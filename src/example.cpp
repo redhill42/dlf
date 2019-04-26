@@ -1,1 +1,5 @@
-/* Placeholder file to make CMake happy */
+#include "onnx.pb.h"
+
+void onnx_test() {
+    onnx::GraphProto g;
+}
