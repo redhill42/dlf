@@ -211,7 +211,7 @@ public:
      */
     Tensor<T> operator+(const Tensor<T>& y) const {
         Tensor<T> z(m_dims);
-        binop(std::plus<T>(), data(), y.data(), z.data(), size());
+        binop(*this, y, z, std::plus<T>());
         return z;
     }
 
@@ -219,7 +219,7 @@ public:
      * Inplace add another tensor elementwise.
      */
     Tensor<T>& operator+=(const Tensor<T>& y) {
-        binop(std::plus<T>(), data(), y.data(), data(), size());
+        binop(*this, y, *this, std::plus<T>());
         return *this;
     }
 
@@ -228,7 +228,7 @@ public:
      */
     Tensor<T> operator+(T v) const {
         Tensor<T> z(m_dims);
-        scalarop(std::plus<T>(), data(), v, z.data(), size());
+        scalarop(data(), v, z.data(), size(), std::plus<T>());
         return z;
     }
 
@@ -236,7 +236,7 @@ public:
      * Inplace add a scalar value.
      */
     Tensor<T>& operator+=(T v) {
-        scalarop(std::plus<T>(), data(), v, data(), size());
+        scalarop(data(), v, data(), size(), std::plus<T>());
         return *this;
     }
 
@@ -245,7 +245,7 @@ public:
      */
     Tensor<T> operator-(const Tensor<T>& y) const {
         Tensor<T> z(m_dims);
-        binop(std::minus<T>(), data(), y.data(), z.data(), size());
+        binop(*this, y, z, std::minus<T>());
         return z;
     }
 
@@ -253,7 +253,7 @@ public:
      * Inplace subtract another tensor elementwise.
      */
     Tensor<T>& operator-=(const Tensor<T>& y) {
-        binop(std::minus<T>(), data(), y.data(), data(), size());
+        binop(*this, y, *this, std::minus<T>());
         return *this;
     }
 
@@ -262,7 +262,7 @@ public:
      */
     Tensor<T> operator-(T v) const {
         Tensor<T> z(m_dims);
-        scalarop(std::minus<T>(), data(), v, z.data(), size());
+        scalarop(data(), v, z.data(), size(), std::minus<T>());
         return z;
     }
 
@@ -270,7 +270,7 @@ public:
      * Inplace subtract a scalar value.
      */
     Tensor<T>& operator-=(T v) {
-        scalarop(std::minus<T>(), data(), v, data(), size());
+        scalarop(data(), v, data(), size(), std::minus<T>());
         return *this;
     }
 
@@ -279,7 +279,7 @@ public:
      */
     Tensor<T> operator*(const Tensor<T>& y) const {
         Tensor<T> z(m_dims);
-        binop(std::multiplies<T>(), data(), y.data(), z.data(), size());
+        binop(*this, y, z, std::multiplies<T>());
         return z;
     }
 
@@ -287,7 +287,7 @@ public:
      * Inplace multiply another tensor elementwise.
      */
     Tensor<T>& operator*=(const Tensor<T>& y) {
-        binop(std::multiplies<T>(), data(), y.data(), data(), size());
+        binop(*this, y, *this, std::multiplies<T>());
         return *this;
     }
 
@@ -296,7 +296,7 @@ public:
      */
     Tensor<T> operator*(T v) const {
         Tensor<T> z(m_dims);
-        scalarop(std::multiplies<T>(), data(), v, z.data(), size());
+        scalarop(data(), v, z.data(), size(), std::multiplies<T>());
         return z;
     }
 
@@ -304,7 +304,7 @@ public:
      * Inplace multiply a scalar value.
      */
     Tensor<T>& operator*=(T v) {
-        scalarop(std::multiplies<T>(), data(), v, data(), size());
+        scalarop(data(), v, data(), size(), std::multiplies<T>());
         return *this;
     }
 
@@ -313,7 +313,7 @@ public:
      */
     Tensor<T> operator/(const Tensor<T>& y) const {
         Tensor<T> z(m_dims);
-        binop(std::divides<T>(), data(), y.data(), z.data(), size());
+        binop(*this, y, z, std::divides<T>());
         return z;
     }
 
@@ -321,7 +321,7 @@ public:
      * Inplace divides another tensor elementwise.
      */
     Tensor<T>& operator/=(const Tensor<T>& y) {
-        binop(std::divides<T>(), data(), y.data(), data(), size());
+        binop(*this, y, *this, std::divides<T>());
         return *this;
     }
 
@@ -330,7 +330,7 @@ public:
      */
     Tensor<T> operator/(T v) const {
         Tensor<T> z(m_dims);
-        scalarop(std::divides<T>(), data(), v, z.data(), size());
+        scalarop(data(), v, z.data(), size(), std::divides<T>());
         return z;
     }
 
@@ -338,7 +338,7 @@ public:
      * Inplace divides a scalar value.
      */
     Tensor<T>& operator/=(T v) {
-        scalarop(std::divides<T>(), data(), v, data(), size());
+        scalarop(data(), v, data(), size(), std::divides<T>());
         return *this;
     }
 
@@ -353,23 +353,37 @@ public:
     Tensor<T> transpose() const;
 
     /**
-     * Casting element type.
-     *
-     * @tparam U the target element type
+     * Apply a function on tensor's elements.
      */
-    template <typename U, typename = std::enable_if_t<std::is_convertible_v<U,T>>>
-    Tensor<U> cast() const {
+    template <typename F>
+    Tensor<T>& apply(F f) {
+        std::transform(data(), data()+size(), data(), f);
+        return *this;
+    }
+
+    /**
+     * Transform tensor's elements to a new tensor by applying the given function.
+     * The element type may change during transformation.
+     *
+     * @param f the function to be applied.
+     * @return the Tensor that contains transformed elements.
+     */
+    template <typename F, typename U = std::result_of_t<F(T)>>
+    Tensor<U> transform(F f) const {
         Tensor<U> res(m_dims);
-        std::transform(data(), data()+size(), res.data(), [](auto x){ return static_cast<U>(x); });
+        std::transform(data(), data()+size(), res.data(), f);
         return res;
     }
 
     /**
-     * Apply a function on tensor's elements.
+     * Casting element type.
+     *
+     * @tparam U the target element type
+     * @return the Tensor with new element type.
      */
-    Tensor<T>& apply(T(*f)(T)) {
-        std::transform(data(), data()+size(), data(), f);
-        return *this;
+    template <typename U>
+    Tensor<U> cast() const {
+        return transform([](T x) { return static_cast<U>(x); });
     }
 
     friend std::ostream& operator<<(std::ostream& os, const Tensor<T>& t) {
@@ -379,12 +393,13 @@ public:
 
 private:
     template <typename F>
-    static void binop(const F& f, const T* x, const T* y, T* z, size_t n) {
-        std::transform(x, x+n, y, z, f);
+    static void binop(const Tensor<T>& x, const Tensor<T>& y, Tensor<T>& z, F f) {
+        assert(x.dims() == y.dims());
+        std::transform(x.data(), x.data()+x.size(), y.data(), z.data(), f);
     }
 
     template <typename F>
-    static void scalarop(const F& f, const T* x, T y, T* z, size_t n) {
+    static void scalarop(const T* x, T y, T* z, size_t n, F f) {
         for (size_t i = 0; i < n; i++) {
             z[i] = f(x[i], y);
         }
@@ -393,10 +408,20 @@ private:
     static const T* printRec(std::ostream& out, const std::vector<size_t>& dims, size_t level, const T* data);
 };
 
+/**
+ * perform binary operation on two tensors elementwise.
+ */
+template <typename T, typename F>
+inline Tensor<T> transform(const Tensor<T>& x, const Tensor<T>& y, F f) {
+    assert(x.dims() == y.dims());
+    Tensor<T> z(x.dims());
+    std::transform(x.data(), x.data()+x.size(), y.data(), z.data(), f);
+    return z;
+}
+
 template <typename T>
 Tensor<T> Tensor<T>::dot(const Tensor<T>& y) const {
-    assert(dims().size() == 2);
-    assert(y.dims().size() == 2);
+    assert(dims().size() == 2 && y.dims().size() == 2);
 
     size_t n = m_dims[0];
     size_t p = m_dims[1];

@@ -36,6 +36,9 @@ protected:
 
     template<typename F>
     void testScalarOp(const Tensor<int32_t> &t, int32_t v, const F &f);
+
+    template <typename T, typename F>
+    void checkDataTransform(const Tensor<T> t, F f);
 };
 
 TEST_F(TensorTest, Init) {
@@ -185,18 +188,56 @@ TEST_F(TensorTest, Transpose) {
     EXPECT_EQ(a.transpose(), b);
 }
 
-TEST_F(TensorTest, Apply) {
-    auto t = t1.cast<double>().apply(sin);
+template <typename T, typename F>
+void TensorTest::checkDataTransform(const Tensor<T> t, F f) {
     for (int i = 0; i < t.size(); i++) {
-        EXPECT_EQ(t.data()[i], sin(data1[i]));
+        EXPECT_EQ(t.data()[i], f(data1[i]));
+    }
+}
+
+TEST_F(TensorTest, Apply) {
+    SCOPED_TRACE("");
+    auto f = [](auto x) { return x*x/2; };
+    t1.apply(f);
+    checkDataTransform(t1, f);
+}
+
+TEST_F(TensorTest, Transform) {
+    {
+        SCOPED_TRACE("");
+        auto f = static_cast<double(*)(double)>(sin);
+        auto t = t1.transform(f);
+        static_assert(std::is_same_v<decltype(t), Tensor<double>>);
+        checkDataTransform(t, f);
+    }
+
+    {
+        SCOPED_TRACE("");
+        auto f = [](auto x) { return std::complex<int>(x, x * 2); };
+        auto t = t1.transform(f);
+        static_assert(std::is_same_v<decltype(t), Tensor<std::complex<int>>>);
+        checkDataTransform(t, f);
+    }
+}
+
+TEST_F(TensorTest, Cast) {
+    SCOPED_TRACE("");
+    auto t = t1.cast<double>();
+    static_assert(std::is_same_v<decltype(t), Tensor<double>>);
+    checkDataTransform(t, [](auto x){ return static_cast<double>(x); });
+}
+
+TEST_F(TensorTest, Transform2) {
+    auto f = [](auto x, auto y) { return (x+y)/2; };
+    auto t = transform(t1, t2, f);
+    for (int i = 0; i < t.size(); i++) {
+        EXPECT_EQ(t.data()[i], f(data1[i], data2[i]));
     }
 }
 
 TEST_F(TensorTest, Complex) {
     using namespace std::complex_literals;
-    Tensor<std::complex<double>> t({2,2}, {
-        1.+2i, 3.+4i, -1.+1i, 2.-5i
-    });
+    Tensor<std::complex<double>> t({2,2}, {1.+2i, 3.+4i, -1.+1i, 2.-5i});
     t += 1.+1i;
 
     EXPECT_EQ((t[{0,0}]), 2.+3i);
