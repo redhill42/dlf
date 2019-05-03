@@ -15,10 +15,9 @@ namespace kneron::model {
 template <typename T>
 class Tensor {
     std::vector<size_t> m_dims;
-    T* m_data = nullptr;
     size_t m_size = 0;
-
-    std::vector<T> m_alloc_data;
+    T* m_data = nullptr;
+    std::unique_ptr<T[]> m_alloc_data;
 
     static size_t sizeOf(const std::vector<size_t>& dims) {
         if (dims.empty())
@@ -74,8 +73,8 @@ public:
         : m_dims(std::move(dims))
     {
         m_size = sizeOf(m_dims);
-        m_alloc_data.resize(m_size);
-        m_data = m_alloc_data.data();
+        m_alloc_data = std::make_unique<T[]>(m_size);
+        m_data = m_alloc_data.get();
     }
 
     /**
@@ -84,12 +83,14 @@ public:
      * @param dims the tensor dimension
      * @param data the tensor data
      */
-    Tensor(std::vector<size_t> dims, std::vector<T> data)
-        : m_dims(std::move(dims)), m_alloc_data(std::move(data))
+    Tensor(std::vector<size_t> dims, const std::vector<T>& data)
+        : m_dims(std::move(dims))
     {
         m_size = sizeOf(m_dims);
-        assert(m_alloc_data.size() == m_size);
-        m_data = m_alloc_data.data();
+        assert(data.size() == m_size);
+        m_alloc_data = std::make_unique<T[]>(m_size);
+        m_data = m_alloc_data.get();
+        std::copy(data.begin(), data.end(), m_data);
     }
 
     /**
@@ -106,9 +107,25 @@ public:
      * Copy constructor.
      */
     Tensor(const Tensor<T>& t)
-        : m_dims(t.m_dims), m_size(t.m_size), m_alloc_data(t.m_data, t.m_data + t.m_size)
+        : m_dims(t.m_dims), m_size(t.m_size)
     {
-        m_data = m_alloc_data.data();
+        m_alloc_data = std::make_unique<T[]>(m_size);
+        m_data = m_alloc_data.get();
+        std::copy(t.data(), t.data() + t.size(), m_data);
+    }
+
+    /**
+     * Copy assignment.
+     */
+    Tensor<T>& operator=(const Tensor<T>& t) {
+        m_dims = t.m_dims;
+        if (m_size != t.m_size || m_alloc_data == nullptr) {
+            m_size = t.m_size;
+            m_alloc_data = std::make_unique<T[]>(m_size);
+            m_data = m_alloc_data.get();
+        }
+        std::copy(t.data(), t.data() + t.size(), m_data);
+        return *this;
     }
 
     /**
@@ -122,17 +139,6 @@ public:
     }
 
     /**
-     * Copy assignment.
-     */
-    Tensor<T>& operator=(const Tensor<T>& t) {
-        m_dims = t.m_dims;
-        m_size = t.m_size;
-        m_alloc_data.assign(t.m_data, t.m_data + t.m_size);
-        m_data = m_alloc_data.data();
-        return *this;
-    }
-
-    /**
      * Move assignment.
      */
     Tensor<T>& operator=(Tensor<T>&& t) noexcept {
@@ -140,10 +146,8 @@ public:
         m_size = t.m_size;
         m_data = t.m_data;
         m_alloc_data = std::move(t.m_alloc_data);
-
         t.m_data = nullptr;
         t.m_size = 0;
-
         return *this;
     }
 

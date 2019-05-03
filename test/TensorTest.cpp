@@ -39,30 +39,33 @@ protected:
 };
 
 TEST_F(TensorTest, Init) {
+    EXPECT_EQ(t1.dims(), std::vector<size_t>({2,3,4}));
+    EXPECT_EQ(t1.size(), 2*3*4);
+
     int32_t next = 0;
     for (size_t i = 0; i < 2; i++)
     for (size_t j = 0; j < 3; j++)
     for (size_t k = 0; k < 4; k++) {
-        int32_t val = t1[{i,j,k}];
-        EXPECT_EQ(val, next);
+        EXPECT_EQ(next, (t1[{i,j,k}]));
         next++;
     }
+}
 
-    EXPECT_EQ(t1.dims(), std::vector<size_t>({2,3,4}));
-    EXPECT_EQ(t1.size(), 2*3*4);
+TEST_F(TensorTest, InitializedToZero) {
+    Tensor<int32_t> t({2,2,2});
+    ASSERT_EQ(t.size(), 8);
+    for (int i = 0; i < 8; i++)
+        EXPECT_EQ(t.data()[i], 0);
 }
 
 TEST_F(TensorTest, Wrap) {
     int32_t data[2*3*4] = {0};
     auto t = Tensor<int32_t>::wrap({2,3,4}, data);
     t += 5;
-    EXPECT_EQ((t[{1,1,1}]), 5);
-}
 
-TEST_F(TensorTest, EmptyDimension) {
-    std::vector<size_t> dims;
-    Tensor<int32_t> t(dims);
-    ASSERT_EQ(t.size(), 0);
+    EXPECT_EQ(data, t.data());
+    EXPECT_EQ((t[{1,1,1}]), 5);
+    EXPECT_EQ(data[12], 5);
 }
 
 TEST_F(TensorTest, ElementAccess) {
@@ -78,8 +81,7 @@ TEST_F(TensorTest, ElementAccess) {
     for (size_t i = 0; i < 2; i++)
     for (size_t j = 0; j < 3; j++)
     for (size_t k = 0; k < 4; k++) {
-        int32_t val = t[{i,j,k}];
-        ASSERT_EQ(val, next);
+        ASSERT_EQ(next, (t[{i,j,k}]));
         next++;
     }
 
@@ -93,8 +95,7 @@ void TensorTest::testBinaryOp(const Tensor<int32_t>& t, const F& f) {
     for (size_t i = 0; i < 2; i++)
     for (size_t j = 0; j < 3; j++)
     for (size_t k = 0; k < 4; k++) {
-        int32_t val = t[{i,j,k}];
-        ASSERT_EQ(f(data1[next], data2[next]), val);
+        ASSERT_EQ(f(data1[next], data2[next]), (t[{i,j,k}]));
         next++;
     }
 }
@@ -105,42 +106,41 @@ void TensorTest::testScalarOp(const Tensor<int32_t>& t, int32_t v, const F& f) {
     for (size_t i = 0; i < 2; i++)
     for (size_t j = 0; j < 3; j++)
     for (size_t k = 0; k < 4; k++) {
-        int32_t val = t[{i,j,k}];
-        ASSERT_EQ(f(data1[next], v), val);
+        ASSERT_EQ(f(data1[next], v), (t[{i,j,k}]));
         next++;
     }
 }
 
 TEST_F(TensorTest, BinaryOp) {
-    SCOPED_TRACE("+"); testBinaryOp(t1 + t2, std::plus<>());
-    SCOPED_TRACE("-"); testBinaryOp(t1 - t2, std::minus<>());
-    SCOPED_TRACE("*"); testBinaryOp(t1 * t2, std::multiplies<>());
-    SCOPED_TRACE("/"); testBinaryOp(t1 / t2, std::divides<>());
+    { SCOPED_TRACE("+"); testBinaryOp(t1 + t2, std::plus<>()); }
+    { SCOPED_TRACE("-"); testBinaryOp(t1 - t2, std::minus<>()); }
+    { SCOPED_TRACE("*"); testBinaryOp(t1 * t2, std::multiplies<>()); }
+    { SCOPED_TRACE("/"); testBinaryOp(t1 / t2, std::divides<>()); }
 }
 
 TEST_F(TensorTest, BinaryAssignOp) {
     Tensor<int32_t> t;
 
-    SCOPED_TRACE("+="); t = t1; t += t2; testBinaryOp(t, std::plus<>());
-    SCOPED_TRACE("-="); t = t1; t -= t2; testBinaryOp(t, std::minus<>());
-    SCOPED_TRACE("*="); t = t1; t *= t2; testBinaryOp(t, std::multiplies<>());
-    SCOPED_TRACE("/="); t = t1; t /= t2; testBinaryOp(t, std::divides<>());
+    { SCOPED_TRACE("+="); t = t1; t += t2; testBinaryOp(t, std::plus<>()); }
+    { SCOPED_TRACE("-="); t = t1; t -= t2; testBinaryOp(t, std::minus<>()); }
+    { SCOPED_TRACE("*="); t = t1; t *= t2; testBinaryOp(t, std::multiplies<>()); }
+    { SCOPED_TRACE("/="); t = t1; t /= t2; testBinaryOp(t, std::divides<>()); }
 }
 
 TEST_F(TensorTest, ScalarOp) {
-    SCOPED_TRACE("+5"); testScalarOp(t1+5, 5, std::plus<>());
-    SCOPED_TRACE("-5"); testScalarOp(t1-5, 5, std::minus<>());
-    SCOPED_TRACE("*5"); testScalarOp(t1*5, 5, std::multiplies<>());
-    SCOPED_TRACE("/5"); testScalarOp(t1/5, 5, std::divides<>());
+    { SCOPED_TRACE("+5"); testScalarOp(t1+5, 5, std::plus<>()); }
+    { SCOPED_TRACE("-5"); testScalarOp(t1-5, 5, std::minus<>()); }
+    { SCOPED_TRACE("*5"); testScalarOp(t1*5, 5, std::multiplies<>()); }
+    { SCOPED_TRACE("/5"); testScalarOp(t1/5, 5, std::divides<>()); }
 }
 
 TEST_F(TensorTest, ScalarAssignOp) {
     Tensor<int32_t> t;
 
-    SCOPED_TRACE("+=5"); t = t1; t += 5; testScalarOp(t, 5, std::plus<>());
-    SCOPED_TRACE("-=5"); t = t1; t -= 5; testScalarOp(t, 5, std::minus<>());
-    SCOPED_TRACE("*=5"); t = t1; t *= 5; testScalarOp(t, 5, std::multiplies<>());
-    SCOPED_TRACE("/=5"); t = t1; t /= 5; testScalarOp(t, 5, std::divides<>());
+    { SCOPED_TRACE("+=5"); t = t1; t += 5; testScalarOp(t, 5, std::plus<>()); }
+    { SCOPED_TRACE("-=5"); t = t1; t -= 5; testScalarOp(t, 5, std::minus<>()); }
+    { SCOPED_TRACE("*=5"); t = t1; t *= 5; testScalarOp(t, 5, std::multiplies<>()); }
+    { SCOPED_TRACE("/=5"); t = t1; t /= 5; testScalarOp(t, 5, std::divides<>()); }
 }
 
 TEST_F(TensorTest, DotProduct) {
