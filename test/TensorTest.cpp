@@ -2,8 +2,12 @@
 #include <complex>
 #include "tensor.h"
 #include "gtest/gtest.h"
+#include "gmock/gmock.h"
 
 using kneron::model::Tensor;
+
+using ::testing::ElementsAre;
+using ::testing::Each;
 
 class TensorTest : public ::testing::Test {
 protected:
@@ -38,7 +42,7 @@ protected:
     void testScalarOp(const Tensor<int32_t> &t, int32_t v, const F &f);
 
     template <typename T, typename F>
-    void checkDataTransform(const Tensor<T> t, F f);
+    void checkDataTransform(const Tensor<T>& t, F f);
 };
 
 TEST_F(TensorTest, Init) {
@@ -68,7 +72,7 @@ TEST_F(TensorTest, Wrap) {
 
     EXPECT_EQ(data, t.data());
     EXPECT_EQ((t[{1,1,1}]), 5);
-    EXPECT_EQ(data[12], 5);
+    EXPECT_THAT(data, Each(5));
 }
 
 TEST_F(TensorTest, ElementAccess) {
@@ -189,7 +193,7 @@ TEST_F(TensorTest, Transpose) {
 }
 
 template <typename T, typename F>
-void TensorTest::checkDataTransform(const Tensor<T> t, F f) {
+void TensorTest::checkDataTransform(const Tensor<T>& t, F f) {
     for (int i = 0; i < t.size(); i++) {
         EXPECT_EQ(t.data()[i], f(data1[i]));
     }
@@ -220,6 +224,13 @@ TEST_F(TensorTest, Transform) {
     }
 }
 
+TEST_F(TensorTest, TransformTo) {
+    auto f = static_cast<double(*)(double)>(sin);
+    Tensor<double> t({2,3,4});
+    t1.transformTo(t, f);
+    checkDataTransform(t, f);
+}
+
 TEST_F(TensorTest, Cast) {
     SCOPED_TRACE("");
     auto t = t1.cast<double>();
@@ -244,6 +255,38 @@ TEST_F(TensorTest, Complex) {
     EXPECT_EQ((t[{0,1}]), 4.+5i);
     EXPECT_EQ((t[{1,0}]), 0.+2i);
     EXPECT_EQ((t[{1,1}]), 3.-4i);
+}
+
+/**
+ * The Relu functor that compute Rectified Linear Unit.
+ *
+ * @tparam T the value type.
+ */
+template <typename T>
+struct Relu {
+    T max_v;
+    static constexpr T zero_v = T();
+    explicit constexpr Relu(T max_v = std::numeric_limits<T>::max()) : max_v(max_v) {}
+
+    constexpr T operator()(T value) const noexcept {
+        if (value <= zero_v)
+            return zero_v;
+        if (value > max_v)
+            return max_v;
+        return value;
+    }
+};
+
+TEST_F(TensorTest, Relu) {
+    int32_t input[] = {1, -1, 0, 2};
+    double output[Relu<int>(std::size(input))(100)]; // test for constexpr
+    static_assert(std::size(input) == std::size(output));
+
+    auto in = Tensor<int32_t>::wrap({2,2}, input);
+    auto out = Tensor<double>::wrap({2,2}, output);
+    in.transformTo(out, Relu(1.0));
+
+    ASSERT_THAT(output, ElementsAre(1.0, 0.0, 0.0, 1.0));
 }
 
 TEST_F(TensorTest, Format) {
