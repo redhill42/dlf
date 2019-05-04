@@ -42,6 +42,16 @@ class Tensor {
         return offset;
     }
 
+    static bool nextIndex(const std::vector<size_t>& dims, std::vector<size_t>& index) {
+        for (auto i = dims.size(); i != 0; ) {
+            --i;
+            if (++index[i] < dims[i])
+                return true;
+            index[i] = 0;
+        }
+        return false;
+    }
+
     /**
      * Construct a tensor with given dimension and wrapped data. This constructor
      * can only be called from wrap() function.
@@ -53,6 +63,20 @@ class Tensor {
         : m_dims(std::move(dims))
     {
         m_data = data;
+        m_size = sizeOf(m_dims);
+    }
+
+    /**
+     * Construct a tensor with given dimension and preallocated data. This constructor
+     * can only be called from builder functions.
+     *
+     * @param dims the tensor dimensions.
+     * @param data the preallocated tensor data.
+     */
+    Tensor(std::vector<size_t> dims, std::unique_ptr<T[]> data)
+        : m_dims(std::move(dims)), m_alloc_data(std::move(data))
+    {
+        m_data = m_alloc_data.get();
         m_size = sizeOf(m_dims);
     }
 
@@ -101,6 +125,29 @@ public:
      */
     static Tensor wrap(std::vector<size_t> dims, T* data) {
         return Tensor(std::move(dims), data);
+    }
+
+    /**
+     * Build the tensor with given generator function. The generator function
+     * accepts the an index and a sequence number which can be aid to generate
+     * the tensor data.
+     *
+     * @param dims the tensor dimension
+     * @param f the generator function
+     * @return the generated tensor
+     */
+    static Tensor build(std::vector<size_t> dims, std::function<T(const std::vector<size_t>&, size_t)> f) {
+        auto size = sizeOf(dims);
+        auto data = std::make_unique<T[]>(size);
+        std::vector<size_t> index(dims.size(), 0);
+        size_t sequence = 0;
+
+        do {
+            data[sequence] = f(index, sequence);
+            sequence++;
+        } while (nextIndex(dims, index));
+
+        return Tensor(std::move(dims), std::move(data));
     }
 
     /**
@@ -422,7 +469,7 @@ private:
 };
 
 /**
- * perform binary operation on two tensors elementwise.
+ * Perform binary operation on two tensors elementwise.
  */
 template <typename T, typename F>
 inline Tensor<T> transform(const Tensor<T>& x, const Tensor<T>& y, F f) {
@@ -430,6 +477,16 @@ inline Tensor<T> transform(const Tensor<T>& x, const Tensor<T>& y, F f) {
     Tensor<T> z(x.dims());
     std::transform(x.data(), x.data()+x.size(), y.data(), z.data(), f);
     return z;
+}
+
+/**
+ * Perform binary operation on two tensors element and store the result into
+ * the third tensor.
+ */
+template <typename T, typename F>
+inline void transformTo(Tensor<T>& z, const Tensor<T>& x, const Tensor<T>& y, F f) {
+    assert(x.dims() == y.dims() && y.dims() == z.dims());
+    std::transform(x.data(), x.data()+x.size(), y.data(), z.data(), f);
 }
 
 template <typename T>
@@ -449,7 +506,7 @@ Tensor<T> Tensor<T>::dot(const Tensor& y) const {
 
     for (i = 0; i < n; i++) {
         for (j = 0; j < m; j++) {
-            T v = 0;
+            T v = T();
             for (k = 0; k < p; k++)
                 v += px[i * p + k] * py[k * m + j];
             pz[i * m + j] = v;

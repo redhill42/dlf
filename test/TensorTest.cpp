@@ -75,6 +75,29 @@ TEST_F(TensorTest, Wrap) {
     EXPECT_THAT(data, Each(5));
 }
 
+TEST_F(TensorTest, Build) {
+    Tensor<std::string> t = Tensor<std::string>::build({2,3,4}, [](auto index, auto sequence) {
+        EXPECT_EQ(index[0]*12 + index[1]*4 + index[2], sequence);
+        return std::to_string(index[0]) + '.' +
+               std::to_string(index[1]) + '.' +
+               std::to_string(index[2]) + '.' +
+               std::to_string(sequence);
+    });
+
+    size_t next = 0;
+    for (size_t i = 0; i < 2; i++)
+    for (size_t j = 0; j < 3; j++)
+    for (size_t k = 0; k < 4; k++) {
+        std::string expect =
+            std::to_string(i) + '.' +
+            std::to_string(j) + '.' +
+            std::to_string(k) + '.' +
+            std::to_string(next);
+        EXPECT_EQ((t[{i,j,k}]), expect);
+        next++;
+    }
+}
+
 TEST_F(TensorTest, ElementAccess) {
     Tensor<int32_t> t({2, 3, 4});
     int32_t next = 0;
@@ -126,12 +149,10 @@ TEST_F(TensorTest, BinaryOp) {
 }
 
 TEST_F(TensorTest, BinaryAssignOp) {
-    Tensor<int32_t> t;
-
-    { SCOPED_TRACE("+="); t = t1; t += t2; testBinaryOp(t, std::plus<>()); }
-    { SCOPED_TRACE("-="); t = t1; t -= t2; testBinaryOp(t, std::minus<>()); }
-    { SCOPED_TRACE("*="); t = t1; t *= t2; testBinaryOp(t, std::multiplies<>()); }
-    { SCOPED_TRACE("/="); t = t1; t /= t2; testBinaryOp(t, std::divides<>()); }
+    { SCOPED_TRACE("+="); auto t = t1; t += t2; testBinaryOp(t, std::plus<>()); }
+    { SCOPED_TRACE("-="); auto t = t1; t -= t2; testBinaryOp(t, std::minus<>()); }
+    { SCOPED_TRACE("*="); auto t = t1; t *= t2; testBinaryOp(t, std::multiplies<>()); }
+    { SCOPED_TRACE("/="); auto t = t1; t /= t2; testBinaryOp(t, std::divides<>()); }
 }
 
 TEST_F(TensorTest, ScalarOp) {
@@ -142,12 +163,10 @@ TEST_F(TensorTest, ScalarOp) {
 }
 
 TEST_F(TensorTest, ScalarAssignOp) {
-    Tensor<int32_t> t;
-
-    { SCOPED_TRACE("+=5"); t = t1; t += 5; testScalarOp(t, 5, std::plus<>()); }
-    { SCOPED_TRACE("-=5"); t = t1; t -= 5; testScalarOp(t, 5, std::minus<>()); }
-    { SCOPED_TRACE("*=5"); t = t1; t *= 5; testScalarOp(t, 5, std::multiplies<>()); }
-    { SCOPED_TRACE("/=5"); t = t1; t /= 5; testScalarOp(t, 5, std::divides<>()); }
+    { SCOPED_TRACE("+=5"); auto t = t1; t += 5; testScalarOp(t, 5, std::plus<>()); }
+    { SCOPED_TRACE("-=5"); auto t = t1; t -= 5; testScalarOp(t, 5, std::minus<>()); }
+    { SCOPED_TRACE("*=5"); auto t = t1; t *= 5; testScalarOp(t, 5, std::multiplies<>()); }
+    { SCOPED_TRACE("/=5"); auto t = t1; t /= 5; testScalarOp(t, 5, std::divides<>()); }
 }
 
 TEST_F(TensorTest, DotProduct) {
@@ -240,9 +259,16 @@ TEST_F(TensorTest, Cast) {
 
 TEST_F(TensorTest, Transform2) {
     auto f = [](auto x, auto y) { return (x+y)/2; };
-    auto t = transform(t1, t2, f);
-    for (int i = 0; i < t.size(); i++) {
-        EXPECT_EQ(t.data()[i], f(data1[i], data2[i]));
+
+    auto a = transform(t1, t2, f);
+
+    Tensor<int32_t> b({2,3,4});
+    transformTo(b, t1, t2, f);
+
+    for (int i = 0; i < a.size(); i++) {
+        auto v = f(data1[i], data2[i]);
+        EXPECT_EQ(a.data()[i], v);
+        EXPECT_EQ(b.data()[i], v);
     }
 }
 
