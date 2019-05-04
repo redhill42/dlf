@@ -29,8 +29,34 @@ class Tensor {
     Tensor(std::vector<size_t> dims, T* data);
 
 public:
-    using element_type = T;
+    typedef T                                       value_type;
+    typedef value_type&                             reference;
+    typedef const value_type&                       const_reference;
+    typedef value_type*                             iterator;
+    typedef const value_type*                       const_iterator;
+    typedef value_type*                             pointer;
+    typedef const value_type*                       const_pointer;
+    typedef size_t                                  size_type;
+    typedef ptrdiff_t                               difference_type;
+    typedef std::reverse_iterator<iterator>         reverse_iterator;
+    typedef std::reverse_iterator<const_iterator>   const_reverse_iterator;
 
+    iterator begin() noexcept { return iterator(data()); }
+    const_iterator begin() const noexcept { return const_iterator(data()); }
+    iterator end() noexcept { return iterator(data() + size()); }
+    const_iterator end() const noexcept { return const_iterator(data() + size()); }
+
+    reverse_iterator rbegin() noexcept { return reverse_iterator(end()); }
+    const_reverse_iterator rbegin() const noexcept { return const_reverse_iterator(end()); }
+    reverse_iterator rend() noexcept { return reverse_iterator(begin()); }
+    const_reverse_iterator rend() const noexcept { return const_reverse_iterator(begin()); }
+
+    const_iterator cbegin() const noexcept { return begin(); }
+    const_iterator cend() const noexcept { return end(); }
+    const_reverse_iterator crbegin() const noexcept { return rbegin(); }
+    const_reverse_iterator crend() const noexcept { return rend(); }
+
+public:
     /**
      * Construct a 0-dimensional tensor.
      */
@@ -101,6 +127,13 @@ public:
     }
 
     /**
+     * Return true if this is an empty tensor.
+     */
+    bool empty() const noexcept {
+        return m_size == 0;
+    }
+
+    /**
      * Returns true if this tensor represent a 1-dimensional vector.
      */
     bool is_vector() const noexcept {
@@ -118,6 +151,13 @@ public:
      * Returns the total size of this tensor.
      */
     size_t size() const noexcept {
+        return m_size;
+    }
+
+    /**
+     * Returns the maximal size.
+     */
+    size_t max_size() const noexcept {
         return m_size;
     }
 
@@ -144,6 +184,13 @@ public:
      * Returns the mutable element given by the index.
      */
     T& operator[](std::initializer_list<size_t> index) noexcept;
+
+    /**
+     * Returns a slice of tensor at the given index. The returned tensor
+     * share the underlying data with this tensor, so the lifetime of the
+     * returned tensor cannot exceed this tensor.
+     */
+    Tensor operator[](size_t index);
 
     /**
      * Equality test for two tensors.
@@ -338,6 +385,19 @@ inline const T Tensor<T>::operator[](std::initializer_list<size_t> index) const 
 template <typename T>
 inline T& Tensor<T>::operator[](std::initializer_list<size_t> index) noexcept {
     return data()[internal::offsetOf(m_dims, index)];
+}
+
+template <typename T>
+Tensor<T> Tensor<T>::operator[](size_t index) {
+    assert(m_dims.size() > 1);
+    assert(index < m_dims[0]);
+
+    auto slice_dims = m_dims;
+    slice_dims.erase(slice_dims.begin());
+
+    auto slice_size = internal::sizeOf(slice_dims);
+    auto slice_data = data() + index * slice_size;
+    return wrap(slice_dims, slice_data);
 }
 
 template <typename T>

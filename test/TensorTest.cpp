@@ -1,13 +1,13 @@
 #include <cmath>
 #include <complex>
+#include <random>
 #include "tensor.h"
 #include "gtest/gtest.h"
 #include "gmock/gmock.h"
 
 using kneron::model::Tensor;
 
-using ::testing::ElementsAre;
-using ::testing::Each;
+namespace T = ::testing;
 
 class TensorTest : public ::testing::Test {
 protected:
@@ -48,21 +48,13 @@ protected:
 TEST_F(TensorTest, Init) {
     EXPECT_EQ(t1.dims(), std::vector<size_t>({2,3,4}));
     EXPECT_EQ(t1.size(), 2*3*4);
-
-    int32_t next = 0;
-    for (size_t i = 0; i < 2; i++)
-    for (size_t j = 0; j < 3; j++)
-    for (size_t k = 0; k < 4; k++) {
-        EXPECT_EQ(next, (t1[{i,j,k}]));
-        next++;
-    }
+    EXPECT_THAT(t1, T::ElementsAreArray(data1));
 }
 
 TEST_F(TensorTest, InitializedToZero) {
     Tensor<int32_t> t({2,2,2});
     ASSERT_EQ(t.size(), 8);
-    for (int i = 0; i < 8; i++)
-        EXPECT_EQ(t.data()[i], 0);
+    EXPECT_THAT(t, T::Each(0));
 }
 
 TEST_F(TensorTest, Wrap) {
@@ -71,8 +63,8 @@ TEST_F(TensorTest, Wrap) {
     t += 5;
 
     EXPECT_EQ(data, t.data());
-    EXPECT_EQ((t[{1,1,1}]), 5);
-    EXPECT_THAT(data, Each(5));
+    EXPECT_THAT(t, T::Each(5));
+    EXPECT_THAT(data, T::Each(5));
 }
 
 TEST_F(TensorTest, Build) {
@@ -117,6 +109,28 @@ TEST_F(TensorTest, ElementAccess) {
 
     ASSERT_EQ(t, t1);
     ASSERT_NE(t, t2);
+}
+
+TEST_F(TensorTest, Slice) {
+    Tensor<int32_t> s1({3,4}, {
+        0, 1, 2, 3,
+        4, 5, 6, 7,
+        8, 9, 10, 11
+    });
+    Tensor<int32_t> s2({3,4}, {
+        12, 13, 14, 15,
+        16, 17, 18, 19,
+        20, 21, 22, 23
+    });
+
+    EXPECT_EQ(t1[0], s1);
+    EXPECT_EQ(t1[1], s2);
+
+    Tensor<int32_t> ts1 = t1[1][1];
+    EXPECT_THAT(ts1, T::ElementsAre(16, 17, 18, 19));
+
+    ts1[{2}] = 100; // shallow change original tensor
+    EXPECT_EQ((t1[{1,1,2}]), 100);
 }
 
 template <typename F>
@@ -276,11 +290,7 @@ TEST_F(TensorTest, Complex) {
     using namespace std::complex_literals;
     Tensor<std::complex<double>> t({2,2}, {1.+2i, 3.+4i, -1.+1i, 2.-5i});
     t += 1.+1i;
-
-    EXPECT_EQ((t[{0,0}]), 2.+3i);
-    EXPECT_EQ((t[{0,1}]), 4.+5i);
-    EXPECT_EQ((t[{1,0}]), 0.+2i);
-    EXPECT_EQ((t[{1,1}]), 3.-4i);
+    EXPECT_THAT(t, T::ElementsAre(2.+3i, 4.+5i, 0.+2i, 3.-4i));
 }
 
 /**
@@ -304,15 +314,20 @@ struct Relu {
 };
 
 TEST_F(TensorTest, Relu) {
-    int32_t input[] = {1, -1, 0, 2};
-    double output[Relu<int>(std::size(input))(100)]; // test for constexpr
-    static_assert(std::size(input) == std::size(output));
+    // initialize random number generator
+    std::random_device rdev;
+    std::default_random_engine reng(rdev());
+    std::uniform_int_distribution<int32_t> rand(-500, 500);
 
-    auto in = Tensor<int32_t>::wrap({2,2}, input);
-    auto out = Tensor<double>::wrap({2,2}, output);
-    in.transformTo(out, Relu(1.0));
+    // fill a tensor with random numbers in [-500,500]
+    auto in = Tensor<int32_t>::build({100, 100}, std::bind(rand, reng));
 
-    ASSERT_THAT(output, ElementsAre(1.0, 0.0, 0.0, 1.0));
+    // relu with 100 as max value
+    auto out = in.transform(Relu(100.0));
+
+    EXPECT_THAT(in, T::Contains(T::Lt(0)));
+    EXPECT_THAT(in, T::Contains(T::Gt(100)));
+    EXPECT_THAT(out, T::Each(T::AllOf(T::Ge(0.0), T::Le(100.0))));
 }
 
 TEST_F(TensorTest, Format) {
