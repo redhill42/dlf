@@ -65,6 +65,16 @@ public:
     bool next(std::vector<size_t>& index) const noexcept;
 };
 
+template <typename InputIterator, typename T>
+using RequireInputIterator =
+    std::enable_if_t<
+        std::is_convertible_v<
+            typename std::iterator_traits<InputIterator>::iterator_category,
+            std::input_iterator_tag> &&
+        std::is_constructible_v<
+            T, typename std::iterator_traits<InputIterator>::reference>,
+        InputIterator>;
+
 /**
  * Tensor is a geometric object that maps in a multi-linear manner geometric
  * vectors, scalars, and other tensors to a resulting tensor.
@@ -130,12 +140,24 @@ public:
     explicit Tensor(Shape shape);
 
     /**
-     * Construct a tensor with given dimensions and initial data.
+     * Construct a tensor with input iterator denoted by [begin,end).
      *
      * @param shape the tensor dimensions
-     * @param data the tensor data
+     * @param begin the start of input iterator
+     * @param end the end of input iterator
      */
-    Tensor(Shape shape, const std::vector<T>& data);
+    template <typename It>
+    Tensor(Shape shape, It begin, RequireInputIterator<It,T> end);
+
+    /**
+     * Construct a tensor with an initializer list.
+     *
+     * @param shape the tensor dimensions
+     * @param init the initializer list
+     */
+    Tensor(Shape shape, std::initializer_list<T> init)
+        : Tensor(std::move(shape), init.begin(), init.end())
+    {}
 
     /**
      * Construct a tensor with given dimension and preallocated data. The ownership
@@ -170,7 +192,8 @@ public:
      * @param f the generator function
      * @return the generated tensor
      */
-    static Tensor build(Shape shape, std::function<T(const std::vector<size_t>&, size_t)> f);
+    template <typename F>
+    static Tensor build(Shape shape, F f);
 
     // Copy and move constructors/assignments.
     Tensor(const Tensor& t);
@@ -322,14 +345,6 @@ private:
 };
 
 template <typename T>
-Tensor<T>::Tensor(Shape shape, T* data)
-    : m_shape(std::move(shape))
-{
-    m_data = data;
-    m_size = m_shape.size();
-}
-
-template <typename T>
 Tensor<T>::Tensor(Shape shape)
     : m_shape(std::move(shape))
 {
@@ -339,14 +354,23 @@ Tensor<T>::Tensor(Shape shape)
 }
 
 template <typename T>
-Tensor<T>::Tensor(Shape shape, const std::vector<T>& data)
+Tensor<T>::Tensor(Shape shape, T* data)
+    : m_shape(std::move(shape))
+{
+    m_data = data;
+    m_size = m_shape.size();
+}
+
+template <typename T>
+template <typename It>
+Tensor<T>::Tensor(Shape shape, It begin, RequireInputIterator<It,T> end)
     : m_shape(std::move(shape))
 {
     m_size = m_shape.size();
-    assert(data.size() == m_size);
+    assert(end - begin == m_size);
     m_alloc_data = std::make_unique<T[]>(m_size);
     m_data = m_alloc_data.get();
-    std::copy(data.begin(), data.end(), m_data);
+    std::copy(begin, end, m_data);
 }
 
 template <typename T>
@@ -363,17 +387,11 @@ inline Tensor<T> Tensor<T>::wrap(Shape shape, T* data) {
 }
 
 template <typename T>
-Tensor<T> Tensor<T>::build(Shape shape, std::function<T(const std::vector<size_t>&, size_t)> f) {
+template <typename F>
+Tensor<T> Tensor<T>::build(Shape shape, F f) {
     auto size = shape.size();
     auto data = std::make_unique<T[]>(size);
-    std::vector<size_t> index(shape.rank(), 0);
-    size_t sequence = 0;
-
-    do {
-        data[sequence] = f(index, sequence);
-        sequence++;
-    } while (shape.next(index));
-
+    std::generate(data.get(), data.get() + size, f);
     return Tensor(std::move(shape), std::move(data));
 }
 

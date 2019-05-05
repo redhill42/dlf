@@ -34,7 +34,9 @@ protected:
 
     Tensor<int32_t> t1, t2;
 
-    TensorTest() : t1({2,3,4}, data1), t2({2,3,4}, data2) {}
+    TensorTest()
+        : t1({2,3,4}, data1.begin(), data1.end()),
+          t2({2,3,4}, data2.begin(), data2.end()) {}
 
     template<typename F>
     void testBinaryOp(const Tensor<int32_t> &t, const F &f);
@@ -69,29 +71,6 @@ TEST_F(TensorTest, Wrap) {
     EXPECT_EQ(data, t.data());
     EXPECT_THAT(t, T::Each(5));
     EXPECT_THAT(data, T::Each(5));
-}
-
-TEST_F(TensorTest, Build) {
-    Tensor<std::string> t = Tensor<std::string>::build({2,3,4}, [](auto index, auto sequence) {
-        EXPECT_EQ(index[0]*12 + index[1]*4 + index[2], sequence);
-        return std::to_string(index[0]) + '.' +
-               std::to_string(index[1]) + '.' +
-               std::to_string(index[2]) + '.' +
-               std::to_string(sequence);
-    });
-
-    size_t next = 0;
-    for (size_t i = 0; i < 2; i++)
-    for (size_t j = 0; j < 3; j++)
-    for (size_t k = 0; k < 4; k++) {
-        std::string expect =
-            std::to_string(i) + '.' +
-            std::to_string(j) + '.' +
-            std::to_string(k) + '.' +
-            std::to_string(next);
-        EXPECT_EQ((t[{i,j,k}]), expect);
-        next++;
-    }
 }
 
 TEST_F(TensorTest, ElementAccess) {
@@ -130,11 +109,22 @@ TEST_F(TensorTest, Slice) {
     EXPECT_EQ(t1[0], s1);
     EXPECT_EQ(t1[1], s2);
 
-    Tensor<int32_t> ts1 = t1[1][1];
+    auto ts1 = t1[1][1];
+    auto ts2 = ts1; // make copy
+
     EXPECT_THAT(ts1, T::ElementsAre(17, 18, 19, 20));
+    EXPECT_NE(ts1.data(), ts2.data());
 
     ts1[{2}] = 100; // shallow change original tensor
     EXPECT_EQ((t1[{1,1,2}]), 100);
+
+    ts2[{3}] = 200; // should not change original tensor
+    EXPECT_EQ((t1[{1,1,3}]), 20);
+
+    // change on original tensor should reflect on sliced tensor
+    t1[{1,1,1}] = 50;
+    EXPECT_EQ(ts1[{1}], 50);
+    EXPECT_EQ(ts2[{1}], 18); // no change on copy
 }
 
 template <typename F>
@@ -169,6 +159,7 @@ void TensorTest::testScalarOp(int32_t v, const Tensor<int32_t>& t, const F& f) {
         next++;
     }
 }
+
 TEST_F(TensorTest, BinaryOp) {
     { SCOPED_TRACE("+"); testBinaryOp(t1 + t2, std::plus<>()); }
     { SCOPED_TRACE("-"); testBinaryOp(t1 - t2, std::minus<>()); }
