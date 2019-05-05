@@ -155,9 +155,22 @@ public:
      * @param shape the tensor dimensions
      * @param init the initializer list
      */
-    Tensor(Shape shape, std::initializer_list<T> init)
-        : Tensor(std::move(shape), init.begin(), init.end())
-    {}
+    Tensor(Shape shape, std::initializer_list<T> init);
+
+    /**
+     * Construct 1-dimensional tensor (a.k.a., a vector).
+     */
+    Tensor(std::initializer_list<std::initializer_list<T>> init);
+
+    /**
+     * Construct a 2-dimensional tensor (a.k.a., a matrix).
+     */
+    Tensor(std::initializer_list<std::initializer_list<std::initializer_list<T>>> init);
+
+    /**
+     * Construct a 3-dimensional tensor.
+     */
+    Tensor(std::initializer_list<std::initializer_list<std::initializer_list<std::initializer_list<T>>>> init);
 
     /**
      * Construct a tensor with given dimension and preallocated data. The ownership
@@ -379,6 +392,60 @@ Tensor<T>::Tensor(Shape shape, std::unique_ptr<T[]> data)
 {
     m_data = m_alloc_data.get();
     m_size = m_shape.size();
+}
+
+template <typename T>
+inline Tensor<T>::Tensor(Shape shape, std::initializer_list<T> init)
+    : Tensor(std::move(shape), init.begin(), init.end())
+{
+}
+
+template <typename T>
+Tensor<T>::Tensor(std::initializer_list<std::initializer_list<T>> init)
+    : Tensor({init.begin()->size()}, *init.begin())
+{
+    assert(init.size() == 1);
+}
+
+template <typename T>
+Tensor<T>::Tensor(std::initializer_list<std::initializer_list<std::initializer_list<T>>> init) {
+    assert(init.size() == 1);
+    auto matrix = init.begin();
+
+    m_shape = Shape({matrix->size(), matrix->begin()->size()});
+    m_size = m_shape.size();
+    m_alloc_data = std::make_unique<T[]>(m_size);
+    m_data = m_alloc_data.get();
+
+    auto p = m_data;
+    for (auto row = matrix->begin(); row != matrix->end(); row++) {
+        assert(row->size() == m_shape[1]);
+        for (auto col = row->begin(); col != row->end(); col++) {
+            *p++ = *col;
+        }
+    }
+}
+
+template <typename T>
+Tensor<T>::Tensor(std::initializer_list<std::initializer_list<std::initializer_list<std::initializer_list<T>>>> init) {
+    assert(init.size() == 1);
+    auto tensor = init.begin();
+
+    m_shape = Shape({tensor->size(), tensor->begin()->size(), tensor->begin()->begin()->size()});
+    m_size = m_shape.size();
+    m_alloc_data = std::make_unique<T[]>(m_size);
+    m_data = m_alloc_data.get();
+
+    auto p = m_data;
+    for (auto row = tensor->begin(); row != tensor->end(); row++) {
+        assert(row->size() == m_shape[1]);
+        for (auto col = row->begin(); col != row->end(); col++) {
+            assert(col->size() == m_shape[2]);
+            for (auto ext = col->begin(); ext != col->end(); ext++) {
+                *p++ = *ext;
+            }
+        }
+    }
 }
 
 template <typename T>

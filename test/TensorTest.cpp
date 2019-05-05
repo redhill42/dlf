@@ -63,6 +63,31 @@ TEST_F(TensorTest, InitializedToZero) {
     EXPECT_THAT(t, T::Each(0));
 }
 
+TEST_F(TensorTest, InitializerList) {
+    Tensor<int32_t> tv = {{1, 2, 3, 4, 5}};
+    EXPECT_EQ(tv.shape(), Shape({5}));
+    EXPECT_THAT(tv, T::ElementsAre(1, 2, 3, 4, 5));
+
+    Tensor<int32_t> tm = {{{1, 2, 3, 4}, {5, 6, 7, 8}}};
+    EXPECT_EQ(tm.shape(), Shape({2, 4}));
+    EXPECT_THAT(tm, T::ElementsAre(1, 2, 3, 4, 5, 6, 7, 8));
+
+    Tensor<int32_t> tt = {{
+        {
+            { 1,  2,  3,  4},
+            { 5,  6,  7,  8},
+            { 9, 10, 11, 12}
+        },
+        {
+            {13, 14, 15, 16},
+            {17, 18, 19, 20},
+            {21, 22, 23, 24}
+        }
+    }};
+    EXPECT_EQ(tt.shape(), Shape({2,3,4}));
+    EXPECT_EQ(tt, t1);
+}
+
 TEST_F(TensorTest, Wrap) {
     int32_t data[2*3*4] = {0};
     auto t = Tensor<int32_t>::wrap({2,3,4}, data);
