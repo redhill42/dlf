@@ -5,6 +5,7 @@
 #include "gtest/gtest.h"
 #include "gmock/gmock.h"
 
+using kneron::model::Shape;
 using kneron::model::Tensor;
 
 namespace T = ::testing;
@@ -12,13 +13,13 @@ namespace T = ::testing;
 class TensorTest : public ::testing::Test {
 protected:
     std::vector<int32_t> data1 {
-        0, 1, 2, 3,
-        4, 5, 6, 7,
-        8, 9, 10, 11,
+         1,  2,  3,  4,
+         5,  6,  7,  8,
+         9, 10, 11, 12,
 
-        12, 13, 14, 15,
-        16, 17, 18, 19,
-        20, 21, 22, 23
+        13, 14, 15, 16,
+        17, 18, 19, 20,
+        21, 22, 23, 24
     };
 
     std::vector<int32_t> data2 {
@@ -41,12 +42,15 @@ protected:
     template<typename F>
     void testScalarOp(const Tensor<int32_t> &t, int32_t v, const F &f);
 
+    template<typename F>
+    void testScalarOp(int32_t v, const Tensor<int32_t> &t, const F &f);
+
     template <typename T, typename F>
     void checkDataTransform(const Tensor<T>& t, F f);
 };
 
 TEST_F(TensorTest, Init) {
-    EXPECT_EQ(t1.dims(), std::vector<size_t>({2,3,4}));
+    EXPECT_EQ(t1.shape(), Shape({2,3,4}));
     EXPECT_EQ(t1.size(), 2*3*4);
     EXPECT_THAT(t1, T::ElementsAreArray(data1));
 }
@@ -92,14 +96,14 @@ TEST_F(TensorTest, Build) {
 
 TEST_F(TensorTest, ElementAccess) {
     Tensor<int32_t> t({2, 3, 4});
-    int32_t next = 0;
+    int32_t next = 1;
 
     for (size_t i = 0; i < 2; i++)
     for (size_t j = 0; j < 3; j++)
     for (size_t k = 0; k < 4; k++)
         t[{i, j, k}] = next++;
 
-    next = 0;
+    next = 1;
     for (size_t i = 0; i < 2; i++)
     for (size_t j = 0; j < 3; j++)
     for (size_t k = 0; k < 4; k++) {
@@ -113,21 +117,21 @@ TEST_F(TensorTest, ElementAccess) {
 
 TEST_F(TensorTest, Slice) {
     Tensor<int32_t> s1({3,4}, {
-        0, 1, 2, 3,
-        4, 5, 6, 7,
-        8, 9, 10, 11
+         1,  2,  3,  4,
+         5,  6,  7,  8,
+         9, 10, 11, 12
     });
     Tensor<int32_t> s2({3,4}, {
-        12, 13, 14, 15,
-        16, 17, 18, 19,
-        20, 21, 22, 23
+        13, 14, 15, 16,
+        17, 18, 19, 20,
+        21, 22, 23, 24
     });
 
     EXPECT_EQ(t1[0], s1);
     EXPECT_EQ(t1[1], s2);
 
     Tensor<int32_t> ts1 = t1[1][1];
-    EXPECT_THAT(ts1, T::ElementsAre(16, 17, 18, 19));
+    EXPECT_THAT(ts1, T::ElementsAre(17, 18, 19, 20));
 
     ts1[{2}] = 100; // shallow change original tensor
     EXPECT_EQ((t1[{1,1,2}]), 100);
@@ -155,6 +159,16 @@ void TensorTest::testScalarOp(const Tensor<int32_t>& t, int32_t v, const F& f) {
     }
 }
 
+template <typename F>
+void TensorTest::testScalarOp(int32_t v, const Tensor<int32_t>& t, const F& f) {
+    size_t next = 0;
+    for (size_t i = 0; i < 2; i++)
+    for (size_t j = 0; j < 3; j++)
+    for (size_t k = 0; k < 4; k++) {
+        ASSERT_EQ(f(v, data1[next]), (t[{i,j,k}]));
+        next++;
+    }
+}
 TEST_F(TensorTest, BinaryOp) {
     { SCOPED_TRACE("+"); testBinaryOp(t1 + t2, std::plus<>()); }
     { SCOPED_TRACE("-"); testBinaryOp(t1 - t2, std::minus<>()); }
@@ -174,6 +188,11 @@ TEST_F(TensorTest, ScalarOp) {
     { SCOPED_TRACE("-5"); testScalarOp(t1-5, 5, std::minus<>()); }
     { SCOPED_TRACE("*5"); testScalarOp(t1*5, 5, std::multiplies<>()); }
     { SCOPED_TRACE("/5"); testScalarOp(t1/5, 5, std::divides<>()); }
+
+    { SCOPED_TRACE("100+"); testScalarOp(100, 100+t1, std::plus<>()); }
+    { SCOPED_TRACE("100-"); testScalarOp(100, 100-t1, std::minus<>()); }
+    { SCOPED_TRACE("100*"); testScalarOp(100, 100*t1, std::multiplies<>()); }
+    { SCOPED_TRACE("100/"); testScalarOp(100, 100/t1, std::divides<>()); }
 }
 
 TEST_F(TensorTest, ScalarAssignOp) {
@@ -181,6 +200,11 @@ TEST_F(TensorTest, ScalarAssignOp) {
     { SCOPED_TRACE("-=5"); auto t = t1; t -= 5; testScalarOp(t, 5, std::minus<>()); }
     { SCOPED_TRACE("*=5"); auto t = t1; t *= 5; testScalarOp(t, 5, std::multiplies<>()); }
     { SCOPED_TRACE("/=5"); auto t = t1; t /= 5; testScalarOp(t, 5, std::divides<>()); }
+}
+
+TEST_F(TensorTest, Expression) {
+    SCOPED_TRACE("5+x*y+x");
+    testBinaryOp(5+t1*t2+t1, [](auto x, auto y) { return 5+x*y+x; });
 }
 
 TEST_F(TensorTest, DotProduct) {

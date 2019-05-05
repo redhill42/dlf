@@ -2,22 +2,20 @@
 
 using namespace kneron::model;
 
-size_t internal::sizeOf(const std::vector<size_t>& dims) noexcept {
-    if (dims.empty())
+size_t Shape::size() const noexcept {
+    if (m_dims.empty())
         return 0;
     size_t size = 1;
-    for (auto d : dims)
+    for (auto d : m_dims)
         size *= d;
     return size;
 }
 
-size_t internal::offsetOf(const std::vector<size_t>& dims,
-                          const std::initializer_list<size_t>& index) noexcept
-{
-    assert(index.size() == dims.size());
+size_t Shape::offset(const std::initializer_list<size_t>& index) const noexcept {
+    assert(index.size() == m_dims.size());
     size_t offset = 0, dim = 1;
     auto p = index.end();
-    auto q = dims.end();
+    auto q = m_dims.end();
     while (p != index.begin()) {
         auto i = *--p;
         auto d = *--q;
@@ -27,9 +25,9 @@ size_t internal::offsetOf(const std::vector<size_t>& dims,
     return offset;
 }
 
-bool internal::nextIndex(const std::vector<size_t>& dims, std::vector<size_t>& index) noexcept {
-    for (auto i = dims.size(); i--; ) {
-        if (++index[i] < dims[i])
+bool Shape::next(std::vector<size_t>& index) const noexcept {
+    for (auto i = m_dims.size(); i--; ) {
+        if (++index[i] < m_dims[i])
             return true;
         index[i] = 0;
     }
