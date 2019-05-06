@@ -11,11 +11,12 @@ size_t Shape::size() const noexcept {
     return size;
 }
 
-size_t Shape::offset(const size_t* index) const noexcept {
+size_t Shape::offset(std::initializer_list<size_t> index) const noexcept {
+    assert(index.size() == m_dims.size());
     size_t offset = 0, dim = 1;
-    auto p = index + m_dims.size();
+    auto p = index.end();
     auto q = m_dims.end();
-    while (p != index) {
+    while (p != index.begin()) {
         auto i = *--p;
         auto d = *--q;
         offset += dim * i;

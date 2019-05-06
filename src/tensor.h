@@ -28,7 +28,7 @@ public:
     /**
      * Returns number of elements in a given dimension.
      */
-    size_t operator[](size_t dim) const noexcept {
+    size_t extent(size_t dim) const noexcept {
         return m_dims[dim];
     }
 
@@ -55,7 +55,7 @@ public:
     /**
      * Return the data offset for the given index.
      */
-    size_t offset(const size_t* index) const noexcept;
+    size_t offset(std::initializer_list<size_t> index) const noexcept;
 
     /**
      * Returns the next index within this shape.
@@ -64,33 +64,6 @@ public:
      */
     bool next(std::vector<size_t>& index) const noexcept;
 };
-
-namespace impl {
-
-template <typename InputIterator, typename T>
-using RequireInputIterator =
-    std::enable_if_t<
-        std::is_convertible_v<
-            typename std::iterator_traits<InputIterator>::iterator_category,
-            std::input_iterator_tag> &&
-        std::is_constructible_v<
-            T, typename std::iterator_traits<InputIterator>::reference>,
-        InputIterator>;
-
-// All() simply applies its predicates to every element of a variadic template
-
-constexpr bool All() { return true; }
-
-template <typename... Args>
-constexpr bool All(bool b, Args... args) {
-    return b && All(args...);
-}
-
-template <typename T, typename... Args>
-using RequireIndexes =
-    std::enable_if_t<All(std::is_convertible_v<Args, size_t>...), T>;
-
-} // namespace impl
 
 /**
  * Tensor is a geometric object that maps in a multi-linear manner geometric
@@ -133,6 +106,21 @@ public: // Container View
     const_reverse_iterator crbegin() const noexcept { return rbegin(); }
     const_reverse_iterator crend() const noexcept { return rend(); }
 
+private: // Concepts
+    template <typename InputIterator>
+    using RequireInputIterator =
+        std::enable_if_t<
+            std::is_convertible_v<
+                typename std::iterator_traits<InputIterator>::iterator_category,
+                std::input_iterator_tag> &&
+            std::is_constructible_v<
+                T, typename std::iterator_traits<InputIterator>::reference>,
+            InputIterator>;
+
+    template <typename... Args>
+    using RequireIndexes =
+        std::enable_if_t<std::conjunction_v<std::is_convertible<Args, size_t>...>>;
+
 private:
     /**
      * Construct a tensor with given dimension and wrapped data. This constructor
@@ -164,7 +152,7 @@ public:
      * @param end the end of input iterator
      */
     template <typename It>
-    Tensor(Shape shape, It begin, impl::RequireInputIterator<It,T> end);
+    Tensor(Shape shape, It begin, RequireInputIterator<It> end);
 
     /**
      * Construct a tensor with an initializer list.
@@ -173,21 +161,6 @@ public:
      * @param init the initializer list
      */
     Tensor(Shape shape, std::initializer_list<T> init);
-
-    /**
-     * Construct 1-dimensional tensor (a.k.a., a vector).
-     */
-    Tensor(std::initializer_list<std::initializer_list<T>> init);
-
-    /**
-     * Construct a 2-dimensional tensor (a.k.a., a matrix).
-     */
-    Tensor(std::initializer_list<std::initializer_list<std::initializer_list<T>>> init);
-
-    /**
-     * Construct a 3-dimensional tensor.
-     */
-    Tensor(std::initializer_list<std::initializer_list<std::initializer_list<std::initializer_list<T>>>> init);
 
     /**
      * Construct a tensor with given dimension and preallocated data. The ownership
@@ -214,9 +187,7 @@ public:
     static Tensor wrap(Shape shape, T* data);
 
     /**
-     * Build the tensor with given generator function. The generator function
-     * accepts an index and a sequence number which can aid to generate the
-     * tensor data.
+     * Build the tensor with given generator function.
      *
      * @param shape the tensor dimension
      * @param f the generator function
@@ -290,14 +261,14 @@ public:
     /**
      * Returns the element given by the index.
      */
-    template <typename... Args>
-    impl::RequireIndexes<const T&, Args...> operator()(Args... args) const noexcept;
+    template <typename... Args, typename = RequireIndexes<Args...>>
+    const T& operator()(Args... args) const noexcept;
 
     /**
      * Returns the mutable element given by the index.
      */
-    template <typename... Args>
-    impl::RequireIndexes<T&, Args...> operator()(Args... args) noexcept;
+    template <typename... Args, typename = RequireIndexes<Args...>>
+    T& operator()(Args... args) noexcept;
 
     /**
      * Returns a slice of tensor at the given index. The returned tensor
@@ -313,14 +284,16 @@ public:
     bool operator!=(const Tensor& other) const;
 
     // Tensor operators
-    Tensor& operator+=(const Tensor& y);
-    Tensor& operator+=(T v);
-    Tensor& operator-=(const Tensor& y);
-    Tensor& operator-=(T v);
-    Tensor& operator*=(const Tensor& y);
-    Tensor& operator*=(T v);
-    Tensor& operator/=(const Tensor& y);
-    Tensor& operator/=(T v);
+#define DECLARE_OPERATOR(op) \
+    template <typename U, typename = std::enable_if_t<std::is_convertible_v<U,T>>> \
+    Tensor& operator op(const Tensor<U>& y); \
+    Tensor& operator op(const T& b);
+
+    DECLARE_OPERATOR(+=)
+    DECLARE_OPERATOR(-=)
+    DECLARE_OPERATOR(*=)
+    DECLARE_OPERATOR(/=)
+#undef DECLARE_OPERATOR
 
     /**
      * Perform dot product on two matrices. A matrix is a 2-dimension tensor.
@@ -333,10 +306,27 @@ public:
     Tensor transpose() const;
 
     /**
-     * Apply a function on tensor's elements.
+     * Transpose a matrix into target.
+     */
+    void transposeTo(Tensor& target) const;
+
+    /**
+     * Apply a unary function on tensor's elements.
      */
     template <typename F>
     Tensor& apply(F f);
+
+    /**
+     * Apply the function pointer on tensor's elements. This is a workaround for
+     * overloaded function deduction issue.
+     */
+    Tensor& apply(T(*f)(T));
+
+    /**
+     * Apply a binary function on two tensor's elements.
+     */
+    template <typename U, typename F>
+    Tensor& apply(const Tensor<U>& y, F f);
 
     /**
      * Transform tensor's elements to a new tensor by applying the given function.
@@ -357,6 +347,28 @@ public:
      */
     template <typename U, typename F>
     void transformTo(Tensor<U>& target, F f) const;
+
+    /**
+     * Transform two tensor's elements to a new tensor by applying the given
+     * binary function. The element type may change during transformation.
+     *
+     * @param y another tensor involved in transformation
+     * @param f the function to be applied.
+     * @return the Tensor that contains transformed elements.
+     */
+    template <typename U, typename F, typename W = std::result_of_t<F(T,U)>>
+    Tensor<W> transform(const Tensor<U>& y, F f) const;
+
+    /**
+     * Transform two tensor's elements to another tensor by applying the given
+     * binary function. The two tensors must have the same shape.
+     *
+     * @param target the target tensor to store transformed data.
+     * @param y another tensor involved in transformation.
+     * @param f the function to be applied.
+     */
+    template <typename U, typename W, typename F>
+    void transformTo(Tensor<W>& z, const Tensor<U>& y, F f) const;
 
     /**
      * Casting element type.
@@ -395,7 +407,7 @@ Tensor<T>::Tensor(Shape shape, T* data)
 
 template <typename T>
 template <typename It>
-Tensor<T>::Tensor(Shape shape, It begin, impl::RequireInputIterator<It,T> end)
+Tensor<T>::Tensor(Shape shape, It begin, RequireInputIterator<It> end)
     : m_shape(std::move(shape))
 {
     m_size = m_shape.size();
@@ -420,54 +432,6 @@ inline Tensor<T>::Tensor(Shape shape, std::initializer_list<T> init)
 }
 
 template <typename T>
-Tensor<T>::Tensor(std::initializer_list<std::initializer_list<T>> init)
-    : Tensor({init.begin()->size()}, *init.begin())
-{
-    assert(init.size() == 1);
-}
-
-template <typename T>
-Tensor<T>::Tensor(std::initializer_list<std::initializer_list<std::initializer_list<T>>> init) {
-    assert(init.size() == 1);
-    auto matrix = init.begin();
-
-    m_shape = Shape({matrix->size(), matrix->begin()->size()});
-    m_size = m_shape.size();
-    m_alloc_data = std::make_unique<T[]>(m_size);
-    m_data = m_alloc_data.get();
-
-    auto p = m_data;
-    for (auto row = matrix->begin(); row != matrix->end(); row++) {
-        assert(row->size() == m_shape[1]);
-        for (auto col = row->begin(); col != row->end(); col++) {
-            *p++ = *col;
-        }
-    }
-}
-
-template <typename T>
-Tensor<T>::Tensor(std::initializer_list<std::initializer_list<std::initializer_list<std::initializer_list<T>>>> init) {
-    assert(init.size() == 1);
-    auto tensor = init.begin();
-
-    m_shape = Shape({tensor->size(), tensor->begin()->size(), tensor->begin()->begin()->size()});
-    m_size = m_shape.size();
-    m_alloc_data = std::make_unique<T[]>(m_size);
-    m_data = m_alloc_data.get();
-
-    auto p = m_data;
-    for (auto row = tensor->begin(); row != tensor->end(); row++) {
-        assert(row->size() == m_shape[1]);
-        for (auto col = row->begin(); col != row->end(); col++) {
-            assert(col->size() == m_shape[2]);
-            for (auto ext = col->begin(); ext != col->end(); ext++) {
-                *p++ = *ext;
-            }
-        }
-    }
-}
-
-template <typename T>
 inline Tensor<T> Tensor<T>::wrap(Shape shape, T* data) {
     return Tensor(std::move(shape), data);
 }
@@ -487,7 +451,7 @@ Tensor<T>::Tensor(const Tensor& t)
 {
     m_alloc_data = std::make_unique<T[]>(m_size);
     m_data = m_alloc_data.get();
-    std::copy(t.data(), t.data() + t.size(), m_data);
+    std::copy(t.begin(), t.end(), m_data);
 }
 
 template <typename T>
@@ -498,7 +462,7 @@ Tensor<T>& Tensor<T>::operator=(const Tensor& t) {
         m_alloc_data = std::make_unique<T[]>(m_size);
         m_data = m_alloc_data.get();
     }
-    std::copy(t.data(), t.data() + t.size(), m_data);
+    std::copy(t.begin(), t.end(), m_data);
     return *this;
 }
 
@@ -524,9 +488,7 @@ Tensor<T>& Tensor<T>::operator=(Tensor&& t) noexcept {
 
 template <typename T>
 bool Tensor<T>::operator==(const Tensor& other) const {
-    if (m_shape != other.m_shape)
-        return false;
-    return std::equal(data(), data()+size(), other.data());
+    return shape() == other.shape() && std::equal(begin(), end(), other.begin());
 }
 
 template <typename T>
@@ -535,27 +497,21 @@ inline bool Tensor<T>::operator!=(const Tensor& other) const {
 }
 
 template<typename T>
-template<typename... Args>
-impl::RequireIndexes<const T&, Args...>
-Tensor<T>::operator()(Args... args) const noexcept {
-    size_t index[] { size_t(args)... };
-    assert(std::size(index) == m_shape.rank());
-    return data()[m_shape.offset(index)];
+template<typename... Args, typename>
+inline const T& Tensor<T>::operator()(Args... args) const noexcept {
+    return data()[shape().offset({size_t(args)...})];
 }
 
 template<typename T>
-template<typename... Args>
-impl::RequireIndexes<T&, Args...>
-Tensor<T>::operator()(Args... args) noexcept {
-    size_t index[] { size_t(args)... };
-    assert(std::size(index) == m_shape.rank());
-    return data()[m_shape.offset(index)];
+template<typename... Args, typename>
+inline T& Tensor<T>::operator()(Args... args) noexcept {
+    return data()[shape().offset({size_t(args)...})];
 }
 
 template <typename T>
 Tensor<T> Tensor<T>::operator[](size_t index) {
     assert(m_shape.rank() > 1);
-    assert(index < m_shape[0]);
+    assert(index < m_shape.extent(0));
 
     auto slice_shape = m_shape.shrink();
     auto slice_size = slice_shape.size();
@@ -566,141 +522,104 @@ Tensor<T> Tensor<T>::operator[](size_t index) {
 template <typename T>
 template <typename F>
 inline Tensor<T>& Tensor<T>::apply(F f) {
-    std::transform(data(), data()+size(), data(), f);
+    std::transform(begin(), end(), begin(), f);
+    return *this;
+}
+
+template <typename T>
+inline Tensor<T>& Tensor<T>::apply(T(*f)(T)) {
+    std::transform(begin(), end(), begin(), f);
+    return *this;
+}
+
+template <typename T>
+template <typename U, typename F>
+inline Tensor<T>& Tensor<T>::apply(const Tensor<U>& y, F f) {
+    assert(shape() == y.shape());
+    std::transform(begin(), end(), y.begin(), begin(), f);
     return *this;
 }
 
 template <typename T>
 template <typename F, typename U>
-inline Tensor<U> Tensor<T>::transform(F f) const {
-    Tensor<U> res(m_shape);
-    std::transform(data(), data() + size(), res.data(), f);
+Tensor<U> Tensor<T>::transform(F f) const {
+    Tensor<U> res(shape());
+    std::transform(begin(), end(), res.begin(), f);
     return res;
 }
 
 template <typename T>
 template <typename U, typename F>
-inline void Tensor<T>::transformTo(Tensor<U>& target, F f) const {
+void Tensor<T>::transformTo(Tensor<U>& target, F f) const {
     assert(shape() == target.shape());
-    std::transform(data(), data() + size(), target.data(), f);
+    std::transform(begin(), end(), target.begin(), f);
+}
+
+template <typename T>
+template <typename U, typename F, typename W>
+Tensor<W> Tensor<T>::transform(const Tensor<U>& y, F f) const {
+    assert(shape() == y.shape());
+    Tensor<W> z(shape());
+    std::transform(begin(), end(), y.begin(), z.begin(), f);
+    return z;
+}
+
+template <typename T>
+template <typename U, typename W, typename F>
+void Tensor<T>::transformTo(Tensor<W>& z, const Tensor<U>& y, F f) const {
+    assert(shape() == y.shape() && shape() == z.shape());
+    std::transform(begin(), end(), y.begin(), z.begin(), f);
 }
 
 template <typename T>
 template <typename U>
 inline Tensor<U> Tensor<T>::cast() const {
-    return transform([](T x) { return static_cast<U>(x); });
+    return transform([](const T& x) { return static_cast<U>(x); });
 }
 
-/**
- * Perform binary operation on two tensors element and store the result into
- * the third tensor.
- */
-template <typename T, typename F>
-inline void transformTo(Tensor<T>& z, const Tensor<T>& x, const Tensor<T>& y, F f) {
-    assert(x.shape() == y.shape() && y.shape() == z.shape());
-    std::transform(x.data(), x.data() + x.size(), y.data(), z.data(), f);
-}
-
-/**
- * Perform binary operation on a tensor and a scalar value, store the
- * result into the third tensor.
- */
-template <typename T, typename F>
-void transformTo(Tensor<T>& z, const Tensor<T>& x, T y, F f) {
-    assert(x.shape() == z.shape());
-    auto px = x.data();
-    auto pz = z.data();
-    auto n  = x.size();
-    for (size_t i = 0; i < n; i++, px++, pz++) {
-        *pz = f(*px, y);
-    }
-}
-
-/**
- * Perform binary operation on a scalar value and a tensor, store the
- * result into the third tensor.
- */
-template <typename T, typename F>
-void transformTo(Tensor<T>& z, T x, const Tensor<T>& y, F f) {
-    assert(y.shape() == z.shape());
-    auto py = y.data();
-    auto pz = z.data();
-    auto n  = y.size();
-    for (size_t i = 0; i < n; i++, py++, pz++) {
-        *pz = f(x, *py);
-    }
-}
-
-/**
- * Perform binary operation on two tensors elements.
- */
-template <typename T, typename F>
-inline Tensor<T> transform(const Tensor<T>& x, const Tensor<T>& y, F f) {
-    Tensor<T> z(x.shape());
-    transformTo(z, x, y, f);
-    return z;
-}
-
-/**
- * Perform binary operation on a tensor and a scalar value.
- */
-template <typename T, typename F>
-inline Tensor<T> transform(const Tensor<T>& x, T y, F f) {
-    Tensor<T> z(x.shape());
-    transformTo(z, x, y, f);
-    return z;
-}
-
-/**
- * Perform binary operation on a scalar value and a tensor.
- */
-template <typename T, typename F>
-inline Tensor<T> transform(T x, const Tensor<T>&y, F f) {
-    Tensor<T> z(y.shape());
-    transformTo(z, x, y, f);
-    return z;
-
-}
-
-#define DEFINE_OPERATOR(op, fn) \
+#define DEFINE_OPERATOR(op) \
     template <typename T> \
-    inline Tensor<T>& Tensor<T>::operator op##=(const Tensor<T>& y) { \
-        kneron::model::transformTo(*this, *this, y, fn<T>()); \
-        return *this; \
+    template <typename U, typename> \
+    inline Tensor<T>& Tensor<T>::operator op##=(const Tensor<U>& y) { \
+        return apply(y, [](const T& a, const U& b){return a op b;}); \
     } \
     template <typename T> \
-    inline Tensor<T>& Tensor<T>::operator op##=(T y) { \
-        kneron::model::transformTo(*this, *this, y, fn<T>()); \
-        return *this; \
+    inline Tensor<T>& Tensor<T>::operator op##=(const T& b) { \
+        return apply([&b](const T& a){return a op b;}); \
     } \
-    template <typename T> \
-    inline Tensor<T> operator op(const Tensor<T>& x, const Tensor<T>& y) { \
-        return transform(x, y, fn<T>()); \
+    template <typename T, typename U, typename W = std::common_type_t<T,U>> \
+    inline Tensor<W> operator op(const Tensor<T>& x, const Tensor<U>& y) { \
+        return x.transform(y, [](const T& a, const U& b) -> W {return a op b;}); \
     } \
-    template <typename T> \
-    inline Tensor<T> operator op(const Tensor<T>& x, T y) { \
-        return transform(x, y, fn<T>()); \
+    template <typename T, typename U, typename W = std::common_type_t<T,U>> \
+    inline Tensor<W> operator op(const Tensor<T>& x, const U& b) { \
+        return x.transform([&b](const T& a) -> W {return a op b;}); \
     } \
-    template <typename T> \
-    inline Tensor<T> operator op(T x, const Tensor<T>& y) { \
-        return transform(x, y, fn<T>()); \
+    template <typename T, typename U, typename W = std::common_type_t<T,U>> \
+    inline Tensor<W> operator op(const T& a, const Tensor<U>& y) { \
+        return y.transform([&a](const U& b) -> W {return a op b;}); \
     }
 
-DEFINE_OPERATOR(+, std::plus)
-DEFINE_OPERATOR(-, std::minus)
-DEFINE_OPERATOR(*, std::multiplies)
-DEFINE_OPERATOR(/, std::divides)
+DEFINE_OPERATOR(+)
+DEFINE_OPERATOR(-)
+DEFINE_OPERATOR(*)
+DEFINE_OPERATOR(/)
 
 #undef DEFINE_OPERATOR
+
+template <typename T>
+Tensor<T> operator-(const Tensor<T>& x) {
+    return x.transform([](const T& a){return -a;});
+}
 
 template <typename T>
 Tensor<T> Tensor<T>::dot(const Tensor& y) const {
     assert(is_matrix() && y.is_matrix());
 
-    auto n = m_shape[0];
-    auto p = m_shape[1];
-    auto m = y.m_shape[1];
-    assert(p == y.m_shape[0]);
+    auto n = shape().extent(0);
+    auto p = shape().extent(1);
+    auto m = y.shape().extent(1);
+    assert(p == y.shape().extent(0));
 
     Tensor z({n, m});
     auto px = data();
@@ -710,7 +629,7 @@ Tensor<T> Tensor<T>::dot(const Tensor& y) const {
 
     for (i = 0; i < n; i++) {
         for (j = 0; j < m; j++) {
-            T v = T();
+            T v{};
             for (k = 0; k < p; k++)
                 v += px[i * p + k] * py[k * m + j];
             pz[i * m + j] = v;
@@ -721,26 +640,34 @@ Tensor<T> Tensor<T>::dot(const Tensor& y) const {
 }
 
 template <typename T>
-Tensor<T> Tensor<T>::transpose() const {
-    assert(is_matrix());
+void Tensor<T>::transposeTo(Tensor& target) const {
+    assert(is_matrix() && target.is_matrix());
+    assert(shape().extent(0) == target.shape().extent(1));
+    assert(shape().extent(1) == target.shape().extent(0));
 
-    auto n = m_shape[0];
-    auto m = m_shape[1];
-
-    Tensor y({m, n});
+    auto n = shape().extent(0);
+    auto m = shape().extent(1);
     auto px = data();
-    auto py = y.data();
+    auto py = target.data();
     int i, j;
 
-    for (i = 0; i < m; i++)
+    for (i = 0; i < m; i++) {
         for (j = 0; j < n; j++)
             *py++ = px[j * m + i];
-    return y;
+    }
+}
+
+template <typename T>
+inline Tensor<T> Tensor<T>::transpose() const {
+    assert(is_matrix());
+    Tensor res({shape().extent(1), shape().extent(0)});
+    transposeTo(res);
+    return res;
 }
 
 template <typename T>
 const T* Tensor<T>::printRec(std::ostream& out, const Shape& shape, size_t level, const T* data) {
-    auto d = shape[level];
+    auto d = shape.extent(level);
 
     out << '[';
     if (level == shape.rank()-1) {
@@ -761,7 +688,7 @@ const T* Tensor<T>::printRec(std::ostream& out, const Shape& shape, size_t level
             }
         }
     }
-    out << "]";
+    out << ']';
 
     return data;
 }

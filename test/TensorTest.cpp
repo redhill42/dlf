@@ -63,31 +63,6 @@ TEST_F(TensorTest, InitializedToZero) {
     EXPECT_THAT(t, T::Each(0));
 }
 
-TEST_F(TensorTest, InitializerList) {
-    Tensor<int32_t> tv = {{1, 2, 3, 4, 5}};
-    EXPECT_EQ(tv.shape(), Shape({5}));
-    EXPECT_THAT(tv, T::ElementsAre(1, 2, 3, 4, 5));
-
-    Tensor<int32_t> tm = {{{1, 2, 3, 4}, {5, 6, 7, 8}}};
-    EXPECT_EQ(tm.shape(), Shape({2, 4}));
-    EXPECT_THAT(tm, T::ElementsAre(1, 2, 3, 4, 5, 6, 7, 8));
-
-    Tensor<int32_t> tt = {{
-        {
-            { 1,  2,  3,  4},
-            { 5,  6,  7,  8},
-            { 9, 10, 11, 12}
-        },
-        {
-            {13, 14, 15, 16},
-            {17, 18, 19, 20},
-            {21, 22, 23, 24}
-        }
-    }};
-    EXPECT_EQ(tt.shape(), Shape({2,3,4}));
-    EXPECT_EQ(tt, t1);
-}
-
 TEST_F(TensorTest, Wrap) {
     int32_t data[2*3*4] = {0};
     auto t = Tensor<int32_t>::wrap({2,3,4}, data);
@@ -100,17 +75,17 @@ TEST_F(TensorTest, Wrap) {
 
 TEST_F(TensorTest, ElementAccess) {
     Tensor<int32_t> t({2, 3, 4});
-    int32_t next = 1;
+    int next = 1;
 
-    for (size_t i = 0; i < 2; i++)
-    for (size_t j = 0; j < 3; j++)
-    for (size_t k = 0; k < 4; k++)
+    for (int i = 0; i < 2; i++)
+    for (int j = 0; j < 3; j++)
+    for (int k = 0; k < 4; k++)
         t(i, j, k) = next++;
 
     next = 1;
-    for (size_t i = 0; i < 2; i++)
-    for (size_t j = 0; j < 3; j++)
-    for (size_t k = 0; k < 4; k++) {
+    for (int i = 0; i < 2; i++)
+    for (int j = 0; j < 3; j++)
+    for (int k = 0; k < 4; k++) {
         ASSERT_EQ(next, t(i,j,k));
         next++;
     }
@@ -154,10 +129,10 @@ TEST_F(TensorTest, Slice) {
 
 template <typename F>
 void TensorTest::testBinaryOp(const Tensor<int32_t>& t, const F& f) {
-    size_t next = 0;
-    for (size_t i = 0; i < 2; i++)
-    for (size_t j = 0; j < 3; j++)
-    for (size_t k = 0; k < 4; k++) {
+    int next = 0;
+    for (int i = 0; i < 2; i++)
+    for (int j = 0; j < 3; j++)
+    for (int k = 0; k < 4; k++) {
         ASSERT_EQ(f(data1[next], data2[next]), t(i,j,k));
         next++;
     }
@@ -165,10 +140,10 @@ void TensorTest::testBinaryOp(const Tensor<int32_t>& t, const F& f) {
 
 template <typename F>
 void TensorTest::testScalarOp(const Tensor<int32_t>& t, int32_t v, const F& f) {
-    size_t next = 0;
-    for (size_t i = 0; i < 2; i++)
-    for (size_t j = 0; j < 3; j++)
-    for (size_t k = 0; k < 4; k++) {
+    int next = 0;
+    for (int i = 0; i < 2; i++)
+    for (int j = 0; j < 3; j++)
+    for (int k = 0; k < 4; k++) {
         ASSERT_EQ(f(data1[next], v), t(i,j,k));
         next++;
     }
@@ -176,10 +151,10 @@ void TensorTest::testScalarOp(const Tensor<int32_t>& t, int32_t v, const F& f) {
 
 template <typename F>
 void TensorTest::testScalarOp(int32_t v, const Tensor<int32_t>& t, const F& f) {
-    size_t next = 0;
-    for (size_t i = 0; i < 2; i++)
-    for (size_t j = 0; j < 3; j++)
-    for (size_t k = 0; k < 4; k++) {
+    int next = 0;
+    for (int i = 0; i < 2; i++)
+    for (int j = 0; j < 3; j++)
+    for (int k = 0; k < 4; k++) {
         ASSERT_EQ(f(v, data1[next]), t(i,j,k));
         next++;
     }
@@ -216,6 +191,32 @@ TEST_F(TensorTest, ScalarAssignOp) {
     { SCOPED_TRACE("-=5"); auto t = t1; t -= 5; testScalarOp(t, 5, std::minus<>()); }
     { SCOPED_TRACE("*=5"); auto t = t1; t *= 5; testScalarOp(t, 5, std::multiplies<>()); }
     { SCOPED_TRACE("/=5"); auto t = t1; t /= 5; testScalarOp(t, 5, std::divides<>()); }
+}
+
+TEST_F(TensorTest, BinaryOpWithDifferentElementType) {
+    Tensor<int> x({2, 3}, {1, 2, 3, 4, 5, 6});
+    Tensor<double> y({2, 3}, {3.1, 3.2, 3.3, 5.5, 5.6, 5.7});
+
+    auto a = x; a += y;
+    EXPECT_THAT(a, T::ElementsAre(4, 5, 6, 9, 10, 11));
+
+    auto b = y; b += x;
+    EXPECT_THAT(b, T::ElementsAre(3.1+1, 3.2+2, 3.3+3, 5.5+4, 5.6+5, 5.7+6));
+
+    static_assert(std::is_same_v<decltype(x+y), Tensor<double>>);
+    EXPECT_THAT(x+y, T::ElementsAre(1+3.1, 2+3.2, 3+3.3, 4+5.5, 5+5.6, 6+5.7));
+
+    static_assert(std::is_same_v<decltype(y-x), Tensor<double>>);
+    EXPECT_THAT(y-x, T::ElementsAre(3.1-1, 3.2-2, 3.3-3, 5.5-4, 5.6-5, 5.7-6));
+
+    static_assert(std::is_same_v<decltype(x+5.5), Tensor<double>>);
+    EXPECT_THAT(x+5.5, T::ElementsAre(1+5.5, 2+5.5, 3+5.5, 4+5.5, 5+5.5, 6+5.5));
+
+    static_assert(std::is_same_v<decltype(5.5-x), Tensor<double>>);
+    EXPECT_THAT(5.5-x, T::ElementsAre(5.5-1, 5.5-2, 5.5-3, 5.5-4, 5.5-5, 5.5-6));
+
+    EXPECT_THAT(-x, T::ElementsAre(-1, -2, -3, -4, -5, -6));
+    EXPECT_THAT(-y, T::ElementsAre(-3.1, -3.2, -3.3, -5.5, -5.6, -5.7));
 }
 
 TEST_F(TensorTest, Expression) {
@@ -279,6 +280,26 @@ TEST_F(TensorTest, Apply) {
     checkDataTransform(t1, f);
 }
 
+template <typename T>
+static void ChainedApplyTest() {
+    constexpr T PI  = 3.14159;
+    constexpr T E   = 2.71828;
+    constexpr T PHI = 1.61803;
+    constexpr T SR2 = 1.41421;
+
+    Tensor<T> t({2,2}, {PI, E, PHI, SR2});
+    t.apply(sin).apply(sqrt);
+
+    static_assert(std::is_same_v<decltype(sin(PI)), T>);
+    auto f = [](auto x){ return sqrt(sin(x)); };
+    EXPECT_THAT(t, testing::ElementsAre(f(PI), f(E), f(PHI), f(SR2)));
+}
+
+TEST_F(TensorTest, ChainedApply) {
+    ChainedApplyTest<double>();
+    ChainedApplyTest<float>();
+}
+
 TEST_F(TensorTest, Transform) {
     {
         SCOPED_TRACE("");
@@ -314,10 +335,10 @@ TEST_F(TensorTest, Cast) {
 TEST_F(TensorTest, Transform2) {
     auto f = [](auto x, auto y) { return (x+y)/2; };
 
-    auto a = transform(t1, t2, f);
+    auto a = t1.transform(t2, f);
 
     Tensor<int32_t> b({2,3,4});
-    transformTo(b, t1, t2, f);
+    t1.transformTo(b, t2, f);
 
     for (int i = 0; i < a.size(); i++) {
         auto v = f(data1[i], data2[i]);
@@ -354,16 +375,14 @@ struct Relu {
 };
 
 TEST_F(TensorTest, Relu) {
-    // initialize random number generator
-    std::random_device rdev;
-    std::default_random_engine reng(rdev());
-    std::uniform_int_distribution<int32_t> rand(-500, 500);
-
     // fill a tensor with random numbers in [-500,500]
-    auto in = Tensor<int32_t>::build({100, 100}, std::bind(rand, reng));
+    auto rand = std::bind(std::uniform_int_distribution<int32_t>(-500, 500),
+                          std::default_random_engine(0x1234)); // NOLINT(cert-msc32-c,cert-msc51-cpp)
+    auto in = Tensor<int32_t>::build({100, 100}, rand);
 
     // relu with 100 as max value
     auto out = in.transform(Relu(100.0));
+    static_assert(std::is_same_v<decltype(out), Tensor<double>>);
 
     EXPECT_THAT(in, T::Contains(T::Lt(0)));
     EXPECT_THAT(in, T::Contains(T::Gt(100)));
