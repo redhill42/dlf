@@ -105,13 +105,13 @@ TEST_F(TensorTest, ElementAccess) {
     for (size_t i = 0; i < 2; i++)
     for (size_t j = 0; j < 3; j++)
     for (size_t k = 0; k < 4; k++)
-        t[{i, j, k}] = next++;
+        t(i, j, k) = next++;
 
     next = 1;
     for (size_t i = 0; i < 2; i++)
     for (size_t j = 0; j < 3; j++)
     for (size_t k = 0; k < 4; k++) {
-        ASSERT_EQ(next, (t[{i,j,k}]));
+        ASSERT_EQ(next, t(i,j,k));
         next++;
     }
 
@@ -140,16 +140,16 @@ TEST_F(TensorTest, Slice) {
     EXPECT_THAT(ts1, T::ElementsAre(17, 18, 19, 20));
     EXPECT_NE(ts1.data(), ts2.data());
 
-    ts1[{2}] = 100; // shallow change original tensor
-    EXPECT_EQ((t1[{1,1,2}]), 100);
+    ts1(2) = 100; // shallow change original tensor
+    EXPECT_EQ(t1(1,1,2), 100);
 
-    ts2[{3}] = 200; // should not change original tensor
-    EXPECT_EQ((t1[{1,1,3}]), 20);
+    ts2(3) = 200; // should not change original tensor
+    EXPECT_EQ(t1(1,1,3), 20);
 
     // change on original tensor should reflect on sliced tensor
-    t1[{1,1,1}] = 50;
-    EXPECT_EQ(ts1[{1}], 50);
-    EXPECT_EQ(ts2[{1}], 18); // no change on copy
+    t1(1,1,1) = 50;
+    EXPECT_EQ(ts1(1), 50);
+    EXPECT_EQ(ts2(1), 18); // no change on copy
 }
 
 template <typename F>
@@ -158,7 +158,7 @@ void TensorTest::testBinaryOp(const Tensor<int32_t>& t, const F& f) {
     for (size_t i = 0; i < 2; i++)
     for (size_t j = 0; j < 3; j++)
     for (size_t k = 0; k < 4; k++) {
-        ASSERT_EQ(f(data1[next], data2[next]), (t[{i,j,k}]));
+        ASSERT_EQ(f(data1[next], data2[next]), t(i,j,k));
         next++;
     }
 }
@@ -169,7 +169,7 @@ void TensorTest::testScalarOp(const Tensor<int32_t>& t, int32_t v, const F& f) {
     for (size_t i = 0; i < 2; i++)
     for (size_t j = 0; j < 3; j++)
     for (size_t k = 0; k < 4; k++) {
-        ASSERT_EQ(f(data1[next], v), (t[{i,j,k}]));
+        ASSERT_EQ(f(data1[next], v), t(i,j,k));
         next++;
     }
 }
@@ -180,7 +180,7 @@ void TensorTest::testScalarOp(int32_t v, const Tensor<int32_t>& t, const F& f) {
     for (size_t i = 0; i < 2; i++)
     for (size_t j = 0; j < 3; j++)
     for (size_t k = 0; k < 4; k++) {
-        ASSERT_EQ(f(v, data1[next]), (t[{i,j,k}]));
+        ASSERT_EQ(f(v, data1[next]), t(i,j,k));
         next++;
     }
 }

@@ -55,7 +55,7 @@ public:
     /**
      * Return the data offset for the given index.
      */
-    size_t offset(const std::initializer_list<size_t>& index) const noexcept;
+    size_t offset(const size_t* index) const noexcept;
 
     /**
      * Returns the next index within this shape.
@@ -64,6 +64,8 @@ public:
      */
     bool next(std::vector<size_t>& index) const noexcept;
 };
+
+namespace impl {
 
 template <typename InputIterator, typename T>
 using RequireInputIterator =
@@ -74,6 +76,21 @@ using RequireInputIterator =
         std::is_constructible_v<
             T, typename std::iterator_traits<InputIterator>::reference>,
         InputIterator>;
+
+// All() simply applies its predicates to every element of a variadic template
+
+constexpr bool All() { return true; }
+
+template <typename... Args>
+constexpr bool All(bool b, Args... args) {
+    return b && All(args...);
+}
+
+template <typename T, typename... Args>
+using RequireIndexes =
+    std::enable_if_t<All(std::is_convertible_v<Args, size_t>...), T>;
+
+} // namespace impl
 
 /**
  * Tensor is a geometric object that maps in a multi-linear manner geometric
@@ -147,7 +164,7 @@ public:
      * @param end the end of input iterator
      */
     template <typename It>
-    Tensor(Shape shape, It begin, RequireInputIterator<It,T> end);
+    Tensor(Shape shape, It begin, impl::RequireInputIterator<It,T> end);
 
     /**
      * Construct a tensor with an initializer list.
@@ -273,12 +290,14 @@ public:
     /**
      * Returns the element given by the index.
      */
-    const T operator[](std::initializer_list<size_t> index) const noexcept;
+    template <typename... Args>
+    impl::RequireIndexes<const T&, Args...> operator()(Args... args) const noexcept;
 
     /**
      * Returns the mutable element given by the index.
      */
-    T& operator[](std::initializer_list<size_t> index) noexcept;
+    template <typename... Args>
+    impl::RequireIndexes<T&, Args...> operator()(Args... args) noexcept;
 
     /**
      * Returns a slice of tensor at the given index. The returned tensor
@@ -376,7 +395,7 @@ Tensor<T>::Tensor(Shape shape, T* data)
 
 template <typename T>
 template <typename It>
-Tensor<T>::Tensor(Shape shape, It begin, RequireInputIterator<It,T> end)
+Tensor<T>::Tensor(Shape shape, It begin, impl::RequireInputIterator<It,T> end)
     : m_shape(std::move(shape))
 {
     m_size = m_shape.size();
@@ -515,13 +534,21 @@ inline bool Tensor<T>::operator!=(const Tensor& other) const {
     return !(*this == other);
 }
 
-template <typename T>
-inline const T Tensor<T>::operator[](std::initializer_list<size_t> index) const noexcept {
+template<typename T>
+template<typename... Args>
+impl::RequireIndexes<const T&, Args...>
+Tensor<T>::operator()(Args... args) const noexcept {
+    size_t index[] { size_t(args)... };
+    assert(std::size(index) == m_shape.rank());
     return data()[m_shape.offset(index)];
 }
 
-template <typename T>
-inline T& Tensor<T>::operator[](std::initializer_list<size_t> index) noexcept {
+template<typename T>
+template<typename... Args>
+impl::RequireIndexes<T&, Args...>
+Tensor<T>::operator()(Args... args) noexcept {
+    size_t index[] { size_t(args)... };
+    assert(std::size(index) == m_shape.rank());
     return data()[m_shape.offset(index)];
 }
 
