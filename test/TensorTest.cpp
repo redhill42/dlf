@@ -1,13 +1,12 @@
 #include <cmath>
 #include <complex>
+#include <variant>
 #include <random>
 #include "tensor.h"
 #include "gtest/gtest.h"
 #include "gmock/gmock.h"
 
-using kneron::model::Shape;
-using kneron::model::Tensor;
-
+using namespace kneron::model;
 namespace T = ::testing;
 
 class TensorTest : public ::testing::Test {
@@ -49,6 +48,13 @@ protected:
 
     template <typename T, typename F>
     void checkDataTransform(const Tensor<T>& t, F f);
+
+    template <typename T>
+    std::string format(Tensor<T> t) {
+        std::stringstream out;
+        out << t;
+        return out.str();
+    }
 };
 
 TEST_F(TensorTest, Init) {
@@ -217,11 +223,15 @@ TEST_F(TensorTest, BinaryOpWithDifferentElementType) {
 
     EXPECT_THAT(-x, T::ElementsAre(-1, -2, -3, -4, -5, -6));
     EXPECT_THAT(-y, T::ElementsAre(-3.1, -3.2, -3.3, -5.5, -5.6, -5.7));
+
+    Tensor<std::string> greetings({4}, {"Hello", "Bonjour", "Ciao", "Aloha"});
+    greetings += " world";
+    EXPECT_THAT(greetings, T::ElementsAre("Hello world", "Bonjour world", "Ciao world", "Aloha world"));
 }
 
 TEST_F(TensorTest, Expression) {
-    SCOPED_TRACE("5+x*y+x");
-    testBinaryOp(5+t1*t2+t1, [](auto x, auto y) { return 5+x*y+x; });
+    SCOPED_TRACE("5+x*y+x*3");
+    testBinaryOp(5+t1*t2+t1*3, [](auto x, auto y) { return 5+x*y+x*3; });
 }
 
 TEST_F(TensorTest, DotProduct) {
@@ -390,7 +400,61 @@ TEST_F(TensorTest, Relu) {
 }
 
 TEST_F(TensorTest, Format) {
-    std::stringstream out;
-    out << t2;
-    EXPECT_EQ(out.str(), "[[[2, 3, 5, 7],\n  [11, 13, 17, 19],\n  [23, 29, 31, 37]],\n [[41, 43, 47, 53],\n  [57, 59, 61, 67],\n  [71, 73, 79, 83]]]");
+    EXPECT_EQ(format(t2),
+        "[[[2, 3, 5, 7],\n"
+        "  [11, 13, 17, 19],\n"
+        "  [23, 29, 31, 37]],\n"
+        " [[41, 43, 47, 53],\n"
+        "  [57, 59, 61, 67],\n"
+        "  [71, 73, 79, 83]]]");
+
+    EXPECT_EQ(format(Tensor<int>()), "");
+}
+
+/**
+ * A simple tensor variant implementation. One can improve it to more efficient
+ * and functionality.
+ */
+template <typename... Ts>
+class TensorVariant
+{
+    std::variant<Tensor<Ts>...> m_var;
+
+public:
+    template <typename T>
+    TensorVariant(Tensor<T> t) : m_var(std::move(t)) {}
+
+    template <typename T>
+    TensorVariant& operator=(Tensor<T> t) {
+        m_var = std::move(t);
+    }
+
+    friend TensorVariant operator+(const TensorVariant& lhs, const TensorVariant& rhs) {
+        return std::visit(
+            [](auto&& x, auto&& y) { return TensorVariant(x + y); },
+            lhs.m_var, rhs.m_var);
+    }
+
+    template <typename F>
+    TensorVariant& apply(F f) {
+        std::visit([f](auto& t) { t.apply(f); }, m_var);
+        return *this;
+    }
+
+    template <typename T>
+    Tensor<T>& get() {
+        return std::get<Tensor<T>>(m_var);
+    }
+};
+
+TEST(Tensor, Variant) {
+    using MyTensorVariant = TensorVariant<int32_t, int64_t, float, double>;
+    MyTensorVariant t1 = Tensor<int32_t>({2,2}, {1, 2, 3, 4});
+    MyTensorVariant t2 = Tensor<double>({2, 2}, {3.14, 2.72, 1.62, 1.41});
+
+    MyTensorVariant t3 = t1 + t2;
+    EXPECT_THAT(t3.get<double>(), T::ElementsAre(1+3.14, 2+2.72, 3+1.62, 4+1.41));
+
+    t3.apply([](auto x) { return x*2; });
+    EXPECT_THAT(t3.get<double>(), T::ElementsAre((1+3.14)*2, (2+2.72)*2, (3+1.62)*2, (4+1.41)*2));
 }

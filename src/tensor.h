@@ -65,6 +65,11 @@ public:
     bool next(std::vector<size_t>& index) const noexcept;
 };
 
+namespace impl {
+template <typename T>
+using Arg = std::conditional_t<std::is_trivially_copyable_v<T>, T, const T&>;
+}
+
 /**
  * Tensor is a geometric object that maps in a multi-linear manner geometric
  * vectors, scalars, and other tensors to a resulting tensor.
@@ -287,7 +292,7 @@ public:
 #define DECLARE_OPERATOR(op) \
     template <typename U, typename = std::enable_if_t<std::is_convertible_v<U,T>>> \
     Tensor& operator op(const Tensor<U>& y); \
-    Tensor& operator op(const T& b);
+    Tensor& operator op(impl::Arg<T> b);
 
     DECLARE_OPERATOR(+=)
     DECLARE_OPERATOR(-=)
@@ -370,6 +375,14 @@ public:
     template <typename U, typename W, typename F>
     void transformTo(Tensor<W>& z, const Tensor<U>& y, F f) const;
 
+    // Rvalue optimization for transformations.
+    template <typename F, typename = std::enable_if_t<std::is_same_v<std::result_of_t<F(T)>,T>>>
+    Tensor<T> transform(F f) &&;
+    template <typename F, typename = std::enable_if_t<std::is_same_v<std::result_of_t<F(T,T)>,T>>>
+    Tensor<T> transform(const Tensor<T>& y, F f) &&;
+    template <typename F, typename = std::enable_if_t<std::is_same_v<std::result_of_t<F(T,T)>,T>>>
+    Tensor<T> transform(Tensor<T>&& y, F f) const;
+
     /**
      * Casting element type.
      *
@@ -380,7 +393,8 @@ public:
     Tensor<U> cast() const;
 
     friend std::ostream& operator<<(std::ostream& os, const Tensor& t) {
-        printRec(os, t.shape(), 0, t.data());
+        if (!t.empty())
+            printRec(os, t.shape(), 0, t.data());
         return os;
     }
 
@@ -542,7 +556,7 @@ inline Tensor<T>& Tensor<T>::apply(const Tensor<U>& y, F f) {
 
 template <typename T>
 template <typename F, typename U>
-Tensor<U> Tensor<T>::transform(F f) const {
+inline Tensor<U> Tensor<T>::transform(F f) const {
     Tensor<U> res(shape());
     std::transform(begin(), end(), res.begin(), f);
     return res;
@@ -550,14 +564,14 @@ Tensor<U> Tensor<T>::transform(F f) const {
 
 template <typename T>
 template <typename U, typename F>
-void Tensor<T>::transformTo(Tensor<U>& target, F f) const {
+inline void Tensor<T>::transformTo(Tensor<U>& target, F f) const {
     assert(shape() == target.shape());
     std::transform(begin(), end(), target.begin(), f);
 }
 
 template <typename T>
 template <typename U, typename F, typename W>
-Tensor<W> Tensor<T>::transform(const Tensor<U>& y, F f) const {
+inline Tensor<W> Tensor<T>::transform(const Tensor<U>& y, F f) const {
     assert(shape() == y.shape());
     Tensor<W> z(shape());
     std::transform(begin(), end(), y.begin(), z.begin(), f);
@@ -566,38 +580,77 @@ Tensor<W> Tensor<T>::transform(const Tensor<U>& y, F f) const {
 
 template <typename T>
 template <typename U, typename W, typename F>
-void Tensor<T>::transformTo(Tensor<W>& z, const Tensor<U>& y, F f) const {
+inline void Tensor<T>::transformTo(Tensor<W>& z, const Tensor<U>& y, F f) const {
     assert(shape() == y.shape() && shape() == z.shape());
     std::transform(begin(), end(), y.begin(), z.begin(), f);
 }
 
 template <typename T>
+template <typename F, typename>
+inline Tensor<T> Tensor<T>::transform(F f) && {
+    return std::move(apply(f));
+}
+
+template <typename T>
+template <typename F, typename>
+inline Tensor<T> Tensor<T>::transform(const Tensor<T> &y, F f) && {
+    return std::move(apply(y, f));
+}
+
+template <typename T>
+template <typename F, typename>
+inline Tensor<T> Tensor<T>::transform(Tensor<T>&& y, F f) const {
+    return std::move(y.apply(*this, [f](T a, T b){return f(b, a);}));
+}
+
+template <typename T>
 template <typename U>
 inline Tensor<U> Tensor<T>::cast() const {
-    return transform([](const T& x) { return static_cast<U>(x); });
+    return transform([](T x) { return static_cast<U>(x); });
 }
 
 #define DEFINE_OPERATOR(op) \
     template <typename T> \
     template <typename U, typename> \
     inline Tensor<T>& Tensor<T>::operator op##=(const Tensor<U>& y) { \
-        return apply(y, [](const T& a, const U& b){return a op b;}); \
+        return apply(y, [](impl::Arg<T> a, impl::Arg<U> b) {return a op b;}); \
     } \
     template <typename T> \
-    inline Tensor<T>& Tensor<T>::operator op##=(const T& b) { \
-        return apply([&b](const T& a){return a op b;}); \
+    inline Tensor<T>& Tensor<T>::operator op##=(impl::Arg<T> b) { \
+        return apply([b](impl::Arg<T> a) {return a op b;}); \
     } \
     template <typename T, typename U, typename W = std::common_type_t<T,U>> \
     inline Tensor<W> operator op(const Tensor<T>& x, const Tensor<U>& y) { \
-        return x.transform(y, [](const T& a, const U& b) -> W {return a op b;}); \
+        return x.transform(y, [](impl::Arg<T> a, impl::Arg<U> b) -> W {return a op b;}); \
     } \
     template <typename T, typename U, typename W = std::common_type_t<T,U>> \
-    inline Tensor<W> operator op(const Tensor<T>& x, const U& b) { \
-        return x.transform([&b](const T& a) -> W {return a op b;}); \
+    inline Tensor<W> operator op(const Tensor<T>& x, U b) { \
+        return x.transform([b=std::move(b)](impl::Arg<T> a) -> W {return a op b;}); \
     } \
     template <typename T, typename U, typename W = std::common_type_t<T,U>> \
-    inline Tensor<W> operator op(const T& a, const Tensor<U>& y) { \
-        return y.transform([&a](const U& b) -> W {return a op b;}); \
+    inline Tensor<W> operator op(T a, const Tensor<U>& y) { \
+        return y.transform([a=std::move(a)](impl::Arg<U> b) -> W {return a op b;}); \
+    } \
+    /* rvalue optimization */ \
+    template <typename T> \
+    inline Tensor<T> operator op(Tensor<T>&& x, const Tensor<T>& y) { \
+        return std::move(x.apply(y, [](impl::Arg<T> a, impl::Arg<T> b) {return a op b;})); \
+    } \
+    template <typename T> \
+    inline Tensor<T> operator op(const Tensor<T>& x, Tensor<T>&& y) { \
+        return std::move(y.apply(x, [](impl::Arg<T> b, impl::Arg<T> a) {return a op b;})); \
+    } \
+    template <typename T> \
+    inline Tensor<T> operator op(Tensor<T>&& x, Tensor<T>&& y) { \
+        return std::move(x.apply(y, [](impl::Arg<T> a, impl::Arg<T> b) { return a op b;})); \
+    } \
+    template <typename T> \
+    inline Tensor<T> operator op(Tensor<T>&& x, impl::Arg<T> b) { \
+        return std::move(x.apply([b](impl::Arg<T> a) {return a op b;})); \
+    } \
+    template <typename T> \
+    inline Tensor<T> operator op(impl::Arg<T> a, Tensor<T>&& y) { \
+        return std::move(y.apply([a](impl::Arg<T> b) {return a op b;})); \
     }
 
 DEFINE_OPERATOR(+)
@@ -608,8 +661,13 @@ DEFINE_OPERATOR(/)
 #undef DEFINE_OPERATOR
 
 template <typename T>
-Tensor<T> operator-(const Tensor<T>& x) {
-    return x.transform([](const T& a){return -a;});
+inline Tensor<T> operator-(const Tensor<T>& x) {
+    return x.transform([](T a){return -a;});
+}
+
+template <typename T>
+inline Tensor<T> operator-(Tensor<T>&& x) {
+    return std::move(x.apply([](T a){return -a;}));
 }
 
 template <typename T>
@@ -640,6 +698,14 @@ Tensor<T> Tensor<T>::dot(const Tensor& y) const {
 }
 
 template <typename T>
+inline Tensor<T> Tensor<T>::transpose() const {
+    assert(is_matrix());
+    Tensor res({shape().extent(1), shape().extent(0)});
+    transposeTo(res);
+    return res;
+}
+
+template <typename T>
 void Tensor<T>::transposeTo(Tensor& target) const {
     assert(is_matrix() && target.is_matrix());
     assert(shape().extent(0) == target.shape().extent(1));
@@ -655,14 +721,6 @@ void Tensor<T>::transposeTo(Tensor& target) const {
         for (j = 0; j < n; j++)
             *py++ = px[j * m + i];
     }
-}
-
-template <typename T>
-inline Tensor<T> Tensor<T>::transpose() const {
-    assert(is_matrix());
-    Tensor res({shape().extent(1), shape().extent(0)});
-    transposeTo(res);
-    return res;
 }
 
 template <typename T>
