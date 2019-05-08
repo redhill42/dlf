@@ -308,7 +308,12 @@ public:
     /**
      * Transpose a matrix. A matrix is a 2-dimension tensor.
      */
-    Tensor transpose() const;
+    Tensor transpose() const &;
+
+    /**
+     * In-place transpose a matrix.
+     */
+    Tensor transpose() &&;
 
     /**
      * Transpose a matrix into target.
@@ -316,7 +321,7 @@ public:
     void transposeTo(Tensor& target) const;
 
     /**
-     * Apply a unary function on tensor's elements.
+     * Transform tensor's elements by applying a unary function on tensor's elements.
      */
     template <typename F>
     Tensor& apply(F f);
@@ -328,17 +333,14 @@ public:
     Tensor& apply(T(*f)(T));
 
     /**
-     * Apply a binary function on two tensor's elements.
+     * Transform two tensor's elements by applying a binary function.
      */
     template <typename U, typename F>
     Tensor& apply(const Tensor<U>& y, F f);
 
     /**
-     * Transform tensor's elements to a new tensor by applying the given function.
-     * The element type may change during transformation.
-     *
-     * @param f the function to be applied.
-     * @return the Tensor that contains transformed elements.
+     * Transform two tensor's elements into the given target tensor by applying
+     * a binary function.
      */
     template <typename F, typename U = std::result_of_t<F(T)>>
     Tensor<U> transform(F f) const;
@@ -400,7 +402,15 @@ public:
 
 private:
     static const T* printRec(std::ostream& out, const Shape& shape, size_t level, const T* data);
+
+    static void transposeCopy(T* dst, const T* src, size_t r, size_t c);
+    static void transposeSquare(T* A, size_t n);
+    static void transposeInplace(T* A, size_t r, size_t c);
 };
+
+//==-------------------------------------------------------------------------
+// Tensor implementation
+//==-------------------------------------------------------------------------
 
 template <typename T>
 Tensor<T>::Tensor(Shape shape)
@@ -698,29 +708,74 @@ Tensor<T> Tensor<T>::dot(const Tensor& y) const {
 }
 
 template <typename T>
-inline Tensor<T> Tensor<T>::transpose() const {
+void Tensor<T>::transposeTo(Tensor& target) const {
+    assert(is_matrix() && target.is_matrix());
+
+    if (&target == this) {
+        // transpose in-place
+        std::move(target).transpose();
+    } else {
+        auto r = shape().extent(0);
+        auto c = shape().extent(1);
+        assert(r == target.shape().extent(1));
+        assert(c == target.shape().extent(0));
+        transposeCopy(target.data(), data(), r, c);
+    }
+}
+
+template <typename T>
+Tensor<T> Tensor<T>::transpose() const & {
     assert(is_matrix());
-    Tensor res({shape().extent(1), shape().extent(0)});
-    transposeTo(res);
+    auto r = shape().extent(0);
+    auto c = shape().extent(1);
+
+    Tensor<T> res({c, r});
+    transposeCopy(res.data(), data(), r, c);
     return res;
 }
 
 template <typename T>
-void Tensor<T>::transposeTo(Tensor& target) const {
-    assert(is_matrix() && target.is_matrix());
-    assert(shape().extent(0) == target.shape().extent(1));
-    assert(shape().extent(1) == target.shape().extent(0));
+Tensor<T> Tensor<T>::transpose() && {
+    assert(is_matrix());
+    auto r = shape().extent(0);
+    auto c = shape().extent(1);
 
-    auto n = shape().extent(0);
-    auto m = shape().extent(1);
-    auto px = data();
-    auto py = target.data();
-    int i, j;
-
-    for (i = 0; i < m; i++) {
-        for (j = 0; j < n; j++)
-            *py++ = px[j * m + i];
+    if (r == c) {
+        transposeSquare(data(), r);
+    } else {
+        m_shape = Shape({c, r});
+        transposeInplace(data(), r, c);
     }
+    return *this;
+}
+
+// Simple case: transpose with copy
+template <typename T>
+void Tensor<T>::transposeCopy(T* dst, const T* src, size_t r, size_t c) {
+    for (int i = 0; i < c; i++) {
+        auto px = src + i;
+        for (int j = 0; j < r; j++, px += c)
+            *dst++ = *px;
+    }
+}
+
+// Easy case: in-place transpose a square matrix
+template <typename T>
+void Tensor<T>::transposeSquare(T* A, size_t n) {
+    for (size_t i = 0; i < n; i++) {
+        for (size_t j = i + 1; j < n; j++) {
+            std::swap(A[i*n+j], A[j*n+i]);
+        }
+    }
+}
+
+// Hard case: in-place transpose a non-square matrix
+// https://en.wikipedia.org/wiki/In-place_matrix_transposition
+template <typename T>
+void Tensor<T>::transposeInplace(T* A, size_t r, size_t c) {
+    // naive implementation
+    Tensor<T> t({r, c}, A, A+r*c);
+    transposeCopy(A, t.data(), r, c);
 }
 
 template <typename T>

@@ -276,6 +276,17 @@ TEST_F(TensorTest, Transpose) {
     EXPECT_EQ(a.transpose(), b);
 }
 
+TEST_F(TensorTest, TransposeInPlace) {
+    for (size_t i = 0; i <= 5; i++) {
+        for (size_t j = 0; j <= 5; j++) {
+            auto a = Tensor<int>::build({i,j}, [x=1]()mutable{return x++;});
+            auto b = a.transpose(); // assume out-of-place transposition is correct
+            a.transposeTo(a); // in-place transpose
+            EXPECT_EQ(a, b);
+        }
+    }
+}
+
 template <typename T, typename F>
 void TensorTest::checkDataTransform(const Tensor<T>& t, F f) {
     for (int i = 0; i < t.size(); i++) {
