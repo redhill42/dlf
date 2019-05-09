@@ -234,7 +234,31 @@ TEST_F(TensorTest, Expression) {
     testBinaryOp(5+t1*t2+t1*3, [](auto x, auto y) { return 5+x*y+x*3; });
 }
 
-TEST_F(TensorTest, DotProduct) {
+TEST_F(TensorTest, VectorDotVector) {
+    Tensor<int32_t> a({3}, {1, 2, 3});
+    Tensor<int32_t> b({3}, {4, 5, 6});
+    auto c = a.inner(b);
+    EXPECT_EQ(c.shape(), Shape({1}));
+    EXPECT_THAT(c, T::ElementsAre(1*4+2*5+3*6));
+}
+
+TEST_F(TensorTest, VectorDotMatrix) {
+    Tensor<int32_t> a({3}, {1, 2, 3});
+    Tensor<int32_t> b({{3, 2}, {4, 5, 6, 7, 8, 9}});
+    auto c = a.inner(b);
+    EXPECT_EQ(c.shape(), Shape({2}));
+    EXPECT_THAT(c, T::ElementsAre(1*4+2*5+3*6, 1*7+2*8+3*9));
+}
+
+TEST_F(TensorTest, MatrixDotVector) {
+    Tensor<int32_t> a({2,3}, {1, 2, 3, 4, 5, 6});
+    Tensor<int32_t> b({3}, {7, 8, 9});
+    auto c = a.inner(b);
+    EXPECT_EQ(c.shape(), Shape({2}));
+    EXPECT_THAT(c, T::ElementsAre(1*7+2*8+3*9, 4*7+5*8+6*9));
+}
+
+TEST_F(TensorTest, MatrixDotMatrix) {
     Tensor<int32_t> a({3, 6}, {
         5, 7, 6, 10, 6, 2,
         9, 6, 6, 1, 6, 10,
@@ -256,7 +280,7 @@ TEST_F(TensorTest, DotProduct) {
         173, 148, 155, 167
     });
 
-    EXPECT_EQ(a.dot(b), c);
+    EXPECT_EQ(inner(a, b), c);
 }
 
 TEST_F(TensorTest, Transpose) {

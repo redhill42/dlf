@@ -44,7 +44,7 @@ public:
      * Shrink one level of dimensions.
      */
     Shape shrink() const {
-        return Shape(std::vector<size_t>(m_dims.begin()+1, m_dims.end()));
+        return Shape(std::vector(m_dims.begin()+1, m_dims.end()));
     }
 
     /**
@@ -301,9 +301,17 @@ public:
 #undef DECLARE_OPERATOR
 
     /**
-     * Perform dot product on two matrices. A matrix is a 2-dimension tensor.
+     * Perform inner product on two tensors. The tensors must be vector
+     * or matrix and have compatible dimensions.
      */
-    Tensor dot(const Tensor& y) const;
+    Tensor inner(const Tensor& rhs) const;
+
+    /**
+     * Alternate inner product form.
+     */
+    friend Tensor inner(const Tensor& lhs, const Tensor& rhs) {
+        return lhs.inner(rhs);
+    }
 
     /**
      * Transpose a matrix. A matrix is a 2-dimension tensor.
@@ -317,11 +325,16 @@ public:
 
     /**
      * Transpose a matrix into target.
+     *
+     * @param target the tensor to store the transposed matrix.
      */
     void transposeTo(Tensor& target) const;
 
     /**
      * Transform tensor's elements by applying a unary function on tensor's elements.
+     *
+     * @param f the unary function.
+     * @return *this (useful for chained operation)
      */
     template <typename F>
     Tensor& apply(F f);
@@ -329,18 +342,28 @@ public:
     /**
      * Apply the function pointer on tensor's elements. This is a workaround for
      * overloaded function deduction issue.
+     *
+     * @param f the function pointer
+     * @return *this (useful for chained operation)
      */
     Tensor& apply(T(*f)(T));
 
     /**
      * Transform two tensor's elements by applying a binary function.
+     *
+     * @param y another tensor involved in apply.
+     * @param f the binary function
+     * @return *this (useful for chained operation)
      */
     template <typename U, typename F>
     Tensor& apply(const Tensor<U>& y, F f);
 
     /**
-     * Transform two tensor's elements into the given target tensor by applying
-     * a binary function.
+     * Transform a tensor to a new tensor by applying the given unary function
+     * on tensor's elements.
+     *
+     * @param f the unary function
+     * @return the transformed tensor
      */
     template <typename F, typename U = std::result_of_t<F(T)>>
     Tensor<U> transform(F f) const;
@@ -383,7 +406,7 @@ public:
     template <typename F, typename = std::enable_if_t<std::is_same_v<std::result_of_t<F(T,T)>,T>>>
     Tensor<T> transform(const Tensor<T>& y, F f) &&;
     template <typename F, typename = std::enable_if_t<std::is_same_v<std::result_of_t<F(T,T)>,T>>>
-    Tensor<T> transform(Tensor<T>&& y, F f) const;
+    Tensor<T> transform(Tensor<T>&& y, F f) const &;
 
     /**
      * Casting element type.
@@ -403,9 +426,14 @@ public:
 private:
     static const T* printRec(std::ostream& out, const Shape& shape, size_t level, const T* data);
 
-    static void transposeCopy(T* dst, const T* src, size_t r, size_t c);
-    static void transposeSquare(T* A, size_t n);
-    static void transposeInplace(T* A, size_t r, size_t c);
+    static Tensor vector_dot_vector(const Tensor& lhs, const Tensor& rhs);
+    static Tensor vector_dot_matrix(const Tensor& lhs, const Tensor& rhs);
+    static Tensor matrix_dot_vector(const Tensor& lhs, const Tensor& rhs);
+    static Tensor matrix_dot_matrix(const Tensor& lhs, const Tensor& rhs);
+
+    static void copy_transpose(T* dst, const T* src, size_t r, size_t c);
+    static void square_transpose(T* A, size_t n);
+    static void inplace_transpose(T* A, size_t r, size_t c);
 };
 
 //==-------------------------------------------------------------------------
@@ -435,7 +463,7 @@ Tensor<T>::Tensor(Shape shape, It begin, RequireInputIterator<It> end)
     : m_shape(std::move(shape))
 {
     m_size = m_shape.size();
-    assert(end - begin == m_size);
+    assert(std::distance(begin, end) == m_size);
     m_alloc_data = std::make_unique<T[]>(m_size);
     m_data = m_alloc_data.get();
     std::copy(begin, end, m_data);
@@ -609,7 +637,7 @@ inline Tensor<T> Tensor<T>::transform(const Tensor<T> &y, F f) && {
 
 template <typename T>
 template <typename F, typename>
-inline Tensor<T> Tensor<T>::transform(Tensor<T>&& y, F f) const {
+inline Tensor<T> Tensor<T>::transform(Tensor<T>&& y, F f) const & {
     return std::move(y.apply(*this, [f](T a, T b){return f(b, a);}));
 }
 
@@ -681,26 +709,89 @@ inline Tensor<T> operator-(Tensor<T>&& x) {
 }
 
 template <typename T>
-Tensor<T> Tensor<T>::dot(const Tensor& y) const {
-    assert(is_matrix() && y.is_matrix());
+Tensor<T> Tensor<T>::inner(const Tensor& rhs) const {
+    if (is_vector() && rhs.is_vector())
+        return vector_dot_vector(*this, rhs);
+    if (is_vector() && rhs.is_matrix())
+        return vector_dot_matrix(*this, rhs);
+    if (is_matrix() && rhs.is_vector())
+        return matrix_dot_vector(*this, rhs);
+    if (is_matrix() && rhs.is_matrix())
+        return matrix_dot_matrix(*this, rhs);
+    assert(false);
+}
 
-    auto n = shape().extent(0);
-    auto p = shape().extent(1);
-    auto m = y.shape().extent(1);
-    assert(p == y.shape().extent(0));
+template <typename T>
+Tensor<T> Tensor<T>::vector_dot_vector(const Tensor& lhs, const Tensor& rhs) {
+    assert(lhs.shape().extent(0) == rhs.shape().extent(0));
+    auto n = lhs.shape().extent(0);
+    auto px = lhs.data(), py = rhs.data();
+    T v{};
+    for (size_t i = 0; i < n; i++)
+        v += *px++ * *py++;
+    return Tensor<T>({1}, {std::move(v)});
+}
+
+template <typename T>
+Tensor<T> Tensor<T>::vector_dot_matrix(const Tensor& lhs, const Tensor& rhs) {
+    assert(lhs.shape().extent(0) == rhs.shape().extent(0));
+    auto r = rhs.shape().extent(0);
+    auto c = rhs.shape().extent(1);
+
+    Tensor<T> res({c});
+    auto py = rhs.data();
+    auto pz = res.data();
+
+    for (size_t i = 0; i < c; i++) {
+        auto px = lhs.data();
+        T v{};
+        for (size_t j = 0; j < r; j++)
+            v += *px++ * *py++;
+        *pz++ = std::move(v);
+    }
+
+    return res;
+}
+
+template <typename T>
+Tensor<T> Tensor<T>::matrix_dot_vector(const Tensor& lhs, const Tensor& rhs) {
+    assert(lhs.shape().extent(1) == rhs.shape().extent(0));
+    auto r = lhs.shape().extent(0);
+    auto c = lhs.shape().extent(1);
+
+    Tensor<T> res({r});
+    auto px = lhs.data();
+    auto pz = res.data();
+
+    for (size_t i = 0; i < r; i++) {
+        auto py = rhs.data();
+        T v{};
+        for (size_t j = 0; j < c; j++)
+            v += *px++ * *py++;
+        *pz++ = std::move(v);
+    }
+
+    return res;
+}
+
+template <typename T>
+Tensor<T> Tensor<T>::matrix_dot_matrix(const Tensor& lhs, const Tensor& rhs) {
+    assert(lhs.shape().extent(1) == rhs.shape().extent(0));
+    auto n = lhs.shape().extent(0);
+    auto p = lhs.shape().extent(1);
+    auto m = rhs.shape().extent(1);
 
     Tensor z({n, m});
-    auto px = data();
-    auto py = y.data();
+    auto px = lhs.data();
+    auto py = rhs.data();
     auto pz = z.data();
-    int i, j, k;
 
-    for (i = 0; i < n; i++) {
-        for (j = 0; j < m; j++) {
+    for (size_t i = 0; i < n; i++) {
+        for (size_t j = 0; j < m; j++) {
             T v{};
-            for (k = 0; k < p; k++)
+            for (size_t k = 0; k < p; k++)
                 v += px[i * p + k] * py[k * m + j];
-            pz[i * m + j] = v;
+            pz[i * m + j] = std::move(v);
         }
     }
 
@@ -719,7 +810,7 @@ void Tensor<T>::transposeTo(Tensor& target) const {
         auto c = shape().extent(1);
         assert(r == target.shape().extent(1));
         assert(c == target.shape().extent(0));
-        transposeCopy(target.data(), data(), r, c);
+        copy_transpose(target.data(), data(), r, c);
     }
 }
 
@@ -730,7 +821,7 @@ Tensor<T> Tensor<T>::transpose() const & {
     auto c = shape().extent(1);
 
     Tensor<T> res({c, r});
-    transposeCopy(res.data(), data(), r, c);
+    copy_transpose(res.data(), data(), r, c);
     return res;
 }
 
@@ -741,17 +832,17 @@ Tensor<T> Tensor<T>::transpose() && {
     auto c = shape().extent(1);
 
     if (r == c) {
-        transposeSquare(data(), r);
+        square_transpose(data(), r);
     } else {
         m_shape = Shape({c, r});
-        transposeInplace(data(), r, c);
+        inplace_transpose(data(), r, c);
     }
     return *this;
 }
 
 // Simple case: transpose with copy
 template <typename T>
-void Tensor<T>::transposeCopy(T* dst, const T* src, size_t r, size_t c) {
+void Tensor<T>::copy_transpose(T* dst, const T* src, size_t r, size_t c) {
     for (int i = 0; i < c; i++) {
         auto px = src + i;
         for (int j = 0; j < r; j++, px += c)
@@ -761,7 +852,7 @@ void Tensor<T>::transposeCopy(T* dst, const T* src, size_t r, size_t c) {
 
 // Easy case: in-place transpose a square matrix
 template <typename T>
-void Tensor<T>::transposeSquare(T* A, size_t n) {
+void Tensor<T>::square_transpose(T* A, size_t n) {
     for (size_t i = 0; i < n; i++) {
         for (size_t j = i + 1; j < n; j++) {
             std::swap(A[i*n+j], A[j*n+i]);
@@ -772,10 +863,10 @@ void Tensor<T>::transposeSquare(T* A, size_t n) {
 // Hard case: in-place transpose a non-square matrix
 // https://en.wikipedia.org/wiki/In-place_matrix_transposition
 template <typename T>
-void Tensor<T>::transposeInplace(T* A, size_t r, size_t c) {
+void Tensor<T>::inplace_transpose(T* A, size_t r, size_t c) {
     // naive implementation
     Tensor<T> t({r, c}, A, A+r*c);
-    transposeCopy(A, t.data(), r, c);
+    copy_transpose(A, t.data(), r, c);
 }
 
 template <typename T>
