@@ -24,8 +24,9 @@ namespace kneron::concurrent {
 //      * for space to become available.
 //      *
 //      * @param e the element to add
+//      * @return true if element is enqueued, false if the queue is invalid
 //      */
-//     void put(E e);
+//     bool put(E e);
 //
 //     /**
 //      * Inserts the specified element into this queue if it is possible to do
@@ -52,8 +53,9 @@ namespace kneron::concurrent {
 //      * until an element becomes available.
 //      *
 //      * @param p the address to element to take, must not be null
+//      * @return true if an element is dequeued, false if the queue is invalid
 //      */
-//     void take(E *p);
+//     bool take(E *p);
 //
 //     /**
 //      * Retrieves and removes the head of this queue if an element is available.
@@ -91,6 +93,22 @@ namespace kneron::concurrent {
 //      * blocking.
 //      */
 //     size_t remaining() const noexcept;
+//
+//     /**
+//      * Remove all elements from queue.
+//      */
+//     void clear();
+//
+//     /**
+//      * Invalidate the queue. No more elements could be enqueued and all
+//      * waiting thread will be notified.
+//      */
+//     void invalidate();
+//
+//     /**
+//      * Returns true if this queue is valid, false othersie.
+//      */
+//     bool valid() const noexcept;
 // };
 
 //==-------------------------------------------------------------------------
@@ -111,12 +129,14 @@ public:
     explicit BoundedBlockingQueue(size_t capacity)
         : m_items(capacity) {}
 
-    void put(E e);
+    ~BoundedBlockingQueue() { invalidate(); clear(); }
+
+    bool put(E e);
     bool offer(E e);
     template <typename Rep, typename Duration>
     bool offer(E e, std::chrono::duration<Rep, Duration> timeout);
 
-    void take(E* p);
+    bool take(E* p);
     bool poll(E* p);
     template <typename Rep, typename Duration>
     bool poll(E* p, std::chrono::duration<Rep, Duration> timeout);
@@ -124,6 +144,10 @@ public:
     bool empty() const noexcept;
     size_t size() const noexcept;
     size_t remaining() const noexcept;
+
+    void clear();
+    void invalidate();
+    bool valid() const noexcept;
 
 private:
     /** The queued items */
@@ -147,117 +171,131 @@ private:
     /** Condition for waiting puts */
     std::condition_variable m_notFull;
 
-    void enqueue(E& x);
-    void dequeue(E* p);
+    /** Validation state. */
+    bool m_valid = true;
 
-    bool isEmpty() { return m_count == 0; }
-    bool isFull()  { return m_count == m_items.size(); }
+    bool enqueue(std::unique_lock<std::mutex>& lock, E& x);
+    bool dequeue(std::unique_lock<std::mutex>& lock, E* p);
+
+    bool isEmpty() const noexcept { return m_count == 0; }
+    bool isFull()  const noexcept { return m_count == m_items.size(); }
+    bool isValid() const noexcept { return m_valid; }
 };
 
 template <typename E>
-void BoundedBlockingQueue<E>::enqueue(E& x) {
+bool BoundedBlockingQueue<E>::enqueue(std::unique_lock<std::mutex>& lock, E& x) {
     m_items[m_putIndex] = std::move(x);
     if (++m_putIndex == m_items.size())
         m_putIndex = 0;
     m_count++;
+
+    lock.unlock();
+    m_notEmpty.notify_one();
+    return true;
 }
 
 template <typename E>
-void BoundedBlockingQueue<E>::dequeue(E* p) {
+bool BoundedBlockingQueue<E>::dequeue(std::unique_lock<std::mutex>& lock, E* p) {
     *p = std::move(m_items[m_takeIndex]);
     if (++m_takeIndex == m_items.size())
         m_takeIndex = 0;
     m_count--;
+
+    lock.unlock();
+    m_notFull.notify_one();
+    return true;
 }
 
 template <typename E>
-void BoundedBlockingQueue<E>::put(E e) {
-    {
-        std::unique_lock lock(m_lock);
-        while (isFull())
-            m_notFull.wait(lock);
-        enqueue(e);
-    }
-    m_notEmpty.notify_one();
+bool BoundedBlockingQueue<E>::put(E e) {
+    std::unique_lock lock(m_lock);
+    m_notFull.wait(lock, [this]() {
+        return !isValid() || !isFull();
+    });
+    return isValid() && enqueue(lock, e);
 }
 
 template <typename E>
 bool BoundedBlockingQueue<E>::offer(E e) {
-    {
-        std::unique_lock lock(m_lock);
-        if (isFull())
-            return false;
-        enqueue(e);
-    }
-    m_notEmpty.notify_one();
-    return true;
+    std::unique_lock lock(m_lock);
+    return isValid() && !isFull() && enqueue(lock, e);
 }
 
 template <typename E>
 template <typename Rep, typename Duration>
 bool BoundedBlockingQueue<E>::offer(E e, std::chrono::duration<Rep,Duration> timeout) {
-    {
-        std::unique_lock lock(m_lock);
-        if (isFull() && !m_notFull.wait_for(lock, timeout, [this](){ return !isFull(); }))
-            return false;
-        enqueue(e);
-    }
-    m_notEmpty.notify_one();
-    return true;
+    std::unique_lock lock(m_lock);
+    if (!m_notFull.wait_for(lock, timeout, [this]() {
+        return !isValid() || !isFull();
+    })) return false;
+    return isValid() && enqueue(lock, e);
 }
 
 template <typename E>
-void BoundedBlockingQueue<E>::take(E* p) {
-    {
-        std::unique_lock lock(m_lock);
-        while (isEmpty())
-            m_notEmpty.wait(lock);
-        dequeue(p);
-    }
-    m_notFull.notify_one();
+bool BoundedBlockingQueue<E>::take(E* p) {
+    std::unique_lock lock(m_lock);
+    m_notEmpty.wait(lock, [this]() {
+        return !isValid() || !isEmpty();
+    });
+    return !isEmpty() && dequeue(lock, p);
 }
 
 template <typename E>
 bool BoundedBlockingQueue<E>::poll(E* p) {
-    {
-        std::unique_lock lock(m_lock);
-        if (isEmpty())
-            return false;
-        dequeue(p);
-    }
-    m_notFull.notify_one();
-    return true;
+    std::unique_lock lock(m_lock);
+    return !isEmpty() && dequeue(lock, p);
 }
 
 template <typename E>
 template <typename Rep, typename Duration>
 bool BoundedBlockingQueue<E>::poll(E* p, std::chrono::duration<Rep, Duration> timeout) {
-    {
-        std::unique_lock lock(m_lock);
-        if (isEmpty() && !m_notEmpty.wait_for(lock, timeout, [this](){ return !isEmpty(); }))
-            return false;
-        dequeue(p);
-    }
-    m_notFull.notify_one();
-    return true;
+    std::unique_lock lock(m_lock);
+    if (!m_notEmpty.wait_for(lock, timeout, [this]() {
+        return !isValid() || !isEmpty();
+    })) return false;
+    return !isEmpty() && dequeue(lock, p);
 }
 
 template <typename E>
-bool BoundedBlockingQueue<E>::empty() const noexcept {
+inline bool BoundedBlockingQueue<E>::empty() const noexcept {
     std::unique_lock lock(m_lock);
     return isEmpty();
 }
 
 template <typename E>
-size_t BoundedBlockingQueue<E>::size() const noexcept {
+inline size_t BoundedBlockingQueue<E>::size() const noexcept {
     std::unique_lock lock(m_lock);
     return m_count;
 }
 
 template <typename E>
-size_t BoundedBlockingQueue<E>::remaining() const noexcept {
+inline size_t BoundedBlockingQueue<E>::remaining() const noexcept {
     std::unique_lock lock(m_lock);
     return m_items.size() - m_count;
+}
+
+template <typename E>
+void BoundedBlockingQueue<E>::clear() {
+    std::unique_lock lock(m_lock);
+    m_items.clear();
+    lock.unlock();
+    m_notFull.notify_all();
+}
+
+template <typename E>
+void BoundedBlockingQueue<E>::invalidate() {
+    std::unique_lock lock(m_lock);
+    if (m_valid) {
+        m_valid = false;
+        m_notEmpty.notify_all();
+        m_notFull.notify_all();
+    }
+}
+
+template <typename E>
+inline bool BoundedBlockingQueue<E>::valid() const noexcept {
+    std::unique_lock lock(m_lock);
+    return m_valid;
 }
 
 //==-------------------------------------------------------------------------
@@ -272,12 +310,14 @@ size_t BoundedBlockingQueue<E>::remaining() const noexcept {
 template <typename E>
 class UnboundedBlockingQueue {
 public:
-    void put(E e);
+    ~UnboundedBlockingQueue() { invalidate(); clear(); }
+
+    bool put(E e);
     bool offer(E e);
     template <typename Rep, typename Duration>
     bool offer(E e, std::chrono::duration<Rep, Duration> timeout);
 
-    void take(E* p);
+    bool take(E* p);
     bool poll(E* p);
     template <typename Rep, typename Duration>
     bool poll(E* p, std::chrono::duration<Rep, Duration> timeout);
@@ -285,6 +325,10 @@ public:
     bool empty() const noexcept;
     size_t size() const noexcept;
     size_t remaining() const noexcept;
+
+    void clear();
+    void invalidate();
+    bool valid() const noexcept;
 
 private:
     /** The underlying queue */
@@ -295,56 +339,79 @@ private:
 
     /** Condition for waiting takes */
     std::condition_variable m_notEmpty;
+
+    /** Validation state */
+    bool m_valid = true;
+
+    bool isValid() { return m_valid; }
+
+    bool enqueue(E& e);
+    bool dequeue(E* p);
 };
 
 template <typename E>
-void UnboundedBlockingQueue<E>::put(E e) {
+bool UnboundedBlockingQueue<E>::enqueue(E& e) {
     std::unique_lock lock(m_lock);
-    m_queue.push(std::move(e));
-    lock.unlock();
-    m_notEmpty.notify_one();
+    if (isValid()) {
+        m_queue.push(std::move(e));
+        lock.unlock();
+        m_notEmpty.notify_one();
+        return true;
+    } else {
+        return false;
+    }
+}
+
+template <typename E>
+bool UnboundedBlockingQueue<E>::dequeue(E* p) {
+    if (!m_queue.empty()) {
+        *p = std::move(m_queue.front());
+        m_queue.pop();
+        return true;
+    } else {
+        return false;
+    }
+}
+
+template <typename E>
+bool UnboundedBlockingQueue<E>::put(E e) {
+    return enqueue(e);
 }
 
 template <typename E>
 inline bool UnboundedBlockingQueue<E>::offer(E e) {
-    put(std::move(e));
-    return true;
+    return enqueue(e);
 }
 
 template <typename E>
 template <typename Rep, typename Duration>
 inline bool UnboundedBlockingQueue<E>::offer(E e, std::chrono::duration<Rep, Duration>) {
-    put(std::move(e));
-    return true;
+    return enqueue(e);
 }
 
 template <typename E>
-void UnboundedBlockingQueue<E>::take(E* p) {
+bool UnboundedBlockingQueue<E>::take(E* p) {
     std::unique_lock lock(m_lock);
-    while (m_queue.empty())
-        m_notEmpty.wait(lock);
-    *p = std::move(m_queue.front());
-    m_queue.pop();
+    m_notEmpty.wait(lock, [this]() {
+        return !isValid() || !m_queue.empty();
+    });
+    return dequeue(p);
 }
 
 template <typename E>
 bool UnboundedBlockingQueue<E>::poll(E* p) {
     std::unique_lock lock(m_lock);
-    if (m_queue.empty())
-        return false;
-    *p = std::move(m_queue.front());
-    m_queue.pop();
+    return dequeue(p);
 }
 
 template <typename E>
 template <typename Rep, typename Duration>
 bool UnboundedBlockingQueue<E>::poll(E* p, std::chrono::duration<Rep, Duration> timeout) {
     std::unique_lock lock(m_lock);
-    if (m_queue.empty() && !m_notEmpty.wait_for(lock, timeout, [this](){ return !m_queue.empty(); }))
-        return false;
-    *p = std::move(m_queue.front());
-    m_queue.pop();
-    return true;
+    if (!m_notEmpty.wait_for(lock, timeout, [this]() {
+        return !isValid() || !m_queue.empty();
+    })) return false;
+    return dequeue(p);
 }
 
 template <typename E>
@@ -364,6 +431,31 @@ inline size_t UnboundedBlockingQueue<E>::remaining() const noexcept {
     std::unique_lock lock(m_lock);
     return std::numeric_limits<size_t>::max();
 }
+
+template <typename E>
+void UnboundedBlockingQueue<E>::clear() {
+    std::unique_lock lock(m_lock);
+    while (!m_queue.empty()) {
+        m_queue.pop();
+    }
+}
+
+template <typename E>
+void UnboundedBlockingQueue<E>::invalidate() {
+    std::unique_lock lock(m_lock);
+    if (m_valid) {
+        m_valid = false;
+        m_notEmpty.notify_all();
+    }
+}
+
+template <typename E>
+inline bool UnboundedBlockingQueue<E>::valid() const noexcept {
+    std::unique_lock lock(m_lock);
+    return m_valid;
+}
+
+//==-------------------------------------------------------------------------
 
 } // namespace kneron::concurrent
 
