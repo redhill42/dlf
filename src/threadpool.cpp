@@ -7,7 +7,6 @@
 #include "concurrent.h"
 
 using namespace kneron::concurrent;
-using namespace kneron::concurrent::impl;
 
 template <typename Func>
 struct AtEnd {
@@ -16,17 +15,7 @@ struct AtEnd {
     ~AtEnd() { block(); }
 };
 
-ThreadPool::ThreadPool(size_t corePoolSize, size_t maximumPoolSize, size_t queueSize,
-                       std::chrono::nanoseconds keepAliveTime)
-    : m_corePoolSize{corePoolSize},
-      m_maximumPoolSize{maximumPoolSize},
-      m_workQueue{queueSize},
-      m_keepAliveTime{keepAliveTime}
-{
-    assert(maximumPoolSize > 0 && maximumPoolSize >= corePoolSize);
-}
-
-void ThreadPool::advanceRunState(ctl_t targetState) {
+void ThreadPoolExecutor::advanceRunState(ctl_t targetState) {
     ctl_t c = m_ctl.load(std::memory_order_relaxed);
     for (;;) {
         if (c >= targetState)
@@ -45,7 +34,7 @@ void ThreadPool::advanceRunState(ctl_t targetState) {
  * possible -- reducing worker count or removing tasks from
  * the queue during shutdown.
  */
-void ThreadPool::tryTerminate() {
+void ThreadPoolExecutor::tryTerminate() {
     ctl_t c = m_ctl.load(std::memory_order_relaxed);
     for (;;) {
         if (isRunning(c) || (c >= TIDYING) ||
@@ -68,7 +57,7 @@ void ThreadPool::tryTerminate() {
     }
 }
 
-bool ThreadPool::addWorker(std::unique_ptr<Runnable>* task, bool core) {
+bool ThreadPoolExecutor::addWorker(std::unique_ptr<Runnable>* task, bool core) {
     bool retry = true;
     while (retry) {
         ctl_t c = m_ctl;
@@ -93,46 +82,21 @@ bool ThreadPool::addWorker(std::unique_ptr<Runnable>* task, bool core) {
         }
     }
 
-    std::thread(
-        &ThreadPool::runWorker, this,
-        task ? std::move(*task) : nullptr
-    ).detach();
+    try {
+        std::thread(
+            &ThreadPoolExecutor::runWorker, this,
+            task ? std::move(*task) : nullptr
+        ).detach();
+    } catch (...) {
+        decrementWorkerCount();
+        tryTerminate();
+        throw;
+    }
+
     return true;
 }
 
-void ThreadPool::onWorkerExit(bool completedAbruptly) {
-    if (completedAbruptly) // If abrupt, then workerCount wasn't adjusted
-        decrementWorkerCount();
-
-    tryTerminate();
-
-    ctl_t c = m_ctl;
-    if (c <= STOP) {
-        if (!completedAbruptly) {
-            size_t min = m_allowCoreThreadTimeOut ? 0 : m_corePoolSize;
-            if (min == 0 && !m_workQueue.empty())
-                min = 1;
-            if (workerCountOf(c) >= min)
-                return;
-        }
-        addWorker(nullptr, false);
-    }
-}
-
-void ThreadPool::runWorker(std::unique_ptr<Runnable> task) {
-    bool completedAbruptly = true;
-    AtEnd atThreadExit([this, &completedAbruptly]() {
-        onWorkerExit(completedAbruptly);
-    });
-
-    while (task != nullptr || (task = getTask()) != nullptr) {
-        task->run();
-        task = nullptr;
-    }
-    completedAbruptly = false;
-}
-
-std::unique_ptr<Runnable> ThreadPool::getTask() {
+std::unique_ptr<Runnable> ThreadPoolExecutor::getTask() {
     bool timedOut = false;
 
     for (;;) {
@@ -165,7 +129,41 @@ std::unique_ptr<Runnable> ThreadPool::getTask() {
     }
 }
 
-void ThreadPool::execute(std::unique_ptr<Runnable> command) {
+void ThreadPoolExecutor::runWorker(std::unique_ptr<Runnable> task) {
+    bool completedAbruptly = true;
+
+    AtEnd atThreadExit([this, &completedAbruptly]() {
+        onWorkerExit(completedAbruptly);
+    });
+
+    while (task != nullptr || (task = getTask()) != nullptr) {
+        task->run();
+        task = nullptr;
+    }
+
+    completedAbruptly = false;
+}
+
+void ThreadPoolExecutor::onWorkerExit(bool completedAbruptly) {
+    if (completedAbruptly) // If abrupt, then workerCount wasn't adjusted
+        decrementWorkerCount();
+
+    tryTerminate();
+
+    ctl_t c = m_ctl;
+    if (c < STOP) {
+        if (!completedAbruptly) {
+            size_t min = m_allowCoreThreadTimeOut ? 0 : m_corePoolSize;
+            if (min == 0 && !m_workQueue.empty())
+                min = 1;
+            if (workerCountOf(c) >= min)
+                return;
+        }
+        addWorker(nullptr, false);
+    }
+}
+
+void ThreadPoolExecutor::execute(std::unique_ptr<Runnable> command) {
     assert(command != nullptr);
     if (workerCountOf(m_ctl) < m_corePoolSize) {
         if (addWorker(&command, true))
@@ -179,12 +177,24 @@ void ThreadPool::execute(std::unique_ptr<Runnable> command) {
     }
 }
 
-void ThreadPool::shutdown() {
+void ThreadPoolExecutor::shutdown() {
     advanceRunState(SHUTDOWN);
     tryTerminate();
 }
 
-bool ThreadPool::awaitTermination(std::chrono::nanoseconds timeout) {
+std::vector<std::unique_ptr<Runnable>> ThreadPoolExecutor::shutdownNow() {
+    std::vector<std::unique_ptr<Runnable>> result;
+    std::unique_ptr<Runnable> task;
+
+    advanceRunState(STOP);
+    result.reserve(m_workQueue.size());
+    while (m_workQueue.poll(&task))
+        result.push_back(std::move(task));
+    tryTerminate();
+    return result;
+}
+
+bool ThreadPoolExecutor::awaitTerminationNano(std::chrono::nanoseconds timeout) {
     std::unique_lock lock(m_mainLock);
     for (;;) {
         if (m_ctl >= TERMINATED) {
@@ -199,7 +209,7 @@ bool ThreadPool::awaitTermination(std::chrono::nanoseconds timeout) {
     }
 }
 
-void ThreadPool::reject(std::unique_ptr<Runnable> task) {
+void ThreadPoolExecutor::reject(std::unique_ptr<Runnable> task) {
     // Default implementation is run task on caller's thread
     task->run();
 }

@@ -2,6 +2,7 @@
 #define KNERON_CONCURRENT_H
 
 #include <queue>
+#include <vector>
 #include <thread>
 #include <future>
 #include <mutex>
@@ -291,15 +292,7 @@ bool BlockingQueue<E>::valid() const noexcept {
 //  * The Executor executes submitted tasks. This interface provides a way
 //  * of decoupling task submission from the mechanics of how each task will
 //  * be run, including details of thread use, scheduling, etc. An Executor
-//  * is normally used instead of explicitly creating threads. For example,
-//  * rather than invoking std::thread(task, args...) for each of a set of
-//  * tasks, you might use:
-//  *
-//  * @code
-//  * Executor executor = anExecutor;
-//  * executor.submit(task, args...)
-//  * ...
-//  * @endcode
+//  * is normally used instead of explicitly creating threads.
 //  *
 //  * However, the Executor interface does not strictly require that execution
 //  * be asynchronous. In the simplest case, an executor can run the submitted
@@ -307,6 +300,15 @@ bool BlockingQueue<E>::valid() const noexcept {
 //  */
 // class Executor {
 // public:
+//     /**
+//      * Executes the given command at some time in the future. The command
+//      * may execute in a new thread, in a pooled thread, or in the calling
+//      * thread, at the discretion of the Executor implementation.
+//      *
+//      * @param command the runnable task
+//      */
+//     void execute(std::unique_ptr<Runnable> command);
+//
 //     /**
 //      * Submits a value-returning task for execution and returns a future
 //      * representing the pending results of the task. The future's get method
@@ -339,19 +341,17 @@ struct Runnable {
     }
 };
 
-namespace impl {
-
 /**
- * The PackagedTask class encapsulate any callable object and implement the
+ * The PackagedTask class encapsulate any callable object and implements the
  * Runnable interface.
  */
 template <typename Func, typename... Args>
 class PackagedTask : public Runnable {
 public:
-    using ResultType = std::invoke_result_t<std::decay_t<Func>, std::decay_t<Args>...>;
+    using ResultType = std::invoke_result_t<Func, Args...>;
 
     explicit PackagedTask(Func&& func, Args&&... args)
-        : func(std::packaged_task<ResultType(std::decay_t<Args>...)>(std::move(func))),
+        : func(std::packaged_task<ResultType(Args...)>(std::move(func))),
           args(std::move(args)...) {}
 
     PackagedTask(PackagedTask&& t) noexcept
@@ -362,27 +362,37 @@ public:
     }
 
     void run() override {
-        execute(std::make_index_sequence<sizeof...(Args)>());
+        execute(std::index_sequence_for<Args...>());
     }
 
 private:
-    std::packaged_task<ResultType(std::decay_t<Args>...)> func;
+    std::packaged_task<ResultType(Args...)> func;
     std::tuple<Args...> args;
 
-    template <size_t... Indices>
-    void execute(std::index_sequence<Indices...>) {
-        std::invoke(std::move(func), std::move(std::get<Indices>(args))...);
+    template <size_t... I>
+    void execute(std::index_sequence<I...>) {
+        std::invoke(std::move(func), std::move(std::get<I>(args))...);
     }
 };
 
 /**
- * The thread pool executes each submitted task using one of possibly
+ * The thread pool executor executes each submitted task using one of possibly
  * several threads.
  */
-class ThreadPool {
+class ThreadPoolExecutor {
+    template <typename Rep, typename Period>
+    std::chrono::nanoseconds toNano(std::chrono::duration<Rep, Period> d) {
+        return std::chrono::duration_cast<std::chrono::nanoseconds>(d);
+    }
+
+    template <typename T>
+    typename std::decay_t<T> decay_copy(T&& t) {
+        return std::forward<T>(t);
+    }
+
 public:
     /**
-     * Creates a new ThreadPool with the given initial parameters.
+     * Creates a new ThreadPoolExecutor with the given initial parameters.
      *
      * @param corePoolSize the number of threads to keep in the pool, even
      *        if they are idle, unless allowCoreThreadTimeOut is set
@@ -394,13 +404,14 @@ public:
      *        the core, this is the maximum time that excess idle threads
      *        will wait for new tasks before terminating.
      */
-    ThreadPool(size_t corePoolSize,  size_t maximumPoolSize, size_t queueSize,
-               std::chrono::nanoseconds keepAliveTime);
+    template <typename Rep, typename Period>
+    ThreadPoolExecutor(size_t corePoolSize, size_t maximumPoolSize, size_t queueSize,
+                       std::chrono::duration<Rep, Period> keepAliveTime);
 
     /**
      * The destructor shutdown the thread pool.
      */
-    virtual ~ThreadPool() { shutdown(); }
+    ~ThreadPoolExecutor() { shutdown(); }
 
     /**
      * Executes the given task sometime in the future. The task may
@@ -409,6 +420,24 @@ public:
      * @param command the task to execute
      */
     void execute(std::unique_ptr<Runnable> command);
+
+    /**
+     * Submits a value-returning task for execution and returns a std::future
+     * representing the pending results of the task. The std::future's get
+     * method will return the task's result upon successful completion.
+     *
+     * @param func callable object to call
+     * @param args parameters to pass to func
+     * @return std::future referring to the shared state
+     */
+    template <typename Func, typename... Args>
+    auto submit(Func&& func, Args&&... args) {
+        auto task = new PackagedTask(decay_copy(std::forward<Func>(func)),
+                                     decay_copy(std::forward<Args>(args))...);
+        auto result = task->get_future();
+        execute(std::unique_ptr<Runnable>(task));
+        return result;
+    }
 
     /**
      * Initiates an orderly shutdown in which previously submitted
@@ -420,20 +449,43 @@ public:
      */
     void shutdown();
 
+    /**
+     * Attempts to stop all actively executing tasks, halts the
+     * processing of waiting tasks, and returns a list of the tasks
+     * that were awaiting execution. These tasks are drained (removed)
+     * from the task queue upon return from this method.
+     *
+     * This method does not wait for actively executing tasks to
+     * terminate. Use awaitTermination to do that.
+     */
+    std::vector<std::unique_ptr<Runnable>> shutdownNow();
+
+    /**
+     * Returns true if this executor has been shut down.
+     */
     bool isShutdown() const noexcept {
         return !isRunning(m_ctl);
     }
 
-    bool isTerminating() const noexcept {
-        ctl_t c = m_ctl;
-        return !isRunning(c) && c < TERMINATED;
-    }
-
+    /**
+     * Returns true if all tasks have completed following shut down.
+     */
     bool isTerminated() const noexcept {
         return m_ctl >= TERMINATED;
     }
 
-    bool awaitTermination(std::chrono::nanoseconds timeout);
+    /**
+     * Blocks until all tasks have completed execution after a shutdown
+     * request, or the times occurs, whichever happens first
+     *
+     * @param timeout the maximum time to wait
+     * @return true if this executor terminated and false if
+     *         the timeout elapsed before termination
+     */
+    template <typename Rep, typename Period>
+    bool awaitTermination(std::chrono::duration<Rep, Period> timeout) {
+        return awaitTerminationNano(toNano(timeout));
+    }
 
 private:
     using ctl_t = uint32_t;
@@ -509,7 +561,8 @@ private:
      * decrements are performed within getTask.
      */
     void decrementWorkerCount() {
-        m_ctl--;
+        ctl_t c = m_ctl--;
+        assert(workerCountOf(c) != 0);
     }
 
     void advanceRunState(ctl_t targetState);
@@ -527,75 +580,72 @@ private:
 private:
     void tryTerminate();
     bool addWorker(std::unique_ptr<Runnable>* task, bool core);
+    std::unique_ptr<Runnable> getTask();
     void runWorker(std::unique_ptr<Runnable> task);
     void onWorkerExit(bool completedAbruptly);
-    std::unique_ptr<Runnable> getTask();
+    bool awaitTerminationNano(std::chrono::nanoseconds timeout);
     void reject(std::unique_ptr<Runnable> task);
 };
 
-} // namespace impl
-
-class ThreadPoolExecutor {
-    impl::ThreadPool m_impl;
-
-    template <typename T>
-    typename std::decay_t<T> decay_copy(T&& t) {
-        return std::forward<T>(t);
-    }
-
-    template <typename Rep, typename Period>
-    static std::chrono::nanoseconds toNano(std::chrono::duration<Rep, Period> d) {
-        return std::chrono::duration_cast<std::chrono::nanoseconds>(d);
-    }
-
-public:
-    template <typename Rep, typename Period>
-    ThreadPoolExecutor(size_t corePoolSize,  size_t maximumPoolSize, size_t queueSize,
-                       std::chrono::duration<Rep, Period> keepAliveTime)
-        : m_impl(corePoolSize, maximumPoolSize, queueSize, toNano(keepAliveTime))
-    {}
-
-    template <typename Func, typename... Args>
-    auto submit(Func&& func, Args&&... args) {
-        auto task = new impl::PackagedTask(decay_copy(std::forward<Func>(func)),
-                                           decay_copy(std::forward<Args>(args))...);
-        auto result = task->get_future();
-        m_impl.execute(std::unique_ptr<Runnable>(task));
-        return result;
-    }
-
-    void shutdown()                     { m_impl.shutdown(); }
-    bool isShutdown()    const noexcept { return m_impl.isShutdown(); }
-    bool isTerminating() const noexcept { return m_impl.isTerminating(); }
-    bool isTerminated()  const noexcept { return m_impl.isTerminated(); }
-
-    template <typename Rep, typename Period>
-    bool awaitTermination(std::chrono::duration<Rep, Period> timeout) {
-        return m_impl.awaitTermination(toNano(timeout));
-    }
-};
-
-namespace Executors {
-
 template <typename Rep, typename Period>
-ThreadPoolExecutor newThreadPool(
-    size_t corePoolSize, size_t maximalPoolSize, size_t queueSize,
-    std::chrono::duration<Rep, Period> keepAliveTime)
+ThreadPoolExecutor::ThreadPoolExecutor(
+        size_t corePoolSize, size_t maximumPoolSize, size_t queueSize,
+        std::chrono::duration<Rep, Period> keepAliveTime)
+    : m_corePoolSize{corePoolSize},
+      m_maximumPoolSize{maximumPoolSize},
+      m_workQueue{queueSize},
+      m_keepAliveTime{toNano(keepAliveTime)}
 {
-    return ThreadPoolExecutor(corePoolSize, maximalPoolSize, queueSize, keepAliveTime);
+    assert(maximumPoolSize > 0 && maximumPoolSize >= corePoolSize);
 }
 
+/**
+ * Factory methods for Executor.
+ */
+namespace Executors {
+
+/**
+ * Creates a thread pool that reuses a fixed number of threads
+ * operating off a shared unbounded queue. At any point, at most
+ * nThreads threads will be active processing tasks. If additional
+ * tasks are submitted when all threads are active, they will wait
+ * in the queue until a thread is available. If any thread terminates
+ * due to a failure during execution prior to shutdown, a new one
+ * will take its place if needed to execute subsequent tasks. The
+ * threads in the pool will exist until it is explicitly shutdown.
+ *
+ * @param nThreads the number of threads in the pool
+ * @return the newly created thread pool
+ */
 inline ThreadPoolExecutor newFixedThreadPool(size_t nThreads) {
     return ThreadPoolExecutor(nThreads, nThreads, 0, std::chrono::nanoseconds(0));
 }
 
-inline ThreadPoolExecutor newSingleThreadExecutor() {
-    return newFixedThreadPool(1);
+/**
+ * Creates a thread pool that creates new threads as needed, but
+ * will reuse previously constructed threads when they are
+ * available. These pools will typically improve the performance
+ * of programs that execute may short-lived asynchronous tasks.
+ * Calls to execute will reuse previously constructed threads
+ * if available. If no existing thread is available, a new
+ * thread will be created and added to the pool. Threads that
+ * have not been used for sixty seconds are terminated and
+ * removed from the cache. Thus a pool that remains idle for
+ * long enough will not consume any resources.
+ *
+ * @return the newly created thread pool
+ */
+inline ThreadPoolExecutor newCachedThreadPool() {
+    return ThreadPoolExecutor(0, std::numeric_limits<size_t>::max(), 1,
+                              std::chrono::seconds(60));
 }
 
+/**
+ * Returns a singleton thread pool.
+ */
 inline ThreadPoolExecutor& defaultThreadPool() {
     static ThreadPoolExecutor theDefault =
-        newFixedThreadPool(std::max(std::thread::hardware_concurrency(), 2U) - 1);
+            newFixedThreadPool(std::max(std::thread::hardware_concurrency(), 2U) - 1);
     return theDefault;
 }
 
