@@ -1,4 +1,4 @@
-add_library(example "")
+add_library(dlfl "")
 
 include(FindProtobuf)
 find_package(Protobuf REQUIRED)
@@ -24,20 +24,20 @@ llvm_map_components_to_libnames(llvm_libs
     Support
     native)
 
-file(GLOB_RECURSE EXAMPLE_SRCS "${CMAKE_CURRENT_LIST_DIR}/*.cpp")
-file(GLOB_RECURSE EXAMPLE_HDRS "${CMAKE_CURRENT_LIST_DIR}/*.h")
+file(GLOB_RECURSE DLFL_SRCS "${CMAKE_CURRENT_LIST_DIR}/*.cpp")
+file(GLOB_RECURSE DLFL_HDRS "${CMAKE_CURRENT_LIST_DIR}/*.h")
 
 target_sources(
-  example
+  dlfl
   PRIVATE
-    ${EXAMPLE_SRCS}
+    ${DLFL_SRCS}
     ${PROTO_SRCS}
   PUBLIC
-    ${EXAMPLE_HDRS}
+    ${DLFL_HDRS}
 )
 
 target_include_directories(
-  example
+  dlfl
   PUBLIC
     ${CMAKE_CURRENT_LIST_DIR}
     ${CMAKE_CURRENT_BINARY_DIR}
@@ -45,7 +45,7 @@ target_include_directories(
 )
 
 target_link_libraries(
-  example
+  dlfl
   PRIVATE
     ${Protobuf_LIBRARIES}
     ${llvm_libs}

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.1)
 
-project(demo CXX)
+project(DLFL CXX)
 set(CMAKE_CXX_STANDARD 17)
 
 # place binaries and libraries according to GNU standards
@@ -21,5 +21,5 @@ fetch_googletest(${PROJECT_SOURCE_DIR}/cmake ${PROJECT_BINARY_DIR}/googletest)
 enable_testing()
 add_subdirectory(test)
 
-add_executable(${PROJECT_NAME} main.cpp)
-target_link_libraries(${PROJECT_NAME} example)
+add_executable(demo main.cpp)
+target_link_libraries(demo dlfl)
