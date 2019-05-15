@@ -515,21 +515,19 @@ Tensor<T>& Tensor<T>::operator=(const Tensor& t) {
 
 template <typename T>
 Tensor<T>::Tensor(Tensor&& t) noexcept
-    : m_shape(std::move(t.m_shape)), m_size(t.m_size),
-      m_data(t.m_data), m_alloc_data(std::move(t.m_alloc_data))
+    : m_shape(std::move(t.m_shape)),
+      m_size(std::exchange(t.m_size, 0)),
+      m_data(std::exchange(t.m_data, nullptr)),
+      m_alloc_data(std::move(t.m_alloc_data))
 {
-    t.m_data = nullptr;
-    t.m_size = 0;
 }
 
 template <typename T>
 Tensor<T>& Tensor<T>::operator=(Tensor&& t) noexcept {
     m_shape = std::move(t.m_shape);
-    m_size = t.m_size;
-    m_data = t.m_data;
+    m_size = std::exchange(t.m_size, 0);
+    m_data = std::exchange(t.m_data, nullptr);
     m_alloc_data = std::move(t.m_alloc_data);
-    t.m_data = nullptr;
-    t.m_size = 0;
     return *this;
 }
 
@@ -874,17 +872,14 @@ const T* Tensor<T>::printRec(std::ostream& out, const Shape& shape, size_t level
         for (int i = 0; i < d; i++) {
             out << *data++;
             if (i < d-1)
-                out << ", ";
+                out << ',';
         }
     } else {
         // intermediate levels, recursive
         for (int i = 0; i < d; i++) {
             data = printRec(out, shape, level+1, data);
-            if (i < d-1) {
-                out << ',' << std::endl;
-                for (int j = 0; j <= level; j++)
-                    out << ' ';
-            }
+            if (i < d-1)
+                out << ',';
         }
     }
     out << ']';
