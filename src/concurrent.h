@@ -134,7 +134,7 @@ private:
     /** Wait queue for waiting puts */
     std::condition_variable m_notFull;
 
-    bool enqueue(std::unique_lock<std::mutex>& lock, E&& e);
+    bool enqueue(std::unique_lock<std::mutex>& lock, E* e);
     bool dequeue(std::unique_lock<std::mutex>& lock, E* p);
 };
 
@@ -164,9 +164,9 @@ inline size_t BlockingQueue<E>::remaining() const noexcept {
 }
 
 template <typename E>
-bool BlockingQueue<E>::enqueue(std::unique_lock<std::mutex>& lock, E&& e) {
+bool BlockingQueue<E>::enqueue(std::unique_lock<std::mutex>& lock, E* e) {
     if (m_queue.size() < m_capacity) {
-        m_queue.push(std::move(e));
+        m_queue.push(std::move(*e));
         lock.unlock();
         m_notEmpty.notify_one();
         return true;
@@ -194,7 +194,7 @@ bool BlockingQueue<E>::put(E e) {
     m_notFull.wait(lock, [this]() {
         return m_capacity == 0 || m_queue.size() < m_capacity;
     });
-    return enqueue(lock, std::move(e));
+    return enqueue(lock, &e);
 }
 
 template <typename E>
@@ -203,19 +203,19 @@ bool BlockingQueue<E>::put(E* e) {
     m_notFull.wait(lock, [this]() {
         return m_capacity == 0 || m_queue.size() < m_capacity;
     });
-    return enqueue(lock, std::move(*e));
+    return enqueue(lock, e);
 }
 
 template <typename E>
 bool BlockingQueue<E>::offer(E e) {
     std::unique_lock lock{m_lock};
-    return enqueue(lock, std::move(e));
+    return enqueue(lock, &e);
 }
 
 template <typename E>
 bool BlockingQueue<E>::offer(E* e) {
     std::unique_lock lock{m_lock};
-    return enqueue(lock, std::move(*e));
+    return enqueue(lock, e);
 }
 
 template <typename E>
@@ -225,7 +225,7 @@ bool BlockingQueue<E>::offer(E e, std::chrono::duration<Rep,Period> timeout) {
     m_notFull.wait_for(lock, timeout, [this]() {
         return m_capacity == 0 || m_queue.size() < m_capacity;
     });
-    return enqueue(lock, std::move(e));
+    return enqueue(lock, &e);
 }
 
 template <typename E>
@@ -235,7 +235,7 @@ bool BlockingQueue<E>::offer(E* e, std::chrono::duration<Rep,Period> timeout) {
     m_notFull.wait_for(lock, timeout, [this]() {
         return m_capacity == 0 || m_queue.size() < m_capacity;
     });
-    return enqueue(lock, std::move(*e));
+    return enqueue(lock, e);
 }
 
 template <typename E>
