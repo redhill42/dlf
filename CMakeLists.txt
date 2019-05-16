@@ -14,6 +14,10 @@ if(CMAKE_CXX_COMPILER_ID MATCHES GNU)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fprofile-arcs -ftest-coverage")
 endif()
 
+include(cmake/tbb.cmake)
+fetch_tbb(${PROJECT_SOURCE_DIR}/cmake ${PROJECT_BINARY_DIR}/tbb)
+
+# add sub-directories that we want CMake to scan
 add_subdirectory(src)
 
 include(cmake/googletest.cmake)
@@ -22,4 +26,4 @@ enable_testing()
 add_subdirectory(test)
 
 add_executable(demo main.cpp)
-target_link_libraries(demo dlfl)
+target_link_libraries(demo dlfl ${TBB_LIBS})
