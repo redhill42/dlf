@@ -4,6 +4,8 @@
 #include <vector>
 #include <iostream>
 
+#include "concurrent.h"
+
 namespace kneron::model {
 
 /**
@@ -44,7 +46,7 @@ public:
      * Shrink one level of dimensions.
      */
     Shape shrink() const {
-        return Shape(std::vector(m_dims.begin()+1, m_dims.end()));
+        return Shape(std::vector(std::next(m_dims.begin()), m_dims.end()));
     }
 
     /**
@@ -567,13 +569,13 @@ Tensor<T> Tensor<T>::operator[](size_t index) {
 template <typename T>
 template <typename F>
 inline Tensor<T>& Tensor<T>::apply(F f) {
-    std::transform(begin(), end(), begin(), f);
+    kneron::concurrent::parallel_transform(begin(), end(), begin(), f);
     return *this;
 }
 
 template <typename T>
 inline Tensor<T>& Tensor<T>::apply(T(*f)(T)) {
-    std::transform(begin(), end(), begin(), f);
+    kneron::concurrent::parallel_transform(begin(), end(), begin(), f);
     return *this;
 }
 
@@ -581,7 +583,7 @@ template <typename T>
 template <typename U, typename F>
 inline Tensor<T>& Tensor<T>::apply(const Tensor<U>& y, F f) {
     assert(shape() == y.shape());
-    std::transform(begin(), end(), y.begin(), begin(), f);
+    kneron::concurrent::parallel_transform(begin(), end(), y.begin(), begin(), f);
     return *this;
 }
 
@@ -589,7 +591,7 @@ template <typename T>
 template <typename F, typename U>
 inline Tensor<U> Tensor<T>::transform(F f) const {
     Tensor<U> res(shape());
-    std::transform(begin(), end(), res.begin(), f);
+    kneron::concurrent::parallel_transform(begin(), end(), res.begin(), f);
     return res;
 }
 
@@ -597,7 +599,7 @@ template <typename T>
 template <typename U, typename F>
 inline void Tensor<T>::transformTo(Tensor<U>& target, F f) const {
     assert(shape() == target.shape());
-    std::transform(begin(), end(), target.begin(), f);
+    kneron::concurrent::parallel_transform(begin(), end(), target.begin(), f);
 }
 
 template <typename T>
@@ -605,7 +607,7 @@ template <typename U, typename F, typename W>
 inline Tensor<W> Tensor<T>::transform(const Tensor<U>& y, F f) const {
     assert(shape() == y.shape());
     Tensor<W> z(shape());
-    std::transform(begin(), end(), y.begin(), z.begin(), f);
+    kneron::concurrent::parallel_transform(begin(), end(), y.begin(), z.begin(), f);
     return z;
 }
 
@@ -613,7 +615,7 @@ template <typename T>
 template <typename U, typename W, typename F>
 inline void Tensor<T>::transformTo(Tensor<W>& z, const Tensor<U>& y, F f) const {
     assert(shape() == y.shape() && shape() == z.shape());
-    std::transform(begin(), end(), y.begin(), z.begin(), f);
+    kneron::concurrent::parallel_transform(begin(), end(), y.begin(), z.begin(), f);
 }
 
 template <typename T>
@@ -631,13 +633,15 @@ inline Tensor<T> Tensor<T>::transform(const Tensor<T> &y, F f) && {
 template <typename T>
 template <typename F, typename>
 inline Tensor<T> Tensor<T>::transform(Tensor<T>&& y, F f) const & {
-    return std::move(y.apply(*this, [f](T a, T b){return f(b, a);}));
+    assert(shape() == y.shape());
+    kneron::concurrent::parallel_transform(begin(), end(), y.begin(), y.begin(), f);
+    return std::move(y);
 }
 
 template <typename T>
 template <typename U>
 inline Tensor<U> Tensor<T>::cast() const {
-    return transform([](T x) { return static_cast<U>(x); });
+    return transform([](const T& x) { return static_cast<U>(x); });
 }
 
 #define DEFINE_OPERATOR(op) \
@@ -648,7 +652,7 @@ inline Tensor<U> Tensor<T>::cast() const {
     } \
     template <typename T> \
     inline Tensor<T>& Tensor<T>::operator op##=(const T& b) { \
-        return apply([b](const T& a) {return a op b;}); \
+        return apply([&b](const T& a) {return a op b;}); \
     } \
     template <typename T, typename U, typename W = std::common_type_t<T,U>> \
     inline Tensor<W> operator op(const Tensor<T>& x, const Tensor<U>& y) { \
@@ -656,11 +660,11 @@ inline Tensor<U> Tensor<T>::cast() const {
     } \
     template <typename T, typename U, typename W = std::common_type_t<T,U>> \
     inline Tensor<W> operator op(const Tensor<T>& x, const U& b) { \
-        return x.transform([b](const T& a) -> W {return a op b;}); \
+        return x.transform([&b](const T& a) -> W {return a op b;}); \
     } \
     template <typename T, typename U, typename W = std::common_type_t<T,U>> \
     inline Tensor<W> operator op(const T& a, const Tensor<U>& y) { \
-        return y.transform([a](const U& b) -> W {return a op b;}); \
+        return y.transform([&a](const U& b) -> W {return a op b;}); \
     } \
     /* rvalue optimization */ \
     template <typename T> \
@@ -673,15 +677,15 @@ inline Tensor<U> Tensor<T>::cast() const {
     } \
     template <typename T> \
     inline Tensor<T> operator op(Tensor<T>&& x, Tensor<T>&& y) { \
-        return std::move(x.apply(y, [](const T& a, const T& b) { return a op b;})); \
+        return std::move(x.apply(y, [](const T& a, const T& b) {return a op b;})); \
     } \
     template <typename T> \
     inline Tensor<T> operator op(Tensor<T>&& x, const T& b) { \
-        return std::move(x.apply([b](const T& a) {return a op b;})); \
+        return std::move(x.apply([&b](const T& a) {return a op b;})); \
     } \
     template <typename T> \
     inline Tensor<T> operator op(const T& a, Tensor<T>&& y) { \
-        return std::move(y.apply([a](const T& b) {return a op b;})); \
+        return std::move(y.apply([&a](const T& b) {return a op b;})); \
     }
 
 DEFINE_OPERATOR(+)
@@ -693,12 +697,12 @@ DEFINE_OPERATOR(/)
 
 template <typename T>
 inline Tensor<T> operator-(const Tensor<T>& x) {
-    return x.transform([](T a){return -a;});
+    return x.transform([](const T& a){return -a;});
 }
 
 template <typename T>
 inline Tensor<T> operator-(Tensor<T>&& x) {
-    return std::move(x.apply([](T a){return -a;}));
+    return std::move(x.apply([](const T& a){return -a;}));
 }
 
 template <typename T>
@@ -712,58 +716,66 @@ Tensor<T> Tensor<T>::inner(const Tensor& rhs) const {
     if (is_matrix() && rhs.is_matrix())
         return matrix_dot_matrix(*this, rhs);
     assert(false);
+    return Tensor<T>();
 }
 
 template <typename T>
 Tensor<T> Tensor<T>::vector_dot_vector(const Tensor& lhs, const Tensor& rhs) {
     assert(lhs.shape().extent(0) == rhs.shape().extent(0));
     auto n = lhs.shape().extent(0);
-    auto px = lhs.data(), py = rhs.data();
-    T v{};
-    for (size_t i = 0; i < n; i++)
-        v += *px++ * *py++;
+    T v = tbb::parallel_reduce(
+        tbb::blocked_range<size_t>(0, n, GRAINSIZE),
+        T{},
+        [&](auto&& r, T sum) {
+            auto px = lhs.data() + r.begin();
+            auto py = rhs.data() + r.begin();
+            for (size_t k = r.size(); k-- != 0; )
+                sum += *px++ * *py++;
+            return sum;
+        },
+        std::plus());
     return Tensor<T>({1}, {std::move(v)});
 }
 
 template <typename T>
 Tensor<T> Tensor<T>::vector_dot_matrix(const Tensor& lhs, const Tensor& rhs) {
     assert(lhs.shape().extent(0) == rhs.shape().extent(0));
-    auto r = rhs.shape().extent(0);
-    auto c = rhs.shape().extent(1);
+    auto n = rhs.shape().extent(0);
+    auto m = rhs.shape().extent(1);
+    Tensor<T> res({m});
 
-    Tensor<T> res({c});
-    auto py = rhs.data();
-    auto pz = res.data();
-
-    for (size_t i = 0; i < c; i++) {
-        auto px = lhs.data();
-        T v{};
-        for (size_t j = 0; j < r; j++)
-            v += *px++ * *py++;
-        *pz++ = std::move(v);
-    }
-
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, m, GRAINSIZE), [&](auto&& r) {
+        auto pz = res.data() + r.begin();
+        for (size_t i = r.begin(); i != r.end(); i++) {
+            auto px = lhs.data();
+            auto py = rhs.data() + i;
+            T v{};
+            for (size_t j = 0; j < n; j++, py += m)
+                v += *px++ * *py;
+            *pz++ = std::move(v);
+        }
+    });
     return res;
 }
 
 template <typename T>
 Tensor<T> Tensor<T>::matrix_dot_vector(const Tensor& lhs, const Tensor& rhs) {
     assert(lhs.shape().extent(1) == rhs.shape().extent(0));
-    auto r = lhs.shape().extent(0);
-    auto c = lhs.shape().extent(1);
+    auto n = lhs.shape().extent(0);
+    auto m = lhs.shape().extent(1);
+    Tensor<T> res({n});
 
-    Tensor<T> res({r});
-    auto px = lhs.data();
-    auto pz = res.data();
-
-    for (size_t i = 0; i < r; i++) {
-        auto py = rhs.data();
-        T v{};
-        for (size_t j = 0; j < c; j++)
-            v += *px++ * *py++;
-        *pz++ = std::move(v);
-    }
-
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, n, GRAINSIZE), [&](auto&& r) {
+        auto px = lhs.data() + r.begin() * m;
+        auto pz = res.data() + r.begin();
+        for (size_t k = r.size(); k-- != 0; ) {
+            auto py = rhs.data();
+            T v{};
+            for (size_t j = 0; j < m; j++)
+                v += *px++ * *py++;
+            *pz++ = std::move(v);
+        }
+    });
     return res;
 }
 

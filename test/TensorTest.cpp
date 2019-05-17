@@ -2,9 +2,14 @@
 #include <complex>
 #include <variant>
 #include <random>
-#include "tensor.h"
 #include "gtest/gtest.h"
 #include "gmock/gmock.h"
+
+#ifndef NDEBUG
+#define GRAINSIZE 1 // enforce parallel algorithm
+#endif
+
+#include "tensor.h"
 
 using namespace kneron::model;
 namespace T = ::testing;
@@ -230,32 +235,26 @@ TEST_F(TensorTest, BinaryOpWithDifferentElementType) {
 }
 
 TEST_F(TensorTest, Expression) {
-    SCOPED_TRACE("5+x*y+x*3");
-    testBinaryOp(5+t1*t2+t1*3, [](auto x, auto y) { return 5+x*y+x*3; });
+    SCOPED_TRACE("(5+x)*y+x*3");
+    testBinaryOp((5+t1)*t2+t1*3, [](auto x, auto y) { return (5+x)*y+x*3; });
 }
 
 TEST_F(TensorTest, VectorDotVector) {
     Tensor<int32_t> a({3}, {1, 2, 3});
     Tensor<int32_t> b({3}, {4, 5, 6});
-    auto c = a.inner(b);
-    EXPECT_EQ(c.shape(), Shape({1}));
-    EXPECT_THAT(c, T::ElementsAre(1*4+2*5+3*6));
+    EXPECT_EQ(a.inner(b), Tensor<int>({1}, {32})); // computed by WolframAlpha
 }
 
 TEST_F(TensorTest, VectorDotMatrix) {
     Tensor<int32_t> a({3}, {1, 2, 3});
     Tensor<int32_t> b({{3, 2}, {4, 5, 6, 7, 8, 9}});
-    auto c = a.inner(b);
-    EXPECT_EQ(c.shape(), Shape({2}));
-    EXPECT_THAT(c, T::ElementsAre(1*4+2*5+3*6, 1*7+2*8+3*9));
+    EXPECT_EQ(a.inner(b), Tensor<int>({2}, {40, 46})); // computed by WolframAlpha
 }
 
 TEST_F(TensorTest, MatrixDotVector) {
-    Tensor<int32_t> a({2,3}, {1, 2, 3, 4, 5, 6});
+    Tensor<int32_t> a({2, 3}, {1, 2, 3, 4, 5, 6});
     Tensor<int32_t> b({3}, {7, 8, 9});
-    auto c = a.inner(b);
-    EXPECT_EQ(c.shape(), Shape({2}));
-    EXPECT_THAT(c, T::ElementsAre(1*7+2*8+3*9, 4*7+5*8+6*9));
+    EXPECT_EQ(a.inner(b), Tensor<int>({2}, {50, 122})); // computed by WolframAlpha
 }
 
 TEST_F(TensorTest, MatrixDotMatrix) {
@@ -274,6 +273,7 @@ TEST_F(TensorTest, MatrixDotMatrix) {
         3, 8, 8, 5
     });
 
+    // computed by WolframAlpha
     Tensor<int32_t> c({3, 4}, {
         230, 254, 116, 199,
         219, 236, 201, 252,
@@ -389,6 +389,33 @@ TEST_F(TensorTest, Transform2) {
         auto v = f(data1[i], data2[i]);
         EXPECT_EQ(a.data()[i], v);
         EXPECT_EQ(b.data()[i], v);
+    }
+}
+
+TEST_F(TensorTest, TransformRValueOptimization) {
+    {
+        Tensor<int> a({2, 2}, {1, 2, 3, 4});
+        Tensor<int> b = std::move(a).transform([](auto x) { return x*2; });
+        EXPECT_TRUE(a.empty());
+        EXPECT_THAT(b, T::ElementsAre(2, 4, 6, 8));
+    }
+
+    {
+        Tensor<int> a({2, 2}, {1, 2, 3, 4});
+        Tensor<int> b({2, 2}, {5, 6, 7, 8});
+        Tensor<int> c = std::move(a).transform(b, std::plus());
+        EXPECT_TRUE(a.empty());
+        EXPECT_THAT(b, T::ElementsAre(5, 6, 7, 8));
+        EXPECT_THAT(c, T::ElementsAre(6, 8, 10, 12));
+    }
+
+    {
+        Tensor<int> a({2, 2}, {1, 2, 3, 4});
+        Tensor<int> b({2, 2}, {5, 6, 7, 8});
+        Tensor<int> c = a.transform(std::move(b), std::plus());
+        EXPECT_THAT(a, T::ElementsAre(1, 2, 3, 4));
+        EXPECT_TRUE(b.empty());
+        EXPECT_THAT(c, T::ElementsAre(6, 8, 10, 12));
     }
 }
 

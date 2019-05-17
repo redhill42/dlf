@@ -132,7 +132,7 @@ std::unique_ptr<Runnable> ThreadPoolExecutor::getTask() {
 void ThreadPoolExecutor::runWorker(std::unique_ptr<Runnable> task) {
     bool completedAbruptly = true;
 
-    AtEnd atThreadExit([this, &completedAbruptly]() {
+    AtEnd atThreadExit([&]() {
         onWorkerExit(completedAbruptly);
     });
 
@@ -212,4 +212,9 @@ bool ThreadPoolExecutor::awaitTerminationNano(std::chrono::nanoseconds timeout) 
 void ThreadPoolExecutor::reject(std::unique_ptr<Runnable> task) {
     // Default implementation is run task on caller's thread
     task->run();
+}
+
+ThreadPoolExecutor::~ThreadPoolExecutor() {
+    shutdown();
+    awaitTermination(std::chrono::seconds(30));
 }
