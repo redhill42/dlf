@@ -379,6 +379,16 @@ TEST_F(TensorTest, Inner) {
     inner_test<std::complex<double>>();
 }
 
+template <typename T = int>
+T quick_fibonacci(int n) {
+    Tensor<T> A({2, 2}, {1, 1, 1, 0});
+    return pow(A, n-1)(0, 0);
+}
+
+TEST(Tensor, Fibonacci) {
+    EXPECT_EQ(quick_fibonacci(12), 144);
+}
+
 template <typename T>
 static void gemm_test() {
     Tensor<T> a({3, 6}, {

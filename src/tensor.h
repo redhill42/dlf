@@ -45,6 +45,14 @@ public:
         return m_dims[dim];
     }
 
+    /**
+     * Return pair of extents if this shape represents a matrix.
+     */
+    std::pair<size_t,size_t> extent() const noexcept {
+        assert(rank() == 2);
+        return std::pair(extent(0), extent(1));
+    }
+
     bool operator==(const Shape& other) const {
         return m_dims == other.m_dims;
     }
@@ -90,6 +98,12 @@ class Tensor {
     size_t m_size = 0;
     T* m_data = nullptr;
     std::unique_ptr<T[]> m_alloc_data;
+
+    void init() {
+        m_size = m_shape.size();
+        m_alloc_data = std::make_unique<T[]>(m_size);
+        m_data = m_alloc_data.get();
+    }
 
 public: // Container View
     using value_type                = T;
@@ -144,7 +158,7 @@ private:
      */
     Tensor(Shape shape, T* data);
 
-public:
+public: // Constructors
     /**
      * Construct a 0-dimensional tensor.
      */
@@ -155,7 +169,8 @@ public:
      *
      * @param shape the tensor shape
      */
-    explicit Tensor(Shape shape);
+    explicit Tensor(const Shape& shape); // NOLINT(modernize-pass-by-value)
+    explicit Tensor(Shape&& shape);
 
     /**
      * Construct a tensor with input iterator denoted by [begin,end).
@@ -209,12 +224,22 @@ public:
     template <typename F>
     static Tensor build(Shape shape, F f);
 
+    /**
+     * Create an n by n identity matrix.
+     *
+     * @param n the matrix dimension
+     * @param value the identity value
+     * @return the identity matrix
+     */
+    static Tensor identity(size_t n, const T& value = T{1});
+
     // Copy and move constructors/assignments.
     Tensor(const Tensor& t);
     Tensor& operator=(const Tensor& t);
     Tensor(Tensor&& t) noexcept;
     Tensor& operator=(Tensor&& t) noexcept;
 
+public: // Attributes
     /**
      * Returns the shape of this tensor.
      */
@@ -241,6 +266,13 @@ public:
      */
     bool is_matrix() const noexcept {
         return m_shape.rank() == 2;
+    }
+
+    /**
+     * Returns true if this tensor is a square matrix.
+     */
+    bool is_square() const noexcept {
+        return is_matrix() && m_shape.extent(0) == m_shape.extent(1);
     }
 
     /**
@@ -296,7 +328,13 @@ public:
     bool operator==(const Tensor& other) const;
     bool operator!=(const Tensor& other) const;
 
-    // Tensor operators
+    friend std::ostream& operator<<(std::ostream& os, const Tensor& t) {
+        if (!t.empty())
+            printRec(os, t.shape(), 0, t.data());
+        return os;
+    }
+
+public: // Operators
 #define DECLARE_OPERATOR(op) \
     template <typename U, typename = std::enable_if_t<std::is_convertible_v<U,T>>> \
     Tensor& operator op(const Tensor<U>& y); \
@@ -325,6 +363,7 @@ public:
      */
     void transposeTo(Tensor& target) const;
 
+public: // Transformations
     /**
      * Transform tensor's elements by applying a unary function on tensor's elements.
      *
@@ -412,13 +451,7 @@ public:
     template <typename U>
     Tensor<U> cast() const;
 
-    friend std::ostream& operator<<(std::ostream& os, const Tensor& t) {
-        if (!t.empty())
-            printRec(os, t.shape(), 0, t.data());
-        return os;
-    }
-
-private:
+private: // Implementation
     static const T* printRec(std::ostream& out, const Shape& shape, size_t level, const T* data);
 
     static void copy_transpose(T* dst, const T* src, size_t r, size_t c);
@@ -431,12 +464,17 @@ private:
 //==-------------------------------------------------------------------------
 
 template <typename T>
-Tensor<T>::Tensor(Shape shape)
+Tensor<T>::Tensor(const Shape& shape) // NOLINT(modernize-pass-by-value)
+    : m_shape(shape)
+{
+    init();
+}
+
+template <typename T>
+Tensor<T>::Tensor(Shape&& shape)
     : m_shape(std::move(shape))
 {
-    m_size = m_shape.size();
-    m_alloc_data = std::make_unique<T[]>(m_size);
-    m_data = m_alloc_data.get();
+    init();
 }
 
 template <typename T>
@@ -452,10 +490,8 @@ template <typename It>
 Tensor<T>::Tensor(Shape shape, It begin, RequireInputIterator<It> end)
     : m_shape(std::move(shape))
 {
-    m_size = m_shape.size();
+    init();
     assert(std::distance(begin, end) == m_size);
-    m_alloc_data = std::make_unique<T[]>(m_size);
-    m_data = m_alloc_data.get();
     std::copy(begin, end, m_data);
 }
 
@@ -468,9 +504,12 @@ Tensor<T>::Tensor(Shape shape, std::unique_ptr<T[]> data)
 }
 
 template <typename T>
-inline Tensor<T>::Tensor(Shape shape, std::initializer_list<T> init)
-    : Tensor(std::move(shape), init.begin(), init.end())
+Tensor<T>::Tensor(Shape shape, std::initializer_list<T> il)
+    : m_shape(std::move(shape))
 {
+    init();
+    assert(m_size == il.size());
+    std::copy(il.begin(), il.end(), m_data);
 }
 
 template <typename T>
@@ -480,11 +519,19 @@ inline Tensor<T> Tensor<T>::wrap(Shape shape, T* data) {
 
 template <typename T>
 template <typename F>
-Tensor<T> Tensor<T>::build(Shape shape, F f) {
-    auto size = shape.size();
-    auto data = std::make_unique<T[]>(size);
-    std::generate(data.get(), data.get() + size, f);
-    return Tensor(std::move(shape), std::move(data));
+inline Tensor<T> Tensor<T>::build(Shape shape, F f) { // NOLINT(performance-unnecessary-value-param)
+    Tensor<T> res(std::move(shape));
+    std::generate(res.begin(), res.end(), f);
+    return res;
+}
+
+template <typename T>
+Tensor<T> Tensor<T>::identity(size_t n, const T& value) {
+    Tensor<T> res({n, n});
+    T* p = res.data();
+    for (size_t i = 0; i < n; i++, p += n+1)
+        *p = value;
+    return res;
 }
 
 template <typename T>
@@ -531,7 +578,7 @@ Tensor<T>& Tensor<T>::operator=(Tensor&& t) noexcept {
 //==-------------------------------------------------------------------------
 
 template <typename T>
-bool Tensor<T>::operator==(const Tensor& other) const {
+inline bool Tensor<T>::operator==(const Tensor& other) const {
     return shape() == other.shape() && std::equal(begin(), end(), other.begin());
 }
 
@@ -560,7 +607,7 @@ Tensor<T> Tensor<T>::operator[](size_t index) {
     auto slice_shape = m_shape.shrink();
     auto slice_size = slice_shape.size();
     auto slice_data = data() + index * slice_size;
-    return wrap(slice_shape, slice_data);
+    return wrap(std::move(slice_shape), slice_data);
 }
 
 template <typename T>
@@ -781,10 +828,10 @@ DEFINE_BLAS_OPERATOR(float, +, saxpby, scopy, 1.0f, 1.0f)
 DEFINE_BLAS_OPERATOR(float, -, saxpby, scopy, 1.0f, -1.0f)
 DEFINE_BLAS_OPERATOR(double, +, daxpby, dcopy, 1.0, 1.0)
 DEFINE_BLAS_OPERATOR(double, -, daxpby, dcopy, 1.0, -1.0)
-DEFINE_BLAS_OPERATOR(std::complex<float>, +, caxpby, ccopy, C_positive_one<float>(), C_positive_one<float>());
-DEFINE_BLAS_OPERATOR(std::complex<float>, -, caxpby, ccopy, C_positive_one<float>(), C_negative_one<float>());
-DEFINE_BLAS_OPERATOR(std::complex<double>, +, zaxpby, zcopy, C_positive_one<double>(), C_positive_one<double>());
-DEFINE_BLAS_OPERATOR(std::complex<double>, -, zaxpby, zcopy, C_positive_one<double>(), C_negative_one<double>());
+DEFINE_BLAS_OPERATOR(std::complex<float>, +, caxpby, ccopy, C_positive_one<float>(), C_positive_one<float>())
+DEFINE_BLAS_OPERATOR(std::complex<float>, -, caxpby, ccopy, C_positive_one<float>(), C_negative_one<float>())
+DEFINE_BLAS_OPERATOR(std::complex<double>, +, zaxpby, zcopy, C_positive_one<double>(), C_positive_one<double>())
+DEFINE_BLAS_OPERATOR(std::complex<double>, -, zaxpby, zcopy, C_positive_one<double>(), C_negative_one<double>())
 
 #undef DEFINE_BLAS_OPERATOR
 
@@ -953,59 +1000,57 @@ inline void matrix_dot_matrix(size_t m, size_t k, size_t n, const std::complex<d
  * or matrix and have compatible dimensions.
  */
 template <typename T>
-void inner(const Tensor<T>& A, const Tensor<T>& B, Tensor<T>* C) {
+Tensor<T>& inner(const Tensor<T>& A, const Tensor<T>& B, Tensor<T>* C) {
+    assert(C != &A && C != &B);
     if (A.is_vector() && B.is_vector()) {
         auto n = A.shape().extent(0);
         assert(n == B.shape().extent(0));
         assert(C->is_vector() && 1 == C->shape().extent(0));
         *C->data() = impl::vector_dot_vector(n, A.data(), B.data());
     } else if (A.is_vector() && B.is_matrix()) {
-        auto k = A.shape().extent(0);
-        auto n = B.shape().extent(1);
-        assert(k == B.shape().extent(0));
+        auto [k, n] = B.shape().extent();
+        assert(k == A.shape().extent(0));
         assert(C->is_vector() && n == C->shape().extent(0));
         impl::matrix_dot_matrix(1, k, n, A.data(), B.data(), C->data());
     } else if (A.is_matrix() && B.is_vector()) {
-        auto m = A.shape().extent(0);
-        auto n = A.shape().extent(1);
+        auto [m, n] = A.shape().extent();
         assert(n == B.shape().extent(0));
         assert(C->is_vector() && m == C->shape().extent(0));
         impl::matrix_dot_vector(m, n, A.data(), B.data(), C->data());
     } else if (A.is_matrix() && B.is_matrix()) {
-        auto m = A.shape().extent(0);
-        auto k = A.shape().extent(1);
-        auto n = B.shape().extent(1);
-        assert(k == B.shape().extent(0));
+        auto [m, k] = A.shape().extent();
+        auto [p, n] = B.shape().extent();
+        assert(k == p);
         assert(C->shape() == Shape({m, n}));
         impl::matrix_dot_matrix(m, k, n, A.data(), B.data(), C->data());
     } else {
         assert(false);
     }
+    return *C;
 }
 
 template <typename T>
 Tensor<T> inner(const Tensor<T>& A, const Tensor<T>& B) {
     if (A.is_vector() && B.is_vector()) {
-        return Tensor<T>({1}, {impl::vector_dot_vector(A.size(), A.data(), B.data())});
+        auto n = A.shape().extent(0);
+        assert(n == B.shape().extent(0));
+        return Tensor<T>({1}, {impl::vector_dot_vector(n, A.data(), B.data())});
     } else if (A.is_vector() && B.is_matrix()) {
-        auto k = A.shape().extent(0);
-        auto n = B.shape().extent(1);
-        assert(k == B.shape().extent(0));
+        auto [k, n] = B.shape().extent();
+        assert(k == A.shape().extent(0));
         Tensor<T> C({n});
         impl::matrix_dot_matrix(1, k, n, A.data(), B.data(), C.data());
         return C;
     } else if (A.is_matrix() && B.is_vector()) {
-        auto m = A.shape().extent(0);
-        auto n = A.shape().extent(1);
+        auto [m, n] = A.shape().extent();
         assert(n == B.shape().extent(0));
         Tensor<T> C({m});
         impl::matrix_dot_vector(m, n, A.data(), B.data(), C.data());
         return C;
     } else if (A.is_matrix() && B.is_matrix()) {
-        auto m = A.shape().extent(0);
-        auto k = A.shape().extent(1);
-        auto n = B.shape().extent(1);
-        assert(k == B.shape().extent(0));
+        auto [m, k] = A.shape().extent();
+        auto [p, n] = B.shape().extent();
+        assert(k == p);
         Tensor<T> C({m, n});
         impl::matrix_dot_matrix(m, k, n, A.data(), B.data(), C.data());
         return C;
@@ -1013,6 +1058,23 @@ Tensor<T> inner(const Tensor<T>& A, const Tensor<T>& B) {
         assert(false);
         return Tensor<T>();
     }
+}
+
+template <typename T>
+Tensor<T> pow(const Tensor<T>& x, long n) {
+    assert(x.is_square() && n >= 0);
+    if (n == 0)
+        return Tensor<T>::identity(x.shape().extent(0));
+    n--;
+
+    auto A = x, B = x, t = x;
+    while (n > 0) {
+        if (n & 1)
+            std::swap(B, inner(A, B, &t));
+        std::swap(A, inner(A, A, &t));
+        n >>= 1;
+    }
+    return B;
 }
 
 /**
@@ -1024,18 +1086,16 @@ void gemm(const Tensor<T>& A, const Tensor<T>& B, Tensor<T>* C,
           bool transA = false, bool transB = false)
 {
     assert(A.is_matrix() && B.is_matrix() && C->is_matrix());
-    auto m = A.shape().extent(0);
-    auto k = A.shape().extent(1);
+    auto [m, k] = A.shape().extent();
     if (transA)
         std::swap(m, k);
 
-    auto p = B.shape().extent(0);
-    auto n = B.shape().extent(1);
+    auto [p, n] = B.shape().extent();
     if (transB)
         std::swap(p, n);
 
     assert(k == p);
-    assert(m == C->shape().extent(0) && n == C->shape().extent(1));
+    assert(C->shape() == Shape({m, n}));
 
     if constexpr (std::is_same_v<T, float>) {
         cblas_sgemm(CblasRowMajor,
@@ -1094,7 +1154,7 @@ void gemm(const Tensor<T>& A, const Tensor<T>& B, Tensor<T>* C,
         return;
     }
 
-    tbb::parallel_for(tbb::blocked_range2d<size_t>(0, m, 32, 0, n, 32), [&](auto &&r) {
+    tbb::parallel_for(tbb::blocked_range2d<size_t>(0, m, 32, 0, n, 32), [&, m=m, k=k, n=n](auto &&r) {
         size_t incX = transA ? m : 1;
         size_t incY = transB ? 1 : n;
         for (size_t i = r.rows().begin(); i != r.rows().end(); i++) {
@@ -1152,10 +1212,8 @@ void Tensor<T>::transposeTo(Tensor& target) const {
         // transpose in-place
         std::move(target).transpose();
     } else {
-        auto r = shape().extent(0);
-        auto c = shape().extent(1);
-        assert(r == target.shape().extent(1));
-        assert(c == target.shape().extent(0));
+        auto [r, c] = shape().extent();
+        assert(target.shape() == Shape({c, r}));
         copy_transpose(target.data(), data(), r, c);
     }
 }
@@ -1163,9 +1221,7 @@ void Tensor<T>::transposeTo(Tensor& target) const {
 template <typename T>
 Tensor<T> Tensor<T>::transpose() const & {
     assert(is_matrix());
-    auto r = shape().extent(0);
-    auto c = shape().extent(1);
-
+    auto [r, c] = shape().extent();
     Tensor<T> res({c, r});
     copy_transpose(res.data(), data(), r, c);
     return res;
@@ -1174,8 +1230,7 @@ Tensor<T> Tensor<T>::transpose() const & {
 template <typename T>
 Tensor<T> Tensor<T>::transpose() && {
     assert(is_matrix());
-    auto r = shape().extent(0);
-    auto c = shape().extent(1);
+    auto [r, c] = shape().extent();
     m_shape = Shape({c, r});
 
 #if HAS_MKL
