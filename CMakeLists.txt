@@ -17,6 +17,12 @@ endif()
 include(cmake/tbb.cmake)
 fetch_tbb(${PROJECT_SOURCE_DIR}/cmake ${PROJECT_BINARY_DIR}/tbb)
 
+include(cmake/FindMKL.cmake)
+if (MKL_FOUND)
+  add_definitions(-DHAS_MKL=1)
+  include_directories(${MKL_INCLUDE_DIRS})
+endif()
+
 # add sub-directories that we want CMake to scan
 add_subdirectory(src)
 
@@ -26,4 +32,7 @@ enable_testing()
 add_subdirectory(test)
 
 add_executable(demo main.cpp)
-target_link_libraries(demo dlfl ${TBB_LIBS})
+target_link_libraries(demo dlfl ${TBB_LIBS} ${MKL_LIBRARIES})
+if (MKL_FOUND)
+  target_link_libraries(demo ${MKL_LIBRARIES})
+endif()

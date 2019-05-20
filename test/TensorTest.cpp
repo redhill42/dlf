@@ -4,6 +4,7 @@
 #include <random>
 #include "gtest/gtest.h"
 #include "gmock/gmock.h"
+#include "utility.h"
 
 #ifndef NDEBUG
 #define GRAINSIZE 1 // enforce parallel algorithm
@@ -234,63 +235,202 @@ TEST_F(TensorTest, BinaryOpWithDifferentElementType) {
     EXPECT_THAT(greetings, T::ElementsAre("Hello world", "Bonjour world", "Ciao world", "Aloha world"));
 }
 
+TEST_F(TensorTest, FloatingOp) {
+    Tensor<float> a({2, 2}, {1.f, 7.f, 5.f, 8.f});
+    Tensor<float> b({2, 2}, {2.f, 9.f, 4.f, 3.f});
+    EXPECT_EQ(a + b, Tensor<float>({2, 2}, {3.f, 16.f, 9.f, 11.f}));
+    EXPECT_EQ(a - b, Tensor<float>({2, 2}, {-1.f, -2.f, 1.f, 5.f}));
+}
+
+TEST_F(TensorTest, FloatingAssignOp) {
+    {
+        Tensor<float> a({2, 2}, {1.f, 7.f, 5.f, 8.f});
+        Tensor<float> b({2, 2}, {2.f, 9.f, 4.f, 3.f});
+        a += b;
+        EXPECT_EQ(a, Tensor<float>({2, 2}, {3.f, 16.f, 9.f, 11.f}));
+    }
+    {
+        Tensor<float> a({2, 2}, {1.f, 7.f, 5.f, 8.f});
+        Tensor<float> b({2, 2}, {2.f, 9.f, 4.f, 3.f});
+        a -= b;
+        EXPECT_EQ(a, Tensor<float>({2, 2}, {-1.f, -2.f, 1.f, 5.f}));
+    }
+}
+
+TEST_F(TensorTest, FloatingOpRValueOptimization) {
+    {
+        Tensor<float> a({2, 2}, {1.f, 7.f, 5.f, 8.f});
+        Tensor<float> b({2, 2}, {2.f, 9.f, 4.f, 3.f});
+        EXPECT_EQ(std::move(a)+b, Tensor<float>({2, 2}, {3.f, 16.f, 9.f, 11.f}));
+    }
+    {
+        Tensor<float> a({2, 2}, {1.f, 7.f, 5.f, 8.f});
+        Tensor<float> b({2, 2}, {2.f, 9.f, 4.f, 3.f});
+        EXPECT_EQ(std::move(a)-b, Tensor<float>({2, 2}, {-1.f, -2.f, 1.f, 5.f}));
+    }
+    {
+        Tensor<float> a({2, 2}, {1.f, 7.f, 5.f, 8.f});
+        Tensor<float> b({2, 2}, {2.f, 9.f, 4.f, 3.f});
+        EXPECT_EQ(a+std::move(b), Tensor<float>({2, 2}, {3.f, 16.f, 9.f, 11.f}));
+    }
+    {
+        Tensor<float> a({2, 2}, {1.f, 7.f, 5.f, 8.f});
+        Tensor<float> b({2, 2}, {2.f, 9.f, 4.f, 3.f});
+        EXPECT_EQ(a-std::move(b), Tensor<float>({2, 2}, {-1.f, -2.f, 1.f, 5.f}));
+    }
+    {
+        Tensor<float> a({2, 2}, {1.f, 7.f, 5.f, 8.f});
+        Tensor<float> b({2, 2}, {2.f, 9.f, 4.f, 3.f});
+        EXPECT_EQ(std::move(a)+std::move(b), Tensor<float>({2, 2}, {3.f, 16.f, 9.f, 11.f}));
+    }
+
+    {
+        Tensor<float> a({2, 2}, {1.f, 7.f, 5.f, 8.f});
+        Tensor<float> b({2, 2}, {2.f, 9.f, 4.f, 3.f});
+        EXPECT_EQ(std::move(a)-std::move(b), Tensor<float>({2, 2}, {-1.f, -2.f, 1.f, 5.f}));
+    }
+}
+
+TEST_F(TensorTest, ComplexOp) {
+    using namespace std::literals::complex_literals;
+    Tensor<std::complex<double>> a({2, 2}, {1.0+2i, 2.0+3i, 3.0-4i, 4.0-5i});
+    Tensor<std::complex<double>> b({2, 2}, {-3.0-4i, 5.0-2i, 4.0+1i, -3i});
+    EXPECT_EQ(a + b, Tensor<std::complex<double>>({2, 2}, {-2.0-2i, 7.0+1i, 7.0-3i, 4.0-8i}));
+}
+
 TEST_F(TensorTest, Expression) {
     SCOPED_TRACE("(5+x)*y+x*3");
     testBinaryOp((5+t1)*t2+t1*3, [](auto x, auto y) { return (5+x)*y+x*3; });
 }
 
-TEST_F(TensorTest, VectorDotVector) {
-    Tensor<int32_t> a({3}, {1, 2, 3});
-    Tensor<int32_t> b({3}, {4, 5, 6});
-    EXPECT_EQ(a.inner(b), Tensor<int>({1}, {32})); // computed by WolframAlpha
+template <typename T>
+static void inner_test() {
+    // Vector . Vector
+    {
+        Tensor<T> a({3}, {1, 2, 3});
+        Tensor<T> b({3}, {4, 5, 6});
+        Tensor<T> c({1}, {42});
+        EXPECT_EQ(inner(a, b), Tensor<T>({1}, {32})); // computed by WolframAlpha
+        inner(a, b, &c);
+        EXPECT_EQ(c, Tensor<T>({1}, {32}));
+    }
+
+    // Vector . Matrix
+    {
+        Tensor<T> a({3}, {1, 2, 3});
+        Tensor<T> b({{3, 2}, {4, 5, 6, 7, 8, 9}});
+        Tensor<T> c({2}, {17, 53});
+        EXPECT_EQ(inner(a, b), Tensor<T>({2}, {40, 46})); // computed by WolframAlpha
+        inner(a, b, &c);
+        EXPECT_EQ(c, Tensor<T>({2}, {40, 46}));
+    }
+
+    // Matrix . Vector
+    {
+        Tensor<T> a({2, 3}, {1, 2, 3, 4, 5, 6});
+        Tensor<T> b({3}, {7, 8, 9});
+        Tensor<T> c({2}, {17, 53});
+        EXPECT_EQ(inner(a, b), Tensor<T>({2}, {50, 122})); // computed by WolframAlpha
+        inner(a, b, &c);
+        EXPECT_EQ(c, Tensor<T>({2}, {50, 122}));
+    }
+
+    // Matrix . Matrix
+    {
+        Tensor<T> a({3, 6}, {
+            5, 7, 6, 10, 6, 2,
+            9, 6, 6, 1, 6, 10,
+            10, 1, 9, 3, 1, 3
+        });
+
+        Tensor<T> b({6, 4}, {
+            7, 1, 8, 7,
+            9, 5, 2, 6,
+            7, 8, 5, 7,
+            6, 9, 1, 1,
+            4, 10, 1, 10,
+            3, 8, 8, 5
+        });
+
+        Tensor<T> c({3, 4}, {
+            1,  2,  3,  4,
+            5,  6,  7,  8,
+            9, 10, 11, 12
+        });
+
+        // computed by WolframAlpha
+        Tensor<T> d({3, 4}, {
+            230, 254, 116, 199,
+            219, 236, 201, 252,
+            173, 148, 155, 167
+        });
+
+        EXPECT_EQ(inner(a, b), d);
+        inner(a, b, &c);
+        EXPECT_EQ(c, d);
+    }
 }
 
-TEST_F(TensorTest, VectorDotMatrix) {
-    Tensor<int32_t> a({3}, {1, 2, 3});
-    Tensor<int32_t> b({{3, 2}, {4, 5, 6, 7, 8, 9}});
-    EXPECT_EQ(a.inner(b), Tensor<int>({2}, {40, 46})); // computed by WolframAlpha
+TEST_F(TensorTest, Inner) {
+    inner_test<int>();
+    inner_test<float>();
+    inner_test<double>();
+    inner_test<std::complex<float>>();
+    inner_test<std::complex<double>>();
 }
 
-TEST_F(TensorTest, MatrixDotVector) {
-    Tensor<int32_t> a({2, 3}, {1, 2, 3, 4, 5, 6});
-    Tensor<int32_t> b({3}, {7, 8, 9});
-    EXPECT_EQ(a.inner(b), Tensor<int>({2}, {50, 122})); // computed by WolframAlpha
-}
-
-TEST_F(TensorTest, MatrixDotMatrix) {
-    Tensor<int32_t> a({3, 6}, {
-        5, 7, 6, 10, 6, 2,
-        9, 6, 6, 1, 6, 10,
-        10, 1, 9, 3, 1, 3
+template <typename T>
+static void gemm_test() {
+    Tensor<T> a({3, 6}, {
+        5, 10, 9, 1, 10, 3,
+        7,  6, 6, 6,  1, 1,
+        6,  2, 6, 10, 9, 3
     });
 
-    Tensor<int32_t> b({6, 4}, {
-        7, 1, 8, 7,
-        9, 5, 2, 6,
-        7, 8, 5, 7,
-        6, 9, 1, 1,
+    Tensor<T> b({6, 4}, {
+        7,  1, 8,  7,
+        9,  5, 2,  6,
+        7,  8, 5,  7,
+        6,  9, 1,  1,
         4, 10, 1, 10,
-        3, 8, 8, 5
+        3,  8, 8,  5
     });
 
-    // computed by WolframAlpha
-    Tensor<int32_t> c({3, 4}, {
+    Tensor<T> c({3, 4}, {
         230, 254, 116, 199,
         219, 236, 201, 252,
         173, 148, 155, 167
     });
 
-    EXPECT_EQ(inner(a, b), c);
+    Tensor<T> r({3, 4}, {
+        1176, 1282, 628, 1145,
+        1033, 1022, 829, 1052,
+         933,  980, 715,  923
+    });
+
+    EXPECT_THAT(gemm(a, b, c, T(2), T(3), false, false), r);
+    EXPECT_THAT(gemm(a.transpose(), b, c, T(2), T(3), true, false), r);
+    EXPECT_THAT(gemm(a, b.transpose(), c, T(2), T(3), false, true), r);
+    EXPECT_THAT(gemm(a.transpose(), b.transpose(), c, T(2), T(3), true, true), r);
 }
 
-TEST_F(TensorTest, Transpose) {
-    Tensor<int32_t> a({3, 4}, {
+TEST_F(TensorTest, Gemm) {
+    gemm_test<int>();
+    gemm_test<float>();
+    gemm_test<double>();
+    gemm_test<std::complex<float>>();
+    gemm_test<std::complex<double>>();
+}
+
+template <typename T>
+static void transpose_test() {
+    Tensor<T> a({3, 4}, {
         230, 254, 116, 199,
         219, 236, 201, 252,
         173, 148, 155, 167
     });
 
-    Tensor<int32_t> b({4, 3}, {
+    Tensor<T> b({4, 3}, {
         230, 219, 173,
         254, 236, 148,
         116, 201, 155,
@@ -298,6 +438,16 @@ TEST_F(TensorTest, Transpose) {
     });
 
     EXPECT_EQ(a.transpose(), b);
+    a.transposeTo(a);
+    EXPECT_EQ(a, b);
+}
+
+TEST_F(TensorTest, Transpose) {
+    transpose_test<int>();
+    transpose_test<float>();
+    transpose_test<double>();
+    transpose_test<std::complex<float>>();
+    transpose_test<std::complex<double>>();
 }
 
 TEST_F(TensorTest, TransposeInPlace) {
