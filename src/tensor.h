@@ -6,12 +6,7 @@
 #include <iostream>
 
 #include "concurrent.h"
-
-#if HAS_MKL
-#include "mkl.h"
-#elif
-#include "cblas.h"
-#endif
+#include "os_blas.h"
 
 namespace kneron::model {
 

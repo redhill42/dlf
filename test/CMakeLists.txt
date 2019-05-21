@@ -4,13 +4,15 @@ target_link_libraries(unit_tests gtest gmock dlfl ${TBB_LIBS})
 
 if (MKL_FOUND)
   target_link_libraries(unit_tests ${MKL_LIBRARIES})
+elseif (APPLE)
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -framework Accelerate")
 endif()
 
 find_package(GMP)
 if (GMP_FOUND)
   add_definitions(-DHAS_GMP=1)
   include_directories(${GMP_INCLUDES})
-  target_link_libraries(unit_tests ${GMP_LIB} ${GMPXX_LIB})
+  target_link_libraries(unit_tests ${GMP_LIBRARIES})
 endif()
 
 add_test(
