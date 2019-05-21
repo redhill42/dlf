@@ -595,15 +595,16 @@ template <typename T>
 Tensor<T> Tensor<T>::random(Shape shape, const T& low, const T& high) {
     static_assert(std::is_arithmetic_v<T>);
 
+    std::random_device r;
+    std::default_random_engine eng(r());
+
     if constexpr (std::is_integral_v<T>) {
-        auto rand = std::bind(std::uniform_int_distribution<T>(low, high),
-                              std::default_random_engine());
+        auto rand = std::bind(std::uniform_int_distribution<T>(low, high), eng);
         return build(std::move(shape), rand);
     }
 
     if constexpr (std::is_floating_point_v<T>) {
-        auto rand = std::bind(std::uniform_real_distribution<T>(low, high),
-                              std::default_random_engine());
+        auto rand = std::bind(std::uniform_real_distribution<T>(low, high), eng);
         return build(std::move(shape), rand);
     }
 }
@@ -846,11 +847,11 @@ DEFINE_OPERATOR(/)
 
 #undef DEFINE_OPERATOR
 
-#define DEFINE_BLAS_OPERATOR(T, op, axpby, alpha, beta) \
+#define DEFINE_BLAS_OPERATOR(op, T, alpha, beta) \
     template <> template <> \
     inline Tensor<T>& Tensor<T>::operator op##=(const Tensor<T>& rhs) { \
         assert(shape() == rhs.shape()); \
-        cblas_##axpby(size(), beta, rhs.data(), 1, alpha, data(), 1); \
+        cblas::axpby(size(), T(beta), rhs.data(), 1, T(alpha), data(), 1); \
         return *this; \
     } \
     template <> \
@@ -858,82 +859,45 @@ DEFINE_OPERATOR(/)
         assert(lhs.shape() == rhs.shape()); \
         Tensor<T> res(lhs.shape()); \
         std::copy(rhs.begin(), rhs.end(), res.begin()); \
-        cblas_##axpby(res.size(), alpha, lhs.data(), 1, beta, res.data(), 1); \
+        cblas::axpby(res.size(), T(alpha), lhs.data(), 1, T(beta), res.data(), 1); \
         return res; \
     } \
     template <> \
     inline Tensor<T> operator op(Tensor<T>&& lhs, const Tensor<T>& rhs) { \
         assert(lhs.shape() == rhs.shape()); \
-        cblas_##axpby(lhs.size(), beta, rhs.data(), 1, alpha, lhs.data(), 1); \
+        cblas::axpby(lhs.size(), T(beta), rhs.data(), 1, T(alpha), lhs.data(), 1); \
         return std::move(lhs); \
     } \
     template <> \
     inline Tensor<T> operator op(const Tensor<T>& lhs, Tensor<T>&& rhs) { \
         assert(lhs.shape() == rhs.shape()); \
-        cblas_##axpby(rhs.size(), alpha, lhs.data(), 1, beta, rhs.data(), 1); \
+        cblas::axpby(rhs.size(), T(alpha), lhs.data(), 1, T(beta), rhs.data(), 1); \
         return std::move(rhs); \
     } \
     template <> \
     inline Tensor<T> operator op(Tensor<T>&& lhs, Tensor<T>&& rhs) { \
         assert(lhs.shape() == rhs.shape()); \
-        cblas_##axpby(lhs.size(), alpha, lhs.data(), 1, beta, rhs.data(), 1); \
+        cblas::axpby(lhs.size(), T(alpha), lhs.data(), 1, T(beta), rhs.data(), 1); \
         return std::move(rhs); \
     }
 
-template <typename T>
-inline const std::complex<T>* C_zero() {
-    static std::complex<T> z{};
-    return &z;
-}
-
-template <typename T>
-inline const std::complex<T>* C_positive_one() {
-    static std::complex<T> x{1};
-    return &x;
-}
-
-template <typename T>
-inline const std::complex<T>* C_negative_one() {
-    static std::complex<T> x{-1};
-    return &x;
-}
-
-DEFINE_BLAS_OPERATOR(float, +, saxpby, 1.0f, 1.0f)
-DEFINE_BLAS_OPERATOR(float, -, saxpby, 1.0f, -1.0f)
-DEFINE_BLAS_OPERATOR(double, +, daxpby, 1.0, 1.0)
-DEFINE_BLAS_OPERATOR(double, -, daxpby, 1.0, -1.0)
-DEFINE_BLAS_OPERATOR(std::complex<float>, +, caxpby, C_positive_one<float>(), C_positive_one<float>())
-DEFINE_BLAS_OPERATOR(std::complex<float>, -, caxpby, C_positive_one<float>(), C_negative_one<float>())
-DEFINE_BLAS_OPERATOR(std::complex<double>, +, zaxpby, C_positive_one<double>(), C_positive_one<double>())
-DEFINE_BLAS_OPERATOR(std::complex<double>, -, zaxpby, C_positive_one<double>(), C_negative_one<double>())
+DEFINE_BLAS_OPERATOR(+, float, 1.0, 1.0)
+DEFINE_BLAS_OPERATOR(-, float, 1.0, -1.0)
+DEFINE_BLAS_OPERATOR(+, double, 1.0, 1.0)
+DEFINE_BLAS_OPERATOR(-, double, 1.0, -1.0)
+DEFINE_BLAS_OPERATOR(+, std::complex<float>, 1.0, 1.0)
+DEFINE_BLAS_OPERATOR(-, std::complex<float>, 1.0, -1.0)
+DEFINE_BLAS_OPERATOR(+, std::complex<double>, 1.0, 1.0)
+DEFINE_BLAS_OPERATOR(-, std::complex<double>, 1.0, -1.0)
 
 #undef DEFINE_BLAS_OPERATOR
 
-template <>
-inline Tensor<float>& Tensor<float>::operator*=(const float& a) {
-    cblas_sscal(size(), a, data(), 1);
-    return *this;
-}
-
-template <>
-inline Tensor<double>& Tensor<double>::operator*=(const double& a) {
-    cblas_dscal(size(), a, data(), 1);
-    return *this;
-}
-
-template <>
-inline Tensor<std::complex<float>>& Tensor<std::complex<float>>::operator*=(const std::complex<float>& a) {
-    cblas_cscal(size(), &a, data(), 1);
-    return *this;
-}
-
-template <>
-inline Tensor<std::complex<double>>& Tensor<std::complex<double>>::operator*=(const std::complex<double>& a) {
-    cblas_zscal(size(), &a, data(), 1);
-    return *this;
-}
-
 #define DEFINE_BLAS_SCALE_OPERATOR(T) \
+    template <> \
+    inline Tensor<T>& Tensor<T>::operator*=(const T& a) { \
+        cblas::scal(size(), a, data(), 1); \
+        return *this; \
+    } \
     template <> \
     inline Tensor<T> operator*(const Tensor<T>& lhs, const T& rhs) { \
         Tensor<T> r = lhs; \
@@ -982,6 +946,10 @@ namespace impl {
 
 template <typename T>
 T vector_dot_vector(size_t n, const T* A, const T* B) {
+    if constexpr (std::is_same_v<T, float> || std::is_same_v<T, double>) {
+        return cblas::dot(n, A, 1, B, 1);
+    }
+
     return tbb::parallel_reduce(
         tbb::blocked_range<size_t>(0, n, GRAINSIZE),
         T{},
@@ -995,17 +963,13 @@ T vector_dot_vector(size_t n, const T* A, const T* B) {
         std::plus());
 }
 
-template <>
-inline float vector_dot_vector(size_t n, const float* A, const float* B) {
-    return cblas_sdot(n, A, 1, B, 1);
-}
-template <>
-inline double vector_dot_vector(size_t n, const double* A, const double* B) {
-    return cblas_ddot(n, A, 1, B, 1);
-}
-
 template <typename T>
 void matrix_dot_vector(size_t m, size_t n, const T* A, const T* B, T* C) {
+    if constexpr (cblas::IsBlasType<T>) {
+        cblas::gemv(CblasRowMajor, CblasNoTrans, m, n, T(1.0), A, n, B, 1, T(0), C, 1);
+        return;
+    }
+
     tbb::parallel_for(tbb::blocked_range<size_t>(0, m, GRAINSIZE), [&](auto&& r) {
         auto px = A + r.begin() * n;
         auto pz = C + r.begin();
@@ -1019,25 +983,13 @@ void matrix_dot_vector(size_t m, size_t n, const T* A, const T* B, T* C) {
     });
 }
 
-template <>
-inline void matrix_dot_vector(size_t m, size_t n, const float* A, const float* B, float* C) {
-    cblas_sgemv(CblasRowMajor, CblasNoTrans, m, n, 1.0f, A, n, B, 1, 0.0f, C, 1);
-}
-template <>
-inline void matrix_dot_vector(size_t m, size_t n, const double* A, const double* B, double* C) {
-    cblas_dgemv(CblasRowMajor, CblasNoTrans, m, n, 1.0, A, n, B, 1, 0.0, C, 1);
-}
-template <>
-inline void matrix_dot_vector(size_t m, size_t n, const std::complex<float>* A, const std::complex<float>* B, std::complex<float>* C) {
-    cblas_cgemv(CblasRowMajor, CblasNoTrans, m, n, C_positive_one<float>(), A, n, B, 1, C_zero<float>(), C, 1);
-}
-template <>
-inline void matrix_dot_vector(size_t m, size_t n, const std::complex<double>* A, const std::complex<double>* B, std::complex<double>* C) {
-    cblas_zgemv(CblasRowMajor, CblasNoTrans, m, n, C_positive_one<double>(), A, n, B, 1, C_zero<double>(), C, 1);
-}
-
 template <typename T>
 void matrix_dot_matrix(size_t m, size_t k, size_t n, const T* A, const T* B, T* C) {
+    if constexpr (cblas::IsBlasType<T>) {
+        cblas::gemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, m, n, k, T(1), A, k, B, n, T(0), C, n);
+        return;
+    }
+
     tbb::parallel_for(tbb::blocked_range2d<size_t>(0, m, 32, 0, n, 32), [&](auto &&r) {
         for (size_t i = r.rows().begin(); i != r.rows().end(); i++) {
             for (size_t j = r.cols().begin(); j != r.cols().end(); j++) {
@@ -1048,23 +1000,6 @@ void matrix_dot_matrix(size_t m, size_t k, size_t n, const T* A, const T* B, T* 
             }
         }
     });
-}
-
-template <>
-inline void matrix_dot_matrix(size_t m, size_t k, size_t n, const float* A, const float* B, float* C) {
-    cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, m, n, k, 1.0f, A, k, B, n, 0.0f, C, n);
-}
-template <>
-inline void matrix_dot_matrix(size_t m, size_t k, size_t n, const double* A, const double* B, double* C) {
-    cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, m, n, k, 1.0, A, k, B, n, 0.0, C, n);
-}
-template <>
-inline void matrix_dot_matrix(size_t m, size_t k, size_t n, const std::complex<float>* A, const std::complex<float>* B, std::complex<float>* C) {
-    cblas_cgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, m, n, k, C_positive_one<float>(), A, k, B, n, C_zero<float>(), C, n);
-}
-template <>
-inline void matrix_dot_matrix(size_t m, size_t k, size_t n, const std::complex<double>* A, const std::complex<double>* B, std::complex<double>* C) {
-    cblas_zgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, m, n, k, C_positive_one<double>(), A, k, B, n, C_zero<double>(), C, n);
 }
 
 } // namespace impl
@@ -1171,8 +1106,8 @@ void gemm(const Tensor<T>& A, const Tensor<T>& B, Tensor<T>* C,
     assert(k == p);
     assert(C->shape() == Shape({m, n}));
 
-    if constexpr (std::is_same_v<T, float>) {
-        cblas_sgemm(CblasRowMajor,
+    if constexpr (cblas::IsBlasType<T>) {
+        cblas::gemm(CblasRowMajor,
                     transA ? CblasTrans : CblasNoTrans,
                     transB ? CblasTrans : CblasNoTrans,
                     m, n, k,
@@ -1180,45 +1115,6 @@ void gemm(const Tensor<T>& A, const Tensor<T>& B, Tensor<T>* C,
                     A.data(), A.shape()[1],
                     B.data(), B.shape()[1],
                     beta,
-                    C->data(), n);
-        return;
-    }
-
-    if constexpr (std::is_same_v<T, double>) {
-        cblas_dgemm(CblasRowMajor,
-                    transA ? CblasTrans : CblasNoTrans,
-                    transB ? CblasTrans : CblasNoTrans,
-                    m, n, k,
-                    alpha,
-                    A.data(), A.shape()[1],
-                    B.data(), B.shape()[1],
-                    beta,
-                    C->data(), n);
-        return;
-    }
-
-    if constexpr (std::is_same_v<T, std::complex<float>>) {
-        cblas_cgemm(CblasRowMajor,
-                    transA ? CblasTrans : CblasNoTrans,
-                    transB ? CblasTrans : CblasNoTrans,
-                    m, n, k,
-                    &alpha,
-                    A.data(), A.shape()[1],
-                    B.data(), B.shape()[1],
-                    &beta,
-                    C->data(), n);
-        return;
-    }
-
-    if constexpr (std::is_same_v<T, std::complex<double>>) {
-        cblas_zgemm(CblasRowMajor,
-                    transA ? CblasTrans : CblasNoTrans,
-                    transB ? CblasTrans : CblasNoTrans,
-                    m, n, k,
-                    &alpha,
-                    A.data(), A.shape()[1],
-                    B.data(), B.shape()[1],
-                    &beta,
                     C->data(), n);
         return;
     }
@@ -1297,27 +1193,8 @@ Tensor<T> Tensor<T>::transpose() && {
     m_shape = Shape({c, r});
 
 #if HAS_MKL
-    if constexpr (std::is_same_v<T, float>) {
-        mkl_simatcopy('R', 'T', r, c, 1.0f, data(), c, r);
-        return *this;
-    }
-
-    if constexpr (std::is_same_v<T, double>) {
-        mkl_dimatcopy('R', 'T', r, c, 1.0, data(), c, r);
-        return *this;
-    }
-
-    if constexpr (std::is_same_v<T, std::complex<float>>) {
-        mkl_cimatcopy('R', 'T', r, c,
-                      *reinterpret_cast<const MKL_Complex8*>(C_positive_one<float>()),
-                      reinterpret_cast<MKL_Complex8*>(data()), c, r);
-        return *this;
-    }
-
-    if constexpr (std::is_same_v<T, std::complex<double>>) {
-        mkl_zimatcopy('R', 'T', r, c,
-                      *reinterpret_cast<const MKL_Complex16*>(C_positive_one<double>()),
-                      reinterpret_cast<MKL_Complex16*>(data()), c, r);
+    if constexpr (cblas::IsBlasType<T>) {
+        mkl::imatcopy('R', 'T', r, c, T(1), data(), c, r);
         return *this;
     }
 #endif
@@ -1334,29 +1211,8 @@ Tensor<T> Tensor<T>::transpose() && {
 template <typename T>
 void Tensor<T>::copy_transpose(T* dst, const T* src, size_t r, size_t c) {
 #if HAS_MKL
-    if constexpr (std::is_same_v<T, float>) {
-        mkl_somatcopy('R', 'T', r, c, 1.0f, src, c, dst, r);
-        return;
-    }
-
-    if constexpr (std::is_same_v<T, double>) {
-        mkl_domatcopy('R', 'T', r, c, 1.0, src, c, dst, r);
-        return;
-    }
-
-    if constexpr (std::is_same_v<T, std::complex<float>>) {
-        mkl_comatcopy('R', 'T', r, c,
-                      *reinterpret_cast<const MKL_Complex8*>(C_positive_one<float>()),
-                      reinterpret_cast<const MKL_Complex8*>(src), c,
-                      reinterpret_cast<MKL_Complex8*>(dst), r);
-        return;
-    }
-
-    if constexpr (std::is_same_v<T, std::complex<double>>) {
-        mkl_zomatcopy('R', 'T', r, c,
-                      *reinterpret_cast<const MKL_Complex16*>(C_positive_one<double>()),
-                      reinterpret_cast<const MKL_Complex16*>(src), c,
-                      reinterpret_cast<MKL_Complex16*>(dst), r);
+    if constexpr (cblas::IsBlasType<T>) {
+        mkl::omatcopy('R', 'T', r, c, T(1), src, c, dst, r);
         return;
     }
 #endif
