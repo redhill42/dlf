@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <complex>
+#include <random>
 #include <iostream>
 
 #include "concurrent.h"
@@ -246,6 +247,24 @@ public: // Constructors
      * @return the identity matrix
      */
     static Tensor identity(size_t n, const T& value = T{1});
+
+    /**
+     * Create a tensor with values starting from n.
+     *
+     * @param shape the tensor dimension
+     * @param n the starting value in the tensor data.
+     */
+    static Tensor range(Shape shape, T n);
+
+    /**
+     * Create a tensor filled with random data.
+     *
+     * @param shape the tensor dimension
+     * @param low the lowest random value
+     * @param high the highest random value
+     * @return a tensor that filled with random data.
+     */
+    static Tensor random(Shape shape, const T& low, const T& high);
 
     // Copy and move constructors/assignments.
     Tensor(const Tensor& t);
@@ -564,6 +583,32 @@ Tensor<T> Tensor<T>::identity(size_t n, const T& value) {
 }
 
 template <typename T>
+Tensor<T> Tensor<T>::range(Shape shape, T n) {
+    Tensor<T> res(std::move(shape));
+    T* p = res.data();
+    for (size_t k = res.size(); k-- != 0; )
+        *p++ = n++;
+    return res;
+}
+
+template <typename T>
+Tensor<T> Tensor<T>::random(Shape shape, const T& low, const T& high) {
+    static_assert(std::is_arithmetic_v<T>);
+
+    if constexpr (std::is_integral_v<T>) {
+        auto rand = std::bind(std::uniform_int_distribution<T>(low, high),
+                              std::default_random_engine());
+        return build(std::move(shape), rand);
+    }
+
+    if constexpr (std::is_floating_point_v<T>) {
+        auto rand = std::bind(std::uniform_real_distribution<T>(low, high),
+                              std::default_random_engine());
+        return build(std::move(shape), rand);
+    }
+}
+
+template <typename T>
 Tensor<T>::Tensor(const Tensor& t)
     : m_shape(t.m_shape), m_size(t.m_size)
 {
@@ -801,7 +846,7 @@ DEFINE_OPERATOR(/)
 
 #undef DEFINE_OPERATOR
 
-#define DEFINE_BLAS_OPERATOR(T, op, axpby, copy, alpha, beta) \
+#define DEFINE_BLAS_OPERATOR(T, op, axpby, alpha, beta) \
     template <> template <> \
     inline Tensor<T>& Tensor<T>::operator op##=(const Tensor<T>& rhs) { \
         assert(shape() == rhs.shape()); \
@@ -812,7 +857,7 @@ DEFINE_OPERATOR(/)
     inline Tensor<T> operator op(const Tensor<T>& lhs, const Tensor<T>& rhs) { \
         assert(lhs.shape() == rhs.shape()); \
         Tensor<T> res(lhs.shape()); \
-        cblas_##copy(res.size(), rhs.data(), 1, res.data(), 1); \
+        std::copy(rhs.begin(), rhs.end(), res.begin()); \
         cblas_##axpby(res.size(), alpha, lhs.data(), 1, beta, res.data(), 1); \
         return res; \
     } \
@@ -853,14 +898,14 @@ inline const std::complex<T>* C_negative_one() {
     return &x;
 }
 
-DEFINE_BLAS_OPERATOR(float, +, saxpby, scopy, 1.0f, 1.0f)
-DEFINE_BLAS_OPERATOR(float, -, saxpby, scopy, 1.0f, -1.0f)
-DEFINE_BLAS_OPERATOR(double, +, daxpby, dcopy, 1.0, 1.0)
-DEFINE_BLAS_OPERATOR(double, -, daxpby, dcopy, 1.0, -1.0)
-DEFINE_BLAS_OPERATOR(std::complex<float>, +, caxpby, ccopy, C_positive_one<float>(), C_positive_one<float>())
-DEFINE_BLAS_OPERATOR(std::complex<float>, -, caxpby, ccopy, C_positive_one<float>(), C_negative_one<float>())
-DEFINE_BLAS_OPERATOR(std::complex<double>, +, zaxpby, zcopy, C_positive_one<double>(), C_positive_one<double>())
-DEFINE_BLAS_OPERATOR(std::complex<double>, -, zaxpby, zcopy, C_positive_one<double>(), C_negative_one<double>())
+DEFINE_BLAS_OPERATOR(float, +, saxpby, 1.0f, 1.0f)
+DEFINE_BLAS_OPERATOR(float, -, saxpby, 1.0f, -1.0f)
+DEFINE_BLAS_OPERATOR(double, +, daxpby, 1.0, 1.0)
+DEFINE_BLAS_OPERATOR(double, -, daxpby, 1.0, -1.0)
+DEFINE_BLAS_OPERATOR(std::complex<float>, +, caxpby, C_positive_one<float>(), C_positive_one<float>())
+DEFINE_BLAS_OPERATOR(std::complex<float>, -, caxpby, C_positive_one<float>(), C_negative_one<float>())
+DEFINE_BLAS_OPERATOR(std::complex<double>, +, zaxpby, C_positive_one<double>(), C_positive_one<double>())
+DEFINE_BLAS_OPERATOR(std::complex<double>, -, zaxpby, C_positive_one<double>(), C_negative_one<double>())
 
 #undef DEFINE_BLAS_OPERATOR
 
@@ -1208,18 +1253,7 @@ void gemm(const Tensor<T>& A, const Tensor<T>& B, const Tensor<T>& C, Tensor<T>*
           const T& alpha = T{1}, const T& beta = T{1},
           bool transA = false, bool transB = false)
 {
-    if constexpr (std::is_same_v<T, float>) {
-        cblas_scopy(C.size(), C.data, 1, R->data(), 1);
-    } else if constexpr (std::is_same_v<T, double>) {
-        cblas_dcopy(C.size(), C.data(), 1, R->data(), 1);
-    } else if constexpr (std::is_same_v<T, std::complex<float>>) {
-        cblas_ccopy(C.size(), C.data(), 1, R->data(), 1);
-    } else if constexpr (std::is_same_v<T, std::complex<double>>) {
-        cblas_zcopy(C.size(), C.data(), 1, R->data(), 1);
-    } else {
-        std::copy(C.begin(), C.end(), R->begin());
-    }
-
+    std::copy(C.begin(), C.end(), R->begin());
     gemm(A, B, R, alpha, beta, transA, transB);
 }
 

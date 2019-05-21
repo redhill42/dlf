@@ -1,10 +1,9 @@
 #include <cmath>
 #include <complex>
 #include <variant>
-#include <random>
 #include "gtest/gtest.h"
 #include "gmock/gmock.h"
-#include "utility.h"
+#include "test_utility.h"
 
 #ifndef NDEBUG
 #define GRAINSIZE 1 // enforce parallel algorithm
@@ -668,9 +667,7 @@ struct Relu {
 
 TEST_F(TensorTest, Relu) {
     // fill a tensor with random numbers in [-500,500]
-    auto rand = std::bind(std::uniform_int_distribution<int32_t>(-500, 500),
-                          std::default_random_engine(0x1234)); // NOLINT(cert-msc32-c,cert-msc51-cpp)
-    auto in = Tensor<int32_t>::build({100, 100}, rand);
+    auto in = Tensor<int32_t>::random({100, 100}, -500, 500);
 
     // relu with 100 as max value
     auto out = in.transform(Relu(100.0));
@@ -691,50 +688,19 @@ TEST_F(TensorTest, Format) {
     EXPECT_EQ(format(Tensor<int>()), "");
 }
 
-/**
- * A simple tensor variant implementation. One can improve it to more efficient
- * and functionality.
- */
-template <typename... Ts>
-class TensorVariant
-{
-    std::variant<Tensor<Ts>...> m_var;
-
-public:
-    template <typename T>
-    TensorVariant(Tensor<T> t) : m_var(std::move(t)) {}
-
-    template <typename T>
-    TensorVariant& operator=(Tensor<T> t) {
-        m_var = std::move(t);
+TEST(Tensor, MatrixMultiplicationPerformance) {
+    {
+        auto A = Tensor<double>::random({100, 100}, -100, 100);
+        auto B = Tensor<double>::random({100, 100}, -100, 100);
+        timing("Small matrix multiplication", 10000, [&]() {
+            inner(A, B);
+        });
     }
-
-    friend TensorVariant operator+(const TensorVariant& lhs, const TensorVariant& rhs) {
-        return std::visit(
-            [](auto&& x, auto&& y) { return TensorVariant(x + y); },
-            lhs.m_var, rhs.m_var);
+    {
+        auto A = Tensor<double>::random({1024, 1024}, -100, 100);
+        auto B = Tensor<double>::random({1024, 1024}, -100, 100);
+        timing("Big matrix multiplication", 100, [&]() {
+            inner(A, B);
+        });
     }
-
-    template <typename F>
-    TensorVariant& apply(F f) {
-        std::visit([f](auto& t) { t.apply(f); }, m_var);
-        return *this;
-    }
-
-    template <typename T>
-    Tensor<T>& get() {
-        return std::get<Tensor<T>>(m_var);
-    }
-};
-
-TEST(Tensor, Variant) {
-    using MyTensorVariant = TensorVariant<int32_t, int64_t, float, double>;
-    MyTensorVariant t1 = Tensor<int32_t>({2,2}, {1, 2, 3, 4});
-    MyTensorVariant t2 = Tensor<double>({2, 2}, {3.14, 2.72, 1.62, 1.41});
-
-    MyTensorVariant t3 = t1 + t2;
-    EXPECT_THAT(t3.get<double>(), T::ElementsAre(1+3.14, 2+2.72, 3+1.62, 4+1.41));
-
-    t3.apply([](auto x) { return x*2; });
-    EXPECT_THAT(t3.get<double>(), T::ElementsAre((1+3.14)*2, (2+2.72)*2, (3+1.62)*2, (4+1.41)*2));
 }
