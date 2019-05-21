@@ -41,6 +41,13 @@ public:
     }
 
     /**
+     * Returns number of elements in a given dimension.
+     */
+    size_t operator[](size_t dim) const noexcept {
+        return m_dims[dim];
+    }
+
+    /**
      * Return pair of extents if this shape represents a matrix.
      */
     std::pair<size_t,size_t> extent() const noexcept {
@@ -48,10 +55,22 @@ public:
         return std::pair(extent(0), extent(1));
     }
 
+    /**
+     * Change dimensions of this shape. The new shape must compatible to
+     * this shape.
+     */
+    bool reshape(Shape newshape);
+
+    /**
+     * Compare two shapes for equality.
+     */
     bool operator==(const Shape& other) const {
         return m_dims == other.m_dims;
     }
 
+    /**
+     * Compare two shapes for non-equality.
+     */
     bool operator!=(const Shape& other) const {
         return m_dims != other.m_dims;
     }
@@ -243,6 +262,21 @@ public: // Attributes
     }
 
     /**
+     * Reshape the tensor without changing tensor data. The new shape
+     * should be compatible with the original shape. At most one
+     * dimension of the new shape can be -1. In this case, the
+     * actual dimension value is inferred from the size of the tensor
+     * and the remaining dimensions.
+     *
+     * @param newshape specifies the new shape.
+     * @return true if shape changed, false if new shape is not
+     * compatible with current shape.
+     */
+    bool reshape(Shape newshape) {
+        return m_shape.reshape(std::move(newshape));
+    }
+
+    /**
      * Return true if this is an empty tensor.
      */
     bool empty() const noexcept {
@@ -267,7 +301,7 @@ public: // Attributes
      * Returns true if this tensor is a square matrix.
      */
     bool is_square() const noexcept {
-        return is_matrix() && m_shape.extent(0) == m_shape.extent(1);
+        return is_matrix() && m_shape[0] == m_shape[1];
     }
 
     /**
@@ -597,7 +631,7 @@ inline T& Tensor<T>::operator()(Args... args) noexcept {
 template <typename T>
 Tensor<T> Tensor<T>::operator[](size_t index) {
     assert(m_shape.rank() > 1);
-    assert(index < m_shape.extent(0));
+    assert(index < m_shape[0]);
 
     auto slice_shape = m_shape.shrink();
     auto slice_size = slice_shape.size();
@@ -998,19 +1032,19 @@ template <typename T>
 Tensor<T>& inner(const Tensor<T>& A, const Tensor<T>& B, Tensor<T>* C) {
     assert(C != &A && C != &B);
     if (A.is_vector() && B.is_vector()) {
-        auto n = A.shape().extent(0);
-        assert(n == B.shape().extent(0));
-        assert(C->is_vector() && 1 == C->shape().extent(0));
+        auto n = A.shape()[0];
+        assert(n == B.shape()[0]);
+        assert(C->is_vector() && 1 == C->shape()[0]);
         *C->data() = impl::vector_dot_vector(n, A.data(), B.data());
     } else if (A.is_vector() && B.is_matrix()) {
         auto [k, n] = B.shape().extent();
-        assert(k == A.shape().extent(0));
-        assert(C->is_vector() && n == C->shape().extent(0));
+        assert(k == A.shape()[0]);
+        assert(C->is_vector() && n == C->shape()[0]);
         impl::matrix_dot_matrix(1, k, n, A.data(), B.data(), C->data());
     } else if (A.is_matrix() && B.is_vector()) {
         auto [m, n] = A.shape().extent();
-        assert(n == B.shape().extent(0));
-        assert(C->is_vector() && m == C->shape().extent(0));
+        assert(n == B.shape()[0]);
+        assert(C->is_vector() && m == C->shape()[0]);
         impl::matrix_dot_vector(m, n, A.data(), B.data(), C->data());
     } else if (A.is_matrix() && B.is_matrix()) {
         auto [m, k] = A.shape().extent();
@@ -1027,18 +1061,18 @@ Tensor<T>& inner(const Tensor<T>& A, const Tensor<T>& B, Tensor<T>* C) {
 template <typename T>
 Tensor<T> inner(const Tensor<T>& A, const Tensor<T>& B) {
     if (A.is_vector() && B.is_vector()) {
-        auto n = A.shape().extent(0);
-        assert(n == B.shape().extent(0));
+        auto n = A.shape()[0];
+        assert(n == B.shape()[0]);
         return Tensor<T>({1}, {impl::vector_dot_vector(n, A.data(), B.data())});
     } else if (A.is_vector() && B.is_matrix()) {
         auto [k, n] = B.shape().extent();
-        assert(k == A.shape().extent(0));
+        assert(k == A.shape()[0]);
         Tensor<T> C({n});
         impl::matrix_dot_matrix(1, k, n, A.data(), B.data(), C.data());
         return C;
     } else if (A.is_matrix() && B.is_vector()) {
         auto [m, n] = A.shape().extent();
-        assert(n == B.shape().extent(0));
+        assert(n == B.shape()[0]);
         Tensor<T> C({m});
         impl::matrix_dot_vector(m, n, A.data(), B.data(), C.data());
         return C;
@@ -1059,7 +1093,7 @@ template <typename T>
 Tensor<T> pow(const Tensor<T>& x, long n) {
     assert(x.is_square() && n >= 0);
     if (n == 0)
-        return Tensor<T>::identity(x.shape().extent(0));
+        return Tensor<T>::identity(x.shape()[0]);
     n--;
 
     auto A = x, B = x, t = x;
@@ -1098,8 +1132,8 @@ void gemm(const Tensor<T>& A, const Tensor<T>& B, Tensor<T>* C,
                     transB ? CblasTrans : CblasNoTrans,
                     m, n, k,
                     alpha,
-                    A.data(), A.shape().extent(1),
-                    B.data(), B.shape().extent(1),
+                    A.data(), A.shape()[1],
+                    B.data(), B.shape()[1],
                     beta,
                     C->data(), n);
         return;
@@ -1111,8 +1145,8 @@ void gemm(const Tensor<T>& A, const Tensor<T>& B, Tensor<T>* C,
                     transB ? CblasTrans : CblasNoTrans,
                     m, n, k,
                     alpha,
-                    A.data(), A.shape().extent(1),
-                    B.data(), B.shape().extent(1),
+                    A.data(), A.shape()[1],
+                    B.data(), B.shape()[1],
                     beta,
                     C->data(), n);
         return;
@@ -1124,8 +1158,8 @@ void gemm(const Tensor<T>& A, const Tensor<T>& B, Tensor<T>* C,
                     transB ? CblasTrans : CblasNoTrans,
                     m, n, k,
                     &alpha,
-                    A.data(), A.shape().extent(1),
-                    B.data(), B.shape().extent(1),
+                    A.data(), A.shape()[1],
+                    B.data(), B.shape()[1],
                     &beta,
                     C->data(), n);
         return;
@@ -1137,8 +1171,8 @@ void gemm(const Tensor<T>& A, const Tensor<T>& B, Tensor<T>* C,
                     transB ? CblasTrans : CblasNoTrans,
                     m, n, k,
                     &alpha,
-                    A.data(), A.shape().extent(1),
-                    B.data(), B.shape().extent(1),
+                    A.data(), A.shape()[1],
+                    B.data(), B.shape()[1],
                     &beta,
                     C->data(), n);
         return;

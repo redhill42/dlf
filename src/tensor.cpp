@@ -33,3 +33,29 @@ bool Shape::next(std::vector<size_t>& index) const noexcept {
     }
     return false;
 }
+
+bool Shape::reshape(Shape newshape) {
+    size_t newsize = 1;
+    int pending = -1;
+
+    if (newshape.rank() == 0) {
+        newsize = 0;
+    } else {
+        for (int i = 0; i < newshape.rank(); i++) {
+            if (newshape[i] == size_t(-1)) {
+                if (pending != -1)
+                    return false;
+                pending = i;
+            } else {
+                newsize *= newshape[i];
+            }
+        }
+    }
+
+    if (pending != -1)
+        newshape.m_dims[pending] = size() / newsize;
+    if (size() != newshape.size())
+        return false;
+    m_dims = std::move(newshape.m_dims);
+    return true;
+}
