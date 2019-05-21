@@ -1293,21 +1293,27 @@ void Tensor<T>::copy_transpose(T* dst, const T* src, size_t r, size_t c) {
     }
 #endif
 
-    for (int i = 0; i < c; i++) {
-        auto px = src + i;
-        for (int j = 0; j < r; j++, px += c)
-            *dst++ = *px;
-    }
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, c, GRAINSIZE), [=](auto&& rr) {
+        T* py = dst + rr.begin()*r;
+        for (size_t i = rr.begin(); i != rr.end(); i++) {
+            auto px = src + i;
+            for (size_t j = 0; j < r; j++, px += c)
+                *py++ = *px;
+        }
+    });
 }
 
 // Easy case: in-place transpose a square matrix
 template <typename T>
 void Tensor<T>::square_transpose(T* A, size_t n) {
-    for (size_t i = 0; i < n; i++) {
-        for (size_t j = i + 1; j < n; j++) {
-            std::swap(A[i*n+j], A[j*n+i]);
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, n, GRAINSIZE), [=](auto&& r) {
+        T* px = A;
+        for (size_t i = r.begin(); i != r.end(); i++) {
+            for (size_t j = i+1; j < n; j++) {
+                std::swap(px[i*n+j], px[j*n+i]);
+            }
         }
-    }
+    });
 }
 
 // Hard case: in-place transpose a non-square matrix
