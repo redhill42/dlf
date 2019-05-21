@@ -12,6 +12,10 @@
 
 #include "tensor.h"
 
+#if HAS_GMP
+#include <gmpxx.h>
+#endif
+
 using namespace kneron::model;
 namespace T = ::testing;
 
@@ -387,6 +391,11 @@ T quick_fibonacci(int n) {
 
 TEST(Tensor, Fibonacci) {
     EXPECT_EQ(quick_fibonacci(12), 144);
+
+#if HAS_GMP
+    auto z = quick_fibonacci<mpz_class>(12);
+    EXPECT_EQ(z, mpz_class(144));
+#endif
 }
 
 template <typename T>
