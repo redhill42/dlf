@@ -4,54 +4,6 @@
 #if HAS_MKL
 #include <mkl.h>
 
-namespace mkl {
-
-inline void imatcopy(char ordering, char trans, size_t rows, size_t cols, float alpha, float* AB, size_t lda, size_t ldb) {
-    mkl_simatcopy(ordering, trans, rows, cols, alpha, AB, lda, ldb);
-}
-
-inline void imatcopy(char ordering, char trans, size_t rows, size_t cols, double alpha, double* AB, size_t lda, size_t ldb) {
-    mkl_dimatcopy(ordering, trans, rows, cols, alpha, AB, lda, ldb);
-}
-
-inline void imatcopy(char ordering, char trans, size_t rows, size_t cols, const std::complex<float>& alpha, std::complex<float>* AB, size_t lda, size_t ldb) {
-    mkl_cimatcopy(ordering, trans, rows, cols,
-                  *reinterpret_cast<const MKL_Complex8*>(&alpha),
-                  reinterpret_cast<MKL_Complex8*>(AB),
-                  lda, ldb);
-}
-
-inline void imatcopy(char ordering, char trans, size_t rows, size_t cols, const std::complex<double>& alpha, std::complex<double>* AB, size_t lda, size_t ldb) {
-    mkl_zimatcopy(ordering, trans, rows, cols,
-                  *reinterpret_cast<const MKL_Complex16*>(&alpha),
-                  reinterpret_cast<MKL_Complex16*>(AB),
-                  lda, ldb);
-}
-
-inline void omatcopy(char ordering, char trans, size_t rows, size_t cols, float alpha, const float* A, size_t lda, float* B, size_t ldb) {
-    mkl_somatcopy(ordering, trans, rows, cols, alpha, A, lda, B, ldb);
-}
-
-inline void omatcopy(char ordering, char trans, size_t rows, size_t cols, double alpha, const double* A, size_t lda, double* B, size_t ldb) {
-    mkl_domatcopy(ordering, trans, rows, cols, alpha, A, lda, B, ldb);
-}
-
-inline void omatcopy(char ordering, char trans, size_t rows, size_t cols, const std::complex<float>& alpha, const std::complex<float>* A, size_t lda, std::complex<float>* B, size_t ldb) {
-    mkl_comatcopy(ordering, trans, rows, cols,
-                  *reinterpret_cast<const MKL_Complex8*>(&alpha),
-                  reinterpret_cast<const MKL_Complex8*>(A), lda,
-                  reinterpret_cast<MKL_Complex8*>(B), ldb);
-}
-
-inline void omatcopy(char ordering, char trans, size_t rows, size_t cols, const std::complex<double>& alpha, const std::complex<double>* A, size_t lda, std::complex<double>* B, size_t ldb) {
-    mkl_zomatcopy(ordering, trans, rows, cols,
-                  *reinterpret_cast<const MKL_Complex16*>(&alpha),
-                  reinterpret_cast<const MKL_Complex16*>(A), lda,
-                  reinterpret_cast<MKL_Complex16*>(B), ldb);
-}
-
-} // namespace mkl
-
 #elif defined(__APPLE__)
 #include <Accelerate/Accelerate.h>
 #define cblas_saxpby catlas_saxpby
@@ -222,5 +174,55 @@ inline void gemm(decltype(CblasRowMajor) layout,
 }
 
 } // namespace cblas
+
+#if HAS_MKL
+namespace mkl {
+
+inline void imatcopy(char ordering, char trans, size_t rows, size_t cols, float alpha, float* AB, size_t lda, size_t ldb) {
+    mkl_simatcopy(ordering, trans, rows, cols, alpha, AB, lda, ldb);
+}
+
+inline void imatcopy(char ordering, char trans, size_t rows, size_t cols, double alpha, double* AB, size_t lda, size_t ldb) {
+    mkl_dimatcopy(ordering, trans, rows, cols, alpha, AB, lda, ldb);
+}
+
+inline void imatcopy(char ordering, char trans, size_t rows, size_t cols, const std::complex<float>& alpha, std::complex<float>* AB, size_t lda, size_t ldb) {
+    mkl_cimatcopy(ordering, trans, rows, cols,
+                  *reinterpret_cast<const MKL_Complex8*>(&alpha),
+                  reinterpret_cast<MKL_Complex8*>(AB),
+                  lda, ldb);
+}
+
+inline void imatcopy(char ordering, char trans, size_t rows, size_t cols, const std::complex<double>& alpha, std::complex<double>* AB, size_t lda, size_t ldb) {
+    mkl_zimatcopy(ordering, trans, rows, cols,
+                  *reinterpret_cast<const MKL_Complex16*>(&alpha),
+                  reinterpret_cast<MKL_Complex16*>(AB),
+                  lda, ldb);
+}
+
+inline void omatcopy(char ordering, char trans, size_t rows, size_t cols, float alpha, const float* A, size_t lda, float* B, size_t ldb) {
+    mkl_somatcopy(ordering, trans, rows, cols, alpha, A, lda, B, ldb);
+}
+
+inline void omatcopy(char ordering, char trans, size_t rows, size_t cols, double alpha, const double* A, size_t lda, double* B, size_t ldb) {
+    mkl_domatcopy(ordering, trans, rows, cols, alpha, A, lda, B, ldb);
+}
+
+inline void omatcopy(char ordering, char trans, size_t rows, size_t cols, const std::complex<float>& alpha, const std::complex<float>* A, size_t lda, std::complex<float>* B, size_t ldb) {
+    mkl_comatcopy(ordering, trans, rows, cols,
+                  *reinterpret_cast<const MKL_Complex8*>(&alpha),
+                  reinterpret_cast<const MKL_Complex8*>(A), lda,
+                  reinterpret_cast<MKL_Complex8*>(B), ldb);
+}
+
+inline void omatcopy(char ordering, char trans, size_t rows, size_t cols, const std::complex<double>& alpha, const std::complex<double>* A, size_t lda, std::complex<double>* B, size_t ldb) {
+    mkl_zomatcopy(ordering, trans, rows, cols,
+                  *reinterpret_cast<const MKL_Complex16*>(&alpha),
+                  reinterpret_cast<const MKL_Complex16*>(A), lda,
+                  reinterpret_cast<MKL_Complex16*>(B), ldb);
+}
+
+} // namespace mkl
+#endif // HAS_MKL
 
 #endif //KNERON_OS_BLAS_H

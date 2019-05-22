@@ -478,9 +478,9 @@ static void gemm_test() {
     });
 
     EXPECT_THAT(gemm(a, b, c, T(2), T(3), false, false), r);
-    EXPECT_THAT(gemm(a.transpose(), b, c, T(2), T(3), true, false), r);
-    EXPECT_THAT(gemm(a, b.transpose(), c, T(2), T(3), false, true), r);
-    EXPECT_THAT(gemm(a.transpose(), b.transpose(), c, T(2), T(3), true, true), r);
+    EXPECT_THAT(gemm(transpose(a), b, c, T(2), T(3), true, false), r);
+    EXPECT_THAT(gemm(a, transpose(b), c, T(2), T(3), false, true), r);
+    EXPECT_THAT(gemm(transpose(a), transpose(b), c, T(2), T(3), true, true), r);
 }
 
 TEST_F(TensorTest, Gemm) {
@@ -506,8 +506,8 @@ static void transpose_test() {
         199, 252, 167
     });
 
-    EXPECT_EQ(a.transpose(), b);
-    a.transposeTo(a);
+    EXPECT_EQ(transpose(a), b);
+    transpose(a, &a);
     EXPECT_EQ(a, b);
 }
 
@@ -519,15 +519,22 @@ TEST_F(TensorTest, Transpose) {
     transpose_test<std::complex<double>>();
 }
 
-TEST_F(TensorTest, TransposeInPlace) {
+template <typename T>
+static void test_transpose_in_place() {
     for (size_t i = 0; i <= 5; i++) {
         for (size_t j = 0; j <= 5; j++) {
-            auto a = Tensor<int>::build({i,j}, [x=1]()mutable{return x++;});
-            auto b = a.transpose(); // assume out-of-place transposition is correct
-            a.transposeTo(a); // in-place transpose
+            auto a = Tensor<T>::range({i, j}, 1);
+            auto b = transpose(a); // assume out-of-place transposition is correct
+            transpose(a, &a); // in-place transpose
             EXPECT_EQ(a, b);
         }
     }
+
+}
+TEST_F(TensorTest, TransposeInPlace) {
+    test_transpose_in_place<int>();
+    test_transpose_in_place<float>();
+    test_transpose_in_place<double>();
 }
 
 template <typename T, typename F>

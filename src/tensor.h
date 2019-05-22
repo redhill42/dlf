@@ -394,23 +394,6 @@ public: // Operators
     DECLARE_OPERATOR(/=)
 #undef DECLARE_OPERATOR
 
-    /**
-     * Transpose a matrix. A matrix is a 2-dimension tensor.
-     */
-    Tensor transpose() const &;
-
-    /**
-     * In-place transpose a matrix.
-     */
-    Tensor transpose() &&;
-
-    /**
-     * Transpose a matrix into target.
-     *
-     * @param target the tensor to store the transposed matrix.
-     */
-    void transposeTo(Tensor& target) const;
-
 public: // Transformations
     /**
      * Transform tensor's elements by applying a unary function on tensor's elements.
@@ -501,10 +484,6 @@ public: // Transformations
 
 private: // Implementation
     static const T* printRec(std::ostream& out, const Shape& shape, size_t level, const T* data);
-
-    static void copy_transpose(T* dst, const T* src, size_t r, size_t c);
-    static void square_transpose(T* A, size_t n);
-    static void inplace_transpose(T* A, size_t r, size_t c);
 };
 
 //==-------------------------------------------------------------------------
@@ -892,42 +871,6 @@ DEFINE_BLAS_OPERATOR(-, std::complex<double>, 1.0, -1.0)
 
 #undef DEFINE_BLAS_OPERATOR
 
-#define DEFINE_BLAS_SCALE_OPERATOR(T) \
-    template <> \
-    inline Tensor<T>& Tensor<T>::operator*=(const T& a) { \
-        cblas::scal(size(), a, data(), 1); \
-        return *this; \
-    } \
-    template <> \
-    inline Tensor<T> operator*(const Tensor<T>& lhs, const T& rhs) { \
-        Tensor<T> r = lhs; \
-        r *= rhs; \
-        return r; \
-    } \
-    template <> \
-    inline Tensor<T> operator*(Tensor<T>&& lhs, const T& rhs) { \
-        lhs *= rhs; \
-        return std::move(lhs); \
-    } \
-    template <> \
-    inline Tensor<T> operator*(const T& lhs, const Tensor<T>& rhs) { \
-        Tensor<T> r = rhs; \
-        r *= lhs; \
-        return r; \
-    } \
-    template <> \
-    inline Tensor<T> operator*(const T& lhs, Tensor<T>&& rhs) { \
-        rhs *= lhs; \
-        return std::move(rhs); \
-    }
-
-DEFINE_BLAS_SCALE_OPERATOR(float)
-DEFINE_BLAS_SCALE_OPERATOR(double)
-DEFINE_BLAS_SCALE_OPERATOR(std::complex<float>)
-DEFINE_BLAS_SCALE_OPERATOR(std::complex<double>)
-
-#undef DEFINE_BLAS_SCALE_OPERATOR
-
 template <typename T>
 inline Tensor<T> operator-(const Tensor<T>& x) {
     return x.transform([](const T& a){return -a;});
@@ -966,7 +909,7 @@ T vector_dot_vector(size_t n, const T* A, const T* B) {
 template <typename T>
 void matrix_dot_vector(size_t m, size_t n, const T* A, const T* B, T* C) {
     if constexpr (cblas::IsBlasType<T>) {
-        cblas::gemv(CblasRowMajor, CblasNoTrans, m, n, T(1.0), A, n, B, 1, T(0), C, 1);
+        cblas::gemv(CblasRowMajor, CblasNoTrans, m, n, T(1), A, n, B, 1, T(0), C, 1);
         return;
     }
 
@@ -1091,8 +1034,7 @@ Tensor<T> pow(const Tensor<T>& x, long n) {
  */
 template <typename T>
 void gemm(const Tensor<T>& A, const Tensor<T>& B, Tensor<T>* C,
-          const T& alpha = T{1}, const T& beta = T{1},
-          bool transA = false, bool transB = false)
+          const T& alpha, const T& beta, bool transA = false, bool transB = false)
 {
     assert(A.is_matrix() && B.is_matrix() && C->is_matrix());
     auto [m, k] = A.shape().extent();
@@ -1146,8 +1088,7 @@ void gemm(const Tensor<T>& A, const Tensor<T>& B, Tensor<T>* C,
 
 template <typename T>
 void gemm(const Tensor<T>& A, const Tensor<T>& B, const Tensor<T>& C, Tensor<T>* R,
-          const T& alpha = T{1}, const T& beta = T{1},
-          bool transA = false, bool transB = false)
+          const T& alpha, const T& beta, bool transA = false, bool transB = false)
 {
     std::copy(C.begin(), C.end(), R->begin());
     gemm(A, B, R, alpha, beta, transA, transB);
@@ -1155,61 +1096,18 @@ void gemm(const Tensor<T>& A, const Tensor<T>& B, const Tensor<T>& C, Tensor<T>*
 
 template <typename T>
 Tensor<T> gemm(const Tensor<T>& A, const Tensor<T>& B, const Tensor<T>& C,
-               const T& alpha = T{1}, const T& beta = T{1},
-               bool transA = false, bool transB = false)
+               const T& alpha, const T& beta, bool transA = false, bool transB = false)
 {
     Tensor<T> R = C;
     gemm(A, B, &R, alpha, beta, transA, transB);
     return R;
 }
 
-template <typename T>
-void Tensor<T>::transposeTo(Tensor& target) const {
-    assert(is_matrix() && target.is_matrix());
-
-    if (&target == this) {
-        // transpose in-place
-        std::move(target).transpose();
-    } else {
-        auto [r, c] = shape().extent();
-        assert(target.shape() == Shape({c, r}));
-        copy_transpose(target.data(), data(), r, c);
-    }
-}
-
-template <typename T>
-Tensor<T> Tensor<T>::transpose() const & {
-    assert(is_matrix());
-    auto [r, c] = shape().extent();
-    Tensor<T> res({c, r});
-    copy_transpose(res.data(), data(), r, c);
-    return res;
-}
-
-template <typename T>
-Tensor<T> Tensor<T>::transpose() && {
-    assert(is_matrix());
-    auto [r, c] = shape().extent();
-    m_shape = Shape({c, r});
-
-#if HAS_MKL
-    if constexpr (cblas::IsBlasType<T>) {
-        mkl::imatcopy('R', 'T', r, c, T(1), data(), c, r);
-        return *this;
-    }
-#endif
-
-    if (r == c) {
-        square_transpose(data(), r);
-    } else {
-        inplace_transpose(data(), r, c);
-    }
-    return *this;
-}
+namespace impl {
 
 // Simple case: transpose with copy
 template <typename T>
-void Tensor<T>::copy_transpose(T* dst, const T* src, size_t r, size_t c) {
+void copy_transpose(size_t r, size_t c, const T* src, T* dst) {
 #if HAS_MKL
     if constexpr (cblas::IsBlasType<T>) {
         mkl::omatcopy('R', 'T', r, c, T(1), src, c, dst, r);
@@ -1229,7 +1127,14 @@ void Tensor<T>::copy_transpose(T* dst, const T* src, size_t r, size_t c) {
 
 // Easy case: in-place transpose a square matrix
 template <typename T>
-void Tensor<T>::square_transpose(T* A, size_t n) {
+void square_transpose(size_t n, T* A) {
+#if HAS_MKL
+    if constexpr (cblas::IsBlasType<T>) {
+        mkl::imatcopy('R', 'T', n, n, T(1), A, n, n);
+        return;
+    }
+#endif
+
     tbb::parallel_for(tbb::blocked_range<size_t>(0, n, GRAINSIZE), [=](auto&& r) {
         T* px = A;
         for (size_t i = r.begin(); i != r.end(); i++) {
@@ -1243,10 +1148,57 @@ void Tensor<T>::square_transpose(T* A, size_t n) {
 // Hard case: in-place transpose a non-square matrix
 // https://en.wikipedia.org/wiki/In-place_matrix_transposition
 template <typename T>
-void Tensor<T>::inplace_transpose(T* A, size_t r, size_t c) {
+void inplace_transpose(size_t r, size_t c, T* A) {
+#if HAS_MKL
+    if constexpr (cblas::IsBlasType<T>) {
+        mkl::imatcopy('R', 'T', r, c, T(1), A, c, r);
+        return;
+    }
+#endif
+
     // naive implementation
     Tensor<T> t({r, c}, A, A+r*c);
-    copy_transpose(A, t.data(), r, c);
+    copy_transpose(r, c, t.data(), A);
+}
+
+} // namespace impl
+
+/**
+ * Transpose a matrix to target matrix.
+ *
+ * @param from the matrix to be transposed
+ * @param to the transposed matrix
+ */
+template <typename T>
+void transpose(const Tensor<T>& from, Tensor<T>* to) {
+    assert(from.is_matrix() && to->is_matrix());
+    auto [r, c] = from.shape().extent();
+    if (&from == to) {
+        if (r == c) {
+            impl::square_transpose(r, to->data());
+        } else {
+            to->reshape({c, r});
+            impl::inplace_transpose(r, c, to->data());
+        }
+    } else {
+        assert(to->shape() == Shape({c, r}));
+        impl::copy_transpose(r, c, from.data(), to->data());
+    }
+}
+
+/**
+ * Transpose a matrix.
+ *
+ * @param A the matrix to be transposed
+ * @return the transposed matrix
+ */
+template <typename T>
+Tensor<T> transpose(const Tensor<T>& A) {
+    assert(A.is_matrix());
+    auto [r, c] = A.shape().extent();
+    Tensor<T> B = Tensor<T>({c, r});
+    impl::copy_transpose(r, c, A.data(), B.data());
+    return B;
 }
 
 } // namespace kneron::model
