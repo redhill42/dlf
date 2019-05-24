@@ -33,6 +33,16 @@ if(USE_MKL)
   include_directories(${MKL_INCLUDE_DIRS})
 endif()
 
+# OpenCL and CUDA
+find_package(OpenCL REQUIRED)
+include_directories(${OpenCL_INCLUDE_DIRS})
+
+find_package(CUDA REQUIRED)
+find_cuda_helper_libs("cuda")
+find_cuda_helper_libs("nvrtc")
+set(CUDA_LIBRARIES ${CUDA_cuda_LIBRARY} ${CUDA_nvrtc_LIBRARY})
+include_directories(${CUDA_INCLUDE_DIRS})
+
 # add sub-directories that we want CMake to scan
 add_subdirectory(src)
 
@@ -42,7 +52,10 @@ enable_testing()
 add_subdirectory(test)
 
 add_executable(demo main.cpp)
-target_link_libraries(demo dlfl ${TBB_LIBS} ${MKL_LIBRARIES})
-if (MKL_FOUND)
+target_link_libraries(demo dlfl)
+
+if (USE_MKL)
   target_link_libraries(demo ${MKL_LIBRARIES})
+elseif (APPLE)
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -framework Accelerate")
 endif()

@@ -1,6 +1,5 @@
 add_library(dlfl "")
 
-include(FindProtobuf)
 find_package(Protobuf REQUIRED)
 protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS "onnx.proto")
 
@@ -50,4 +49,8 @@ target_link_libraries(
   PRIVATE
     ${Protobuf_LIBRARIES}
     ${LLVM_LIBS}
+    ${TBB_LIBS}
+    ${MKL_LIBRARIES}
+    ${OpenCL_LIBRARY}
+    ${CUDA_LIBRARIES}
 )
