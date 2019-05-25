@@ -214,7 +214,9 @@ public:
         return reinterpret_cast<ContextID>(m_context);
     }
 
-    std::shared_ptr<raw::Program> compile(const char *source, const std::vector<std::string> &options) override;
+    std::shared_ptr<raw::Program> compileProgram(const char *source, const std::vector<std::string> &options) override;
+    std::shared_ptr<raw::Program> loadProgram(const std::string& binary) override;
+
     std::shared_ptr<raw::Queue> createQueue() override;
     std::shared_ptr<raw::Event> createEvent() override;
     std::shared_ptr<raw::Buffer> createBuffer(BufferAccess access, size_t size) override;
@@ -339,6 +341,7 @@ public:
         }
     }
 
+    std::string getIR() override;
     std::shared_ptr<raw::Kernel> getKernel(const char* name) override;
 };
 
@@ -478,7 +481,9 @@ static std::string getBuildInfo(cl_program program, cl_device_id device) {
     return result;
 }
 
-std::shared_ptr<raw::Program> clContext::compile(const char *source, const std::vector<std::string> &options) {
+std::shared_ptr<raw::Program> clContext::compileProgram(
+    const char *source, const std::vector<std::string> &options)
+{
     auto status = CL_SUCCESS;
     auto program = clCreateProgramWithSource(m_context, 1, &source, nullptr, &status);
     check(status, "clCreateProgramWithSource");
@@ -486,10 +491,44 @@ std::shared_ptr<raw::Program> clContext::compile(const char *source, const std::
     auto option_string = std::accumulate(options.begin(), options.end(), std::string{" "});
     status = clBuildProgram(program, 1, &m_device, option_string.c_str(), nullptr, nullptr);
     if (status == CL_BUILD_PROGRAM_FAILURE)
-        std::cout << getBuildInfo(program, m_device);
+        std::cerr << getBuildInfo(program, m_device);
+    if (status != CL_SUCCESS)
+        clReleaseProgram(program);
     check(status, "clBuildProgram");
 
     return std::make_shared<clProgram>(program);
+}
+
+std::shared_ptr<raw::Program> clContext::loadProgram(const std::string &binary) {
+    auto binary_ptr = reinterpret_cast<const unsigned char*>(binary.data());
+    auto length = binary.length();
+    auto status1 = CL_SUCCESS;
+    auto status2 = CL_SUCCESS;
+
+    auto program = clCreateProgramWithBinary(
+        m_context, 1, &m_device, &length, &binary_ptr, &status1, &status2);
+    check(status1, "clCreateProgramWithBinary (binary status)");
+    check(status2, "clCreateProgramWithBinary");
+
+    // we need to build the program even if it's loaded from binary
+    status1 = clBuildProgram(program, 1, &m_device, nullptr, nullptr, nullptr);
+    if (status1 == CL_BUILD_PROGRAM_FAILURE)
+        std::cerr << getBuildInfo(program, m_device);
+    if (status1 != CL_SUCCESS)
+        clReleaseProgram(program);
+    check(status1, "clBuildProgram");
+
+    return std::make_shared<clProgram>(program);
+}
+
+std::string clProgram::getIR() {
+    size_t bytes = 0;
+    CheckError(clGetProgramInfo(m_program, CL_PROGRAM_BINARY_SIZES, sizeof(size_t), &bytes, nullptr));
+    std::string binary;
+    binary.resize(bytes);
+    auto ptr = binary.data();
+    CheckError(clGetProgramInfo(m_program, CL_PROGRAM_BINARIES, sizeof(char*), &ptr, nullptr));
+    return binary;
 }
 
 std::shared_ptr<raw::Kernel> clProgram::getKernel(const char* name) {

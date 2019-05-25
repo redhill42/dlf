@@ -204,7 +204,9 @@ public:
     virtual std::shared_ptr<Queue> createQueue() = 0;
     virtual std::shared_ptr<Event> createEvent() = 0;
     virtual std::shared_ptr<Buffer> createBuffer(BufferAccess access, size_t size) = 0;
-    virtual std::shared_ptr<Program> compile(const char* source, const std::vector<std::string>& options) = 0;
+
+    virtual std::shared_ptr<Program> compileProgram(const char* source, const std::vector<std::string>& options) = 0;
+    virtual std::shared_ptr<Program> loadProgram(const std::string& binary) = 0;
 };
 
 class Queue {
@@ -235,6 +237,7 @@ public:
 class Program {
 public:
     virtual ~Program() = default;
+    virtual std::string getIR() = 0;
     virtual std::shared_ptr<Kernel> getKernel(const char* name) = 0;
 };
 
@@ -427,7 +430,12 @@ public:
     /**
      * Compile program from source.
      */
-    Program compile(const char* source, const std::vector<std::string>& options);
+    Program compileProgram(const char* source, const std::vector<std::string>& options);
+
+    /**
+     * Load program from binary.
+     */
+    Program loadProgram(const std::string& binary);
 
    /**
     * Create a queue that can be used to schedule commands such as
@@ -537,6 +545,7 @@ public:
         return m_context;
     }
 
+    std::string getIR();
     Kernel getKernel(const char* name);
 };
 
@@ -630,8 +639,16 @@ inline float Event::getElapsedTime() const {
     return m_raw->getElapsedTime();
 }
 
-inline Program Context::compile(const char* source, const std::vector<std::string>& options) {
-    return Program(*this, m_raw->compile(source, options));
+inline Program Context::compileProgram(const char* source, const std::vector<std::string>& options) {
+    return Program(*this, m_raw->compileProgram(source, options));
+}
+
+inline Program Context::loadProgram(const std::string& binary) {
+    return Program(*this, m_raw->loadProgram(binary));
+}
+
+inline std::string Program::getIR() {
+    return m_raw->getIR();
 }
 
 inline Kernel Program::getKernel(const char* name) {

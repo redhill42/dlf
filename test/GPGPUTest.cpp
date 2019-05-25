@@ -33,7 +33,11 @@ TEST(GPGPU, API) {
     // Creates a new program based on the kernel string. Then, builds
     // this program and checks for any compilation errors. If there
     // are any, they are printed and execution is halted.
-    auto program = context.compile(source.c_str(), {});
+    auto cc = device.createContext();
+    auto program = cc.compileProgram(source.c_str(), {});
+
+    // Test for load program from binary
+    program = context.loadProgram(program.getIR());
     auto kernel = program.getKernel("multiply");
 
     // Populate regular host vectors with example data

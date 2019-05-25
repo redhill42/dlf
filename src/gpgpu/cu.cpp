@@ -1,3 +1,4 @@
+#include <iostream>
 #include <cuda.h>
 #include <nvrtc.h>
 #include "gpgpu.h"
@@ -188,7 +189,9 @@ public:
         return reinterpret_cast<ContextID>(m_context);
     }
 
-    std::shared_ptr<raw::Program> compile(const char *source, const std::vector<std::string> &options) override;
+    std::shared_ptr<raw::Program> compileProgram(const char *source, const std::vector<std::string> &options) override;
+    std::shared_ptr<raw::Program> loadProgram(const std::string& binary) override ;
+
     std::shared_ptr<raw::Queue> createQueue() override;
     std::shared_ptr<raw::Event> createEvent() override;
     std::shared_ptr<raw::Buffer> createBuffer(BufferAccess access, size_t size) override;
@@ -294,26 +297,21 @@ public:
 };
 
 class cuProgram final : public raw::Program {
-    nvrtcProgram m_program;
-    CUmodule m_module = nullptr;
+    CUmodule m_module;
+    std::string m_ir;
 
 public:
-    explicit cuProgram(nvrtcProgram program)
-        : m_program(program)
-    {
-        size_t bytes = 0;
-        CheckNVRTC(nvrtcGetPTXSize(program, &bytes));
-
-        std::string ir;
-        ir.resize(bytes);
-        CheckNVRTC(nvrtcGetPTX(program, &ir[0]));
-
-        cuModuleLoadDataEx(&m_module, ir.data(), 0, nullptr, nullptr);
-    }
+    explicit cuProgram(CUmodule module, std::string ir)
+        : m_module(module), m_ir(std::move(ir)) {}
 
     ~cuProgram() override {
-        if (m_program)
-            CheckNVRTCDtor(nvrtcDestroyProgram(&m_program));
+        if (m_module) {
+            cuModuleUnload(m_module);
+        }
+    }
+
+    std::string getIR() override {
+        return m_ir;
     }
 
     std::shared_ptr<raw::Kernel> getKernel(const char* name) override;
@@ -419,17 +417,49 @@ std::shared_ptr<raw::Buffer> cuContext::createBuffer(BufferAccess access, size_t
     return std::make_shared<cuBuffer>(access, buffer);
 }
 
-std::shared_ptr<raw::Program> cuContext::compile(const char *source, const std::vector<std::string> &options) {
+static std::string getBuildInfo(nvrtcProgram program) {
+    size_t bytes = 0;
+    CheckNVRTC(nvrtcGetProgramLogSize(program, &bytes));
+
+    std::string log;
+    log.resize(bytes);
+    CheckNVRTC(nvrtcGetProgramLog(program, log.data()));
+    return log;
+}
+
+std::shared_ptr<raw::Program> cuContext::compileProgram(
+    const char *source, const std::vector<std::string> &options)
+{
     nvrtcProgram program = nullptr;
-    CheckNVRTCDtor(nvrtcCreateProgram(&program, source, nullptr, 0, nullptr, nullptr));
+    CheckNVRTC(nvrtcCreateProgram(&program, source, nullptr, 0, nullptr, nullptr));
 
     std::vector<const char*> raw_options;
     raw_options.reserve(options.size());
     for (const auto& option : options)
         raw_options.push_back(option.c_str());
-    CheckNVRTC(nvrtcCompileProgram(program, raw_options.size(), raw_options.data()));
 
-    return std::make_shared<cuProgram>(program);
+    auto status = nvrtcCompileProgram(program, raw_options.size(), raw_options.data());
+    if (status == NVRTC_ERROR_INVALID_INPUT)
+        std::cerr << getBuildInfo(program) << std::endl;
+    if (status != NVRTC_SUCCESS)
+        nvrtcDestroyProgram(&program);
+    checkNVRTC(status, "nvrtcCompileProgram");
+
+    size_t bytes = 0;
+    CheckNVRTC(nvrtcGetPTXSize(program, &bytes));
+
+    std::string ir;
+    ir.resize(bytes);
+    CheckNVRTC(nvrtcGetPTX(program, ir.data()));
+
+    CheckNVRTC(nvrtcDestroyProgram(&program));
+    return loadProgram(ir);
+}
+
+std::shared_ptr<raw::Program> cuContext::loadProgram(const std::string &ir) {
+    CUmodule module;
+    CheckError(cuModuleLoadDataEx(&module, ir.data(), 0, nullptr, nullptr));
+    return std::make_shared<cuProgram>(module, ir);
 }
 
 std::shared_ptr<raw::Kernel> cuProgram::getKernel(const char *name) {
