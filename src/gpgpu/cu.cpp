@@ -209,6 +209,15 @@ cuEvent::~cuEvent() {
         CheckErrorDtor(cuEventDestroy(m_end));
 }
 
+cublasHandle_t cuQueue::getCublasHandle() {
+    if (m_cublas == nullptr) {
+        // TODO: check error
+        cublasCreate(&m_cublas);
+        cublasSetStream_v2(m_cublas, m_queue);
+    }
+    return m_cublas;
+}
+
 void cuQueue::finish(raw::Event& event) {
     CheckError(cuEventSynchronize(cuEvent::end(event)));
     finish();
@@ -221,6 +230,8 @@ void cuQueue::finish() {
 cuQueue::~cuQueue() {
     if (m_queue)
         CheckErrorDtor(cuStreamDestroy(m_queue));
+    if (m_cublas)
+        cublasDestroy(m_cublas);
 }
 
 void cuBuffer::read(raw::Queue& queue, void* host, size_t size, size_t offset) {

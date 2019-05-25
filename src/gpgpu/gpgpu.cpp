@@ -32,6 +32,7 @@ std::vector<Device> Platform::devices(DeviceType type) const {
 namespace gpgpu::blas {
 
 using namespace gpgpu::cl;
+using namespace gpgpu::cu;
 
 using float2 = std::complex<float>;
 using double2 = std::complex<double>;
@@ -43,14 +44,50 @@ static_assert(static_cast<clblast::Transpose>(cblas::Transpose::Trans) == clblas
 static_assert(static_cast<clblast::Transpose>(cblas::Transpose::ConjTrans) == clblast::Transpose::kConjugate);
 
 template <typename T>
+constexpr cudaDataType CudaType = static_cast<cudaDataType>(-1);
+
+template <> constexpr cudaDataType CudaType<float>   = cudaDataType::CUDA_R_32F;
+template <> constexpr cudaDataType CudaType<double>  = cudaDataType::CUDA_R_64F;
+template <> constexpr cudaDataType CudaType<float2>  = cudaDataType::CUDA_C_32F;
+template <> constexpr cudaDataType CudaType<double2> = cudaDataType::CUDA_C_64F;
+
+static cublasOperation_t cudaOp(Transpose trans) {
+    switch (trans) {
+    case Transpose::NoTrans:
+        return cublasOperation_t::CUBLAS_OP_N;
+    case Transpose::Trans:
+        return cublasOperation_t::CUBLAS_OP_T;
+    case Transpose::ConjTrans:
+        return cublasOperation_t::CUBLAS_OP_C;
+    }
+}
+
+template <typename T, typename CL, typename CU>
+static void dispatch(Queue& queue, Event* event, CL&& cl, CU&& cu) {
+    if (isOpenCL()) {
+        auto q = clQueue::unwrap(queue.raw());
+        auto e = event==nullptr ? nullptr : clEvent::unwrap(event->raw());
+        cl(q, e);
+    } else {
+        auto q = static_cast<cuQueue&>(queue.raw());
+        cu(q.getCublasHandle(), CudaType<T>);
+    }
+}
+
+//==-------------------------------------------------------------------------
+
+template <typename T>
 void scal(const size_t N, const T alpha, Buffer<T>& X, const size_t incX,
           Queue& queue, Event* event) {
-    if (isOpenCL()) {
-        auto xBuffer = *clBuffer::unwrap(X.raw());
-        auto q = clQueue::unwrap(queue.raw());
-        auto ev = event==nullptr ? nullptr : clEvent::unwrap(event->raw());
-        clblast::Scal(N, alpha, xBuffer, 0, incX, q, ev);
-    }
+    dispatch<T>(queue, event,
+        [&](auto q, auto e) {
+            auto xBuffer = *clBuffer::unwrap(X.raw());
+            clblast::Scal(N, alpha, xBuffer, 0, incX, q, e);
+        },
+
+        [&](auto h, auto t) {
+            cublasScalEx(h, N, &alpha, t, cuBuffer::unwrap(X.raw()), t, incX, t);
+        });
 }
 
 template void scal(const size_t, const float, Buffer<float>&, const size_t, Queue&, Event*);
@@ -68,23 +105,34 @@ void gemm(const Layout layout, const Transpose transA, const Transpose transB,
           Buffer<T>& C, const size_t ldc,
           Queue& queue, Event* event)
 {
-    if (isOpenCL()) {
-        auto aBuffer = *clBuffer::unwrap(A.raw());
-        auto bBuffer = *clBuffer::unwrap(B.raw());
-        auto cBuffer = *clBuffer::unwrap(C.raw());
-        auto q = clQueue::unwrap(queue.raw());
-        auto e = event==nullptr ? nullptr : clEvent::unwrap(event->raw());
-        clblast::Gemm(static_cast<clblast::Layout>(layout),
-                      static_cast<clblast::Transpose>(transA),
-                      static_cast<clblast::Transpose>(transB),
-                      M, N, K,
-                      alpha,
-                      aBuffer, 0, lda,
-                      bBuffer, 0, ldb,
-                      beta,
-                      cBuffer, 0, ldc,
-                      q, e);
-    }
+    dispatch<T>(queue, event,
+        [&](auto q, auto e) {
+            auto aBuffer = *clBuffer::unwrap(A.raw());
+            auto bBuffer = *clBuffer::unwrap(B.raw());
+            auto cBuffer = *clBuffer::unwrap(C.raw());
+            clblast::Gemm(static_cast<clblast::Layout>(layout),
+                          static_cast<clblast::Transpose>(transA),
+                          static_cast<clblast::Transpose>(transB),
+                          M, N, K,
+                          alpha,
+                          aBuffer, 0, lda,
+                          bBuffer, 0, ldb,
+                          beta,
+                          cBuffer, 0, ldc,
+                          q, e);
+        },
+
+        [&](auto handle, auto type) {
+            auto aBuffer = cuBuffer::unwrap(A.raw());
+            auto bBuffer = cuBuffer::unwrap(B.raw());
+            auto cBuffer = cuBuffer::unwrap(C.raw());
+            cublasGemmEx(handle, cudaOp(transA), cudaOp(transB),
+                         M, N, K, &alpha,
+                         aBuffer, type, lda,
+                         bBuffer, type, ldb, &beta,
+                         cBuffer, type, ldc,
+                         type, CUBLAS_GEMM_DEFAULT);
+        });
 }
 
 template void gemm(const Layout, const Transpose, const Transpose,
