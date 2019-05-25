@@ -6,6 +6,7 @@
 #include <vector>
 #include <memory>
 #include <stdexcept>
+#include "os_blas.h"
 
 namespace gpgpu {
 
@@ -597,10 +598,22 @@ private:
 };
 
 //==-------------------------------------------------------------------------
-// Implementation
+// Global functions
 //==-------------------------------------------------------------------------
 
 extern Platform probe();
+
+inline bool isOpenCL() {
+    return probe().api() == APITypes::OpenCL;
+}
+
+inline bool isCUDA() {
+    return probe().api() == APITypes::CUDA;
+}
+
+//==-------------------------------------------------------------------------
+// Implementation
+//==-------------------------------------------------------------------------
 
 inline Device Platform::device() {
     return Device{*this, m_raw->device()};
@@ -655,6 +668,30 @@ inline Kernel Program::getKernel(const char* name) {
     return Kernel(m_raw->getKernel(name));
 }
 
+//==-------------------------------------------------------------------------
+// BLAS (Basic Linear Algebra Subprograms) interface
+//==-------------------------------------------------------------------------
+
+namespace blas {
+
+using cblas::Layout;
+using cblas::Transpose;
+
+template <typename T>
+void scal(const size_t N, const T alpha, Buffer<T>& X, const size_t incX,
+          Queue& queue, Event* event = nullptr);
+
+template <typename T>
+void gemm(const Layout layout, const Transpose transA, const Transpose transB,
+          const size_t M, const size_t N, const size_t K,
+          const T alpha,
+          const Buffer<T>& A, const size_t lda,
+          const Buffer<T>& B, const size_t ldb,
+          const T beta,
+          Buffer<T>& C, const size_t ldc,
+          Queue& queue, Event* event = nullptr);
+
+} // namespace blas
 } // namespace gpgpu
 
 #endif //_GPGPU_H

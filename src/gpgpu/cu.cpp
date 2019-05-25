@@ -1,11 +1,7 @@
 #include <iostream>
-#include <cuda.h>
-#include <nvrtc.h>
-#include "gpgpu.h"
+#include "cu.hpp"
 
-static constexpr size_t kStringLength = 256;
-
-using namespace gpgpu;
+namespace gpgpu::cu {
 
 static void check(CUresult status, const std::string& where) {
     if (status != CUDA_SUCCESS) {
@@ -50,307 +46,7 @@ static std::string trimCallString(const char* where) {
 #define CheckErrorDtor(call) checkDtor(call, trimCallString(#call))
 #define CheckNVRTCDtor(call) checkNVRTCDtor(call, trimCallString(#call))
 
-class cuPlatform;
-class cuDevice;
-class cuContext;
-class cuQueue;
-class cuEvent;
-class cuProgram;
-class cuKernel;
-
-class cuPlatform final : public raw::Platform {
-public:
-    APITypes api() const noexcept override {
-        return APITypes::CUDA;
-    }
-
-    PlatformID id() const noexcept override {
-        return 0;
-    }
-
-    std::string name() const override {
-        return "CUDA";
-    }
-
-    std::string vendor() const override {
-        return "NVIDIA Corporation";
-    }
-
-    std::string version() const override {
-        auto result = 0;
-        CheckError(cuDriverGetVersion(&result));
-        return "CUDA driver " + std::to_string(result);
-    }
-
-    std::vector<std::shared_ptr<raw::Device>> devices(DeviceType type) const override;
-    std::shared_ptr<raw::Device> device() override;
-};
-
-class cuDevice final : public raw::Device {
-    CUdevice m_device;
-
-public:
-    explicit cuDevice(CUdevice device)
-        : m_device(device) {}
-
-    DeviceID id() const noexcept override {
-        return static_cast<DeviceID>(m_device);
-    }
-
-    std::string version() const override {
-        auto result = 0;
-        CheckError(cuDriverGetVersion(&result));
-        return "CUDA driver " + std::to_string(result);
-    }
-
-    std::string vendor() const override {
-        return "NVIDIA Corporation";
-    }
-
-    std::string name() const override {
-        std::string result;
-        result.resize(kStringLength);
-        CheckError(cuDeviceGetName(&result[0], result.size(), m_device));
-        return result;
-    }
-
-    DeviceType type() const override {
-        return DeviceType::GPU;
-    }
-
-    size_t maxWorkGroupSize() const override {
-        return getInfo(CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK);
-    }
-
-    size_t maxWorkItemDimensions() const override {
-        return 3;
-    }
-
-    std::vector<size_t> maxWorkItemSizes() const override {
-        return {
-            getInfo(CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_X),
-            getInfo(CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Y),
-            getInfo(CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Z)
-        };
-    }
-
-    uint64_t localMemSize() const override {
-        return getInfo(CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK);
-    }
-
-    std::string capabilities() const override {
-        auto major = getInfo(CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR);
-        auto minor = getInfo(CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR);
-        return "SM" + std::to_string(major) + "." + std::to_string(minor);
-    }
-
-    uint32_t coreClock() const override {
-        return getInfo(CU_DEVICE_ATTRIBUTE_CLOCK_RATE) / 1000;
-    }
-
-    uint32_t computeUnits() const override {
-        return getInfo(CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT);
-    }
-
-    uint64_t memorySize() const override {
-        size_t result = 0;
-        CheckError(cuDeviceTotalMem(&result, m_device));
-        return result;
-    }
-
-    uint64_t maxAllocSize() const override {
-        return memorySize();
-    }
-
-    std::shared_ptr<raw::Context> createContext() override;
-
-private:
-    size_t getInfo(CUdevice_attribute info) const {
-        int result = 0;
-        CheckError(cuDeviceGetAttribute(&result, info, m_device));
-        return result;
-    }
-};
-
-class cuContext final : public raw::Context {
-    CUcontext m_context;
-
-public:
-    explicit cuContext(CUcontext context)
-        : m_context(context) {}
-
-    ~cuContext() override {
-        if (m_context) {
-            CheckErrorDtor(cuCtxDestroy(m_context));
-        }
-    }
-
-    ContextID id() const noexcept override {
-        return reinterpret_cast<ContextID>(m_context);
-    }
-
-    std::shared_ptr<raw::Program> compileProgram(const char *source, const std::vector<std::string> &options) override;
-    std::shared_ptr<raw::Program> loadProgram(const std::string& binary) override ;
-
-    std::shared_ptr<raw::Queue> createQueue() override;
-    std::shared_ptr<raw::Event> createEvent() override;
-    std::shared_ptr<raw::Buffer> createBuffer(BufferAccess access, size_t size) override;
-};
-
-class cuEvent final : public raw::Event {
-    CUevent m_start, m_end;
-
-public:
-    cuEvent(CUevent start, CUevent end)
-        : m_start(start), m_end(end) {}
-
-    ~cuEvent() override {
-        if (m_start)
-            CheckErrorDtor(cuEventDestroy(m_start));
-        if (m_end)
-            CheckErrorDtor(cuEventDestroy(m_end));
-    }
-
-    // Waits for completion of this event (not implemented by CUDA)
-    void waitForCompletion() override {}
-
-    float getElapsedTime() override {
-        float result = 0.0f;
-        cuEventElapsedTime(&result, m_start, m_end);
-        return result;
-    }
-
-    CUevent start() const noexcept { return m_start; }
-    CUevent end() const noexcept { return m_end; }
-
-    static CUevent start(const raw::Event& event) {
-        return reinterpret_cast<const cuEvent&>(event).start();
-    }
-    static CUevent end(const raw::Event& event) {
-        return reinterpret_cast<const cuEvent&>(event).end();
-    }
-};
-
-class cuQueue final : public raw::Queue {
-    CUstream m_queue;
-public:
-    explicit cuQueue(CUstream queue)
-        : m_queue(queue) {}
-
-    ~cuQueue() override {
-        if (m_queue)
-            CheckErrorDtor(cuStreamDestroy(m_queue));
-    }
-
-    static CUstream* unwrap(raw::Queue& queue) {
-        return &reinterpret_cast<cuQueue&>(queue).m_queue;
-    }
-    static const CUstream* unwrap(const raw::Queue& queue) {
-        return &reinterpret_cast<const cuQueue&>(queue).m_queue;
-    }
-
-    void finish(raw::Event& event) override {
-        CheckError(cuEventSynchronize(cuEvent::end(event)));
-        finish();
-    }
-
-    void finish() override {
-        CheckError(cuStreamSynchronize(m_queue));
-    }
-};
-
-class cuBuffer final : public raw::Buffer {
-    BufferAccess m_access;
-    CUdeviceptr m_buffer;
-
-public:
-    explicit cuBuffer(BufferAccess access, CUdeviceptr buffer)
-        : m_access(access), m_buffer(buffer) {}
-
-    ~cuBuffer() override {
-        if (m_buffer)
-            CheckErrorDtor(cuMemFree(m_buffer));
-    }
-
-    static CUdeviceptr* unwrap(raw::Buffer& buffer) {
-        return &reinterpret_cast<cuBuffer&>(buffer).m_buffer;
-    }
-    static const CUdeviceptr* unwrap(const raw::Buffer& buffer) {
-        return &reinterpret_cast<const cuBuffer&>(buffer).m_buffer;
-    }
-
-    void read(raw::Queue& queue, void* host, size_t size, size_t offset) override {
-        if (m_access == BufferAccess::kWriteOnly)
-            throw LogicError("Buffer: reading from a write-only buffer");
-        CheckError(cuMemcpyDtoHAsync(host, m_buffer+offset, size, *cuQueue::unwrap(queue)));
-    }
-
-    void write(raw::Queue& queue, const void* host, size_t size, size_t offset) override {
-        if (m_access == BufferAccess::kReadOnly)
-            throw LogicError("Buffer: writing to a read-only buffer");
-        CheckError(cuMemcpyHtoDAsync(m_buffer+offset, host, size, *cuQueue::unwrap(queue)));
-    }
-
-    void copy(raw::Queue& queue, raw::Buffer& dest, size_t size) override {
-        CheckError(cuMemcpyDtoDAsync(*cuBuffer::unwrap(dest), m_buffer, size, *cuQueue::unwrap(queue)));
-    }
-};
-
-class cuProgram final : public raw::Program {
-    CUmodule m_module;
-    std::string m_ir;
-
-public:
-    explicit cuProgram(CUmodule module, std::string ir)
-        : m_module(module), m_ir(std::move(ir)) {}
-
-    ~cuProgram() override {
-        if (m_module) {
-            cuModuleUnload(m_module);
-        }
-    }
-
-    std::string getIR() override {
-        return m_ir;
-    }
-
-    std::shared_ptr<raw::Kernel> getKernel(const char* name) override;
-};
-
-class cuKernel final : public raw::Kernel {
-    CUfunction m_kernel;
-    std::vector<size_t> m_arguments_indices;
-    std::vector<char> m_arguments_data;
-
-public:
-    explicit cuKernel(CUfunction kernel) : m_kernel(kernel) {}
-
-    /**
-     * Sets a kernel argument at the indicated position. This stores both the
-     * value of the argument (as raw bytes) and the index indicating where
-     * this value can be found.
-     */
-    void setArgument(size_t index, const void* value, size_t size) override {
-        if (index >= m_arguments_indices.size())
-            m_arguments_indices.resize(index+1);
-        m_arguments_indices[index] = m_arguments_data.size();
-
-        char* end = &m_arguments_data[m_arguments_data.size()];
-        m_arguments_data.resize(m_arguments_data.size() + size);
-        memcpy(end, value, size);
-    }
-
-    void setArgument(size_t index, const raw::Buffer& buffer) override {
-        setArgument(index, cuBuffer::unwrap(buffer), sizeof(CUdeviceptr));
-    }
-
-    void launch(raw::Queue& queue,
-                const std::vector<size_t>& global,
-                const std::vector<size_t>& local,
-                raw::Event* event) override;
-};
-
-std::shared_ptr<raw::Platform> probe_cu() {
+std::shared_ptr<raw::Platform> probe() {
     static std::shared_ptr<raw::Platform> platform;
 
     if (platform == nullptr) {
@@ -392,6 +88,45 @@ std::shared_ptr<raw::Device> cuPlatform::device() {
     return std::make_shared<cuDevice>(device);
 }
 
+std::string cuPlatform::version() const {
+    auto result = 0;
+    CheckError(cuDriverGetVersion(&result));
+    return "CUDA driver " + std::to_string(result);
+}
+
+std::string cuDevice::version() const {
+    auto result = 0;
+    CheckError(cuDriverGetVersion(&result));
+    return "CUDA driver " + std::to_string(result);
+}
+
+std::string cuDevice::vendor() const {
+    return "NVIDIA";
+}
+
+std::string cuDevice::name() const {
+    std::string result;
+    result.resize(256);
+    CheckError(cuDeviceGetName(&result[0], result.size(), m_device));
+    return result;
+}
+
+DeviceType cuDevice::type() const {
+    return DeviceType::GPU;
+}
+
+uint64_t cuDevice::memorySize() const {
+    size_t result = 0;
+    CheckError(cuDeviceTotalMem(&result, m_device));
+    return result;
+}
+
+size_t cuDevice::getInfo(CUdevice_attribute info) const {
+    int result = 0;
+    CheckError(cuDeviceGetAttribute(&result, info, m_device));
+    return result;
+}
+
 std::shared_ptr<raw::Context> cuDevice::createContext() {
     CUcontext context = nullptr;
     CheckError(cuCtxCreate(&context, 0, m_device));
@@ -428,7 +163,7 @@ static std::string getBuildInfo(nvrtcProgram program) {
 }
 
 std::shared_ptr<raw::Program> cuContext::compileProgram(
-    const char *source, const std::vector<std::string> &options)
+    const char* source, const std::vector<std::string>& options)
 {
     nvrtcProgram program = nullptr;
     CheckNVRTC(nvrtcCreateProgram(&program, source, nullptr, 0, nullptr, nullptr));
@@ -456,16 +191,87 @@ std::shared_ptr<raw::Program> cuContext::compileProgram(
     return loadProgram(ir);
 }
 
-std::shared_ptr<raw::Program> cuContext::loadProgram(const std::string &ir) {
+std::shared_ptr<raw::Program> cuContext::loadProgram(const std::string& ir) {
     CUmodule module;
     CheckError(cuModuleLoadDataEx(&module, ir.data(), 0, nullptr, nullptr));
     return std::make_shared<cuProgram>(module, ir);
+}
+
+cuContext::~cuContext() {
+    if (m_context)
+        CheckErrorDtor(cuCtxDestroy(m_context));
+}
+
+cuEvent::~cuEvent() {
+    if (m_start)
+        CheckErrorDtor(cuEventDestroy(m_start));
+    if (m_end)
+        CheckErrorDtor(cuEventDestroy(m_end));
+}
+
+void cuQueue::finish(raw::Event& event) {
+    CheckError(cuEventSynchronize(cuEvent::end(event)));
+    finish();
+}
+
+void cuQueue::finish() {
+    CheckError(cuStreamSynchronize(m_queue));
+}
+
+cuQueue::~cuQueue() {
+    if (m_queue)
+        CheckErrorDtor(cuStreamDestroy(m_queue));
+}
+
+void cuBuffer::read(raw::Queue& queue, void* host, size_t size, size_t offset) {
+    if (m_access == BufferAccess::kWriteOnly)
+        throw LogicError("Buffer: reading from a write-only buffer");
+    CheckError(cuMemcpyDtoHAsync(host, m_buffer+offset, size, *cuQueue::unwrap(queue)));
+}
+
+void cuBuffer::write(raw::Queue& queue, const void* host, size_t size, size_t offset) {
+    if (m_access == BufferAccess::kReadOnly)
+        throw LogicError("Buffer: writing to a read-only buffer");
+    CheckError(cuMemcpyHtoDAsync(m_buffer+offset, host, size, *cuQueue::unwrap(queue)));
+}
+
+void cuBuffer::copy(raw::Queue& queue, raw::Buffer& dest, size_t size) {
+    CheckError(cuMemcpyDtoDAsync(*cuBuffer::unwrap(dest), m_buffer, size, *cuQueue::unwrap(queue)));
+}
+
+cuBuffer::~cuBuffer() {
+    if (m_buffer)
+        CheckErrorDtor(cuMemFree(m_buffer));
 }
 
 std::shared_ptr<raw::Kernel> cuProgram::getKernel(const char *name) {
     CUfunction kernel = nullptr;
     CheckError(cuModuleGetFunction(&kernel, m_module, name));
     return std::make_shared<cuKernel>(kernel);
+}
+
+cuProgram::~cuProgram() {
+    if (m_module)
+        CheckErrorDtor(cuModuleUnload(m_module));
+}
+
+/**
+ * Sets a kernel argument at the indicated position. This stores both the
+ * value of the argument (as raw bytes) and the index indicating where
+ * this value can be found.
+ */
+void cuKernel::setArgument(size_t index, const void* value, size_t size) {
+    if (index >= m_arguments_indices.size())
+        m_arguments_indices.resize(index+1);
+    m_arguments_indices[index] = m_arguments_data.size();
+
+    char* end = &m_arguments_data[m_arguments_data.size()];
+    m_arguments_data.resize(m_arguments_data.size() + size);
+    memcpy(end, value, size);
+}
+
+void cuKernel::setArgument(size_t index, const raw::Buffer& buffer) {
+    setArgument(index, cuBuffer::unwrap(buffer), sizeof(CUdeviceptr));
 }
 
 void cuKernel::launch(raw::Queue& queue,
@@ -501,3 +307,5 @@ void cuKernel::launch(raw::Queue& queue,
     if (event != nullptr)
         CheckError(cuEventRecord(cuEvent::end(*event), q));
 }
+
+} // namespace gpgpu::cu

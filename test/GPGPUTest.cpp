@@ -1,6 +1,7 @@
 #include "tensor.h"
 #include "gpgpu.h"
 #include "gtest/gtest.h"
+#include "test_utility.h"
 
 using namespace kneron::model;
 
@@ -76,4 +77,53 @@ TEST(GPGPU, API) {
     }
 
     // End of execution: no frees or clean-up needed
+}
+
+void test_gemm(const size_t N) {
+    using real = float;
+
+    auto A = Tensor<real>::random({N, N}, 0, 1);
+    auto B = Tensor<real>::random({N, N}, 0, 1);
+    auto C = Tensor<real>({N, N});
+
+    timing("CPU gemm " + std::to_string(N), 5, [&]() {
+        cblas::gemm(cblas::Layout::RowMajor,
+                    cblas::Transpose::NoTrans,
+                    cblas::Transpose::NoTrans,
+                    N, N, N, 1.0,
+                    A.data(), N,
+                    B.data(), N, 0.0,
+                    C.data(), N);
+    });
+
+    auto device = gpgpu::probe().devices(gpgpu::DeviceType::GPU)[1];
+    auto context = device.createContext();
+    auto queue = context.createQueue();
+
+    auto dev_A = context.createBuffer<real>(gpgpu::BufferAccess::kWriteOnly, A.size());
+    auto dev_B = context.createBuffer<real>(gpgpu::BufferAccess::kWriteOnly, B.size());
+    auto dev_C = context.createBuffer<real>(gpgpu::BufferAccess::kReadOnly, C.size());
+
+    timing("GPU gemm " + std::to_string(N), 5, [&]() {
+        dev_A.writeAsync(queue, A.data(), A.size());
+        dev_B.writeAsync(queue, B.data(), B.size());
+
+        gpgpu::blas::gemm(cblas::Layout::RowMajor,
+                          cblas::Transpose::NoTrans,
+                          cblas::Transpose::NoTrans,
+                          N, N, N, 1.0f,
+                          dev_A, N,
+                          dev_B, N, 0.0f,
+                          dev_C, N,
+                          queue);
+
+        dev_C.readAsync(queue, C.data(), C.size());
+        queue.finish();
+    });
+}
+
+TEST(GPGPU, GEMMPerformance) {
+    for (int n = 512; n <= 8192; n *= 2) {
+        test_gemm(n);
+    }
 }

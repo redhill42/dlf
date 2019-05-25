@@ -26,11 +26,13 @@ endif()
 
 file(GLOB_RECURSE DLFL_SRCS "${CMAKE_CURRENT_LIST_DIR}/*.cpp")
 file(GLOB_RECURSE DLFL_HDRS "${CMAKE_CURRENT_LIST_DIR}/*.h")
+file(GLOB_RECURSE DLFL_PRIVATE_HDRS "${CMAKE_CURRENT_LIST_DIR}/*.hpp")
 
 target_sources(
   dlfl
   PRIVATE
     ${DLFL_SRCS}
+    ${DLFL_PRIVATE_HDRS}
     ${PROTO_SRCS}
   PUBLIC
     ${DLFL_HDRS}
@@ -53,4 +55,5 @@ target_link_libraries(
     ${MKL_LIBRARIES}
     ${OpenCL_LIBRARY}
     ${CUDA_LIBRARIES}
+    clblast
 )

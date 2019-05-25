@@ -43,6 +43,9 @@ find_cuda_helper_libs("nvrtc")
 set(CUDA_LIBRARIES ${CUDA_cuda_LIBRARY} ${CUDA_nvrtc_LIBRARY})
 include_directories(${CUDA_INCLUDE_DIRS})
 
+include(cmake/clblast.cmake)
+fetch_clblast(${PROJECT_SOURCE_DIR}/cmake ${PROJECT_BINARY_DIR}/clblast)
+
 # add sub-directories that we want CMake to scan
 add_subdirectory(src)
 

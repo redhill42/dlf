@@ -25,6 +25,17 @@ constexpr bool IsBlasType =
         std::is_same<T, std::complex<float>>,
         std::is_same<T, std::complex<double>>>;
 
+enum class Layout {
+    RowMajor = CblasRowMajor,
+    ColMajor = CblasColMajor
+};
+
+enum class Transpose {
+    NoTrans = CblasNoTrans,
+    Trans = CblasTrans,
+    ConjTrans = CblasConjTrans
+};
+
 inline void axpy(size_t N, float alpha, const float* X, int incX, float* Y, int incY) {
     cblas_saxpy(N, alpha, X, incX, Y, incY);
 }
@@ -81,96 +92,116 @@ inline double dot(size_t N, const double* X, int incX, const double* Y, int incY
     return cblas_ddot(N, X, incX, Y, incY);
 }
 
-inline void gemv(decltype(CblasRowMajor) layout,
-                 decltype(CblasNoTrans) transA,
+inline void gemv(Layout layout,
+                 Transpose transA,
                  size_t m, size_t n,
                  float alpha,
                  const float* A, int lda,
                  const float* X, int incX,
                  float beta,
                  float* Y, int incY) {
-    cblas_sgemv(layout, transA, m, n, alpha, A, lda, X, incX, beta, Y, incY);
+    cblas_sgemv(static_cast<decltype(CblasRowMajor)>(layout),
+                static_cast<decltype(CblasNoTrans)>(transA),
+                m, n, alpha, A, lda, X, incX, beta, Y, incY);
 }
 
-inline void gemv(decltype(CblasRowMajor) layout,
-                 decltype(CblasNoTrans) transA,
+inline void gemv(Layout layout,
+                 Transpose transA,
                  size_t m, size_t n,
                  double alpha,
                  const double* A, int lda,
                  const double* X, int incX,
                  double beta,
                  double* Y, int incY) {
-    cblas_dgemv(layout, transA, m, n, alpha, A, lda, X, incX, beta, Y, incY);
+    cblas_dgemv(static_cast<decltype(CblasRowMajor)>(layout),
+                static_cast<decltype(CblasNoTrans)>(transA),
+                m, n, alpha, A, lda, X, incX, beta, Y, incY);
 }
 
-inline void gemv(decltype(CblasRowMajor) layout,
-                 decltype(CblasNoTrans) transA,
+inline void gemv(Layout layout,
+                 Transpose transA,
                  size_t m, size_t n,
                  const std::complex<float>& alpha,
                  const std::complex<float>* A, int lda,
                  const std::complex<float>* X, int incX,
                  const std::complex<float>& beta,
                  std::complex<float>* Y, int incY) {
-    cblas_cgemv(layout, transA, m, n, &alpha, A, lda, X, incX, &beta, Y, incY);
+    cblas_cgemv(static_cast<decltype(CblasRowMajor)>(layout),
+                static_cast<decltype(CblasNoTrans)>(transA),
+                m, n, &alpha, A, lda, X, incX, &beta, Y, incY);
 }
 
-inline void gemv(decltype(CblasRowMajor) layout,
-                 decltype(CblasNoTrans) transA,
+inline void gemv(Layout layout,
+                 Transpose transA,
                  size_t m, size_t n,
                  const std::complex<double>& alpha,
                  const std::complex<double>* A, int lda,
                  const std::complex<double>* X, int incX,
                  const std::complex<double>& beta,
                  std::complex<double>* Y, int incY) {
-    cblas_zgemv(layout, transA, m, n, &alpha, A, lda, X, incX, &beta, Y, incY);
+    cblas_zgemv(static_cast<decltype(CblasRowMajor)>(layout),
+                static_cast<decltype(CblasNoTrans)>(transA),
+                m, n, &alpha, A, lda, X, incX, &beta, Y, incY);
 }
 
-inline void gemm(decltype(CblasRowMajor) layout,
-                 decltype(CblasNoTrans) transA,
-                 decltype(CblasNoTrans) transB,
+inline void gemm(Layout layout,
+                 Transpose transA,
+                 Transpose transB,
                  size_t m, size_t n, size_t k,
                  float alpha,
                  const float* A, int lda,
                  const float* B, int ldb,
                  float beta,
                  float* C, int ldc) {
-    cblas_sgemm(layout, transA, transB, m, n, k, alpha, A, lda, B, ldb, beta, C, ldc);
+    cblas_sgemm(static_cast<decltype(CblasRowMajor)>(layout),
+                static_cast<decltype(CblasNoTrans)>(transA),
+                static_cast<decltype(CblasNoTrans)>(transB),
+                m, n, k, alpha, A, lda, B, ldb, beta, C, ldc);
 }
 
-inline void gemm(decltype(CblasRowMajor) layout,
-                 decltype(CblasNoTrans) transA,
-                 decltype(CblasNoTrans) transB,
+inline void gemm(Layout layout,
+                 Transpose transA,
+                 Transpose transB,
                  size_t m, size_t n, size_t k,
                  double alpha,
                  const double* A, int lda,
                  const double* B, int ldb,
                  double beta,
                  double* C, int ldc) {
-    cblas_dgemm(layout, transA, transB, m, n, k, alpha, A, lda, B, ldb, beta, C, ldc);
+    cblas_dgemm(static_cast<decltype(CblasRowMajor)>(layout),
+                static_cast<decltype(CblasNoTrans)>(transA),
+                static_cast<decltype(CblasNoTrans)>(transB),
+                m, n, k, alpha, A, lda, B, ldb, beta, C, ldc);
 }
 
-inline void gemm(decltype(CblasRowMajor) layout,
-                 decltype(CblasNoTrans) transA,
-                 decltype(CblasNoTrans) transB,
+inline void gemm(Layout layout,
+                 Transpose transA,
+                 Transpose transB,
                  size_t m, size_t n, size_t k,
                  const std::complex<float>& alpha,
                  const std::complex<float>* A, int lda,
                  const std::complex<float>* B, int ldb,
                  const std::complex<float> beta,
                  std::complex<float>* C, int ldc) {
-    cblas_cgemm(layout, transA, transB, m, n, k, &alpha, A, lda, B, ldb, &beta, C, ldc);
+    cblas_cgemm(static_cast<decltype(CblasRowMajor)>(layout),
+                static_cast<decltype(CblasNoTrans)>(transA),
+                static_cast<decltype(CblasNoTrans)>(transB),
+                m, n, k, &alpha, A, lda, B, ldb, &beta, C, ldc);
 }
 
-inline void gemm(decltype(CblasRowMajor) layout,
-                 decltype(CblasNoTrans) transA,
-                 decltype(CblasNoTrans) transB,
+inline void gemm(Layout layout,
+                 Transpose transA,
+                 Transpose transB,
                  size_t m, size_t n, size_t k,
                  const std::complex<double>& alpha,
                  const std::complex<double>* A, int lda,
                  const std::complex<double>* B, int ldb,
                  const std::complex<double> beta,
                  std::complex<double>* C, int ldc) {
-    cblas_zgemm(layout, transA, transB, m, n, k, &alpha, A, lda, B, ldb, &beta, C, ldc);
+    cblas_zgemm(static_cast<decltype(CblasRowMajor)>(layout),
+                static_cast<decltype(CblasNoTrans)>(transA),
+                static_cast<decltype(CblasNoTrans)>(transB),
+                m, n, k, &alpha, A, lda, B, ldb, &beta, C, ldc);
 }
 
 } // namespace cblas

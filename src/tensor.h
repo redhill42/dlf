@@ -909,7 +909,8 @@ T vector_dot_vector(size_t n, const T* A, const T* B) {
 template <typename T>
 void matrix_dot_vector(size_t m, size_t n, const T* A, const T* B, T* C) {
     if constexpr (cblas::IsBlasType<T>) {
-        cblas::gemv(CblasRowMajor, CblasNoTrans, m, n, T(1), A, n, B, 1, T(0), C, 1);
+        cblas::gemv(cblas::Layout::RowMajor, cblas::Transpose::NoTrans,
+                    m, n, T(1), A, n, B, 1, T(0), C, 1);
         return;
     }
 
@@ -929,7 +930,10 @@ void matrix_dot_vector(size_t m, size_t n, const T* A, const T* B, T* C) {
 template <typename T>
 void matrix_dot_matrix(size_t m, size_t k, size_t n, const T* A, const T* B, T* C) {
     if constexpr (cblas::IsBlasType<T>) {
-        cblas::gemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, m, n, k, T(1), A, k, B, n, T(0), C, n);
+        cblas::gemm(cblas::Layout::RowMajor,
+                    cblas::Transpose::NoTrans,
+                    cblas::Transpose::NoTrans,
+                    m, n, k, T(1), A, k, B, n, T(0), C, n);
         return;
     }
 
@@ -1049,9 +1053,9 @@ void gemm(const Tensor<T>& A, const Tensor<T>& B, Tensor<T>* C,
     assert(C->shape() == Shape({m, n}));
 
     if constexpr (cblas::IsBlasType<T>) {
-        cblas::gemm(CblasRowMajor,
-                    transA ? CblasTrans : CblasNoTrans,
-                    transB ? CblasTrans : CblasNoTrans,
+        cblas::gemm(cblas::Layout::RowMajor,
+                    transA ? cblas::Transpose::Trans : cblas::Transpose::NoTrans,
+                    transB ? cblas::Transpose::Trans : cblas::Transpose::NoTrans,
                     m, n, k,
                     alpha,
                     A.data(), A.shape()[1],
