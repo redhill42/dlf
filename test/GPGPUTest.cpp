@@ -3,7 +3,7 @@
 #include "gtest/gtest.h"
 #include "test_utility.h"
 
-using namespace kneron::model;
+using namespace tensor;
 
 static auto program_source = R"(
 __kernel void multiply(__global float* x, __global float* y, const int factor) {

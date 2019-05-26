@@ -15,7 +15,7 @@
 #include <gmpxx.h>
 #endif
 
-using namespace kneron::model;
+using namespace tensor;
 namespace T = ::testing;
 
 class TensorTest : public ::testing::Test {

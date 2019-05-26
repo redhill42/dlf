@@ -1,6 +1,6 @@
-#include "tensor.h"
+#include "tensor/shape.h"
 
-using namespace kneron::model;
+using namespace tensor;
 
 size_t Shape::size() const noexcept {
     if (m_dims.empty())
