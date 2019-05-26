@@ -830,7 +830,7 @@ DEFINE_OPERATOR(/)
     template <> template <> \
     inline Tensor<T>& Tensor<T>::operator op##=(const Tensor<T>& rhs) { \
         assert(shape() == rhs.shape()); \
-        cblas::axpby(size(), T(beta), rhs.data(), 1, T(alpha), data(), 1); \
+        blas::axpby(size(), T(beta), rhs.data(), 1, T(alpha), data(), 1); \
         return *this; \
     } \
     template <> \
@@ -838,25 +838,25 @@ DEFINE_OPERATOR(/)
         assert(lhs.shape() == rhs.shape()); \
         Tensor<T> res(lhs.shape()); \
         std::copy(rhs.begin(), rhs.end(), res.begin()); \
-        cblas::axpby(res.size(), T(alpha), lhs.data(), 1, T(beta), res.data(), 1); \
+        blas::axpby(res.size(), T(alpha), lhs.data(), 1, T(beta), res.data(), 1); \
         return res; \
     } \
     template <> \
     inline Tensor<T> operator op(Tensor<T>&& lhs, const Tensor<T>& rhs) { \
         assert(lhs.shape() == rhs.shape()); \
-        cblas::axpby(lhs.size(), T(beta), rhs.data(), 1, T(alpha), lhs.data(), 1); \
+        blas::axpby(lhs.size(), T(beta), rhs.data(), 1, T(alpha), lhs.data(), 1); \
         return std::move(lhs); \
     } \
     template <> \
     inline Tensor<T> operator op(const Tensor<T>& lhs, Tensor<T>&& rhs) { \
         assert(lhs.shape() == rhs.shape()); \
-        cblas::axpby(rhs.size(), T(alpha), lhs.data(), 1, T(beta), rhs.data(), 1); \
+        blas::axpby(rhs.size(), T(alpha), lhs.data(), 1, T(beta), rhs.data(), 1); \
         return std::move(rhs); \
     } \
     template <> \
     inline Tensor<T> operator op(Tensor<T>&& lhs, Tensor<T>&& rhs) { \
         assert(lhs.shape() == rhs.shape()); \
-        cblas::axpby(lhs.size(), T(alpha), lhs.data(), 1, T(beta), rhs.data(), 1); \
+        blas::axpby(lhs.size(), T(alpha), lhs.data(), 1, T(beta), rhs.data(), 1); \
         return std::move(rhs); \
     }
 
@@ -890,7 +890,7 @@ namespace impl {
 template <typename T>
 T vector_dot_vector(size_t n, const T* A, const T* B) {
     if constexpr (std::is_same_v<T, float> || std::is_same_v<T, double>) {
-        return cblas::dot(n, A, 1, B, 1);
+        return blas::dot(n, A, 1, B, 1);
     }
 
     return tbb::parallel_reduce(
@@ -908,8 +908,8 @@ T vector_dot_vector(size_t n, const T* A, const T* B) {
 
 template <typename T>
 void matrix_dot_vector(size_t m, size_t n, const T* A, const T* B, T* C) {
-    if constexpr (cblas::IsBlasType<T>) {
-        cblas::gemv(cblas::Layout::RowMajor, cblas::Transpose::NoTrans,
+    if constexpr (blas::IsBlasType<T>) {
+        blas::gemv(blas::Layout::RowMajor, blas::Transpose::NoTrans,
                     m, n, T(1), A, n, B, 1, T(0), C, 1);
         return;
     }
@@ -929,11 +929,11 @@ void matrix_dot_vector(size_t m, size_t n, const T* A, const T* B, T* C) {
 
 template <typename T>
 void matrix_dot_matrix(size_t m, size_t k, size_t n, const T* A, const T* B, T* C) {
-    if constexpr (cblas::IsBlasType<T>) {
-        cblas::gemm(cblas::Layout::RowMajor,
-                    cblas::Transpose::NoTrans,
-                    cblas::Transpose::NoTrans,
-                    m, n, k, T(1), A, k, B, n, T(0), C, n);
+    if constexpr (blas::IsBlasType<T>) {
+        blas::gemm(blas::Layout::RowMajor,
+                   blas::Transpose::NoTrans,
+                   blas::Transpose::NoTrans,
+                   m, n, k, T(1), A, k, B, n, T(0), C, n);
         return;
     }
 
@@ -1052,16 +1052,16 @@ void gemm(const Tensor<T>& A, const Tensor<T>& B, Tensor<T>* C,
     assert(k == p);
     assert(C->shape() == Shape({m, n}));
 
-    if constexpr (cblas::IsBlasType<T>) {
-        cblas::gemm(cblas::Layout::RowMajor,
-                    transA ? cblas::Transpose::Trans : cblas::Transpose::NoTrans,
-                    transB ? cblas::Transpose::Trans : cblas::Transpose::NoTrans,
-                    m, n, k,
-                    alpha,
-                    A.data(), A.shape()[1],
-                    B.data(), B.shape()[1],
-                    beta,
-                    C->data(), n);
+    if constexpr (blas::IsBlasType<T>) {
+        blas::gemm(blas::Layout::RowMajor,
+                   transA ? blas::Transpose::Trans : blas::Transpose::NoTrans,
+                   transB ? blas::Transpose::Trans : blas::Transpose::NoTrans,
+                   m, n, k,
+                   alpha,
+                   A.data(), A.shape()[1],
+                   B.data(), B.shape()[1],
+                   beta,
+                   C->data(), n);
         return;
     }
 

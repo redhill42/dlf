@@ -87,13 +87,13 @@ void test_gemm(const size_t N) {
     auto C = Tensor<real>({N, N});
 
     timing("CPU gemm " + std::to_string(N), 5, [&]() {
-        cblas::gemm(cblas::Layout::RowMajor,
-                    cblas::Transpose::NoTrans,
-                    cblas::Transpose::NoTrans,
-                    N, N, N, 1.0,
-                    A.data(), N,
-                    B.data(), N, 0.0,
-                    C.data(), N);
+        blas::gemm(blas::Layout::RowMajor,
+                   blas::Transpose::NoTrans,
+                   blas::Transpose::NoTrans,
+                   N, N, N, 1.0,
+                   A.data(), N,
+                   B.data(), N, 0.0,
+                   C.data(), N);
     });
 
     auto device = gpgpu::probe().devices(gpgpu::DeviceType::GPU)[1];
@@ -108,9 +108,9 @@ void test_gemm(const size_t N) {
         dev_A.writeAsync(queue, A.data(), A.size());
         dev_B.writeAsync(queue, B.data(), B.size());
 
-        gpgpu::blas::gemm(cblas::Layout::RowMajor,
-                          cblas::Transpose::NoTrans,
-                          cblas::Transpose::NoTrans,
+        gpgpu::blas::gemm(blas::Layout::RowMajor,
+                          blas::Transpose::NoTrans,
+                          blas::Transpose::NoTrans,
                           N, N, N, 1.0f,
                           dev_A, N,
                           dev_B, N, 0.0f,

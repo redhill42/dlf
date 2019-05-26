@@ -1,5 +1,5 @@
-#ifndef KNERON_OS_BLAS_H
-#define KNERON_OS_BLAS_H
+#ifndef _OS_BLAS_H
+#define _OS_BLAS_H
 
 #include <complex>
 
@@ -17,7 +17,7 @@
 #include <cblas.h>
 #endif
 
-namespace cblas {
+namespace blas {
 
 template <typename T>
 constexpr bool IsBlasType =
@@ -38,70 +38,126 @@ enum class Transpose {
     ConjTrans = CblasConjTrans
 };
 
-inline void axpy(size_t N, float alpha, const float* X, int incX, float* Y, int incY) {
+//==-------------------------------------------------------------------------
+// BLAS level-1 (vector-vector) routines
+//==-------------------------------------------------------------------------
+
+inline float asum(size_t N, const float* X, size_t incX) {
+    return cblas_sasum(N, X, incX);
+}
+
+inline double asum(size_t N, const double* X, size_t incX) {
+    return cblas_dasum(N, X, incX);
+}
+
+inline void axpy(size_t N, float alpha, const float* X, size_t incX, float* Y, size_t incY) {
     cblas_saxpy(N, alpha, X, incX, Y, incY);
 }
 
-inline void axpy(size_t N, double alpha, const double* X, int incX, double* Y, int incY) {
+inline void axpy(size_t N, double alpha, const double* X, size_t incX, double* Y, size_t incY) {
     cblas_daxpy(N, alpha, X, incX, Y, incY);
 }
 
-inline void axpy(size_t N, const std::complex<float>& alpha, const std::complex<float>* X, int incX, std::complex<float>* Y, int incY) {
+inline void axpy(size_t N, const std::complex<float>& alpha, const std::complex<float>* X, size_t incX, std::complex<float>* Y, size_t incY) {
     cblas_caxpy(N, &alpha, X, incX, Y, incY);
 }
 
-inline void axpy(size_t N, const std::complex<double>& alpha, const std::complex<double>* X, int incX, std::complex<double>* Y, int incY) {
+inline void axpy(size_t N, const std::complex<double>& alpha, const std::complex<double>* X, size_t incX, std::complex<double>* Y, size_t incY) {
     cblas_zaxpy(N, &alpha, X, incX, Y, incY);
 }
 
-inline void axpby(size_t N, float alpha, const float* X, int incX, float beta, float* Y, int incY) {
+inline void axpby(size_t N, float alpha, const float* X, size_t incX, float beta, float* Y, size_t incY) {
     cblas_saxpby(N, alpha, X, incX, beta, Y, incY);
 }
 
-inline void axpby(size_t N, double alpha, const double* X, int incX, double beta, double* Y, int incY) {
+inline void axpby(size_t N, double alpha, const double* X, size_t incX, double beta, double* Y, size_t incY) {
     cblas_daxpby(N, alpha, X, incX, beta, Y, incY);
 }
 
-inline void axpby(size_t N, const std::complex<float>& alpha, const std::complex<float>* X, int incX, const std::complex<float>& beta, std::complex<float>* Y, int incY) {
+inline void axpby(size_t N, const std::complex<float>& alpha, const std::complex<float>* X, size_t incX, const std::complex<float>& beta, std::complex<float>* Y, size_t incY) {
     cblas_caxpby(N, &alpha, X, incX, &beta, Y, incY);
 }
 
-inline void axpby(size_t N, const std::complex<double>& alpha, const std::complex<double>* X, int incX, const std::complex<double>& beta, std::complex<double>* Y, int incY) {
+inline void axpby(size_t N, const std::complex<double>& alpha, const std::complex<double>* X, size_t incX, const std::complex<double>& beta, std::complex<double>* Y, size_t incY) {
     cblas_zaxpby(N, &alpha, X, incX, &beta, Y, incY);
 }
 
-inline void scal(size_t N, float a, float* X, int incX) {
-    cblas_sscal(N, a, X, incX);
+inline void copy(size_t N, const float* X, size_t incX, float* Y, size_t incY) {
+    cblas_scopy(N, X, incX, Y, incY);
 }
 
-inline void scal(size_t N, double a, double* X, int incX) {
-    cblas_dscal(N, a, X, incX);
+inline void copy(size_t N, const double* X, size_t incX, double* Y, size_t incY) {
+    cblas_dcopy(N, X, incX, Y, incY);
 }
 
-inline void scal(size_t N, const std::complex<float>& a, std::complex<float>* X, int incX) {
-    cblas_cscal(N, &a, X, incX);
+inline void copy(size_t N, const std::complex<float>* X, size_t incX, std::complex<float>* Y, size_t incY) {
+    cblas_ccopy(N, X, incX, Y, incY);
 }
 
-inline void scal(size_t N, const std::complex<double>& a, std::complex<double>* X, int incX) {
-    cblas_zscal(N, &a, X, incX);
+inline void copy(size_t N, const std::complex<double>* X, size_t incX, std::complex<double>* Y, size_t incY) {
+    cblas_ccopy(N, X, incX, Y, incY);
 }
 
-inline float dot(size_t N, const float* X, int incX, const float* Y, int incY) {
+inline float dot(size_t N, const float* X, size_t incX, const float* Y, size_t incY) {
     return cblas_sdot(N, X, incX, Y, incY);
 }
 
-inline double dot(size_t N, const double* X, int incX, const double* Y, int incY) {
+inline double dot(size_t N, const double* X, size_t incX, const double* Y, size_t incY) {
     return cblas_ddot(N, X, incX, Y, incY);
 }
+
+inline float nrm2(size_t N, float* X, size_t incX) {
+    return cblas_snrm2(N, X, incX);
+}
+
+inline double nrm2(size_t N, double* X, size_t incX) {
+    return cblas_dnrm2(N, X, incX);
+}
+
+inline void scal(size_t N, float a, float* X, size_t incX) {
+    cblas_sscal(N, a, X, incX);
+}
+
+inline void scal(size_t N, double a, double* X, size_t incX) {
+    cblas_dscal(N, a, X, incX);
+}
+
+inline void scal(size_t N, const std::complex<float>& a, std::complex<float>* X, size_t incX) {
+    cblas_cscal(N, &a, X, incX);
+}
+
+inline void scal(size_t N, const std::complex<double>& a, std::complex<double>* X, size_t incX) {
+    cblas_zscal(N, &a, X, incX);
+}
+
+inline void swap(size_t N, float* X, size_t incX, float* Y, size_t incY) {
+    cblas_sswap(N, X, incX, Y, incY);
+}
+
+inline void swap(size_t N, double* X, size_t incX, double* Y, size_t incY) {
+    cblas_dswap(N, X, incX, Y, incY);
+}
+
+inline void swap(size_t N, std::complex<float>* X, size_t incX, std::complex<float>* Y, size_t incY) {
+    cblas_cswap(N, X, incX, Y, incY);
+}
+
+inline void swap(size_t N, std::complex<double>* X, size_t incX, std::complex<double>* Y, size_t incY) {
+    cblas_zswap(N, X, incX, Y, incY);
+}
+
+//==-------------------------------------------------------------------------
+// BLAS level-2 (matrix-vector) routines
+//==-------------------------------------------------------------------------
 
 inline void gemv(Layout layout,
                  Transpose transA,
                  size_t m, size_t n,
                  float alpha,
-                 const float* A, int lda,
-                 const float* X, int incX,
+                 const float* A, size_t lda,
+                 const float* X, size_t incX,
                  float beta,
-                 float* Y, int incY) {
+                 float* Y, size_t incY) {
     cblas_sgemv(static_cast<decltype(CblasRowMajor)>(layout),
                 static_cast<decltype(CblasNoTrans)>(transA),
                 m, n, alpha, A, lda, X, incX, beta, Y, incY);
@@ -111,10 +167,10 @@ inline void gemv(Layout layout,
                  Transpose transA,
                  size_t m, size_t n,
                  double alpha,
-                 const double* A, int lda,
-                 const double* X, int incX,
+                 const double* A, size_t lda,
+                 const double* X, size_t incX,
                  double beta,
-                 double* Y, int incY) {
+                 double* Y, size_t incY) {
     cblas_dgemv(static_cast<decltype(CblasRowMajor)>(layout),
                 static_cast<decltype(CblasNoTrans)>(transA),
                 m, n, alpha, A, lda, X, incX, beta, Y, incY);
@@ -124,10 +180,10 @@ inline void gemv(Layout layout,
                  Transpose transA,
                  size_t m, size_t n,
                  const std::complex<float>& alpha,
-                 const std::complex<float>* A, int lda,
-                 const std::complex<float>* X, int incX,
+                 const std::complex<float>* A, size_t lda,
+                 const std::complex<float>* X, size_t incX,
                  const std::complex<float>& beta,
-                 std::complex<float>* Y, int incY) {
+                 std::complex<float>* Y, size_t incY) {
     cblas_cgemv(static_cast<decltype(CblasRowMajor)>(layout),
                 static_cast<decltype(CblasNoTrans)>(transA),
                 m, n, &alpha, A, lda, X, incX, &beta, Y, incY);
@@ -137,24 +193,28 @@ inline void gemv(Layout layout,
                  Transpose transA,
                  size_t m, size_t n,
                  const std::complex<double>& alpha,
-                 const std::complex<double>* A, int lda,
-                 const std::complex<double>* X, int incX,
+                 const std::complex<double>* A, size_t lda,
+                 const std::complex<double>* X, size_t incX,
                  const std::complex<double>& beta,
-                 std::complex<double>* Y, int incY) {
+                 std::complex<double>* Y, size_t incY) {
     cblas_zgemv(static_cast<decltype(CblasRowMajor)>(layout),
                 static_cast<decltype(CblasNoTrans)>(transA),
                 m, n, &alpha, A, lda, X, incX, &beta, Y, incY);
 }
+
+//==-------------------------------------------------------------------------
+// BLAS level-3 (matrix-matrix) routines
+//==-------------------------------------------------------------------------
 
 inline void gemm(Layout layout,
                  Transpose transA,
                  Transpose transB,
                  size_t m, size_t n, size_t k,
                  float alpha,
-                 const float* A, int lda,
-                 const float* B, int ldb,
+                 const float* A, size_t lda,
+                 const float* B, size_t ldb,
                  float beta,
-                 float* C, int ldc) {
+                 float* C, size_t ldc) {
     cblas_sgemm(static_cast<decltype(CblasRowMajor)>(layout),
                 static_cast<decltype(CblasNoTrans)>(transA),
                 static_cast<decltype(CblasNoTrans)>(transB),
@@ -166,10 +226,10 @@ inline void gemm(Layout layout,
                  Transpose transB,
                  size_t m, size_t n, size_t k,
                  double alpha,
-                 const double* A, int lda,
-                 const double* B, int ldb,
+                 const double* A, size_t lda,
+                 const double* B, size_t ldb,
                  double beta,
-                 double* C, int ldc) {
+                 double* C, size_t ldc) {
     cblas_dgemm(static_cast<decltype(CblasRowMajor)>(layout),
                 static_cast<decltype(CblasNoTrans)>(transA),
                 static_cast<decltype(CblasNoTrans)>(transB),
@@ -181,10 +241,10 @@ inline void gemm(Layout layout,
                  Transpose transB,
                  size_t m, size_t n, size_t k,
                  const std::complex<float>& alpha,
-                 const std::complex<float>* A, int lda,
-                 const std::complex<float>* B, int ldb,
+                 const std::complex<float>* A, size_t lda,
+                 const std::complex<float>* B, size_t ldb,
                  const std::complex<float> beta,
-                 std::complex<float>* C, int ldc) {
+                 std::complex<float>* C, size_t ldc) {
     cblas_cgemm(static_cast<decltype(CblasRowMajor)>(layout),
                 static_cast<decltype(CblasNoTrans)>(transA),
                 static_cast<decltype(CblasNoTrans)>(transB),
@@ -196,17 +256,17 @@ inline void gemm(Layout layout,
                  Transpose transB,
                  size_t m, size_t n, size_t k,
                  const std::complex<double>& alpha,
-                 const std::complex<double>* A, int lda,
-                 const std::complex<double>* B, int ldb,
+                 const std::complex<double>* A, size_t lda,
+                 const std::complex<double>* B, size_t ldb,
                  const std::complex<double> beta,
-                 std::complex<double>* C, int ldc) {
+                 std::complex<double>* C, size_t ldc) {
     cblas_zgemm(static_cast<decltype(CblasRowMajor)>(layout),
                 static_cast<decltype(CblasNoTrans)>(transA),
                 static_cast<decltype(CblasNoTrans)>(transB),
                 m, n, k, &alpha, A, lda, B, ldb, &beta, C, ldc);
 }
 
-} // namespace cblas
+} // namespace blas
 
 #if HAS_MKL
 namespace mkl {
@@ -258,4 +318,4 @@ inline void omatcopy(char ordering, char trans, size_t rows, size_t cols, const 
 } // namespace mkl
 #endif // HAS_MKL
 
-#endif //KNERON_OS_BLAS_H
+#endif //_OS_BLAS_H

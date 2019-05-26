@@ -37,11 +37,11 @@ using namespace gpgpu::cu;
 using float2 = std::complex<float>;
 using double2 = std::complex<double>;
 
-static_assert(static_cast<clblast::Layout>(cblas::Layout::RowMajor) == clblast::Layout::kRowMajor);
-static_assert(static_cast<clblast::Layout>(cblas::Layout::ColMajor) == clblast::Layout::kColMajor);
-static_assert(static_cast<clblast::Transpose>(cblas::Transpose::NoTrans) == clblast::Transpose::kNo);
-static_assert(static_cast<clblast::Transpose>(cblas::Transpose::Trans) == clblast::Transpose::kYes);
-static_assert(static_cast<clblast::Transpose>(cblas::Transpose::ConjTrans) == clblast::Transpose::kConjugate);
+static_assert(static_cast<clblast::Layout>(blas::Layout::RowMajor) == clblast::Layout::kRowMajor);
+static_assert(static_cast<clblast::Layout>(blas::Layout::ColMajor) == clblast::Layout::kColMajor);
+static_assert(static_cast<clblast::Transpose>(blas::Transpose::NoTrans) == clblast::Transpose::kNo);
+static_assert(static_cast<clblast::Transpose>(blas::Transpose::Trans) == clblast::Transpose::kYes);
+static_assert(static_cast<clblast::Transpose>(blas::Transpose::ConjTrans) == clblast::Transpose::kConjugate);
 
 template <typename T>
 constexpr cudaDataType CudaType = static_cast<cudaDataType>(-1);
@@ -167,104 +167,6 @@ template void nrm2(size_t, Buffer<float2>&, size_t, Buffer<float2>&, Queue&, Eve
 template void nrm2(size_t, Buffer<double2>&, size_t, Buffer<double2>&, Queue&, Event*);
 
 template <typename T>
-void rot(size_t N, Buffer<T>& X, size_t incX, Buffer<T>& Y, size_t incY,
-         const T cos, const T sin, Queue& queue, Event* event) {
-    dispatch<T>(queue, event,
-        [&](auto q, auto e) {
-            clblast::Rot<T>(N,
-                            *clBuffer::unwrap(X), 0, incX,
-                            *clBuffer::unwrap(Y), 0, incY,
-                            cos, sin, q, e);
-        },
-
-        [&](auto h, auto t) {
-            cublasRotEx(h, N,
-                        cuBuffer::unwrap(X), t, incX,
-                        cuBuffer::unwrap(Y), t, incY,
-                        &cos, &sin, t, t);
-        });
-}
-
-template void rot(size_t, Buffer<float>&, size_t, Buffer<float>&, size_t,
-                  const float, const float, Queue&, Event*);
-template void rot(size_t, Buffer<double>&, size_t, Buffer<double>&, size_t,
-                  const double, const double, Queue&, Event*);
-
-template <typename T>
-void rotg(Buffer<T>& A, Buffer<T>& B, Buffer<T>& C, Buffer<T>& S, Queue& queue, Event* event) {
-    dispatch<T>(queue, event,
-        [&](auto q, auto e) {
-            clblast::Rotg<T>(*clBuffer::unwrap(A), 0,
-                             *clBuffer::unwrap(B), 0,
-                             *clBuffer::unwrap(C), 0,
-                             *clBuffer::unwrap(S), 0,
-                             q, e);
-        },
-
-        [&](auto h, auto t) {
-            cublasRotgEx(h,
-                         cuBuffer::unwrap(A),
-                         cuBuffer::unwrap(B), t,
-                         cuBuffer::unwrap(C),
-                         cuBuffer::unwrap(S), t,
-                         t);
-        });
-}
-
-template void rotg(Buffer<float>&, Buffer<float>&, Buffer<float>&, Buffer<float>&, Queue&, Event*);
-template void rotg(Buffer<double>&, Buffer<double>&, Buffer<double>&, Buffer<double>&, Queue&, Event*);
-
-template <typename T>
-void rotm(size_t N, Buffer<T>& X, size_t incX, Buffer<T>& Y, size_t incY,
-          Buffer<T>& param, Queue& queue, Event* event) {
-    dispatch<T>(queue, event,
-        [&](auto q, auto e) {
-            clblast::Rotm<T>(N,
-                             *clBuffer::unwrap(X), 0, incX,
-                             *clBuffer::unwrap(Y), 0, incY,
-                             *clBuffer::unwrap(param), 0,
-                             q, e);
-        },
-
-        [&](auto h, auto t) {
-            cublasRotmEx(h, N,
-                         cuBuffer::unwrap(X), t, incX,
-                         cuBuffer::unwrap(Y), t, incY,
-                         cuBuffer::unwrap(param), t, t);
-        });
-}
-
-template void rotm(size_t, Buffer<float>&, size_t, Buffer<float>&, size_t, Buffer<float>&, Queue&, Event*);
-template void rotm(size_t, Buffer<double>&, size_t, Buffer<double>&, size_t, Buffer<double>&, Queue&, Event*);
-
-template <typename T>
-void rotmg(Buffer<T>& D1, Buffer<T>& D2, Buffer<T>& X1, const Buffer<T>& Y1, Buffer<T>& param,
-           Queue& queue, Event* event) {
-    dispatch<T>(queue, event,
-        [&](auto q, auto e) {
-            clblast::Rotmg<T>(*clBuffer::unwrap(D1), 0,
-                              *clBuffer::unwrap(D2), 0,
-                              *clBuffer::unwrap(X1), 0,
-                              *clBuffer::unwrap(Y1), 0,
-                              *clBuffer::unwrap(param), 0,
-                              q, e);
-        },
-
-        [&](auto h, auto t) {
-            cublasRotmgEx(h,
-                          cuBuffer::unwrap(D1), t,
-                          cuBuffer::unwrap(D2), t,
-                          cuBuffer::unwrap(X1), t,
-                          cuBuffer::unwrap(Y1), t,
-                          cuBuffer::unwrap(param), t,
-                          t);
-        });
-}
-
-template void rotmg(Buffer<float>&, Buffer<float>&, Buffer<float>&, const Buffer<float>&, Buffer<float>&, Queue&, Event*);
-template void rotmg(Buffer<double>&, Buffer<double>&, Buffer<double>&, const Buffer<double>&, Buffer<double>&, Queue&, Event*);
-
-template <typename T>
 void scal(const size_t N, const T alpha, Buffer<T>& X, const size_t incX,
           Queue& queue, Event* event) {
     dispatch<T>(queue, event,
@@ -299,6 +201,108 @@ template void swap(size_t, Buffer<double>&, size_t, Buffer<double>&, size_t, Que
 template void swap(size_t, Buffer<float2>&, size_t, Buffer<float2>&, size_t, Queue&, Event*);
 template void swap(size_t, Buffer<double2>&, size_t, Buffer<double2>&, size_t, Queue&, Event*);
 
+//==-------------------------------------------------------------------------
+// BLAS level-2 (matrix-vector) routines
+//==-------------------------------------------------------------------------
+
+template <typename T>
+void cublasGemv(cublasHandle_t handle, cublasOperation_t transA,
+                size_t M, size_t N, const T* alpha,
+                const T* A, size_t lda,
+                const T* X, size_t incX, const T* beta,
+                T* Y, size_t incY);
+
+template <>
+inline void cublasGemv(cublasHandle_t handle, cublasOperation_t transA,
+                       size_t M, size_t N, const float* alpha,
+                       const float* A, size_t lda,
+                       const float* X, size_t incX,
+                       const float* beta, float* Y, size_t incY) {
+    cublasSgemv(handle, transA, M, N, alpha, A, lda, X, incX, beta, Y, incY);
+}
+
+template <>
+inline void cublasGemv(cublasHandle_t handle, cublasOperation_t transA,
+                       size_t M, size_t N, const double* alpha,
+                       const double* A, size_t lda,
+                       const double* X, size_t incX,
+                       const double* beta, double* Y, size_t incY) {
+    cublasDgemv(handle, transA, M, N, alpha, A, lda, X, incX, beta, Y, incY);
+}
+
+template <>
+inline void cublasGemv(cublasHandle_t handle, cublasOperation_t transA,
+                       size_t M, size_t N, const float2* alpha,
+                       const float2* A, size_t lda,
+                       const float2* X, size_t incX,
+                       const float2* beta, float2* Y, size_t incY) {
+    cublasCgemv(handle, transA, M, N,
+                reinterpret_cast<const cuComplex*>(alpha),
+                reinterpret_cast<const cuComplex*>(A), lda,
+                reinterpret_cast<const cuComplex*>(X), incX,
+                reinterpret_cast<const cuComplex*>(beta),
+                reinterpret_cast<cuComplex*>(Y), incY);
+}
+
+template <>
+inline void cublasGemv(cublasHandle_t handle, cublasOperation_t transA,
+                       size_t M, size_t N, const double2* alpha,
+                       const double2* A, size_t lda,
+                       const double2* X, size_t incX,
+                       const double2* beta, double2* Y, size_t incY) {
+    cublasZgemv(handle, transA, M, N,
+                reinterpret_cast<const cuDoubleComplex*>(alpha),
+                reinterpret_cast<const cuDoubleComplex*>(A), lda,
+                reinterpret_cast<const cuDoubleComplex*>(X), incX,
+                reinterpret_cast<const cuDoubleComplex*>(beta),
+                reinterpret_cast<cuDoubleComplex*>(Y), incY);
+}
+
+// General matrix-vector multiplication
+template <typename T>
+void gemv(Layout layout, Transpose transA, size_t M, size_t N, const T alpha,
+          const Buffer<T>& A, size_t lda, const Buffer<T>& X, size_t incX,
+          const T beta, Buffer<T>& Y, size_t incY,
+          Queue& queue, Event* event)
+{
+    dispatch<T>(queue, event,
+        [&](auto q, auto e) {
+            clblast::Gemv<T>(static_cast<clblast::Layout>(layout),
+                             static_cast<clblast::Transpose>(transA),
+                             M, N, alpha,
+                             *clBuffer::unwrap(A), 0, lda,
+                             *clBuffer::unwrap(X), 0, incX, beta,
+                             *clBuffer::unwrap(Y), 0, incY,
+                             q, e);
+        },
+
+        [&](auto h, auto t) {
+            cublasGemv<T>(h, cudaOp(transA), M, N,
+                          reinterpret_cast<const T*>(&alpha),
+                          reinterpret_cast<const T*>(cuBuffer::unwrap(A)), lda,
+                          reinterpret_cast<const T*>(cuBuffer::unwrap(X)), incX,
+                          reinterpret_cast<const T*>(&beta),
+                          reinterpret_cast<T*>(cuBuffer::unwrap(Y)), incY);
+        });
+}
+
+template void gemv(Layout, Transpose, size_t, size_t, const float,
+                   const Buffer<float>&, size_t, const Buffer<float>&, size_t,
+                   const float, Buffer<float>&, size_t, Queue&, Event*);
+template void gemv(Layout, Transpose, size_t, size_t, const double,
+                   const Buffer<double>&, size_t, const Buffer<double>&, size_t,
+                   const double, Buffer<double>&, size_t, Queue&, Event*);
+template void gemv(Layout, Transpose, size_t, size_t, const float2,
+                   const Buffer<float2>&, size_t, const Buffer<float2>&, size_t,
+                   const float2, Buffer<float2>&, size_t, Queue&, Event*);
+template void gemv(Layout, Transpose, size_t, size_t, const double2,
+                   const Buffer<double2>&, size_t, const Buffer<double2>&, size_t,
+                   const double2, Buffer<double2>&, size_t, Queue&, Event*);
+
+//==-------------------------------------------------------------------------
+// BLAS level-3 (matrix-matrix) routines
+//==-------------------------------------------------------------------------
+
 template <typename T>
 void gemm(const Layout layout, const Transpose transA, const Transpose transB,
           const size_t M, const size_t N, const size_t K,
@@ -314,11 +318,9 @@ void gemm(const Layout layout, const Transpose transA, const Transpose transB,
             clblast::Gemm<T>(static_cast<clblast::Layout>(layout),
                              static_cast<clblast::Transpose>(transA),
                              static_cast<clblast::Transpose>(transB),
-                             M, N, K,
-                             alpha,
+                             M, N, K, alpha,
                              *clBuffer::unwrap(A), 0, lda,
-                             *clBuffer::unwrap(B), 0, ldb,
-                             beta,
+                             *clBuffer::unwrap(B), 0, ldb, beta,
                              *clBuffer::unwrap(C), 0, ldc,
                              q, e);
         },

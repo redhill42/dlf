@@ -674,8 +674,8 @@ inline Kernel Program::getKernel(const char* name) {
 
 namespace blas {
 
-using cblas::Layout;
-using cblas::Transpose;
+using ::blas::Layout;
+using ::blas::Transpose;
 
 //==-------------------------------------------------------------------------
 // BLAS level-1 (vector-vector) routines
@@ -698,31 +698,26 @@ void dot(size_t N, const Buffer<T>& X, size_t incX, const Buffer<T>& Y, size_t i
 template <typename T>
 void nrm2(size_t N, Buffer<T>& X, size_t incX, Buffer<T>& result, Queue& queue, Event* event = nullptr);
 
-// Note: CLBlast not implemented
-template <typename T>
-void rot(size_t N, Buffer<T>& X, size_t incX, Buffer<T>& Y, size_t incY,
-         const T cos, const T sin, Queue& queue, Event* event = nullptr);
-
-// Note: CLBlast not implemented
-template <typename T>
-void rotg(Buffer<T>& A, Buffer<T>& B, Buffer<T>& C, Buffer<T>& S, Queue& queue, Event* event = nullptr);
-
-// Note: CLBlast not implemented
-template <typename T>
-void rotm(size_t N, Buffer<T>& X, size_t incX, Buffer<T>& Y, size_t yInc,
-          Buffer<T>& param, Queue& queue, Event* event = nullptr);
-
-// Note: CLBlast not implemented
-template <typename T>
-void rotmg(Buffer<T>& D1, Buffer<T>& D2, Buffer<T>& X1, const Buffer<T>& y1, Buffer<T>& param,
-           Queue& queue, Event* event = nullptr);
-
 template <typename T>
 void scal(const size_t N, const T alpha, Buffer<T>& X, const size_t incX,
           Queue& queue, Event* event = nullptr);
 
 template <typename T>
 void swap(size_t N, Buffer<T>& X, size_t incX, Buffer<T>& Y, size_t incY, Queue& queue, Event* event = nullptr);
+
+//==-------------------------------------------------------------------------
+// BLAS level-2 (matrix-vector) routines
+//==-------------------------------------------------------------------------
+
+template <typename T>
+void gemv(Layout layout, Transpose trans, size_t M, size_t N, const T alpha,
+          const Buffer<T>& A, size_t lda, const Buffer<T>X, size_t incX,
+          const T beta, Buffer<T>& Y, size_t incY,
+          Queue& queue, Event* event = nullptr);
+
+//==-------------------------------------------------------------------------
+// BLAS level-3 (matrix-matrix) routines
+//==-------------------------------------------------------------------------
 
 template <typename T>
 void gemm(const Layout layout, const Transpose transA, const Transpose transB,
