@@ -15,8 +15,8 @@ class DevTensor {
     Shape m_shape;
     size_t m_size = 0;
 
-    gpgpu::Queue m_queue;
-    gpgpu::Buffer<T> m_data;
+    mutable gpgpu::Queue m_queue;
+    mutable gpgpu::Buffer<T> m_data;
 
 public:
     DevTensor() = default;
@@ -36,8 +36,18 @@ public:
         m_data.write(m_queue, host.data(), host.size());
     }
 
+    DevTensor(Shape shape, gpgpu::Buffer<T> data, gpgpu::Queue queue)
+        : m_shape(std::move(shape)), m_data(std::move(data)), m_queue(std::move(queue))
+    {
+        m_size = m_shape.size();
+    }
+
     const Shape& shape() const noexcept {
         return m_shape;
+    }
+
+    bool reshape(Shape newshape) {
+        return m_shape.reshape(std::move(newshape));
     }
 
     /**
@@ -78,7 +88,7 @@ public:
     /**
      * Read data from device.
      */
-    Tensor<T> read() {
+    Tensor<T> read() const {
         Tensor<T> host(m_shape);
         m_data.read(m_queue, host.data(), host.size());
         return host;
@@ -87,7 +97,7 @@ public:
     /**
      * Asynchronously read data from deivce.
      */
-    Tensor<T> readAsync() {
+    Tensor<T> readAsync() const {
         Tensor<T> host(m_shape);
         m_data.readAsync(m_queue, host.data(), host.size());
         return host;
@@ -96,7 +106,7 @@ public:
     /**
      * Read data from device and store data into given host tensor.
      */
-    void read(Tensor<T>& host) {
+    void read(Tensor<T>& host) const {
         assert(m_shape == host.shape());
         m_data.read(m_queue, host.data(), host.size());
     }
@@ -104,7 +114,7 @@ public:
     /**
      * Asynchronously read data from device and store data into given host tensor.
      */
-    void readAsync(Tensor<T>& host) {
+    void readAsync(Tensor<T>& host) const {
         assert(m_shape == host.shape());
         m_data.readAsync(m_queue, host.data(), host.size());
     }
@@ -128,7 +138,7 @@ public:
     /**
      * Copy data into target.
      */
-    void copyTo(DevTensor<T>& dest) {
+    void copyTo(DevTensor<T>& dest) const {
         assert(m_shape == dest.shape());
         m_data.copy(m_queue, dest.buffer(), size());
     }
@@ -136,7 +146,7 @@ public:
     /**
      * Asynchronously copy data into destination.
      */
-    void copyToAsync(DevTensor<T>& dest) {
+    void copyToAsync(DevTensor<T>& dest) const {
         assert(m_shape == dest.shape());
         m_data.copyAsync(m_queue, dest.buffer(), size());
     }
@@ -144,7 +154,7 @@ public:
     /**
      * Create a copy of this tensor.
      */
-    DevTensor<T> copy() {
+    DevTensor<T> copy() const {
         DevTensor<T> dest(m_shape, m_queue);
         m_data.copy(m_queue, dest.buffer(), size());
         return dest;
@@ -153,7 +163,7 @@ public:
     /**
      * Asynchronously create a copy of this tensor.
      */
-    DevTensor<T> copyAsync() {
+    DevTensor<T> copyAsync() const {
         DevTensor<T> dest(m_shape, m_queue);
         m_data.copyAsync(m_queue, dest.buffer(), size());
         return dest;
@@ -186,7 +196,109 @@ public:
     const gpgpu::Queue& queue() const noexcept {
         return m_queue;
     }
+
+public:
+    DevTensor<T>& operator+=(const DevTensor<T>& rhs);
+    DevTensor<T>& operator-=(const DevTensor<T>& rhs);
+    DevTensor<T>& operator*=(const T& rhs);
 };
+
+template <typename T>
+inline DevTensor<T>& DevTensor<T>::operator+=(const DevTensor<T>& rhs) {
+    assert(m_shape == rhs.shape());
+    gpgpu::blas::axpy(size(), T(1), rhs.buffer(), 1, buffer(), 1, m_queue);
+    return *this;
+}
+
+template <typename T>
+inline DevTensor<T> operator+(const DevTensor<T>& lhs, const DevTensor<T>& rhs) {
+    auto R = lhs.copy();
+    R += rhs;
+    return R;
+}
+
+template <typename T>
+inline DevTensor<T> operator+(DevTensor<T>&& lhs, const DevTensor<T>& rhs) {
+    lhs += rhs;
+    return std::move(lhs);
+}
+
+template <typename T>
+inline DevTensor<T> operator+(const DevTensor<T>& lhs, DevTensor<T>&& rhs) {
+    rhs += lhs;
+    return std::move(rhs);
+}
+
+template <typename T>
+inline DevTensor<T> operator+(DevTensor<T>&& lhs, DevTensor<T>&& rhs) {
+    lhs += rhs;
+    return std::move(lhs);
+}
+
+template <typename T>
+inline DevTensor<T>& DevTensor<T>::operator-=(const DevTensor<T>& rhs) {
+    assert(m_shape == rhs.shape());
+    gpgpu::blas::axpy(size(), T(-1), rhs.buffer(), 1, buffer(), 1, m_queue);
+    return *this;
+}
+
+template <typename T>
+inline DevTensor<T> operator-(const DevTensor<T>& lhs, const DevTensor<T>& rhs) {
+    auto R = lhs.copy();
+    R -= rhs;
+    return R;
+}
+
+template <typename T>
+inline DevTensor<T> operator-(DevTensor<T>&& lhs, const DevTensor<T>& rhs) {
+    lhs -= rhs;
+    return std::move(lhs);
+}
+
+template <typename T>
+inline DevTensor<T> operator-(const DevTensor<T>& lhs, DevTensor<T>&& rhs) {
+    auto R = lhs.copy(); // FIXME
+    R -= rhs;
+    return R;
+}
+
+template <typename T>
+inline DevTensor<T> operator-(DevTensor<T>&& lhs, DevTensor<T>&& rhs) {
+    lhs -= rhs;
+    return lhs;
+}
+
+template <typename T>
+inline DevTensor<T>& DevTensor<T>::operator*=(const T& rhs) {
+    gpgpu::blas::scal(size(), rhs, buffer(), 1, m_queue);
+    return *this;
+}
+
+template <typename T>
+inline DevTensor<T> operator*(const DevTensor<T>& lhs, const T& rhs) {
+    auto R = lhs.copy();
+    R *= rhs;
+    return R;
+}
+
+template <typename T>
+inline DevTensor<T> operator*(DevTensor<T>&& lhs, const T& rhs) {
+    lhs *= rhs;
+    return std::move(lhs);
+}
+
+template <typename T>
+inline DevTensor<T> operator*(const T& lhs, const DevTensor<T>& rhs) {
+    auto R = rhs.copy();
+    R *= lhs;
+    return R;
+}
+
+template <typename T>
+inline DevTensor<T> operator*(const T& lhs, DevTensor<T>&& rhs) {
+    rhs *= lhs;
+    return std::move(rhs);
+}
 
 /**
  * Perform inner product on two tensors. The tensors must be vector
