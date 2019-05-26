@@ -121,7 +121,7 @@ public:
 
     std::shared_ptr<raw::Queue> createQueue() override;
     std::shared_ptr<raw::Event> createEvent() override;
-    std::shared_ptr<raw::Buffer> createBuffer(BufferAccess access, size_t size) override;
+    std::shared_ptr<raw::Buffer> createBuffer(size_t size, BufferAccess access) override;
 };
 
 class cuEvent final : public raw::Event {
@@ -163,6 +163,10 @@ public:
         : m_queue(queue), m_cublas(nullptr) {}
 
     ~cuQueue() override;
+
+    QueueID id() const noexcept override {
+        return reinterpret_cast<QueueID>(m_queue);
+    }
 
     cublasHandle_t getCublasHandle();
 

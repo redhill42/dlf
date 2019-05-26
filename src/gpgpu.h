@@ -128,6 +128,7 @@ enum class BufferAccess { kReadOnly, kWriteOnly, kReadWrite };
 using PlatformID = intptr_t;
 using DeviceID = intptr_t;
 using ContextID = intptr_t;
+using QueueID = intptr_t;
 
 //==-------------------------------------------------------------------------
 // Raw Interface
@@ -204,7 +205,7 @@ public:
 
     virtual std::shared_ptr<Queue> createQueue() = 0;
     virtual std::shared_ptr<Event> createEvent() = 0;
-    virtual std::shared_ptr<Buffer> createBuffer(BufferAccess access, size_t size) = 0;
+    virtual std::shared_ptr<Buffer> createBuffer(size_t size, BufferAccess access) = 0;
 
     virtual std::shared_ptr<Program> compileProgram(const char* source, const std::vector<std::string>& options) = 0;
     virtual std::shared_ptr<Program> loadProgram(const std::string& binary) = 0;
@@ -214,6 +215,7 @@ class Queue {
 public:
     virtual ~Queue() = default;
 
+    virtual QueueID id() const noexcept = 0;
     virtual void finish(Event& event) = 0;
     virtual void finish() = 0;
 };
@@ -311,6 +313,14 @@ public:
      * Get the default device in this platform.
      */
     Device device();
+
+    bool operator==(const Platform& other) const noexcept {
+        return m_raw->id() == other.m_raw->id();
+    }
+
+    bool operator!=(const Platform& other) const noexcept {
+        return !(*this == other);
+    }
 };
 
 class Device {
@@ -404,6 +414,15 @@ public:
      * Create a new context.
      */
     Context createContext();
+
+
+    bool operator==(const Device& other) const noexcept {
+        return m_raw->id() == other.m_raw->id();
+    }
+
+    bool operator!=(const Device& other) const noexcept {
+        return !(*this == other);
+    }
 };
 
 class Context {
@@ -453,7 +472,15 @@ public:
      * Create the device buffer.
      */
     template <typename T>
-    Buffer<T> createBuffer(BufferAccess access, size_t size);
+    Buffer<T> createBuffer(size_t size, BufferAccess access = BufferAccess::kReadWrite);
+
+    bool operator==(const Context& other) const noexcept {
+        return m_raw->id() == other.m_raw->id();
+    }
+
+    bool operator!=(const Context& other) const noexcept {
+        return !(*this == other);
+    }
 };
 
 class Queue {
@@ -474,6 +501,14 @@ public:
 
     void finish(Event& event);
     void finish();
+
+    bool operator==(const Queue& other) const noexcept {
+        return m_raw->id() == other.m_raw->id();
+    }
+
+    bool operator!=(const Queue& other) const noexcept {
+        return !(*this == other);
+    }
 };
 
 class Event {
@@ -632,8 +667,8 @@ inline Event Context::createEvent() {
 }
 
 template <typename T>
-inline Buffer<T> Context::createBuffer(BufferAccess access, size_t size) {
-    return Buffer<T>(m_raw->createBuffer(access, size*sizeof(T)));
+inline Buffer<T> Context::createBuffer(size_t size, BufferAccess access) {
+    return Buffer<T>(m_raw->createBuffer(size*sizeof(T), access));
 }
 
 inline void Queue::finish(Event& event) {
@@ -711,7 +746,7 @@ void swap(size_t N, Buffer<T>& X, size_t incX, Buffer<T>& Y, size_t incY, Queue&
 
 template <typename T>
 void gemv(Layout layout, Transpose trans, size_t M, size_t N, const T alpha,
-          const Buffer<T>& A, size_t lda, const Buffer<T>X, size_t incX,
+          const Buffer<T>& A, size_t lda, const Buffer<T>& X, size_t incX,
           const T beta, Buffer<T>& Y, size_t incY,
           Queue& queue, Event* event = nullptr);
 

@@ -150,7 +150,7 @@ std::shared_ptr<raw::Event> clContext::createEvent() {
     return std::make_shared<clEvent>();
 }
 
-std::shared_ptr<raw::Buffer> clContext::createBuffer(BufferAccess access, size_t size) {
+std::shared_ptr<raw::Buffer> clContext::createBuffer(size_t size, BufferAccess access) {
     auto flags = CL_MEM_READ_WRITE;
     if (access == BufferAccess::kReadOnly)
         flags = CL_MEM_READ_ONLY;

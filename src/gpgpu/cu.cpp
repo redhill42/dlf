@@ -146,7 +146,7 @@ std::shared_ptr<raw::Event> cuContext::createEvent() {
     return std::make_shared<cuEvent>(start, end);
 }
 
-std::shared_ptr<raw::Buffer> cuContext::createBuffer(BufferAccess access, size_t size) {
+std::shared_ptr<raw::Buffer> cuContext::createBuffer(size_t size, BufferAccess access) {
     CUdeviceptr buffer = 0;
     CheckError(cuMemAlloc(&buffer, size));
     return std::make_shared<cuBuffer>(access, buffer);

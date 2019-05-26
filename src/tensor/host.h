@@ -1006,14 +1006,6 @@ void gemm(const Tensor<T>& A, const Tensor<T>& B, Tensor<T>* C,
 }
 
 template <typename T>
-void gemm(const Tensor<T>& A, const Tensor<T>& B, const Tensor<T>& C, Tensor<T>* R,
-          const T& alpha, const T& beta, bool transA = false, bool transB = false)
-{
-    std::copy(C.begin(), C.end(), R->begin());
-    gemm(A, B, R, alpha, beta, transA, transB);
-}
-
-template <typename T>
 Tensor<T> gemm(const Tensor<T>& A, const Tensor<T>& B, const Tensor<T>& C,
                const T& alpha, const T& beta, bool transA = false, bool transB = false)
 {

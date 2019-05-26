@@ -1,9 +1,44 @@
 #include "tensor.h"
 #include "gpgpu.h"
 #include "gtest/gtest.h"
+#include "gmock/gmock.h"
 #include "test_utility.h"
 
 using namespace tensor;
+
+static auto cl2cu =
+    #include "cl2cu.inc"
+
+class GPGPUTest : public ::testing::Test {
+protected:
+    gpgpu::Device device;
+    gpgpu::Context context;
+    gpgpu::Queue queue;
+
+    GPGPUTest() {
+        // Initialize the GPGPU platform and device. This initializes the
+        // OpenCL/CUDA back-end selects a specific device on the platform.
+        device = gpgpu::probe().device();
+
+        // Creates a new GPGPU context and queue for this device. The queue
+        // can be used to schedule commands such as launching a kernel or
+        // performing a device-host memory copy.
+        context = device.createContext();
+        queue = context.createQueue();
+    }
+
+    gpgpu::Program compile(std::string source) {
+        // Translate OpenCL kernel code into CUDA.
+        if (device.platform().api() == gpgpu::APITypes::CUDA) {
+            source = cl2cu + source;
+        }
+
+        // Creates a new program based on the kernel string. Then, builds
+        // this program and checks for any compilation errors. If there
+        // are any, they are printed and execution is halted.
+        return context.compileProgram(source.c_str(), {});
+    }
+};
 
 static auto program_source = R"(
 __kernel void multiply(__global float* x, __global float* y, const int factor) {
@@ -11,45 +46,16 @@ __kernel void multiply(__global float* x, __global float* y, const int factor) {
   y[tid] = x[tid] * factor;
 })";
 
-static auto cl2cu =
-    #include "cl2cu.inc"
-
-TEST(GPGPU, API) {
-    // Initialize the GPGPU platform and device. This initializes the
-    // OpenCL/CUDA back-end selects a specific device on the platform.
-    auto device = gpgpu::probe().device();
-
-    // Creates a new GPGPU context and queue for this device. The queue
-    // can be used to schedule commands such as launching a kernel or
-    // performing a device-host memory copy.
-    auto context = device.createContext();
-    auto queue = context.createQueue();
-
-    // Translate OpenCL kernel code into CUDA.
-    std::string source = program_source;
-    if (device.platform().api() == gpgpu::APITypes::CUDA) {
-        source = cl2cu + source;
-    }
-
-    // Creates a new program based on the kernel string. Then, builds
-    // this program and checks for any compilation errors. If there
-    // are any, they are printed and execution is halted.
-    auto cc = device.createContext();
-    auto program = cc.compileProgram(source.c_str(), {});
-
-    // Test for load program from binary
-    program = context.loadProgram(program.getIR());
-    auto kernel = program.getKernel("multiply");
+TEST_F(GPGPUTest, CompileProgram) {
+    auto kernel = compile(program_source).getKernel("multiply");
 
     // Populate regular host vectors with example data
     auto host_a = Tensor<float>::range({2048, 2048}, 0);
-    auto host_b = Tensor<float>({2048, 2048});
 
     // Creates two new device buffers and copies the host data to these
     // device buffer
-    auto dev_a = context.createBuffer<float>(gpgpu::BufferAccess::kReadWrite, host_a.size());
-    auto dev_b = context.createBuffer<float>(gpgpu::BufferAccess::kReadWrite, host_b.size());
-    dev_a.writeAsync(queue, host_a.data(), host_a.size());
+    auto dev_a = DevTensor(host_a, queue);
+    auto dev_b = DevTensor<float>(host_a.shape(), queue);
 
     // Creates a 1-dimensional thread configuration with thread-blocks/work-groups
     // of 256 threads and a total number of threads equal to the number of elements
@@ -58,72 +64,117 @@ TEST(GPGPU, API) {
 
     // Enqueues the kernel. Note that launching the kernel is always asynchronous
     // and thus requires finishing the queue in order to complete the operation.
-    kernel.setArguments(dev_a, dev_b, 2);
-    kernel.launch(queue, {host_a.size()}, {kWorkGroupSize});
-
-    // Launch again by swapping parameter and multiply factor
-    kernel.setArguments(dev_b, dev_a, 3);
-    kernel.launch(queue, {host_a.size()}, {kWorkGroupSize});
+    kernel.setArguments(dev_a.buffer(), dev_b.buffer(), 2);
+    kernel.launch(queue, {dev_a.size()}, {kWorkGroupSize});
 
     // Reads the results back to the host memory
-    dev_a.readAsync(queue, host_b.data(), host_b.size());
-
-    // Wait for queue completion
-    queue.finish();
+    auto host_b = dev_b.read();
 
     // Verify the result
     for (auto index : {4, 900, 1500}) {
-        EXPECT_EQ(host_a(index, index) * 6, host_b(index, index));
+        EXPECT_EQ(host_a(index, index) * 2, host_b(index, index));
     }
 
     // End of execution: no frees or clean-up needed
 }
 
-void test_gemm(const size_t N) {
-    using real = float;
+TEST_F(GPGPUTest, VectorDotVector) {
+    auto A = Tensor<float>({4}, {2, 7, 3, 4});
+    auto B = Tensor<float>({4}, {4, 1, 9, 6});
+    auto R = Tensor<float>({1}, {66});
 
-    auto A = Tensor<real>::random({N, N}, 0, 1);
-    auto B = Tensor<real>::random({N, N}, 0, 1);
-    auto C = Tensor<real>({N, N});
+    auto dev_A = DevTensor(A, queue);
+    auto dev_B = DevTensor(B, queue);
+    auto dev_C = DevTensor<float>({1}, queue);
 
-    timing("CPU gemm " + std::to_string(N), 5, [&]() {
-        blas::gemm(blas::Layout::RowMajor,
-                   blas::Transpose::NoTrans,
-                   blas::Transpose::NoTrans,
-                   N, N, N, 1.0,
-                   A.data(), N,
-                   B.data(), N, 0.0,
-                   C.data(), N);
-    });
+    inner(dev_A, dev_B, &dev_C);
+    EXPECT_EQ(dev_C.read(), R);
 
-    auto device = gpgpu::probe().devices(gpgpu::DeviceType::GPU)[1];
-    auto context = device.createContext();
-    auto queue = context.createQueue();
-
-    auto dev_A = context.createBuffer<real>(gpgpu::BufferAccess::kWriteOnly, A.size());
-    auto dev_B = context.createBuffer<real>(gpgpu::BufferAccess::kWriteOnly, B.size());
-    auto dev_C = context.createBuffer<real>(gpgpu::BufferAccess::kReadOnly, C.size());
-
-    timing("GPU gemm " + std::to_string(N), 5, [&]() {
-        dev_A.writeAsync(queue, A.data(), A.size());
-        dev_B.writeAsync(queue, B.data(), B.size());
-
-        gpgpu::blas::gemm(blas::Layout::RowMajor,
-                          blas::Transpose::NoTrans,
-                          blas::Transpose::NoTrans,
-                          N, N, N, 1.0f,
-                          dev_A, N,
-                          dev_B, N, 0.0f,
-                          dev_C, N,
-                          queue);
-
-        dev_C.readAsync(queue, C.data(), C.size());
-        queue.finish();
-    });
+    auto dev_T = inner(dev_A, dev_B);
+    EXPECT_EQ(dev_T.read(), R);
 }
 
-TEST(GPGPU, GEMMPerformance) {
-    for (int n = 512; n <= 2048; n *= 2) {
-        test_gemm(n);
-    }
+TEST_F(GPGPUTest, MatrixDotVector) {
+    auto A = Tensor<float>({2, 3}, {2, 7, 3, 5, 9, 6});
+    auto B = Tensor<float>({3}, {9, 6, 7});
+    auto R = Tensor<float>({2}, {81, 141});
+
+    auto dev_A = DevTensor(A, queue);
+    auto dev_B = DevTensor(B, queue);
+    auto dev_C = DevTensor<float>({2}, queue);
+
+    inner(dev_A, dev_B, &dev_C);
+    EXPECT_EQ(dev_C.read(), R);
+
+    auto dev_T = inner(dev_A, dev_B);
+    EXPECT_EQ(dev_T.read(), R);
+}
+
+TEST_F(GPGPUTest, VectorDoMatrix) {
+    auto A = Tensor<float>({3}, {9, 6, 7});
+    auto B = Tensor<float>({3, 2}, {2, 7, 3, 5, 9, 6});
+    auto R = Tensor<float>({2}, {99, 135});
+
+    auto dev_A = DevTensor(A, queue);
+    auto dev_B = DevTensor(B, queue);
+    auto dev_C = DevTensor<float>({2}, queue);
+
+    inner(dev_A, dev_B, &dev_C);
+    EXPECT_EQ(dev_C.read(), R);
+
+    auto dev_T = inner(dev_A, dev_B);
+    EXPECT_EQ(dev_T.read(), R);
+
+}
+
+TEST_F(GPGPUTest, MatrixDotMatrix) {
+    auto A = Tensor<float>({2, 3}, {2, 7, 3, 5, 9, 6});
+    auto B = Tensor<float>({3, 2}, {2, 7, 3, 5, 9, 6});
+    auto R = Tensor<float>({2, 2}, {52, 67, 91, 116});
+
+    auto dev_A = DevTensor(A, queue);
+    auto dev_B = DevTensor(B, queue);
+    auto dev_C = DevTensor<float>({2, 2}, queue);
+
+    inner(dev_A, dev_B, &dev_C);
+    EXPECT_EQ(dev_C.read(), R);
+
+    auto dev_T = inner(dev_A, dev_B);
+    EXPECT_EQ(dev_T.read(), R);
+}
+
+TEST_F(GPGPUTest, GEMM) {
+    Tensor<float> A({3, 6}, {
+        5, 10, 9, 1, 10, 3,
+        7,  6, 6, 6,  1, 1,
+        6,  2, 6, 10, 9, 3
+    });
+
+    Tensor<float> B({6, 4}, {
+        7,  1, 8,  7,
+        9,  5, 2,  6,
+        7,  8, 5,  7,
+        6,  9, 1,  1,
+        4, 10, 1, 10,
+        3,  8, 8,  5
+    });
+
+    Tensor<float> C({3, 4}, {
+        230, 254, 116, 199,
+        219, 236, 201, 252,
+        173, 148, 155, 167
+    });
+
+    Tensor<float> R({3, 4}, {
+        1176, 1282, 628, 1145,
+        1033, 1022, 829, 1052,
+         933,  980, 715,  923
+    });
+
+    auto dev_A = DevTensor(A, queue);
+    auto dev_B = DevTensor(B, queue);
+    auto dev_C = DevTensor(C, queue);
+
+    auto dev_T = gemm(dev_A, dev_B, dev_C, 2.0f, 3.0f);
+    EXPECT_THAT(dev_T.read(), R);
 }

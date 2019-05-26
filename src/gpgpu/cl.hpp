@@ -159,7 +159,7 @@ public:
 
     std::shared_ptr<raw::Queue> createQueue() override;
     std::shared_ptr<raw::Event> createEvent() override;
-    std::shared_ptr<raw::Buffer> createBuffer(BufferAccess access, size_t size) override;
+    std::shared_ptr<raw::Buffer> createBuffer(size_t size, BufferAccess access) override;
 };
 
 class clQueue final : public raw::Queue {
@@ -170,6 +170,10 @@ public:
         : m_queue(queue) {}
 
     ~clQueue() override;
+
+    QueueID id() const noexcept override {
+        return reinterpret_cast<QueueID>(m_queue);
+    }
 
     void finish(raw::Event&) override;
     void finish() override;
