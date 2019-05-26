@@ -20,10 +20,8 @@ macro(fetch_clblast _download_module_path _download_root)
         ${_download_root}
   )
 
-  add_subdirectory(
-    ${_download_root}/clblast-src
-    ${_download_root}/clblast-build
-  )
+  set(TUNERS OFF)
+  add_subdirectory(${_download_root}/clblast-src)
 
   include_directories("${clblast_SOURCE_DIR}/include")
 endmacro()

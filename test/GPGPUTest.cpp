@@ -123,7 +123,7 @@ void test_gemm(const size_t N) {
 }
 
 TEST(GPGPU, GEMMPerformance) {
-    for (int n = 512; n <= 8192; n *= 2) {
+    for (int n = 512; n <= 2048; n *= 2) {
         test_gemm(n);
     }
 }

@@ -9,6 +9,8 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR})
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR})
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR})
 
+set(CMAKE_MACOSX_RPATH 1)
+
 set(CMAKE_MODULE_PATH
   ${CMAKE_CURRENT_LIST_DIR}/cmake
   ${CMAKE_MODULE_PATH}
@@ -56,7 +58,7 @@ enable_testing()
 add_subdirectory(test)
 
 add_executable(demo main.cpp)
-target_link_libraries(demo dlfl)
+target_link_libraries(demo dlfl ${TBB_LIBS})
 
 if (USE_MKL)
   target_link_libraries(demo ${MKL_LIBRARIES})
