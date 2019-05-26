@@ -199,6 +199,16 @@ public:
     static const CUdeviceptr* unwrap(const raw::Buffer& buffer) {
         return &reinterpret_cast<const cuBuffer&>(buffer).m_buffer;
     }
+
+    template <typename T>
+    static CUdeviceptr* unwrap(gpgpu::Buffer<T>& buffer) {
+        return unwrap(buffer.raw());
+    }
+
+    template <typename T>
+    static const CUdeviceptr* unwrap(const gpgpu::Buffer<T>& buffer) {
+        return unwrap(buffer.raw());
+    }
 };
 
 class cuProgram final : public raw::Program {

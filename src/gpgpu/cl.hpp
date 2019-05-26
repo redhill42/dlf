@@ -223,6 +223,15 @@ public:
         return &reinterpret_cast<const clBuffer&>(raw).m_buffer;
     }
 
+    template <typename T>
+    static cl_mem* unwrap(gpgpu::Buffer<T>& buffer) {
+        return unwrap(buffer.raw());
+    }
+
+    template <typename T>
+    static const cl_mem* unwrap(const gpgpu::Buffer<T>& buffer) {
+        return unwrap(buffer.raw());
+    }
 };
 
 class clProgram final : public raw::Program {

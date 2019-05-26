@@ -1,6 +1,8 @@
 #ifndef KNERON_OS_BLAS_H
 #define KNERON_OS_BLAS_H
 
+#include <complex>
+
 #if HAS_MKL
 #include <mkl.h>
 
