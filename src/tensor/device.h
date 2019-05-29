@@ -4,6 +4,7 @@
 #include "tensor/shape.h"
 #include "tensor/host.h"
 #include "gpgpu.h"
+#include "gpblas.h"
 
 namespace tensor {
 
@@ -140,7 +141,7 @@ public:
      */
     void copyTo(DevTensor<T>& dest) const {
         assert(m_shape == dest.shape());
-        m_data.copy(m_queue, dest.buffer(), size());
+        m_data.copyTo(m_queue, dest.buffer(), size());
     }
 
     /**
@@ -148,7 +149,7 @@ public:
      */
     void copyToAsync(DevTensor<T>& dest) const {
         assert(m_shape == dest.shape());
-        m_data.copyAsync(m_queue, dest.buffer(), size());
+        m_data.copyToAsync(m_queue, dest.buffer(), size());
     }
 
     /**
@@ -156,7 +157,7 @@ public:
      */
     DevTensor<T> copy() const {
         DevTensor<T> dest(m_shape, m_queue);
-        m_data.copy(m_queue, dest.buffer(), size());
+        m_data.copyTo(m_queue, dest.buffer(), size());
         return dest;
     }
 
@@ -165,7 +166,7 @@ public:
      */
     DevTensor<T> copyAsync() const {
         DevTensor<T> dest(m_shape, m_queue);
-        m_data.copyAsync(m_queue, dest.buffer(), size());
+        m_data.copyToAsync(m_queue, dest.buffer(), size());
         return dest;
     }
 
@@ -206,7 +207,7 @@ public:
 template <typename T>
 inline DevTensor<T>& DevTensor<T>::operator+=(const DevTensor<T>& rhs) {
     assert(m_shape == rhs.shape());
-    gpgpu::blas::axpy(size(), T(1), rhs.buffer(), 1, buffer(), 1, m_queue);
+    gpgpu::blas::axpy(size(), T(1), rhs.buffer(), 0, 1, buffer(), 0, 1, m_queue);
     return *this;
 }
 
@@ -238,7 +239,7 @@ inline DevTensor<T> operator+(DevTensor<T>&& lhs, DevTensor<T>&& rhs) {
 template <typename T>
 inline DevTensor<T>& DevTensor<T>::operator-=(const DevTensor<T>& rhs) {
     assert(m_shape == rhs.shape());
-    gpgpu::blas::axpy(size(), T(-1), rhs.buffer(), 1, buffer(), 1, m_queue);
+    gpgpu::blas::axpy(size(), T(-1), rhs.buffer(), 0, 1, buffer(), 0, 1, m_queue);
     return *this;
 }
 
@@ -270,7 +271,7 @@ inline DevTensor<T> operator-(DevTensor<T>&& lhs, DevTensor<T>&& rhs) {
 
 template <typename T>
 inline DevTensor<T>& DevTensor<T>::operator*=(const T& rhs) {
-    gpgpu::blas::scal(size(), rhs, buffer(), 1, m_queue);
+    gpgpu::blas::scal(size(), rhs, buffer(), 0, 1, m_queue);
     return *this;
 }
 
@@ -316,7 +317,7 @@ void inner(const DevTensor<T>& A, const DevTensor<T>& B, DevTensor<T>* C) {
         if (A.is_vector()) {
             assert(n == A.shape()[0]);
             assert(C->is_vector() && 1 == C->shape()[0]);
-            gpgpu::blas::dot(n, A.buffer(), 1, B.buffer(), 1, C->buffer(), q);
+            gpgpu::blas::dot(n, A.buffer(), 0, 1, B.buffer(), 0, 1, C->buffer(), 0, q);
             return;
         }
 
@@ -325,12 +326,12 @@ void inner(const DevTensor<T>& A, const DevTensor<T>& B, DevTensor<T>* C) {
             auto m = A.shape()[0];
             assert(n == A.shape()[1]);
             assert(C->is_vector() && m == C->shape()[0]);
-            gpgpu::blas::gemv(blas::Layout::RowMajor,
-                              blas::Transpose::NoTrans,
+            gpgpu::blas::gemv(gpgpu::blas::Layout::RowMajor,
+                              gpgpu::blas::Transpose::NoTrans,
                               m, n, T(1),
-                              A.buffer(), n,
-                              B.buffer(), 1, T(0),
-                              C->buffer(), 1, q);
+                              A.buffer(), 0, n,
+                              B.buffer(), 0, 1, T(0),
+                              C->buffer(), 0, 1, q);
             return;
         }
 
@@ -356,12 +357,12 @@ void inner(const DevTensor<T>& A, const DevTensor<T>& B, DevTensor<T>* C) {
             return;
         }
 
-        gpgpu::blas::gemm(blas::Layout::RowMajor,
-                          blas::Transpose::NoTrans,
-                          blas::Transpose::NoTrans,
+        gpgpu::blas::gemm(gpgpu::blas::Layout::RowMajor,
+                          gpgpu::blas::Transpose::NoTrans,
+                          gpgpu::blas::Transpose::NoTrans,
                           m, n, k,
-                          T(1), A.buffer(), k, B.buffer(), n,
-                          T(0), C->buffer(), n, q);
+                          T(1), A.buffer(), 0, k, B.buffer(), 0, n,
+                          T(0), C->buffer(), 0, n, q);
     }
 }
 
@@ -412,8 +413,9 @@ DevTensor<T> inner(const DevTensor<T>& A, const DevTensor<T>& B) {
  * General matrix multiplication.
  */
 template <typename T>
-void gemm(const DevTensor<T>& A, const DevTensor<T>& B, DevTensor<T>* C,
-          const T& alpha, const T& beta, bool transA = false, bool transB = false)
+void gemm(const T& alpha, const DevTensor<T>& A, const DevTensor<T>& B,
+          const T& beta, DevTensor<T>* C,
+          bool transA = false, bool transB = false)
 {
     auto q = A.queue();
     assert(q == B.queue() && q == C->queue());
@@ -430,22 +432,23 @@ void gemm(const DevTensor<T>& A, const DevTensor<T>& B, DevTensor<T>* C,
     assert(k == p);
     assert(C->shape() == Shape({m, n}));
 
-    gpgpu::blas::gemm(blas::Layout::RowMajor,
-                      transA ? blas::Transpose::Trans : blas::Transpose::NoTrans,
-                      transB ? blas::Transpose::Trans : blas::Transpose::NoTrans,
+    gpgpu::blas::gemm(gpgpu::blas::Layout::RowMajor,
+                      transA ? gpgpu::blas::Transpose::Trans : gpgpu::blas::Transpose::NoTrans,
+                      transB ? gpgpu::blas::Transpose::Trans : gpgpu::blas::Transpose::NoTrans,
                       m, n, k,
                       alpha,
-                      A.buffer(), A.shape()[1],
-                      B.buffer(), B.shape()[1],
+                      A.buffer(), 0, A.shape()[1],
+                      B.buffer(), 0, B.shape()[1],
                       beta,
-                      C->buffer(), n, q);
+                      C->buffer(), 0, n, q);
 }
 
 template <typename T>
-DevTensor<T> gemm(const DevTensor<T>& A, const DevTensor<T>& B, DevTensor<T>& C,
-                  const T& alpha, const T& beta, bool transA = false, bool transB = false) {
+DevTensor<T> gemm(const T& alpha, const DevTensor<T>& A, const DevTensor<T>& B,
+                  const T& beta, DevTensor<T>& C,
+                  bool transA = false, bool transB = false) {
     DevTensor<T> R = C.copy();
-    gemm(A, B, &R, alpha, beta, transA, transB);
+    gemm(alpha, A, B, beta, &R, transA, transB);
     return R;
 }
 

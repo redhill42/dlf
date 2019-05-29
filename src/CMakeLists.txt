@@ -55,5 +55,5 @@ target_link_libraries(
     ${MKL_LIBRARIES}
     ${OpenCL_LIBRARY}
     ${CUDA_LIBRARIES}
-    clblast
+    gpgpu
 )

@@ -952,8 +952,9 @@ Tensor<T> pow(const Tensor<T>& x, long n) {
  * General matrix multiplication.
  */
 template <typename T>
-void gemm(const Tensor<T>& A, const Tensor<T>& B, Tensor<T>* C,
-          const T& alpha, const T& beta, bool transA = false, bool transB = false)
+void gemm(const T& alpha, const Tensor<T>& A, const Tensor<T>& B,
+          const T& beta, Tensor<T>* C,
+          bool transA = false, bool transB = false)
 {
     assert(A.is_matrix() && B.is_matrix() && C->is_matrix());
     auto [m, k] = A.shape().extent();
@@ -1006,11 +1007,12 @@ void gemm(const Tensor<T>& A, const Tensor<T>& B, Tensor<T>* C,
 }
 
 template <typename T>
-Tensor<T> gemm(const Tensor<T>& A, const Tensor<T>& B, const Tensor<T>& C,
-               const T& alpha, const T& beta, bool transA = false, bool transB = false)
+Tensor<T> gemm(const T& alpha, const Tensor<T>& A, const Tensor<T>& B,
+               const T& beta, const Tensor<T>& C,
+               bool transA = false, bool transB = false)
 {
     Tensor<T> R = C;
-    gemm(A, B, &R, alpha, beta, transA, transB);
+    gemm(alpha, A, B, beta, &R, transA, transB);
     return R;
 }
 

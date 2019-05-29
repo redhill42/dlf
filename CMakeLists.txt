@@ -46,10 +46,9 @@ find_cuda_helper_libs("cublas")
 set(CUDA_LIBRARIES ${CUDA_cuda_LIBRARY} ${CUDA_nvrtc_LIBRARY} ${CUDA_cublas_LIBRARY})
 include_directories(${CUDA_INCLUDE_DIRS})
 
-include(cmake/clblast.cmake)
-fetch_clblast(${PROJECT_SOURCE_DIR}/cmake ${PROJECT_BINARY_DIR}/clblast)
-
 # add sub-directories that we want CMake to scan
+add_subdirectory(gpgpu)
+include_directories(${gpgpu_SOURCE_DIR}/include)
 add_subdirectory(src)
 
 include(cmake/googletest.cmake)
@@ -58,7 +57,7 @@ enable_testing()
 add_subdirectory(test)
 
 add_executable(demo main.cpp)
-target_link_libraries(demo dlfl ${TBB_LIBS})
+target_link_libraries(demo gpgpu dlfl ${TBB_LIBS})
 
 if (USE_MKL)
   target_link_libraries(demo ${MKL_LIBRARIES})

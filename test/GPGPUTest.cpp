@@ -60,7 +60,7 @@ TEST_F(GPGPUTest, CompileProgram) {
     // Creates a 1-dimensional thread configuration with thread-blocks/work-groups
     // of 256 threads and a total number of threads equal to the number of elements
     // in the input/output vectors.
-    const auto kWorkGroupSize = device.maxWorkItemSizes();
+    const auto kWorkGroupSize = 128;
 
     // Enqueues the kernel. Note that launching the kernel is always asynchronous
     // and thus requires finishing the queue in order to complete the operation.
@@ -190,6 +190,6 @@ TEST_F(GPGPUTest, GEMM) {
     auto dev_B = DevTensor(B, queue);
     auto dev_C = DevTensor(C, queue);
 
-    auto dev_T = gemm(dev_A, dev_B, dev_C, 2.0f, 3.0f);
+    auto dev_T = gemm(2.0f, dev_A, dev_B, 3.0f, dev_C);
     EXPECT_THAT(dev_T.read(), R);
 }

@@ -477,10 +477,10 @@ static void gemm_test() {
          933,  980, 715,  923
     });
 
-    EXPECT_THAT(gemm(a, b, c, T(2), T(3), false, false), r);
-    EXPECT_THAT(gemm(transpose(a), b, c, T(2), T(3), true, false), r);
-    EXPECT_THAT(gemm(a, transpose(b), c, T(2), T(3), false, true), r);
-    EXPECT_THAT(gemm(transpose(a), transpose(b), c, T(2), T(3), true, true), r);
+    EXPECT_THAT(gemm(T(2), a, b, T(3), c, false, false), r);
+    EXPECT_THAT(gemm(T(2), transpose(a), b, T(3), c, true, false), r);
+    EXPECT_THAT(gemm(T(2), a, transpose(b), T(3), c, false, true), r);
+    EXPECT_THAT(gemm(T(2), transpose(a), transpose(b), T(3), c, true, true), r);
 }
 
 TEST_F(TensorTest, Gemm) {
@@ -693,21 +693,4 @@ TEST_F(TensorTest, Format) {
         "]");
 
     EXPECT_EQ(format(Tensor<int>()), "");
-}
-
-TEST(Tensor, MatrixMultiplicationPerformance) {
-    {
-        auto A = Tensor<double>::random({100, 100}, -100, 100);
-        auto B = Tensor<double>::random({100, 100}, -100, 100);
-        timing("Small matrix multiplication", 10000, [&]() {
-            inner(A, B);
-        });
-    }
-    {
-        auto A = Tensor<double>::random({1024, 1024}, -100, 100);
-        auto B = Tensor<double>::random({1024, 1024}, -100, 100);
-        timing("Big matrix multiplication", 100, [&]() {
-            inner(A, B);
-        });
-    }
 }
