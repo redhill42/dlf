@@ -695,6 +695,12 @@ void gemmStridedBatched(const Layout layout, const Transpose a_transpose, const 
                         const size_t batch_count,
                         const Queue& queue, Event* event = nullptr);
 
+// Vector clamp (non-BLAS function): SCLAMP/DCLAMP/HCLAMP
+template <typename T>
+void clamp(const size_t n, const T min, const T max,
+           Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
+           const Queue& queue, Event* event = nullptr);
+
 // =================================================================================================
 
 // Retrieves the required size of the temporary buffer for the GEMM kernel (optional)

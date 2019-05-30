@@ -75,5 +75,6 @@
 #include "routines/levelx/xaxpybatched.hpp"
 #include "routines/levelx/xgemmbatched.hpp"
 #include "routines/levelx/xgemmstridedbatched.hpp"
+#include "routines/levelx/xclamp.hpp"
 
 #endif // GPGPU_BLAS_ROUTINES_ROUTINES_H_
