@@ -202,12 +202,15 @@ static void clamp_test(const size_t n, const gpgpu::Queue& queue) {
 
     auto A = Tensor<float>::random({n}, -10.0f, 10.0f);
     auto dev_A = DevTensor(A, queue);
-    gpgpu::blas::clamp(A.size(), min, max, dev_A.buffer(), 0, 1, queue);
+
+    clamp(dev_A, min, max);
     auto B = dev_A.read();
 
-    for (size_t i = 0; i < B.size(); i++) {
-        EXPECT_THAT(B(i), AllOf(Ge(min), Le(max)));
-    }
+    clamp(A, min, max);
+
+    EXPECT_THAT(A, Each(AllOf(Ge(min), Le(max))));
+    EXPECT_THAT(B, Each(AllOf(Ge(min), Le(max))));
+    EXPECT_EQ(A, B);
 }
 
 TEST_F(GPGPUTest, Xclamp) {

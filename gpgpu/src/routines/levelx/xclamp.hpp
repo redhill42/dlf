@@ -12,7 +12,7 @@ public:
     Xclamp(const Queue& queue, Event* event, const std::string& name = "CLAMP");
 
     // Templated-precision implementation of the routine
-    void DoClamp(const size_t n, const T min, const T max,
+    void DoClamp(const size_t n, const T minval, const T maxval,
                  Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc);
 };
 

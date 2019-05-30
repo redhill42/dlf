@@ -16,7 +16,7 @@ Xclamp<T>::Xclamp(const Queue& queue, Event* event, const std::string& name)
 
 // The main routine
 template <typename T>
-void Xclamp<T>::DoClamp(const size_t n, const T min, const T max,
+void Xclamp<T>::DoClamp(const size_t n, const T minval, const T maxval,
                         Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc) {
     // Make sure all dimensions are larger than zero
     if (n == 0) {
@@ -34,8 +34,8 @@ void Xclamp<T>::DoClamp(const size_t n, const T min, const T max,
     if (use_fast_kernel) {
         auto kernel = program_.getKernel("XclampFast");
         kernel.setArguments(static_cast<int>(n),
-                            GetRealArg(min),
-                            GetRealArg(max),
+                            GetRealArg(minval),
+                            GetRealArg(maxval),
                             x_buffer);
 
         auto global = std::vector<size_t>{CeilDiv(n, db_["WPT"]*db_["VW"])};
@@ -44,8 +44,8 @@ void Xclamp<T>::DoClamp(const size_t n, const T min, const T max,
     } else {
         auto kernel = program_.getKernel("Xclamp");
         kernel.setArguments(static_cast<int>(n),
-                            GetRealArg(min),
-                            GetRealArg(max),
+                            GetRealArg(minval),
+                            GetRealArg(maxval),
                             x_buffer,
                             static_cast<int>(x_offset),
                             static_cast<int>(x_inc));

@@ -2314,11 +2314,11 @@ template void PUBLIC_API gemmStridedBatched<half>   (const Layout, const Transpo
 
 // Vector clamp (non-BLAS function): SCLAMP/DCLAMP/HCLAMP
 template <typename T>
-void clamp(const size_t n, const T min, const T max,
+void clamp(const size_t n, const T minval, const T maxval,
            Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
            const Queue& queue, Event* event) {
     auto routine = Xclamp<T>(queue, event);
-    routine.DoClamp(n, min, max, x_buffer, x_offset, x_inc);
+    routine.DoClamp(n, minval, maxval, x_buffer, x_offset, x_inc);
 }
 
 template void PUBLIC_API clamp<float> (const size_t, const float, const float,

@@ -4,30 +4,30 @@ R"(
 
 // Full version of the kernel with offsets and strided accesses
 __kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
-void Xclamp(const int n, const real_arg arg_min, const real_arg arg_max,
+void Xclamp(const int n, const real_arg arg_minval, const real_arg arg_maxval,
             __global real* xgm, const int x_offset, const int x_inc) {
-  const real min = GetRealArg(arg_min);
-  const real max = GetRealArg(arg_max);
+  const real minval = GetRealArg(arg_minval);
+  const real maxval = GetRealArg(arg_maxval);
 
   // Loops over the work that needs to be done (allows for an arbitrary number of threads)
   for (int id = get_global_id(0); id<n; id += get_global_size(0)) {
     const int gid = id * x_inc + x_offset;
-    xgm[gid] = clamp(xgm[gid], min, max);
+    xgm[gid] = clamp(xgm[gid], minval, maxval);
   }
 }
 
 // Faster version of the kernel without offsets and strided accesses. Also assumes that 'n' is
 // dividable by 'VW', 'WGS' and 'WPT'.
 __kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
-void XclampFast(const int n, const real_arg arg_min, const real_arg arg_max,
+void XclampFast(const int n, const real_arg arg_minval, const real_arg arg_maxval,
                __global realV* xgm) {
-  const real min = GetRealArg(arg_min);
-  const real max = GetRealArg(arg_max);
+  const real minval = GetRealArg(arg_minval);
+  const real maxval = GetRealArg(arg_maxval);
 
   #pragma unroll
   for (int _w = 0; _w < WPT; _w += 1) {
     const int id = _w*get_global_size(0) + get_global_id(0);
-    xgm[id] = clamp(xgm[id], min, max);
+    xgm[id] = clamp(xgm[id], minval, maxval);
   }
 }
 
