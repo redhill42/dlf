@@ -705,12 +705,12 @@ void clamp(const size_t n, const T min, const T max,
 
 // Retrieves the required size of the temporary buffer for the GEMM kernel (optional)
 template <typename T>
-void gemmTempBufferSize(const Layout layout, const Transpose a_transpose, const Transpose b_transpose,
-                        const size_t m, const size_t n, const size_t k,
-                        const size_t a_offset, const size_t a_ld,
-                        const size_t b_offset, const size_t b_ld,
-                        const size_t c_offset, const size_t c_ld,
-                        const Queue& queue, size_t& temp_buffer_size);
+size_t gemmTempBufferSize(const Layout layout, const Transpose a_transpose, const Transpose b_transpose,
+                          const size_t m, const size_t n, const size_t k,
+                          const size_t a_offset, const size_t a_ld,
+                          const size_t b_offset, const size_t b_ld,
+                          const size_t c_offset, const size_t c_ld,
+                          const Queue& queue);
 
 // =================================================================================================
 

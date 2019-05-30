@@ -34,11 +34,11 @@ void rotg(Buffer<T>&, const size_t,
   throw BLASError(StatusCode::kNotImplemented);
 }
 
-template void PUBLIC_API rotg<float>(Buffer<float>&, const size_t,
-                                     Buffer<float>&, const size_t,
-                                     Buffer<float>&, const size_t,
-                                     Buffer<float>&, const size_t,
-                                     const Queue&, Event*);
+template void PUBLIC_API rotg<float> (Buffer<float>&, const size_t,
+                                      Buffer<float>&, const size_t,
+                                      Buffer<float>&, const size_t,
+                                      Buffer<float>&, const size_t,
+                                      const Queue&, Event*);
 template void PUBLIC_API rotg<double>(Buffer<double>&, const size_t,
                                       Buffer<double>&, const size_t,
                                       Buffer<double>&, const size_t,
@@ -56,12 +56,12 @@ void rotmg(Buffer<T>&, const size_t,
   throw BLASError(StatusCode::kNotImplemented);
 }
 
-template void PUBLIC_API rotmg<float>(Buffer<float>&, const size_t,
-                                      Buffer<float>&, const size_t,
-                                      Buffer<float>&, const size_t,
-                                      const Buffer<float>&, const size_t,
-                                      Buffer<float>&, const size_t,
-                                      const Queue&, Event*);
+template void PUBLIC_API rotmg<float> (Buffer<float>&, const size_t,
+                                       Buffer<float>&, const size_t,
+                                       Buffer<float>&, const size_t,
+                                       const Buffer<float>&, const size_t,
+                                       Buffer<float>&, const size_t,
+                                       const Queue&, Event*);
 template void PUBLIC_API rotmg<double>(Buffer<double>&, const size_t,
                                        Buffer<double>&, const size_t,
                                        Buffer<double>&, const size_t,
@@ -74,23 +74,20 @@ template <typename T>
 void rot(const size_t,
          Buffer<T>&, const size_t, const size_t,
          Buffer<T>&, const size_t, const size_t,
-         const T,
-         const T,
+         const T, const T,
          const Queue&, Event*) {
   throw BLASError(StatusCode::kNotImplemented);
 }
 
-template void PUBLIC_API rot<float>(const size_t,
-                                    Buffer<float>&, const size_t, const size_t,
-                                    Buffer<float>&, const size_t, const size_t,
-                                    const float,
-                                    const float,
-                                    const Queue&, Event*);
+template void PUBLIC_API rot<float> (const size_t,
+                                     Buffer<float>&, const size_t, const size_t,
+                                     Buffer<float>&, const size_t, const size_t,
+                                     const float, const float,
+                                     const Queue&, Event*);
 template void PUBLIC_API rot<double>(const size_t,
                                      Buffer<double>&, const size_t, const size_t,
                                      Buffer<double>&, const size_t, const size_t,
-                                     const double,
-                                     const double,
+                                     const double, const double,
                                      const Queue&, Event*);
 
 // Apply modified givens plane rotation: SROTM/DROTM
@@ -103,11 +100,11 @@ void rotm(const size_t,
   throw BLASError(StatusCode::kNotImplemented);
 }
 
-template void PUBLIC_API rotm<float>(const size_t,
-                                     Buffer<float>&, const size_t, const size_t,
-                                     Buffer<float>&, const size_t, const size_t,
-                                     Buffer<float>&, const size_t,
-                                     const Queue&, Event*);
+template void PUBLIC_API rotm<float> (const size_t,
+                                      Buffer<float>&, const size_t, const size_t,
+                                      Buffer<float>&, const size_t, const size_t,
+                                      Buffer<float>&, const size_t,
+                                      const Queue&, Event*);
 template void PUBLIC_API rotm<double>(const size_t,
                                       Buffer<double>&, const size_t, const size_t,
                                       Buffer<double>&, const size_t, const size_t,
@@ -126,52 +123,51 @@ void swap(const size_t n,
                    y_buffer, y_offset, y_inc);
 }
 
-template void PUBLIC_API swap<float>(const size_t,
-                                     Buffer<float>&, const size_t, const size_t,
-                                     Buffer<float>&, const size_t, const size_t,
-                                     const Queue&, Event*);
-template void PUBLIC_API swap<double>(const size_t,
-                                      Buffer<double>&, const size_t, const size_t,
-                                      Buffer<double>&, const size_t, const size_t,
-                                      const Queue&, Event*);
-template void PUBLIC_API swap<float2>(const size_t,
-                                      Buffer<float2>&, const size_t, const size_t,
-                                      Buffer<float2>&, const size_t, const size_t,
-                                      const Queue&, Event*);
+template void PUBLIC_API swap<float>  (const size_t,
+                                       Buffer<float>&, const size_t, const size_t,
+                                       Buffer<float>&, const size_t, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API swap<double> (const size_t,
+                                       Buffer<double>&, const size_t, const size_t,
+                                       Buffer<double>&, const size_t, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API swap<float2> (const size_t,
+                                       Buffer<float2>&, const size_t, const size_t,
+                                       Buffer<float2>&, const size_t, const size_t,
+                                       const Queue&, Event*);
 template void PUBLIC_API swap<double2>(const size_t,
                                        Buffer<double2>&, const size_t, const size_t,
                                        Buffer<double2>&, const size_t, const size_t,
                                        const Queue&, Event*);
-template void PUBLIC_API swap<half>(const size_t,
-                                    Buffer<half>&, const size_t, const size_t,
-                                    Buffer<half>&, const size_t, const size_t,
-                                    const Queue&, Event*);
+template void PUBLIC_API swap<half>   (const size_t,
+                                       Buffer<half>&, const size_t, const size_t,
+                                       Buffer<half>&, const size_t, const size_t,
+                                       const Queue&, Event*);
 
 // Vector scaling: SSCAL/DSCAL/CSCAL/ZSCAL/HSCAL
 template <typename T>
-void scal(const size_t n,
-          const T alpha,
+void scal(const size_t n, const T alpha,
           Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
           const Queue& queue, Event* event) {
     auto routine = Xscal<T>(queue, event);
     routine.DoScal(n, alpha, x_buffer, x_offset, x_inc);
 }
 
-template void PUBLIC_API scal<float>(const size_t, const float,
-                                     Buffer<float>&, const size_t, const size_t,
-                                     const Queue&, Event*);
-template void PUBLIC_API scal<double>(const size_t, const double,
-                                      Buffer<double>&, const size_t, const size_t,
-                                      const Queue&, Event*);
-template void PUBLIC_API scal<float2>(const size_t, const float2,
-                                      Buffer<float2>&, const size_t, const size_t,
-                                      const Queue&, Event*);
+template void PUBLIC_API scal<float>  (const size_t, const float,
+                                       Buffer<float>&, const size_t, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API scal<double> (const size_t, const double,
+                                       Buffer<double>&, const size_t, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API scal<float2> (const size_t, const float2,
+                                       Buffer<float2>&, const size_t, const size_t,
+                                       const Queue&, Event*);
 template void PUBLIC_API scal<double2>(const size_t, const double2,
                                        Buffer<double2>&, const size_t, const size_t,
                                        const Queue&, Event*);
-template void PUBLIC_API scal<half>(const size_t, const half,
-                                    Buffer<half>&, const size_t, const size_t,
-                                    const Queue&, Event*);
+template void PUBLIC_API scal<half>   (const size_t, const half,
+                                       Buffer<half>&, const size_t, const size_t,
+                                       const Queue&, Event*);
 
 // Vector copy: SCOPY/DCOPY/CCOPY/ZCOPY/HCOPY
 template <typename T>
@@ -185,66 +181,59 @@ void copy(const size_t n,
                    y_buffer, y_offset, y_inc);
 }
 
-template void PUBLIC_API copy<float>(const size_t,
-                                     const Buffer<float>&, const size_t, const size_t,
-                                     Buffer<float>&, const size_t, const size_t,
-                                     const Queue&, Event*);
-template void PUBLIC_API copy<double>(const size_t,
-                                      const Buffer<double>&, const size_t, const size_t,
-                                      Buffer<double>&, const size_t, const size_t,
-                                      const Queue&, Event*);
-template void PUBLIC_API copy<float2>(const size_t,
-                                      const Buffer<float2>&, const size_t, const size_t,
-                                      Buffer<float2>&, const size_t, const size_t,
-                                      const Queue&, Event*);
+template void PUBLIC_API copy<float>  (const size_t,
+                                       const Buffer<float>&, const size_t, const size_t,
+                                       Buffer<float>&, const size_t, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API copy<double> (const size_t,
+                                       const Buffer<double>&, const size_t, const size_t,
+                                       Buffer<double>&, const size_t, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API copy<float2> (const size_t,
+                                       const Buffer<float2>&, const size_t, const size_t,
+                                       Buffer<float2>&, const size_t, const size_t,
+                                       const Queue&, Event*);
 template void PUBLIC_API copy<double2>(const size_t,
                                        const Buffer<double2>&, const size_t, const size_t,
                                        Buffer<double2>&, const size_t, const size_t,
                                        const Queue&, Event*);
-template void PUBLIC_API copy<half>(const size_t,
-                                    const Buffer<half>&, const size_t, const size_t,
-                                    Buffer<half>&, const size_t, const size_t,
-                                    const Queue&, Event*);
+template void PUBLIC_API copy<half>   (const size_t,
+                                       const Buffer<half>&, const size_t, const size_t,
+                                       Buffer<half>&, const size_t, const size_t,
+                                       const Queue&, Event*);
 
 // Vector-times-constant plus vector: SAXPY/DAXPY/CAXPY/ZAXPY/HAXPY
 template <typename T>
-void axpy(const size_t n,
-          const T alpha,
+void axpy(const size_t n, const T alpha,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
           Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
           const Queue& queue, Event* event) {
     auto routine = Xaxpy<T>(queue, event);
-    routine.DoAxpy(n,
-                   alpha,
+    routine.DoAxpy(n, alpha,
                    x_buffer, x_offset, x_inc,
                    y_buffer, y_offset, y_inc);
 }
 
-template void PUBLIC_API axpy<float>(const size_t,
-                                     const float,
-                                     const Buffer<float>&, const size_t, const size_t,
-                                     Buffer<float>&, const size_t, const size_t,
-                                     const Queue&, Event*);
-template void PUBLIC_API axpy<double>(const size_t,
-                                      const double,
-                                      const Buffer<double>&, const size_t, const size_t,
-                                      Buffer<double>&, const size_t, const size_t,
-                                      const Queue&, Event*);
-template void PUBLIC_API axpy<float2>(const size_t,
-                                      const float2,
-                                      const Buffer<float2>&, const size_t, const size_t,
-                                      Buffer<float2>&, const size_t, const size_t,
-                                      const Queue&, Event*);
-template void PUBLIC_API axpy<double2>(const size_t,
-                                       const double2,
+template void PUBLIC_API axpy<float>  (const size_t, const float,
+                                       const Buffer<float>&, const size_t, const size_t,
+                                       Buffer<float>&, const size_t, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API axpy<double> (const size_t, const double,
+                                       const Buffer<double>&, const size_t, const size_t,
+                                       Buffer<double>&, const size_t, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API axpy<float2> (const size_t, const float2,
+                                       const Buffer<float2>&, const size_t, const size_t,
+                                       Buffer<float2>&, const size_t, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API axpy<double2>(const size_t, const double2,
                                        const Buffer<double2>&, const size_t, const size_t,
                                        Buffer<double2>&, const size_t, const size_t,
                                        const Queue&, Event*);
-template void PUBLIC_API axpy<half>(const size_t,
-                                    const half,
-                                    const Buffer<half>&, const size_t, const size_t,
-                                    Buffer<half>&, const size_t, const size_t,
-                                    const Queue&, Event*);
+template void PUBLIC_API axpy<half>   (const size_t, const half,
+                                       const Buffer<half>&, const size_t, const size_t,
+                                       Buffer<half>&, const size_t, const size_t,
+                                       const Queue&, Event*);
 
 // Dot product of two vectors: SDOT/DDOT/HDOT
 template <typename T>
@@ -260,21 +249,21 @@ void dot(const size_t n,
                   dot_buffer, dot_offset);
 }
 
-template void PUBLIC_API dot<float>(const size_t,
-                                    const Buffer<float>&, const size_t, const size_t,
-                                    const Buffer<float>&, const size_t, const size_t,
-                                    Buffer<float>&, const size_t,
-                                    const Queue&, Event*);
-template void PUBLIC_API dot<double>(const size_t,
-                                     const Buffer<double>&, const size_t, const size_t,
-                                     const Buffer<double>&, const size_t, const size_t,
-                                     Buffer<double>&, const size_t,
-                                     const Queue&, Event*);
-template void PUBLIC_API dot<half>(const size_t,
-                                   const Buffer<half>&, const size_t, const size_t,
-                                   const Buffer<half>&, const size_t, const size_t,
-                                   Buffer<half>&, const size_t,
-                                   const Queue&, Event*);
+template void PUBLIC_API dot<float>  (const size_t,
+                                      const Buffer<float>&, const size_t, const size_t,
+                                      const Buffer<float>&, const size_t, const size_t,
+                                      Buffer<float>&, const size_t,
+                                      const Queue&, Event*);
+template void PUBLIC_API dot<double> (const size_t,
+                                      const Buffer<double>&, const size_t, const size_t,
+                                      const Buffer<double>&, const size_t, const size_t,
+                                      Buffer<double>&, const size_t,
+                                      const Queue&, Event*);
+template void PUBLIC_API dot<half>   (const size_t,
+                                      const Buffer<half>&, const size_t, const size_t,
+                                      const Buffer<half>&, const size_t, const size_t,
+                                      Buffer<half>&, const size_t,
+                                      const Queue&, Event*);
 
 // Dot product of two complex vectors: CDOTU/ZDOTU
 template <typename T>
@@ -290,11 +279,11 @@ void dotu(const size_t n,
                    dot_buffer, dot_offset);
 }
 
-template void PUBLIC_API dotu<float2>(const size_t,
-                                      const Buffer<float2>&, const size_t, const size_t,
-                                      const Buffer<float2>&, const size_t, const size_t,
-                                      Buffer<float2>&, const size_t,
-                                      const Queue&, Event*);
+template void PUBLIC_API dotu<float2> (const size_t,
+                                       const Buffer<float2>&, const size_t, const size_t,
+                                       const Buffer<float2>&, const size_t, const size_t,
+                                       Buffer<float2>&, const size_t,
+                                       const Queue&, Event*);
 template void PUBLIC_API dotu<double2>(const size_t,
                                        const Buffer<double2>&, const size_t, const size_t,
                                        const Buffer<double2>&, const size_t, const size_t,
@@ -315,11 +304,11 @@ void dotc(const size_t n,
                    dot_buffer, dot_offset);
 }
 
-template void PUBLIC_API dotc<float2>(const size_t,
-                                      const Buffer<float2>&, const size_t, const size_t,
-                                      const Buffer<float2>&, const size_t, const size_t,
-                                      Buffer<float2>&, const size_t,
-                                      const Queue&, Event*);
+template void PUBLIC_API dotc<float2> (const size_t,
+                                       const Buffer<float2>&, const size_t, const size_t,
+                                       const Buffer<float2>&, const size_t, const size_t,
+                                       Buffer<float2>&, const size_t,
+                                       const Queue&, Event*);
 template void PUBLIC_API dotc<double2>(const size_t,
                                        const Buffer<double2>&, const size_t, const size_t,
                                        const Buffer<double2>&, const size_t, const size_t,
@@ -338,26 +327,26 @@ void nrm2(const size_t n,
                    nrm2_buffer, nrm2_offset);
 }
 
-template void PUBLIC_API nrm2<float>(const size_t,
-                                     const Buffer<float>&, const size_t, const size_t,
-                                     Buffer<float>&, const size_t,
-                                     const Queue&, Event*);
-template void PUBLIC_API nrm2<double>(const size_t,
-                                      const Buffer<double>&, const size_t, const size_t,
-                                      Buffer<double>&, const size_t,
-                                      const Queue&, Event*);
-template void PUBLIC_API nrm2<float2>(const size_t,
-                                      const Buffer<float2>&, const size_t, const size_t,
-                                      Buffer<float2>&, const size_t,
-                                      const Queue&, Event*);
+template void PUBLIC_API nrm2<float>  (const size_t,
+                                       const Buffer<float>&, const size_t, const size_t,
+                                       Buffer<float>&, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API nrm2<double> (const size_t,
+                                       const Buffer<double>&, const size_t, const size_t,
+                                       Buffer<double>&, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API nrm2<float2> (const size_t,
+                                       const Buffer<float2>&, const size_t, const size_t,
+                                       Buffer<float2>&, const size_t,
+                                       const Queue&, Event*);
 template void PUBLIC_API nrm2<double2>(const size_t,
                                        const Buffer<double2>&, const size_t, const size_t,
                                        Buffer<double2>&, const size_t,
                                        const Queue&, Event*);
-template void PUBLIC_API nrm2<half>(const size_t,
-                                    const Buffer<half>&, const size_t, const size_t,
-                                    Buffer<half>&, const size_t,
-                                    const Queue&, Event*);
+template void PUBLIC_API nrm2<half>   (const size_t,
+                                       const Buffer<half>&, const size_t, const size_t,
+                                       Buffer<half>&, const size_t,
+                                       const Queue&, Event*);
 
 // Absolute sum of values in a vector: SASUM/DASUM/ScASUM/DzASUM/HASUM
 template <typename T>
@@ -371,26 +360,26 @@ void asum(const size_t n,
                    asum_buffer, asum_offset);
 }
 
-template void PUBLIC_API asum<float>(const size_t,
-                                     const Buffer<float>&, const size_t, const size_t,
-                                     Buffer<float>&, const size_t,
-                                     const Queue&, Event*);
-template void PUBLIC_API asum<double>(const size_t,
-                                      const Buffer<double>&, const size_t, const size_t,
-                                      Buffer<double>&, const size_t,
-                                      const Queue&, Event*);
-template void PUBLIC_API asum<float2>(const size_t,
-                                      const Buffer<float2>&, const size_t, const size_t,
-                                      Buffer<float2>&, const size_t,
-                                      const Queue&, Event*);
+template void PUBLIC_API asum<float>  (const size_t,
+                                       const Buffer<float>&, const size_t, const size_t,
+                                       Buffer<float>&, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API asum<double> (const size_t,
+                                       const Buffer<double>&, const size_t, const size_t,
+                                       Buffer<double>&, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API asum<float2> (const size_t,
+                                       const Buffer<float2>&, const size_t, const size_t,
+                                       Buffer<float2>&, const size_t,
+                                       const Queue&, Event*);
 template void PUBLIC_API asum<double2>(const size_t,
                                        const Buffer<double2>&, const size_t, const size_t,
                                        Buffer<double2>&, const size_t,
                                        const Queue&, Event*);
-template void PUBLIC_API asum<half>(const size_t,
-                                    const Buffer<half>&, const size_t, const size_t,
-                                    Buffer<half>&, const size_t,
-                                    const Queue&, Event*);
+template void PUBLIC_API asum<half>   (const size_t,
+                                       const Buffer<half>&, const size_t, const size_t,
+                                       Buffer<half>&, const size_t,
+                                       const Queue&, Event*);
 
 // Sum of values in a vector (non-BLAS function): SSUM/DSUM/ScSUM/DzSUM/HSUM
 template <typename T>
@@ -404,26 +393,26 @@ void sum(const size_t n,
                   sum_buffer, sum_offset);
 }
 
-template void PUBLIC_API sum<float>(const size_t,
-                                    const Buffer<float>&, const size_t, const size_t,
-                                    Buffer<float>&, const size_t,
-                                    const Queue&, Event*);
-template void PUBLIC_API sum<double>(const size_t,
-                                     const Buffer<double>&, const size_t, const size_t,
-                                     Buffer<double>&, const size_t,
-                                     const Queue&, Event*);
-template void PUBLIC_API sum<float2>(const size_t,
-                                     const Buffer<float2>&, const size_t, const size_t,
-                                     Buffer<float2>&, const size_t,
-                                     const Queue&, Event*);
+template void PUBLIC_API sum<float>  (const size_t,
+                                      const Buffer<float>&, const size_t, const size_t,
+                                      Buffer<float>&, const size_t,
+                                      const Queue&, Event*);
+template void PUBLIC_API sum<double> (const size_t,
+                                      const Buffer<double>&, const size_t, const size_t,
+                                      Buffer<double>&, const size_t,
+                                      const Queue&, Event*);
+template void PUBLIC_API sum<float2> (const size_t,
+                                      const Buffer<float2>&, const size_t, const size_t,
+                                      Buffer<float2>&, const size_t,
+                                      const Queue&, Event*);
 template void PUBLIC_API sum<double2>(const size_t,
                                       const Buffer<double2>&, const size_t, const size_t,
                                       Buffer<double2>&, const size_t,
                                       const Queue&, Event*);
-template void PUBLIC_API sum<half>(const size_t,
-                                   const Buffer<half>&, const size_t, const size_t,
-                                   Buffer<half>&, const size_t,
-                                   const Queue&, Event*);
+template void PUBLIC_API sum<half>   (const size_t,
+                                      const Buffer<half>&, const size_t, const size_t,
+                                      Buffer<half>&, const size_t,
+                                      const Queue&, Event*);
 
 // Index of absolute maximum value in a vector: iSAMAX/iDAMAX/iCAMAX/iZAMAX/iHAMAX
 template <typename T>
@@ -437,26 +426,26 @@ void amax(const size_t n,
                    imax_buffer, imax_offset);
 }
 
-template void PUBLIC_API amax<float>(const size_t,
-                                     const Buffer<float>&, const size_t, const size_t,
-                                     Buffer<unsigned int>&, const size_t,
-                                     const Queue&, Event*);
-template void PUBLIC_API amax<double>(const size_t,
-                                      const Buffer<double>&, const size_t, const size_t,
-                                      Buffer<unsigned int>&, const size_t,
-                                      const Queue&, Event*);
-template void PUBLIC_API amax<float2>(const size_t,
-                                      const Buffer<float2>&, const size_t, const size_t,
-                                      Buffer<unsigned int>&, const size_t,
-                                      const Queue&, Event*);
+template void PUBLIC_API amax<float>  (const size_t,
+                                       const Buffer<float>&, const size_t, const size_t,
+                                       Buffer<unsigned int>&, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API amax<double> (const size_t,
+                                       const Buffer<double>&, const size_t, const size_t,
+                                       Buffer<unsigned int>&, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API amax<float2> (const size_t,
+                                       const Buffer<float2>&, const size_t, const size_t,
+                                       Buffer<unsigned int>&, const size_t,
+                                       const Queue&, Event*);
 template void PUBLIC_API amax<double2>(const size_t,
                                        const Buffer<double2>&, const size_t, const size_t,
                                        Buffer<unsigned int>&, const size_t,
                                        const Queue&, Event*);
-template void PUBLIC_API amax<half>(const size_t,
-                                    const Buffer<half>&, const size_t, const size_t,
-                                    Buffer<unsigned int>&, const size_t,
-                                    const Queue&, Event*);
+template void PUBLIC_API amax<half>   (const size_t,
+                                       const Buffer<half>&, const size_t, const size_t,
+                                       Buffer<unsigned int>&, const size_t,
+                                       const Queue&, Event*);
 
 // Index of absolute minimum value in a vector (non-BLAS function): iSAMIN/iDAMIN/iCAMIN/iZAMIN/iHAMIN
 template <typename T>
@@ -470,26 +459,26 @@ void amin(const size_t n,
                    imin_buffer, imin_offset);
 }
 
-template void PUBLIC_API amin<float>(const size_t,
-                                     const Buffer<float>&, const size_t, const size_t,
-                                     Buffer<unsigned int>&, const size_t,
-                                     const Queue&, Event*);
-template void PUBLIC_API amin<double>(const size_t,
-                                      const Buffer<double>&, const size_t, const size_t,
-                                      Buffer<unsigned int>&, const size_t,
-                                      const Queue&, Event*);
-template void PUBLIC_API amin<float2>(const size_t,
-                                      const Buffer<float2>&, const size_t, const size_t,
-                                      Buffer<unsigned int>&, const size_t,
-                                      const Queue&, Event*);
+template void PUBLIC_API amin<float>  (const size_t,
+                                       const Buffer<float>&, const size_t, const size_t,
+                                       Buffer<unsigned int>&, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API amin<double> (const size_t,
+                                       const Buffer<double>&, const size_t, const size_t,
+                                       Buffer<unsigned int>&, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API amin<float2> (const size_t,
+                                       const Buffer<float2>&, const size_t, const size_t,
+                                       Buffer<unsigned int>&, const size_t,
+                                       const Queue&, Event*);
 template void PUBLIC_API amin<double2>(const size_t,
                                        const Buffer<double2>&, const size_t, const size_t,
                                        Buffer<unsigned int>&, const size_t,
                                        const Queue&, Event*);
-template void PUBLIC_API amin<half>(const size_t,
-                                    const Buffer<half>&, const size_t, const size_t,
-                                    Buffer<unsigned int>&, const size_t,
-                                    const Queue&, Event*);
+template void PUBLIC_API amin<half>   (const size_t,
+                                       const Buffer<half>&, const size_t, const size_t,
+                                       Buffer<unsigned int>&, const size_t,
+                                       const Queue&, Event*);
 
 // Index of maximum value in a vector (non-BLAS function): iSMAX/iDMAX/iCMAX/iZMAX/iHMAX
 template <typename T>
@@ -503,26 +492,26 @@ void max(const size_t n,
                   imax_buffer, imax_offset);
 }
 
-template void PUBLIC_API max<float>(const size_t,
-                                    const Buffer<float>&, const size_t, const size_t,
-                                    Buffer<unsigned int>&, const size_t,
-                                    const Queue&, Event*);
-template void PUBLIC_API max<double>(const size_t,
-                                     const Buffer<double>&, const size_t, const size_t,
-                                     Buffer<unsigned int>&, const size_t,
-                                     const Queue&, Event*);
-template void PUBLIC_API max<float2>(const size_t,
-                                     const Buffer<float2>&, const size_t, const size_t,
-                                     Buffer<unsigned int>&, const size_t,
-                                     const Queue&, Event*);
+template void PUBLIC_API max<float>  (const size_t,
+                                      const Buffer<float>&, const size_t, const size_t,
+                                      Buffer<unsigned int>&, const size_t,
+                                      const Queue&, Event*);
+template void PUBLIC_API max<double> (const size_t,
+                                      const Buffer<double>&, const size_t, const size_t,
+                                      Buffer<unsigned int>&, const size_t,
+                                      const Queue&, Event*);
+template void PUBLIC_API max<float2> (const size_t,
+                                      const Buffer<float2>&, const size_t, const size_t,
+                                      Buffer<unsigned int>&, const size_t,
+                                      const Queue&, Event*);
 template void PUBLIC_API max<double2>(const size_t,
                                       const Buffer<double2>&, const size_t, const size_t,
                                       Buffer<unsigned int>&, const size_t,
                                       const Queue&, Event*);
-template void PUBLIC_API max<half>(const size_t,
-                                   const Buffer<half>&, const size_t, const size_t,
-                                   Buffer<unsigned int>&, const size_t,
-                                   const Queue&, Event*);
+template void PUBLIC_API max<half>   (const size_t,
+                                      const Buffer<half>&, const size_t, const size_t,
+                                      Buffer<unsigned int>&, const size_t,
+                                      const Queue&, Event*);
 
 // Index of minimum value in a vector (non-BLAS function): iSMIN/iDMIN/iCMIN/iZMIN/iHMIN
 template <typename T>
@@ -536,26 +525,26 @@ void min(const size_t n,
                   imin_buffer, imin_offset);
 }
 
-template void PUBLIC_API min<float>(const size_t,
-                                    const Buffer<float>&, const size_t, const size_t,
-                                    Buffer<unsigned int>&, const size_t,
-                                    const Queue&, Event*);
-template void PUBLIC_API min<double>(const size_t,
-                                     const Buffer<double>&, const size_t, const size_t,
-                                     Buffer<unsigned int>&, const size_t,
-                                     const Queue&, Event*);
-template void PUBLIC_API min<float2>(const size_t,
-                                     const Buffer<float2>&, const size_t, const size_t,
-                                     Buffer<unsigned int>&, const size_t,
-                                     const Queue&, Event*);
+template void PUBLIC_API min<float>  (const size_t,
+                                      const Buffer<float>&, const size_t, const size_t,
+                                      Buffer<unsigned int>&, const size_t,
+                                      const Queue&, Event*);
+template void PUBLIC_API min<double> (const size_t,
+                                      const Buffer<double>&, const size_t, const size_t,
+                                      Buffer<unsigned int>&, const size_t,
+                                      const Queue&, Event*);
+template void PUBLIC_API min<float2> (const size_t,
+                                      const Buffer<float2>&, const size_t, const size_t,
+                                      Buffer<unsigned int>&, const size_t,
+                                      const Queue&, Event*);
 template void PUBLIC_API min<double2>(const size_t,
                                       const Buffer<double2>&, const size_t, const size_t,
                                       Buffer<unsigned int>&, const size_t,
                                       const Queue&, Event*);
-template void PUBLIC_API min<half>(const size_t,
-                                   const Buffer<half>&, const size_t, const size_t,
-                                   Buffer<unsigned int>&, const size_t,
-                                   const Queue&, Event*);
+template void PUBLIC_API min<half>   (const size_t,
+                                      const Buffer<half>&, const size_t, const size_t,
+                                      Buffer<unsigned int>&, const size_t,
+                                      const Queue&, Event*);
 
 // =================================================================================================
 // BLAS level-2 (matrix-vector) routines
@@ -581,30 +570,30 @@ void gemv(const Layout layout, const Transpose a_transpose,
                    y_buffer, y_offset, y_inc);
 }
 
-template void PUBLIC_API gemv<float>(const Layout, const Transpose,
-                                     const size_t, const size_t,
-                                     const float,
-                                     const Buffer<float>&, const size_t, const size_t,
-                                     const Buffer<float>&, const size_t, const size_t,
-                                     const float,
-                                     Buffer<float>&, const size_t, const size_t,
-                                     const Queue&, Event*);
-template void PUBLIC_API gemv<double>(const Layout, const Transpose,
-                                      const size_t, const size_t,
-                                      const double,
-                                      const Buffer<double>&, const size_t, const size_t,
-                                      const Buffer<double>&, const size_t, const size_t,
-                                      const double,
-                                      Buffer<double>&, const size_t, const size_t,
-                                      const Queue&, Event*);
-template void PUBLIC_API gemv<float2>(const Layout, const Transpose,
-                                      const size_t, const size_t,
-                                      const float2,
-                                      const Buffer<float2>&, const size_t, const size_t,
-                                      const Buffer<float2>&, const size_t, const size_t,
-                                      const float2,
-                                      Buffer<float2>&, const size_t, const size_t,
-                                      const Queue&, Event*);
+template void PUBLIC_API gemv<float>  (const Layout, const Transpose,
+                                       const size_t, const size_t,
+                                       const float,
+                                       const Buffer<float>&, const size_t, const size_t,
+                                       const Buffer<float>&, const size_t, const size_t,
+                                       const float,
+                                       Buffer<float>&, const size_t, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API gemv<double> (const Layout, const Transpose,
+                                       const size_t, const size_t,
+                                       const double,
+                                       const Buffer<double>&, const size_t, const size_t,
+                                       const Buffer<double>&, const size_t, const size_t,
+                                       const double,
+                                       Buffer<double>&, const size_t, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API gemv<float2> (const Layout, const Transpose,
+                                       const size_t, const size_t,
+                                       const float2,
+                                       const Buffer<float2>&, const size_t, const size_t,
+                                       const Buffer<float2>&, const size_t, const size_t,
+                                       const float2,
+                                       Buffer<float2>&, const size_t, const size_t,
+                                       const Queue&, Event*);
 template void PUBLIC_API gemv<double2>(const Layout, const Transpose,
                                        const size_t, const size_t,
                                        const double2,
@@ -613,14 +602,14 @@ template void PUBLIC_API gemv<double2>(const Layout, const Transpose,
                                        const double2,
                                        Buffer<double2>&, const size_t, const size_t,
                                        const Queue&, Event*);
-template void PUBLIC_API gemv<half>(const Layout, const Transpose,
-                                    const size_t, const size_t,
-                                    const half,
-                                    const Buffer<half>&, const size_t, const size_t,
-                                    const Buffer<half>&, const size_t, const size_t,
-                                    const half,
-                                    Buffer<half>&, const size_t, const size_t,
-                                    const Queue&, Event*);
+template void PUBLIC_API gemv<half>   (const Layout, const Transpose,
+                                       const size_t, const size_t,
+                                       const half,
+                                       const Buffer<half>&, const size_t, const size_t,
+                                       const Buffer<half>&, const size_t, const size_t,
+                                       const half,
+                                       Buffer<half>&, const size_t, const size_t,
+                                       const Queue&, Event*);
 
 // General banded matrix-vector multiplication: SGBMV/DGBMV/CGBMV/ZGBMV/HGBMV
 template <typename T>
@@ -642,30 +631,30 @@ void gbmv(const Layout layout, const Transpose a_transpose,
                    y_buffer, y_offset, y_inc);
 }
 
-template void PUBLIC_API gbmv<float>(const Layout, const Transpose,
-                                     const size_t, const size_t, const size_t, const size_t,
-                                     const float,
-                                     const Buffer<float>&, const size_t, const size_t,
-                                     const Buffer<float>&, const size_t, const size_t,
-                                     const float,
-                                     Buffer<float>&, const size_t, const size_t,
-                                     const Queue&, Event*);
-template void PUBLIC_API gbmv<double>(const Layout, const Transpose,
-                                      const size_t, const size_t, const size_t, const size_t,
-                                      const double,
-                                      const Buffer<double>&, const size_t, const size_t,
-                                      const Buffer<double>&, const size_t, const size_t,
-                                      const double,
-                                      Buffer<double>&, const size_t, const size_t,
-                                      const Queue&, Event*);
-template void PUBLIC_API gbmv<float2>(const Layout, const Transpose,
-                                      const size_t, const size_t, const size_t, const size_t,
-                                      const float2,
-                                      const Buffer<float2>&, const size_t, const size_t,
-                                      const Buffer<float2>&, const size_t, const size_t,
-                                      const float2,
-                                      Buffer<float2>&, const size_t, const size_t,
-                                      const Queue&, Event*);
+template void PUBLIC_API gbmv<float>  (const Layout, const Transpose,
+                                       const size_t, const size_t, const size_t, const size_t,
+                                       const float,
+                                       const Buffer<float>&, const size_t, const size_t,
+                                       const Buffer<float>&, const size_t, const size_t,
+                                       const float,
+                                       Buffer<float>&, const size_t, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API gbmv<double> (const Layout, const Transpose,
+                                       const size_t, const size_t, const size_t, const size_t,
+                                       const double,
+                                       const Buffer<double>&, const size_t, const size_t,
+                                       const Buffer<double>&, const size_t, const size_t,
+                                       const double,
+                                       Buffer<double>&, const size_t, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API gbmv<float2> (const Layout, const Transpose,
+                                       const size_t, const size_t, const size_t, const size_t,
+                                       const float2,
+                                       const Buffer<float2>&, const size_t, const size_t,
+                                       const Buffer<float2>&, const size_t, const size_t,
+                                       const float2,
+                                       Buffer<float2>&, const size_t, const size_t,
+                                       const Queue&, Event*);
 template void PUBLIC_API gbmv<double2>(const Layout, const Transpose,
                                        const size_t, const size_t, const size_t, const size_t,
                                        const double2,
@@ -674,19 +663,18 @@ template void PUBLIC_API gbmv<double2>(const Layout, const Transpose,
                                        const double2,
                                        Buffer<double2>&, const size_t, const size_t,
                                        const Queue&, Event*);
-template void PUBLIC_API gbmv<half>(const Layout, const Transpose,
-                                    const size_t, const size_t, const size_t, const size_t,
-                                    const half,
-                                    const Buffer<half>&, const size_t, const size_t,
-                                    const Buffer<half>&, const size_t, const size_t,
-                                    const half,
-                                    Buffer<half>&, const size_t, const size_t,
-                                    const Queue&, Event*);
+template void PUBLIC_API gbmv<half>   (const Layout, const Transpose,
+                                       const size_t, const size_t, const size_t, const size_t,
+                                       const half,
+                                       const Buffer<half>&, const size_t, const size_t,
+                                       const Buffer<half>&, const size_t, const size_t,
+                                       const half,
+                                       Buffer<half>&, const size_t, const size_t,
+                                       const Queue&, Event*);
 
 // Hermitian matrix-vector multiplication: CHEMV/ZHEMV
 template <typename T>
-void hemv(const Layout layout, const Triangle triangle,
-          const size_t n,
+void hemv(const Layout layout, const Triangle triangle, const size_t n,
           const T alpha,
           const Buffer<T>& a_buffer, const size_t a_offset, const size_t a_ld,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
@@ -694,8 +682,7 @@ void hemv(const Layout layout, const Triangle triangle,
           Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
           const Queue& queue, Event* event) {
     auto routine = Xhemv<T>(queue, event);
-    routine.DoHemv(layout, triangle,
-                   n,
+    routine.DoHemv(layout, triangle, n,
                    alpha,
                    a_buffer, a_offset, a_ld,
                    x_buffer, x_offset, x_inc,
@@ -703,16 +690,14 @@ void hemv(const Layout layout, const Triangle triangle,
                    y_buffer, y_offset, y_inc);
 }
 
-template void PUBLIC_API hemv<float2>(const Layout, const Triangle,
-                                      const size_t,
-                                      const float2,
-                                      const Buffer<float2>&, const size_t, const size_t,
-                                      const Buffer<float2>&, const size_t, const size_t,
-                                      const float2,
-                                      Buffer<float2>&, const size_t, const size_t,
-                                      const Queue&, Event*);
-template void PUBLIC_API hemv<double2>(const Layout, const Triangle,
-                                       const size_t,
+template void PUBLIC_API hemv<float2> (const Layout, const Triangle, const size_t,
+                                       const float2,
+                                       const Buffer<float2>&, const size_t, const size_t,
+                                       const Buffer<float2>&, const size_t, const size_t,
+                                       const float2,
+                                       Buffer<float2>&, const size_t, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API hemv<double2>(const Layout, const Triangle, const size_t,
                                        const double2,
                                        const Buffer<double2>&, const size_t, const size_t,
                                        const Buffer<double2>&, const size_t, const size_t,
@@ -740,14 +725,14 @@ void hbmv(const Layout layout, const Triangle triangle,
                    y_buffer, y_offset, y_inc);
 }
 
-template void PUBLIC_API hbmv<float2>(const Layout, const Triangle,
-                                      const size_t, const size_t,
-                                      const float2,
-                                      const Buffer<float2>&, const size_t, const size_t,
-                                      const Buffer<float2>&, const size_t, const size_t,
-                                      const float2,
-                                      Buffer<float2>&, const size_t, const size_t,
-                                      const Queue&, Event*);
+template void PUBLIC_API hbmv<float2> (const Layout, const Triangle,
+                                       const size_t, const size_t,
+                                       const float2,
+                                       const Buffer<float2>&, const size_t, const size_t,
+                                       const Buffer<float2>&, const size_t, const size_t,
+                                       const float2,
+                                       Buffer<float2>&, const size_t, const size_t,
+                                       const Queue&, Event*);
 template void PUBLIC_API hbmv<double2>(const Layout, const Triangle,
                                        const size_t, const size_t,
                                        const double2,
@@ -759,8 +744,7 @@ template void PUBLIC_API hbmv<double2>(const Layout, const Triangle,
 
 // Hermitian packed matrix-vector multiplication: CHPMV/ZHPMV
 template <typename T>
-void hpmv(const Layout layout, const Triangle triangle,
-          const size_t n,
+void hpmv(const Layout layout, const Triangle triangle, const size_t n,
           const T alpha,
           const Buffer<T>& ap_buffer, const size_t ap_offset,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
@@ -768,8 +752,7 @@ void hpmv(const Layout layout, const Triangle triangle,
           Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
           const Queue& queue, Event* event) {
     auto routine = Xhpmv<T>(queue, event);
-    routine.DoHpmv(layout, triangle,
-                   n,
+    routine.DoHpmv(layout, triangle, n,
                    alpha,
                    ap_buffer, ap_offset,
                    x_buffer, x_offset, x_inc,
@@ -777,16 +760,14 @@ void hpmv(const Layout layout, const Triangle triangle,
                    y_buffer, y_offset, y_inc);
 }
 
-template void PUBLIC_API hpmv<float2>(const Layout, const Triangle,
-                                      const size_t,
-                                      const float2,
-                                      const Buffer<float2>&, const size_t,
-                                      const Buffer<float2>&, const size_t, const size_t,
-                                      const float2,
-                                      Buffer<float2>&, const size_t, const size_t,
-                                      const Queue&, Event*);
-template void PUBLIC_API hpmv<double2>(const Layout, const Triangle,
-                                       const size_t,
+template void PUBLIC_API hpmv<float2> (const Layout, const Triangle, const size_t,
+                                       const float2,
+                                       const Buffer<float2>&, const size_t,
+                                       const Buffer<float2>&, const size_t, const size_t,
+                                       const float2,
+                                       Buffer<float2>&, const size_t, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API hpmv<double2>(const Layout, const Triangle, const size_t,
                                        const double2,
                                        const Buffer<double2>&, const size_t,
                                        const Buffer<double2>&, const size_t, const size_t,
@@ -796,8 +777,7 @@ template void PUBLIC_API hpmv<double2>(const Layout, const Triangle,
 
 // Symmetric matrix-vector multiplication: SSYMV/DSYMV/HSYMV
 template <typename T>
-void symv(const Layout layout, const Triangle triangle,
-          const size_t n,
+void symv(const Layout layout, const Triangle triangle, const size_t n,
           const T alpha,
           const Buffer<T>& a_buffer, const size_t a_offset, const size_t a_ld,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
@@ -805,8 +785,7 @@ void symv(const Layout layout, const Triangle triangle,
           Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
           const Queue& queue, Event* event) {
     auto routine = Xsymv<T>(queue, event);
-    routine.DoSymv(layout, triangle,
-                   n,
+    routine.DoSymv(layout, triangle, n,
                    alpha,
                    a_buffer, a_offset, a_ld,
                    x_buffer, x_offset, x_inc,
@@ -814,30 +793,27 @@ void symv(const Layout layout, const Triangle triangle,
                    y_buffer, y_offset, y_inc);
 }
 
-template void PUBLIC_API symv<float>(const Layout, const Triangle,
-                                     const size_t,
-                                     const float,
-                                     const Buffer<float>&, const size_t, const size_t,
-                                     const Buffer<float>&, const size_t, const size_t,
-                                     const float,
-                                     Buffer<float>&, const size_t, const size_t,
-                                     const Queue&, Event*);
-template void PUBLIC_API symv<double>(const Layout, const Triangle,
-                                      const size_t,
+template void PUBLIC_API symv<float> (const Layout, const Triangle, const size_t,
+                                      const float,
+                                      const Buffer<float>&, const size_t, const size_t,
+                                      const Buffer<float>&, const size_t, const size_t,
+                                      const float,
+                                      Buffer<float>&, const size_t, const size_t,
+                                      const Queue&, Event*);
+template void PUBLIC_API symv<double>(const Layout, const Triangle, const size_t,
                                       const double,
                                       const Buffer<double>&, const size_t, const size_t,
                                       const Buffer<double>&, const size_t, const size_t,
                                       const double,
                                       Buffer<double>&, const size_t, const size_t,
                                       const Queue&, Event*);
-template void PUBLIC_API symv<half>(const Layout, const Triangle,
-                                    const size_t,
-                                    const half,
-                                    const Buffer<half>&, const size_t, const size_t,
-                                    const Buffer<half>&, const size_t, const size_t,
-                                    const half,
-                                    Buffer<half>&, const size_t, const size_t,
-                                    const Queue&, Event*);
+template void PUBLIC_API symv<half>  (const Layout, const Triangle, const size_t,
+                                      const half,
+                                      const Buffer<half>&, const size_t, const size_t,
+                                      const Buffer<half>&, const size_t, const size_t,
+                                      const half,
+                                      Buffer<half>&, const size_t, const size_t,
+                                      const Queue&, Event*);
 
 // Symmetric banded matrix-vector multiplication: SSBMV/DSBMV/HSBMV
 template <typename T>
@@ -850,8 +826,7 @@ void sbmv(const Layout layout, const Triangle triangle,
           Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
           const Queue& queue, Event* event) {
     auto routine = Xsbmv<T>(queue, event);
-    routine.DoSbmv(layout, triangle,
-                   n, k,
+    routine.DoSbmv(layout, triangle, n, k,
                    alpha,
                    a_buffer, a_offset, a_ld,
                    x_buffer, x_offset, x_inc,
@@ -859,14 +834,14 @@ void sbmv(const Layout layout, const Triangle triangle,
                    y_buffer, y_offset, y_inc);
 }
 
-template void PUBLIC_API sbmv<float>(const Layout, const Triangle,
-                                     const size_t, const size_t,
-                                     const float,
-                                     const Buffer<float>&, const size_t, const size_t,
-                                     const Buffer<float>&, const size_t, const size_t,
-                                     const float,
-                                     Buffer<float>&, const size_t, const size_t,
-                                     const Queue&, Event*);
+template void PUBLIC_API sbmv<float> (const Layout, const Triangle,
+                                      const size_t, const size_t,
+                                      const float,
+                                      const Buffer<float>&, const size_t, const size_t,
+                                      const Buffer<float>&, const size_t, const size_t,
+                                      const float,
+                                      Buffer<float>&, const size_t, const size_t,
+                                      const Queue&, Event*);
 template void PUBLIC_API sbmv<double>(const Layout, const Triangle,
                                       const size_t, const size_t,
                                       const double,
@@ -875,19 +850,18 @@ template void PUBLIC_API sbmv<double>(const Layout, const Triangle,
                                       const double,
                                       Buffer<double>&, const size_t, const size_t,
                                       const Queue&, Event*);
-template void PUBLIC_API sbmv<half>(const Layout, const Triangle,
-                                    const size_t, const size_t,
-                                    const half,
-                                    const Buffer<half>&, const size_t, const size_t,
-                                    const Buffer<half>&, const size_t, const size_t,
-                                    const half,
-                                    Buffer<half>&, const size_t, const size_t,
-                                    const Queue&, Event*);
+template void PUBLIC_API sbmv<half>  (const Layout, const Triangle,
+                                      const size_t, const size_t,
+                                      const half,
+                                      const Buffer<half>&, const size_t, const size_t,
+                                      const Buffer<half>&, const size_t, const size_t,
+                                      const half,
+                                      Buffer<half>&, const size_t, const size_t,
+                                      const Queue&, Event*);
 
 // Symmetric packed matrix-vector multiplication: SSPMV/DSPMV/HSPMV
 template <typename T>
-void spmv(const Layout layout, const Triangle triangle,
-          const size_t n,
+void spmv(const Layout layout, const Triangle triangle, const size_t n,
           const T alpha,
           const Buffer<T>& ap_buffer, const size_t ap_offset,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
@@ -895,8 +869,7 @@ void spmv(const Layout layout, const Triangle triangle,
           Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
           const Queue& queue, Event* event) {
     auto routine = Xspmv<T>(queue, event);
-    routine.DoSpmv(layout, triangle,
-                   n,
+    routine.DoSpmv(layout, triangle, n,
                    alpha,
                    ap_buffer, ap_offset,
                    x_buffer, x_offset, x_inc,
@@ -904,30 +877,27 @@ void spmv(const Layout layout, const Triangle triangle,
                    y_buffer, y_offset, y_inc);
 }
 
-template void PUBLIC_API spmv<float>(const Layout, const Triangle,
-                                     const size_t,
-                                     const float,
-                                     const Buffer<float>&, const size_t,
-                                     const Buffer<float>&, const size_t, const size_t,
-                                     const float,
-                                     Buffer<float>&, const size_t, const size_t,
-                                     const Queue&, Event*);
-template void PUBLIC_API spmv<double>(const Layout, const Triangle,
-                                      const size_t,
+template void PUBLIC_API spmv<float> (const Layout, const Triangle, const size_t,
+                                      const float,
+                                      const Buffer<float>&, const size_t,
+                                      const Buffer<float>&, const size_t, const size_t,
+                                      const float,
+                                      Buffer<float>&, const size_t, const size_t,
+                                      const Queue&, Event*);
+template void PUBLIC_API spmv<double>(const Layout, const Triangle, const size_t,
                                       const double,
                                       const Buffer<double>&, const size_t,
                                       const Buffer<double>&, const size_t, const size_t,
                                       const double,
                                       Buffer<double>&, const size_t, const size_t,
                                       const Queue&, Event*);
-template void PUBLIC_API spmv<half>(const Layout, const Triangle,
-                                    const size_t,
-                                    const half,
-                                    const Buffer<half>&, const size_t,
-                                    const Buffer<half>&, const size_t, const size_t,
-                                    const half,
-                                    Buffer<half>&, const size_t, const size_t,
-                                    const Queue&, Event*);
+template void PUBLIC_API spmv<half>  (const Layout, const Triangle, const size_t,
+                                      const half,
+                                      const Buffer<half>&, const size_t,
+                                      const Buffer<half>&, const size_t, const size_t,
+                                      const half,
+                                      Buffer<half>&, const size_t, const size_t,
+                                      const Queue&, Event*);
 
 // Triangular matrix-vector multiplication: STRMV/DTRMV/CTRMV/ZTRMV/HTRMV
 template <typename T>
@@ -943,31 +913,31 @@ void trmv(const Layout layout, const Triangle triangle, const Transpose a_transp
                    x_buffer, x_offset, x_inc);
 }
 
-template void PUBLIC_API trmv<float>(const Layout, const Triangle, const Transpose, const Diagonal,
-                                     const size_t,
-                                     const Buffer<float>&, const size_t, const size_t,
-                                     Buffer<float>&, const size_t, const size_t,
-                                     const Queue&, Event*);
-template void PUBLIC_API trmv<double>(const Layout, const Triangle, const Transpose, const Diagonal,
-                                      const size_t,
-                                      const Buffer<double>&, const size_t, const size_t,
-                                      Buffer<double>&, const size_t, const size_t,
-                                      const Queue&, Event*);
-template void PUBLIC_API trmv<float2>(const Layout, const Triangle, const Transpose, const Diagonal,
-                                      const size_t,
-                                      const Buffer<float2>&, const size_t, const size_t,
-                                      Buffer<float2>&, const size_t, const size_t,
-                                      const Queue&, Event*);
+template void PUBLIC_API trmv<float>  (const Layout, const Triangle, const Transpose, const Diagonal,
+                                       const size_t,
+                                       const Buffer<float>&, const size_t, const size_t,
+                                       Buffer<float>&, const size_t, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API trmv<double> (const Layout, const Triangle, const Transpose, const Diagonal,
+                                       const size_t,
+                                       const Buffer<double>&, const size_t, const size_t,
+                                       Buffer<double>&, const size_t, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API trmv<float2> (const Layout, const Triangle, const Transpose, const Diagonal,
+                                       const size_t,
+                                       const Buffer<float2>&, const size_t, const size_t,
+                                       Buffer<float2>&, const size_t, const size_t,
+                                       const Queue&, Event*);
 template void PUBLIC_API trmv<double2>(const Layout, const Triangle, const Transpose, const Diagonal,
                                        const size_t,
                                        const Buffer<double2>&, const size_t, const size_t,
                                        Buffer<double2>&, const size_t, const size_t,
                                        const Queue&, Event*);
-template void PUBLIC_API trmv<half>(const Layout, const Triangle, const Transpose, const Diagonal,
-                                    const size_t,
-                                    const Buffer<half>&, const size_t, const size_t,
-                                    Buffer<half>&, const size_t, const size_t,
-                                    const Queue&, Event*);
+template void PUBLIC_API trmv<half>   (const Layout, const Triangle, const Transpose, const Diagonal,
+                                       const size_t,
+                                       const Buffer<half>&, const size_t, const size_t,
+                                       Buffer<half>&, const size_t, const size_t,
+                                       const Queue&, Event*);
 
 // Triangular banded matrix-vector multiplication: STBMV/DTBMV/CTBMV/ZTBMV/HTBMV
 template <typename T>
@@ -983,31 +953,31 @@ void tbmv(const Layout layout, const Triangle triangle, const Transpose a_transp
                    x_buffer, x_offset, x_inc);
 }
 
-template void PUBLIC_API tbmv<float>(const Layout, const Triangle, const Transpose, const Diagonal,
-                                     const size_t, const size_t,
-                                     const Buffer<float>&, const size_t, const size_t,
-                                     Buffer<float>&, const size_t, const size_t,
-                                     const Queue&, Event*);
-template void PUBLIC_API tbmv<double>(const Layout, const Triangle, const Transpose, const Diagonal,
-                                      const size_t, const size_t,
-                                      const Buffer<double>&, const size_t, const size_t,
-                                      Buffer<double>&, const size_t, const size_t,
-                                      const Queue&, Event*);
-template void PUBLIC_API tbmv<float2>(const Layout, const Triangle, const Transpose, const Diagonal,
-                                      const size_t, const size_t,
-                                      const Buffer<float2>&, const size_t, const size_t,
-                                      Buffer<float2>&, const size_t, const size_t,
-                                      const Queue&, Event*);
+template void PUBLIC_API tbmv<float>  (const Layout, const Triangle, const Transpose, const Diagonal,
+                                       const size_t, const size_t,
+                                       const Buffer<float>&, const size_t, const size_t,
+                                       Buffer<float>&, const size_t, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API tbmv<double> (const Layout, const Triangle, const Transpose, const Diagonal,
+                                       const size_t, const size_t,
+                                       const Buffer<double>&, const size_t, const size_t,
+                                       Buffer<double>&, const size_t, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API tbmv<float2> (const Layout, const Triangle, const Transpose, const Diagonal,
+                                       const size_t, const size_t,
+                                       const Buffer<float2>&, const size_t, const size_t,
+                                       Buffer<float2>&, const size_t, const size_t,
+                                       const Queue&, Event*);
 template void PUBLIC_API tbmv<double2>(const Layout, const Triangle, const Transpose, const Diagonal,
                                        const size_t, const size_t,
                                        const Buffer<double2>&, const size_t, const size_t,
                                        Buffer<double2>&, const size_t, const size_t,
                                        const Queue&, Event*);
-template void PUBLIC_API tbmv<half>(const Layout, const Triangle, const Transpose, const Diagonal,
-                                    const size_t, const size_t,
-                                    const Buffer<half>&, const size_t, const size_t,
-                                    Buffer<half>&, const size_t, const size_t,
-                                    const Queue&, Event*);
+template void PUBLIC_API tbmv<half>   (const Layout, const Triangle, const Transpose, const Diagonal,
+                                       const size_t, const size_t,
+                                       const Buffer<half>&, const size_t, const size_t,
+                                       Buffer<half>&, const size_t, const size_t,
+                                       const Queue&, Event*);
 
 // Triangular packed matrix-vector multiplication: STPMV/DTPMV/CTPMV/ZTPMV/HTPMV
 template <typename T>
@@ -1023,31 +993,31 @@ void tpmv(const Layout layout, const Triangle triangle, const Transpose a_transp
                    x_buffer, x_offset, x_inc);
 }
 
-template void PUBLIC_API tpmv<float>(const Layout, const Triangle, const Transpose, const Diagonal,
-                                     const size_t,
-                                     const Buffer<float>&, const size_t,
-                                     Buffer<float>&, const size_t, const size_t,
-                                     const Queue&, Event*);
-template void PUBLIC_API tpmv<double>(const Layout, const Triangle, const Transpose, const Diagonal,
-                                      const size_t,
-                                      const Buffer<double>&, const size_t,
-                                      Buffer<double>&, const size_t, const size_t,
-                                      const Queue&, Event*);
-template void PUBLIC_API tpmv<float2>(const Layout, const Triangle, const Transpose, const Diagonal,
-                                      const size_t,
-                                      const Buffer<float2>&, const size_t,
-                                      Buffer<float2>&, const size_t, const size_t,
-                                      const Queue&, Event*);
+template void PUBLIC_API tpmv<float>  (const Layout, const Triangle, const Transpose, const Diagonal,
+                                       const size_t,
+                                       const Buffer<float>&, const size_t,
+                                       Buffer<float>&, const size_t, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API tpmv<double> (const Layout, const Triangle, const Transpose, const Diagonal,
+                                       const size_t,
+                                       const Buffer<double>&, const size_t,
+                                       Buffer<double>&, const size_t, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API tpmv<float2> (const Layout, const Triangle, const Transpose, const Diagonal,
+                                       const size_t,
+                                       const Buffer<float2>&, const size_t,
+                                       Buffer<float2>&, const size_t, const size_t,
+                                       const Queue&, Event*);
 template void PUBLIC_API tpmv<double2>(const Layout, const Triangle, const Transpose, const Diagonal,
                                        const size_t,
                                        const Buffer<double2>&, const size_t,
                                        Buffer<double2>&, const size_t, const size_t,
                                        const Queue&, Event*);
-template void PUBLIC_API tpmv<half>(const Layout, const Triangle, const Transpose, const Diagonal,
-                                    const size_t,
-                                    const Buffer<half>&, const size_t,
-                                    Buffer<half>&, const size_t, const size_t,
-                                    const Queue&, Event*);
+template void PUBLIC_API tpmv<half>   (const Layout, const Triangle, const Transpose, const Diagonal,
+                                       const size_t,
+                                       const Buffer<half>&, const size_t,
+                                       Buffer<half>&, const size_t, const size_t,
+                                       const Queue&, Event*);
 
 // Solves a triangular system of equations: STRSV/DTRSV/CTRSV/ZTRSV
 template <typename T>
@@ -1063,21 +1033,21 @@ void trsv(const Layout layout, const Triangle triangle, const Transpose a_transp
                    x_buffer, x_offset, x_inc);
 }
 
-template void PUBLIC_API trsv<float>(const Layout, const Triangle, const Transpose, const Diagonal,
-                                     const size_t,
-                                     const Buffer<float>&, const size_t, const size_t,
-                                     Buffer<float>&, const size_t, const size_t,
-                                     const Queue&, Event*);
-template void PUBLIC_API trsv<double>(const Layout, const Triangle, const Transpose, const Diagonal,
-                                      const size_t,
-                                      const Buffer<double>&, const size_t, const size_t,
-                                      Buffer<double>&, const size_t, const size_t,
-                                      const Queue&, Event*);
-template void PUBLIC_API trsv<float2>(const Layout, const Triangle, const Transpose, const Diagonal,
-                                      const size_t,
-                                      const Buffer<float2>&, const size_t, const size_t,
-                                      Buffer<float2>&, const size_t, const size_t,
-                                      const Queue&, Event*);
+template void PUBLIC_API trsv<float>  (const Layout, const Triangle, const Transpose, const Diagonal,
+                                       const size_t,
+                                       const Buffer<float>&, const size_t, const size_t,
+                                       Buffer<float>&, const size_t, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API trsv<double> (const Layout, const Triangle, const Transpose, const Diagonal,
+                                       const size_t,
+                                       const Buffer<double>&, const size_t, const size_t,
+                                       Buffer<double>&, const size_t, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API trsv<float2> (const Layout, const Triangle, const Transpose, const Diagonal,
+                                       const size_t,
+                                       const Buffer<float2>&, const size_t, const size_t,
+                                       Buffer<float2>&, const size_t, const size_t,
+                                       const Queue&, Event*);
 template void PUBLIC_API trsv<double2>(const Layout, const Triangle, const Transpose, const Diagonal,
                                        const size_t,
                                        const Buffer<double2>&, const size_t, const size_t,
@@ -1094,21 +1064,21 @@ void tbsv(const Layout, const Triangle, const Transpose, const Diagonal,
   throw BLASError(StatusCode::kNotImplemented);
 }
 
-template void PUBLIC_API tbsv<float>(const Layout, const Triangle, const Transpose, const Diagonal,
-                                     const size_t, const size_t,
-                                     const Buffer<float>&, const size_t, const size_t,
-                                     Buffer<float>&, const size_t, const size_t,
-                                     const Queue&, Event*);
-template void PUBLIC_API tbsv<double>(const Layout, const Triangle, const Transpose, const Diagonal,
-                                      const size_t, const size_t,
-                                      const Buffer<double>&, const size_t, const size_t,
-                                      Buffer<double>&, const size_t, const size_t,
-                                      const Queue&, Event*);
-template void PUBLIC_API tbsv<float2>(const Layout, const Triangle, const Transpose, const Diagonal,
-                                      const size_t, const size_t,
-                                      const Buffer<float2>&, const size_t, const size_t,
-                                      Buffer<float2>&, const size_t, const size_t,
-                                      const Queue&, Event*);
+template void PUBLIC_API tbsv<float>  (const Layout, const Triangle, const Transpose, const Diagonal,
+                                       const size_t, const size_t,
+                                       const Buffer<float>&, const size_t, const size_t,
+                                       Buffer<float>&, const size_t, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API tbsv<double> (const Layout, const Triangle, const Transpose, const Diagonal,
+                                       const size_t, const size_t,
+                                       const Buffer<double>&, const size_t, const size_t,
+                                       Buffer<double>&, const size_t, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API tbsv<float2> (const Layout, const Triangle, const Transpose, const Diagonal,
+                                       const size_t, const size_t,
+                                       const Buffer<float2>&, const size_t, const size_t,
+                                       Buffer<float2>&, const size_t, const size_t,
+                                       const Queue&, Event*);
 template void PUBLIC_API tbsv<double2>(const Layout, const Triangle, const Transpose, const Diagonal,
                                        const size_t, const size_t,
                                        const Buffer<double2>&, const size_t, const size_t,
@@ -1125,21 +1095,21 @@ void tpsv(const Layout, const Triangle, const Transpose, const Diagonal,
   throw BLASError(StatusCode::kNotImplemented);
 }
 
-template void PUBLIC_API tpsv<float>(const Layout, const Triangle, const Transpose, const Diagonal,
-                                     const size_t,
-                                     const Buffer<float>&, const size_t,
-                                     Buffer<float>&, const size_t, const size_t,
-                                     const Queue&, Event*);
-template void PUBLIC_API tpsv<double>(const Layout, const Triangle, const Transpose, const Diagonal,
-                                      const size_t,
-                                      const Buffer<double>&, const size_t,
-                                      Buffer<double>&, const size_t, const size_t,
-                                      const Queue&, Event*);
-template void PUBLIC_API tpsv<float2>(const Layout, const Triangle, const Transpose, const Diagonal,
-                                      const size_t,
-                                      const Buffer<float2>&, const size_t,
-                                      Buffer<float2>&, const size_t, const size_t,
-                                      const Queue&, Event*);
+template void PUBLIC_API tpsv<float>  (const Layout, const Triangle, const Transpose, const Diagonal,
+                                       const size_t,
+                                       const Buffer<float>&, const size_t,
+                                       Buffer<float>&, const size_t, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API tpsv<double> (const Layout, const Triangle, const Transpose, const Diagonal,
+                                       const size_t,
+                                       const Buffer<double>&, const size_t,
+                                       Buffer<double>&, const size_t, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API tpsv<float2> (const Layout, const Triangle, const Transpose, const Diagonal,
+                                       const size_t,
+                                       const Buffer<float2>&, const size_t,
+                                       Buffer<float2>&, const size_t, const size_t,
+                                       const Queue&, Event*);
 template void PUBLIC_API tpsv<double2>(const Layout, const Triangle, const Transpose, const Diagonal,
                                        const size_t,
                                        const Buffer<double2>&, const size_t,
@@ -1148,72 +1118,54 @@ template void PUBLIC_API tpsv<double2>(const Layout, const Triangle, const Trans
 
 // General rank-1 matrix update: SGER/DGER/HGER
 template <typename T>
-void ger(const Layout layout,
-         const size_t m, const size_t n,
-         const T alpha,
+void ger(const Layout layout, const size_t m, const size_t n, const T alpha,
          const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
          const Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
          Buffer<T>& a_buffer, const size_t a_offset, const size_t a_ld,
          const Queue& queue, Event* event) {
     auto routine = Xger<T>(queue, event);
-    routine.DoGer(layout,
-                  m, n,
-                  alpha,
+    routine.DoGer(layout, m, n, alpha,
                   x_buffer, x_offset, x_inc,
                   y_buffer, y_offset, y_inc,
                   a_buffer, a_offset, a_ld);
 }
 
-template void PUBLIC_API ger<float>(const Layout,
-                                    const size_t, const size_t,
-                                    const float,
-                                    const Buffer<float>&, const size_t, const size_t,
-                                    const Buffer<float>&, const size_t, const size_t,
-                                    Buffer<float>&, const size_t, const size_t,
-                                    const Queue&, Event*);
-template void PUBLIC_API ger<double>(const Layout,
-                                     const size_t, const size_t,
-                                     const double,
+template void PUBLIC_API ger<float> (const Layout, const size_t, const size_t, const float,
+                                     const Buffer<float>&, const size_t, const size_t,
+                                     const Buffer<float>&, const size_t, const size_t,
+                                     Buffer<float>&, const size_t, const size_t,
+                                     const Queue&, Event*);
+template void PUBLIC_API ger<double>(const Layout, const size_t, const size_t, const double,
                                      const Buffer<double>&, const size_t, const size_t,
                                      const Buffer<double>&, const size_t, const size_t,
                                      Buffer<double>&, const size_t, const size_t,
                                      const Queue&, Event*);
-template void PUBLIC_API ger<half>(const Layout,
-                                   const size_t, const size_t,
-                                   const half,
-                                   const Buffer<half>&, const size_t, const size_t,
-                                   const Buffer<half>&, const size_t, const size_t,
-                                   Buffer<half>&, const size_t, const size_t,
-                                   const Queue&, Event*);
+template void PUBLIC_API ger<half>  (const Layout, const size_t, const size_t, const half,
+                                     const Buffer<half>&, const size_t, const size_t,
+                                     const Buffer<half>&, const size_t, const size_t,
+                                     Buffer<half>&, const size_t, const size_t,
+                                     const Queue&, Event*);
 
 // General rank-1 complex matrix update: CGERU/ZGERU
 template <typename T>
-void geru(const Layout layout,
-          const size_t m, const size_t n,
-          const T alpha,
+void geru(const Layout layout, const size_t m, const size_t n, const T alpha,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
           const Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
           Buffer<T>& a_buffer, const size_t a_offset, const size_t a_ld,
           const Queue& queue, Event* event) {
     auto routine = Xgeru<T>(queue, event);
-    routine.DoGeru(layout,
-                   m, n,
-                   alpha,
+    routine.DoGeru(layout, m, n, alpha,
                    x_buffer, x_offset, x_inc,
                    y_buffer, y_offset, y_inc,
                    a_buffer, a_offset, a_ld);
 }
 
-template void PUBLIC_API geru<float2>(const Layout,
-                                      const size_t, const size_t,
-                                      const float2,
-                                      const Buffer<float2>&, const size_t, const size_t,
-                                      const Buffer<float2>&, const size_t, const size_t,
-                                      Buffer<float2>&, const size_t, const size_t,
-                                      const Queue&, Event*);
-template void PUBLIC_API geru<double2>(const Layout,
-                                       const size_t, const size_t,
-                                       const double2,
+template void PUBLIC_API geru<float2> (const Layout, const size_t, const size_t, const float2,
+                                       const Buffer<float2>&, const size_t, const size_t,
+                                       const Buffer<float2>&, const size_t, const size_t,
+                                       Buffer<float2>&, const size_t, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API geru<double2>(const Layout, const size_t, const size_t, const double2,
                                        const Buffer<double2>&, const size_t, const size_t,
                                        const Buffer<double2>&, const size_t, const size_t,
                                        Buffer<double2>&, const size_t, const size_t,
@@ -1221,32 +1173,24 @@ template void PUBLIC_API geru<double2>(const Layout,
 
 // General rank-1 complex conjugated matrix update: CGERC/ZGERC
 template <typename T>
-void gerc(const Layout layout,
-          const size_t m, const size_t n,
-          const T alpha,
+void gerc(const Layout layout, const size_t m, const size_t n, const T alpha,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
           const Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
           Buffer<T>& a_buffer, const size_t a_offset, const size_t a_ld,
           const Queue& queue, Event* event) {
     auto routine = Xgerc<T>(queue, event);
-    routine.DoGerc(layout,
-                   m, n,
-                   alpha,
+    routine.DoGerc(layout, m, n, alpha,
                    x_buffer, x_offset, x_inc,
                    y_buffer, y_offset, y_inc,
                    a_buffer, a_offset, a_ld);
 }
 
-template void PUBLIC_API gerc<float2>(const Layout,
-                                      const size_t, const size_t,
-                                      const float2,
-                                      const Buffer<float2>&, const size_t, const size_t,
-                                      const Buffer<float2>&, const size_t, const size_t,
-                                      Buffer<float2>&, const size_t, const size_t,
-                                      const Queue&, Event*);
-template void PUBLIC_API gerc<double2>(const Layout,
-                                       const size_t, const size_t,
-                                       const double2,
+template void PUBLIC_API gerc<float2> (const Layout, const size_t, const size_t, const float2,
+                                       const Buffer<float2>&, const size_t, const size_t,
+                                       const Buffer<float2>&, const size_t, const size_t,
+                                       Buffer<float2>&, const size_t, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API gerc<double2>(const Layout, const size_t, const size_t, const double2,
                                        const Buffer<double2>&, const size_t, const size_t,
                                        const Buffer<double2>&, const size_t, const size_t,
                                        Buffer<double2>&, const size_t, const size_t,
@@ -1254,90 +1198,66 @@ template void PUBLIC_API gerc<double2>(const Layout,
 
 // Hermitian rank-1 matrix update: CHER/ZHER
 template <typename T>
-void her(const Layout layout, const Triangle triangle,
-         const size_t n,
-         const T alpha,
+void her(const Layout layout, const Triangle triangle, const size_t n, const T alpha,
          const Buffer<std::complex<T>>& x_buffer, const size_t x_offset, const size_t x_inc,
          Buffer<std::complex<T>>& a_buffer, const size_t a_offset, const size_t a_ld,
          const Queue& queue, Event* event) {
     auto routine = Xher<std::complex<T>,T>(queue, event);
-    routine.DoHer(layout, triangle,
-                  n,
-                  alpha,
+    routine.DoHer(layout, triangle, n, alpha,
                   x_buffer, x_offset, x_inc,
                   a_buffer, a_offset, a_ld);
 }
 
-template void PUBLIC_API her<float>(const Layout, const Triangle,
-                                    const size_t,
-                                    const float,
-                                    const Buffer<std::complex<float>>&, const size_t, const size_t,
-                                    Buffer<std::complex<float>>&, const size_t, const size_t,
-                                    const Queue&, Event*);
-template void PUBLIC_API her<double>(const Layout, const Triangle,
-                                     const size_t,
-                                     const double,
+template void PUBLIC_API her<float> (const Layout, const Triangle, const size_t, const float,
+                                     const Buffer<std::complex<float>>&, const size_t, const size_t,
+                                     Buffer<std::complex<float>>&, const size_t, const size_t,
+                                     const Queue&, Event*);
+template void PUBLIC_API her<double>(const Layout, const Triangle, const size_t, const double,
                                      const Buffer<std::complex<double>>&, const size_t, const size_t,
                                      Buffer<std::complex<double>>&, const size_t, const size_t,
                                      const Queue&, Event*);
 
 // Hermitian packed rank-1 matrix update: CHPR/ZHPR
 template <typename T>
-void hpr(const Layout layout, const Triangle triangle,
-         const size_t n,
-         const T alpha,
+void hpr(const Layout layout, const Triangle triangle, const size_t n, const T alpha,
          const Buffer<std::complex<T>>& x_buffer, const size_t x_offset, const size_t x_inc,
          Buffer<std::complex<T>>& ap_buffer, const size_t ap_offset,
          const Queue& queue, Event* event) {
     auto routine = Xhpr<std::complex<T>,T>(queue, event);
-    routine.DoHpr(layout, triangle,
-                  n,
-                  alpha,
+    routine.DoHpr(layout, triangle, n, alpha,
                   x_buffer, x_offset, x_inc,
                   ap_buffer, ap_offset);
 }
 
-template void PUBLIC_API hpr<float>(const Layout, const Triangle,
-                                    const size_t,
-                                    const float,
-                                    const Buffer<std::complex<float>>&, const size_t, const size_t,
-                                    Buffer<std::complex<float>>&, const size_t,
-                                    const Queue&, Event*);
-template void PUBLIC_API hpr<double>(const Layout, const Triangle,
-                                     const size_t,
-                                     const double,
+template void PUBLIC_API hpr<float> (const Layout, const Triangle, const size_t, const float,
+                                     const Buffer<std::complex<float>>&, const size_t, const size_t,
+                                     Buffer<std::complex<float>>&, const size_t,
+                                     const Queue&, Event*);
+template void PUBLIC_API hpr<double>(const Layout, const Triangle, const size_t, const double,
                                      const Buffer<std::complex<double>>&, const size_t, const size_t,
                                      Buffer<std::complex<double>>&, const size_t,
                                      const Queue&, Event*);
 
 // Hermitian rank-2 matrix update: CHER2/ZHER2
 template <typename T>
-void her2(const Layout layout, const Triangle triangle,
-          const size_t n,
-          const T alpha,
+void her2(const Layout layout, const Triangle triangle, const size_t n, const T alpha,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
           const Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
           Buffer<T>& a_buffer, const size_t a_offset, const size_t a_ld,
           const Queue& queue, Event* event) {
     auto routine = Xher2<T>(queue, event);
-    routine.DoHer2(layout, triangle,
-                   n,
-                   alpha,
+    routine.DoHer2(layout, triangle, n, alpha,
                    x_buffer, x_offset, x_inc,
                    y_buffer, y_offset, y_inc,
                    a_buffer, a_offset, a_ld);
 }
 
-template void PUBLIC_API her2<float2>(const Layout, const Triangle,
-                                      const size_t,
-                                      const float2,
-                                      const Buffer<float2>&, const size_t, const size_t,
-                                      const Buffer<float2>&, const size_t, const size_t,
-                                      Buffer<float2>&, const size_t, const size_t,
-                                      const Queue&, Event*);
-template void PUBLIC_API her2<double2>(const Layout, const Triangle,
-                                       const size_t,
-                                       const double2,
+template void PUBLIC_API her2<float2> (const Layout, const Triangle, const size_t, const float2,
+                                       const Buffer<float2>&, const size_t, const size_t,
+                                       const Buffer<float2>&, const size_t, const size_t,
+                                       Buffer<float2>&, const size_t, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API her2<double2>(const Layout, const Triangle, const size_t, const double2,
                                        const Buffer<double2>&, const size_t, const size_t,
                                        const Buffer<double2>&, const size_t, const size_t,
                                        Buffer<double2>&, const size_t, const size_t,
@@ -1345,32 +1265,24 @@ template void PUBLIC_API her2<double2>(const Layout, const Triangle,
 
 // Hermitian packed rank-2 matrix update: CHPR2/ZHPR2
 template <typename T>
-void hpr2(const Layout layout, const Triangle triangle,
-          const size_t n,
-          const T alpha,
+void hpr2(const Layout layout, const Triangle triangle, const size_t n, const T alpha,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
           const Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
           Buffer<T>& ap_buffer, const size_t ap_offset,
           const Queue& queue, Event* event) {
     auto routine = Xhpr2<T>(queue, event);
-    routine.DoHpr2(layout, triangle,
-                   n,
-                   alpha,
+    routine.DoHpr2(layout, triangle, n, alpha,
                    x_buffer, x_offset, x_inc,
                    y_buffer, y_offset, y_inc,
                    ap_buffer, ap_offset);
 }
 
-template void PUBLIC_API hpr2<float2>(const Layout, const Triangle,
-                                      const size_t,
-                                      const float2,
-                                      const Buffer<float2>&, const size_t, const size_t,
-                                      const Buffer<float2>&, const size_t, const size_t,
-                                      Buffer<float2>&, const size_t,
-                                      const Queue&, Event*);
-template void PUBLIC_API hpr2<double2>(const Layout, const Triangle,
-                                       const size_t,
-                                       const double2,
+template void PUBLIC_API hpr2<float2> (const Layout, const Triangle, const size_t, const float2,
+                                       const Buffer<float2>&, const size_t, const size_t,
+                                       const Buffer<float2>&, const size_t, const size_t,
+                                       Buffer<float2>&, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API hpr2<double2>(const Layout, const Triangle, const size_t, const double2,
                                        const Buffer<double2>&, const size_t, const size_t,
                                        const Buffer<double2>&, const size_t, const size_t,
                                        Buffer<double2>&, const size_t,
@@ -1378,153 +1290,113 @@ template void PUBLIC_API hpr2<double2>(const Layout, const Triangle,
 
 // Symmetric rank-1 matrix update: SSYR/DSYR/HSYR
 template <typename T>
-void syr(const Layout layout, const Triangle triangle,
-         const size_t n,
-         const T alpha,
+void syr(const Layout layout, const Triangle triangle, const size_t n, const T alpha,
          const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
          Buffer<T>& a_buffer, const size_t a_offset, const size_t a_ld,
          const Queue& queue, Event* event) {
     auto routine = Xsyr<T>(queue, event);
-    routine.DoSyr(layout, triangle,
-                  n,
-                  alpha,
+    routine.DoSyr(layout, triangle, n, alpha,
                   x_buffer, x_offset, x_inc,
                   a_buffer, a_offset, a_ld);
 }
 
-template void PUBLIC_API syr<float>(const Layout, const Triangle,
-                                    const size_t,
-                                    const float,
-                                    const Buffer<float>&, const size_t, const size_t,
-                                    Buffer<float>&, const size_t, const size_t,
-                                    const Queue&, Event*);
-template void PUBLIC_API syr<double>(const Layout, const Triangle,
-                                     const size_t,
-                                     const double,
+template void PUBLIC_API syr<float> (const Layout, const Triangle, const size_t, const float,
+                                     const Buffer<float>&, const size_t, const size_t,
+                                     Buffer<float>&, const size_t, const size_t,
+                                     const Queue&, Event*);
+template void PUBLIC_API syr<double>(const Layout, const Triangle, const size_t, const double,
                                      const Buffer<double>&, const size_t, const size_t,
                                      Buffer<double>&, const size_t, const size_t,
                                      const Queue&, Event*);
-template void PUBLIC_API syr<half>(const Layout, const Triangle,
-                                   const size_t,
-                                   const half,
-                                   const Buffer<half>&, const size_t, const size_t,
-                                   Buffer<half>&, const size_t, const size_t,
-                                   const Queue&, Event*);
+template void PUBLIC_API syr<half>  (const Layout, const Triangle, const size_t, const half,
+                                     const Buffer<half>&, const size_t, const size_t,
+                                     Buffer<half>&, const size_t, const size_t,
+                                     const Queue&, Event*);
 
 // Symmetric packed rank-1 matrix update: SSPR/DSPR/HSPR
 template <typename T>
-void spr(const Layout layout, const Triangle triangle,
-         const size_t n,
-         const T alpha,
+void spr(const Layout layout, const Triangle triangle, const size_t n, const T alpha,
          const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
          Buffer<T>& ap_buffer, const size_t ap_offset,
          const Queue& queue, Event* event) {
     auto routine = Xspr<T>(queue, event);
-    routine.DoSpr(layout, triangle,
-                  n,
-                  alpha,
+    routine.DoSpr(layout, triangle, n, alpha,
                   x_buffer, x_offset, x_inc,
                   ap_buffer, ap_offset);
 }
 
-template void PUBLIC_API spr<float>(const Layout, const Triangle,
-                                    const size_t,
-                                    const float,
-                                    const Buffer<float>&, const size_t, const size_t,
-                                    Buffer<float>&, const size_t,
-                                    const Queue&, Event*);
-template void PUBLIC_API spr<double>(const Layout, const Triangle,
-                                     const size_t,
-                                     const double,
+template void PUBLIC_API spr<float> (const Layout, const Triangle, const size_t, const float,
+                                     const Buffer<float>&, const size_t, const size_t,
+                                     Buffer<float>&, const size_t,
+                                     const Queue&, Event*);
+template void PUBLIC_API spr<double>(const Layout, const Triangle, const size_t, const double,
                                      const Buffer<double>&, const size_t, const size_t,
                                      Buffer<double>&, const size_t,
                                      const Queue&, Event*);
-template void PUBLIC_API spr<half>(const Layout, const Triangle,
-                                   const size_t,
-                                   const half,
-                                   const Buffer<half>&, const size_t, const size_t,
-                                   Buffer<half>&, const size_t,
-                                   const Queue&, Event*);
+template void PUBLIC_API spr<half>  (const Layout, const Triangle, const size_t, const half,
+                                     const Buffer<half>&, const size_t, const size_t,
+                                     Buffer<half>&, const size_t,
+                                     const Queue&, Event*);
 
 // Symmetric rank-2 matrix update: SSYR2/DSYR2/HSYR2
 template <typename T>
-void syr2(const Layout layout, const Triangle triangle,
-          const size_t n,
-          const T alpha,
+void syr2(const Layout layout, const Triangle triangle, const size_t n, const T alpha,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
           const Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
           Buffer<T>& a_buffer, const size_t a_offset, const size_t a_ld,
           const Queue& queue, Event* event) {
     auto routine = Xsyr2<T>(queue, event);
-    routine.DoSyr2(layout, triangle,
-                   n,
-                   alpha,
+    routine.DoSyr2(layout, triangle, n, alpha,
                    x_buffer, x_offset, x_inc,
                    y_buffer, y_offset, y_inc,
                    a_buffer, a_offset, a_ld);
 }
 
-template void PUBLIC_API syr2<float>(const Layout, const Triangle,
-                                     const size_t,
-                                     const float,
-                                     const Buffer<float>&, const size_t, const size_t,
-                                     const Buffer<float>&, const size_t, const size_t,
-                                     Buffer<float>&, const size_t, const size_t,
-                                     const Queue&, Event*);
-template void PUBLIC_API syr2<double>(const Layout, const Triangle,
-                                      const size_t,
-                                      const double,
+template void PUBLIC_API syr2<float> (const Layout, const Triangle, const size_t, const float,
+                                      const Buffer<float>&, const size_t, const size_t,
+                                      const Buffer<float>&, const size_t, const size_t,
+                                      Buffer<float>&, const size_t, const size_t,
+                                      const Queue&, Event*);
+template void PUBLIC_API syr2<double>(const Layout, const Triangle, const size_t, const double,
                                       const Buffer<double>&, const size_t, const size_t,
                                       const Buffer<double>&, const size_t, const size_t,
                                       Buffer<double>&, const size_t, const size_t,
                                       const Queue&, Event*);
-template void PUBLIC_API syr2<half>(const Layout, const Triangle,
-                                    const size_t,
-                                    const half,
-                                    const Buffer<half>&, const size_t, const size_t,
-                                    const Buffer<half>&, const size_t, const size_t,
-                                    Buffer<half>&, const size_t, const size_t,
-                                    const Queue&, Event*);
+template void PUBLIC_API syr2<half>  (const Layout, const Triangle, const size_t, const half,
+                                      const Buffer<half>&, const size_t, const size_t,
+                                      const Buffer<half>&, const size_t, const size_t,
+                                      Buffer<half>&, const size_t, const size_t,
+                                      const Queue&, Event*);
 
 // Symmetric packed rank-2 matrix update: SSPR2/DSPR2/HSPR2
 template <typename T>
-void spr2(const Layout layout, const Triangle triangle,
-          const size_t n,
-          const T alpha,
+void spr2(const Layout layout, const Triangle triangle, const size_t n, const T alpha,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
           const Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
           Buffer<T>& ap_buffer, const size_t ap_offset,
           const Queue& queue, Event* event) {
     auto routine = Xspr2<T>(queue, event);
-    routine.DoSpr2(layout, triangle,
-                   n,
-                   alpha,
+    routine.DoSpr2(layout, triangle, n, alpha,
                    x_buffer, x_offset, x_inc,
                    y_buffer, y_offset, y_inc,
                    ap_buffer, ap_offset);
 }
 
-template void PUBLIC_API spr2<float>(const Layout, const Triangle,
-                                     const size_t,
-                                     const float,
-                                     const Buffer<float>&, const size_t, const size_t,
-                                     const Buffer<float>&, const size_t, const size_t,
-                                     Buffer<float>&, const size_t,
-                                     const Queue&, Event*);
-template void PUBLIC_API spr2<double>(const Layout, const Triangle,
-                                      const size_t,
-                                      const double,
+template void PUBLIC_API spr2<float> (const Layout, const Triangle, const size_t, const float,
+                                      const Buffer<float>&, const size_t, const size_t,
+                                      const Buffer<float>&, const size_t, const size_t,
+                                      Buffer<float>&, const size_t,
+                                      const Queue&, Event*);
+template void PUBLIC_API spr2<double>(const Layout, const Triangle, const size_t, const double,
                                       const Buffer<double>&, const size_t, const size_t,
                                       const Buffer<double>&, const size_t, const size_t,
                                       Buffer<double>&, const size_t,
                                       const Queue&, Event*);
-template void PUBLIC_API spr2<half>(const Layout, const Triangle,
-                                    const size_t,
-                                    const half,
-                                    const Buffer<half>&, const size_t, const size_t,
-                                    const Buffer<half>&, const size_t, const size_t,
-                                    Buffer<half>&, const size_t,
-                                    const Queue&, Event*);
+template void PUBLIC_API spr2<half>  (const Layout, const Triangle, const size_t, const half,
+                                      const Buffer<half>&, const size_t, const size_t,
+                                      const Buffer<half>&, const size_t, const size_t,
+                                      Buffer<half>&, const size_t,
+                                      const Queue&, Event*);
 
 // =================================================================================================
 // BLAS level-3 (matrix-matrix) routines
@@ -1613,30 +1485,30 @@ void symm(const Layout layout, const Side side, const Triangle triangle,
                    c_buffer, c_offset, c_ld);
 }
 
-template void PUBLIC_API symm<float>(const Layout, const Side, const Triangle,
-                                     const size_t, const size_t,
-                                     const float,
-                                     const Buffer<float>&, const size_t, const size_t,
-                                     const Buffer<float>&, const size_t, const size_t,
-                                     const float,
-                                     Buffer<float>&, const size_t, const size_t,
-                                     const Queue&, Event*);
-template void PUBLIC_API symm<double>(const Layout, const Side, const Triangle,
-                                      const size_t, const size_t,
-                                      const double,
-                                      const Buffer<double>&, const size_t, const size_t,
-                                      const Buffer<double>&, const size_t, const size_t,
-                                      const double,
-                                      Buffer<double>&, const size_t, const size_t,
-                                      const Queue&, Event*);
-template void PUBLIC_API symm<float2>(const Layout, const Side, const Triangle,
-                                      const size_t, const size_t,
-                                      const float2,
-                                      const Buffer<float2>&, const size_t, const size_t,
-                                      const Buffer<float2>&, const size_t, const size_t,
-                                      const float2,
-                                      Buffer<float2>&, const size_t, const size_t,
-                                      const Queue&, Event*);
+template void PUBLIC_API symm<float>  (const Layout, const Side, const Triangle,
+                                       const size_t, const size_t,
+                                       const float,
+                                       const Buffer<float>&, const size_t, const size_t,
+                                       const Buffer<float>&, const size_t, const size_t,
+                                       const float,
+                                       Buffer<float>&, const size_t, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API symm<double> (const Layout, const Side, const Triangle,
+                                       const size_t, const size_t,
+                                       const double,
+                                       const Buffer<double>&, const size_t, const size_t,
+                                       const Buffer<double>&, const size_t, const size_t,
+                                       const double,
+                                       Buffer<double>&, const size_t, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API symm<float2> (const Layout, const Side, const Triangle,
+                                       const size_t, const size_t,
+                                       const float2,
+                                       const Buffer<float2>&, const size_t, const size_t,
+                                       const Buffer<float2>&, const size_t, const size_t,
+                                       const float2,
+                                       Buffer<float2>&, const size_t, const size_t,
+                                       const Queue&, Event*);
 template void PUBLIC_API symm<double2>(const Layout, const Side, const Triangle,
                                        const size_t, const size_t,
                                        const double2,
@@ -1645,14 +1517,14 @@ template void PUBLIC_API symm<double2>(const Layout, const Side, const Triangle,
                                        const double2,
                                        Buffer<double2>&, const size_t, const size_t,
                                        const Queue&, Event*);
-template void PUBLIC_API symm<half>(const Layout, const Side, const Triangle,
-                                    const size_t, const size_t,
-                                    const half,
-                                    const Buffer<half>&, const size_t, const size_t,
-                                    const Buffer<half>&, const size_t, const size_t,
-                                    const half,
-                                    Buffer<half>&, const size_t, const size_t,
-                                    const Queue&, Event*);
+template void PUBLIC_API symm<half>   (const Layout, const Side, const Triangle,
+                                       const size_t, const size_t,
+                                       const half,
+                                       const Buffer<half>&, const size_t, const size_t,
+                                       const Buffer<half>&, const size_t, const size_t,
+                                       const half,
+                                       Buffer<half>&, const size_t, const size_t,
+                                       const Queue&, Event*);
 
 // Hermitian matrix-matrix multiplication: CHEMM/ZHEMM
 template <typename T>
@@ -1674,14 +1546,14 @@ void hemm(const Layout layout, const Side side, const Triangle triangle,
                    c_buffer, c_offset, c_ld);
 }
 
-template void PUBLIC_API hemm<float2>(const Layout, const Side, const Triangle,
-                                      const size_t, const size_t,
-                                      const float2,
-                                      const Buffer<float2>&, const size_t, const size_t,
-                                      const Buffer<float2>&, const size_t, const size_t,
-                                      const float2,
-                                      Buffer<float2>&, const size_t, const size_t,
-                                      const Queue&, Event*);
+template void PUBLIC_API hemm<float2> (const Layout, const Side, const Triangle,
+                                       const size_t, const size_t,
+                                       const float2,
+                                       const Buffer<float2>&, const size_t, const size_t,
+                                       const Buffer<float2>&, const size_t, const size_t,
+                                       const float2,
+                                       Buffer<float2>&, const size_t, const size_t,
+                                       const Queue&, Event*);
 template void PUBLIC_API hemm<double2>(const Layout, const Side, const Triangle,
                                        const size_t, const size_t,
                                        const double2,
@@ -1709,27 +1581,27 @@ void syrk(const Layout layout, const Triangle triangle, const Transpose a_transp
                    c_buffer, c_offset, c_ld);
 }
 
-template void PUBLIC_API syrk<float>(const Layout, const Triangle, const Transpose,
-                                     const size_t, const size_t,
-                                     const float,
-                                     const Buffer<float>&, const size_t, const size_t,
-                                     const float,
-                                     Buffer<float>&, const size_t, const size_t,
-                                     const Queue&, Event*);
-template void PUBLIC_API syrk<double>(const Layout, const Triangle, const Transpose,
-                                      const size_t, const size_t,
-                                      const double,
-                                      const Buffer<double>&, const size_t, const size_t,
-                                      const double,
-                                      Buffer<double>&, const size_t, const size_t,
-                                      const Queue&, Event*);
-template void PUBLIC_API syrk<float2>(const Layout, const Triangle, const Transpose,
-                                      const size_t, const size_t,
-                                      const float2,
-                                      const Buffer<float2>&, const size_t, const size_t,
-                                      const float2,
-                                      Buffer<float2>&, const size_t, const size_t,
-                                      const Queue&, Event*);
+template void PUBLIC_API syrk<float>  (const Layout, const Triangle, const Transpose,
+                                       const size_t, const size_t,
+                                       const float,
+                                       const Buffer<float>&, const size_t, const size_t,
+                                       const float,
+                                       Buffer<float>&, const size_t, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API syrk<double> (const Layout, const Triangle, const Transpose,
+                                       const size_t, const size_t,
+                                       const double,
+                                       const Buffer<double>&, const size_t, const size_t,
+                                       const double,
+                                       Buffer<double>&, const size_t, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API syrk<float2> (const Layout, const Triangle, const Transpose,
+                                       const size_t, const size_t,
+                                       const float2,
+                                       const Buffer<float2>&, const size_t, const size_t,
+                                       const float2,
+                                       Buffer<float2>&, const size_t, const size_t,
+                                       const Queue&, Event*);
 template void PUBLIC_API syrk<double2>(const Layout, const Triangle, const Transpose,
                                        const size_t, const size_t,
                                        const double2,
@@ -1737,13 +1609,13 @@ template void PUBLIC_API syrk<double2>(const Layout, const Triangle, const Trans
                                        const double2,
                                        Buffer<double2>&, const size_t, const size_t,
                                        const Queue&, Event*);
-template void PUBLIC_API syrk<half>(const Layout, const Triangle, const Transpose,
-                                    const size_t, const size_t,
-                                    const half,
-                                    const Buffer<half>&, const size_t, const size_t,
-                                    const half,
-                                    Buffer<half>&, const size_t, const size_t,
-                                    const Queue&, Event*);
+template void PUBLIC_API syrk<half>   (const Layout, const Triangle, const Transpose,
+                                       const size_t, const size_t,
+                                       const half,
+                                       const Buffer<half>&, const size_t, const size_t,
+                                       const half,
+                                       Buffer<half>&, const size_t, const size_t,
+                                       const Queue&, Event*);
 
 // Rank-K update of a hermitian matrix: CHERK/ZHERK
 template <typename T>
@@ -1763,13 +1635,13 @@ void herk(const Layout layout, const Triangle triangle, const Transpose a_transp
                    c_buffer, c_offset, c_ld);
 }
 
-template void PUBLIC_API herk<float>(const Layout, const Triangle, const Transpose,
-                                     const size_t, const size_t,
-                                     const float,
-                                     const Buffer<std::complex<float>>&, const size_t, const size_t,
-                                     const float,
-                                     Buffer<std::complex<float>>&, const size_t, const size_t,
-                                     const Queue&, Event*);
+template void PUBLIC_API herk<float> (const Layout, const Triangle, const Transpose,
+                                      const size_t, const size_t,
+                                      const float,
+                                      const Buffer<std::complex<float>>&, const size_t, const size_t,
+                                      const float,
+                                      Buffer<std::complex<float>>&, const size_t, const size_t,
+                                      const Queue&, Event*);
 template void PUBLIC_API herk<double>(const Layout, const Triangle, const Transpose,
                                       const size_t, const size_t,
                                       const double,
@@ -1798,30 +1670,30 @@ void syr2k(const Layout layout, const Triangle triangle, const Transpose ab_tran
                     c_buffer, c_offset, c_ld);
 }
 
-template void PUBLIC_API syr2k<float>(const Layout, const Triangle, const Transpose,
-                                      const size_t, const size_t,
-                                      const float,
-                                      const Buffer<float>&, const size_t, const size_t,
-                                      const Buffer<float>&, const size_t, const size_t,
-                                      const float,
-                                      Buffer<float>&, const size_t, const size_t,
-                                      const Queue&, Event*);
-template void PUBLIC_API syr2k<double>(const Layout, const Triangle, const Transpose,
-                                       const size_t, const size_t,
-                                       const double,
-                                       const Buffer<double>&, const size_t, const size_t,
-                                       const Buffer<double>&, const size_t, const size_t,
-                                       const double,
-                                       Buffer<double>&, const size_t, const size_t,
-                                       const Queue&, Event*);
-template void PUBLIC_API syr2k<float2>(const Layout, const Triangle, const Transpose,
-                                       const size_t, const size_t,
-                                       const float2,
-                                       const Buffer<float2>&, const size_t, const size_t,
-                                       const Buffer<float2>&, const size_t, const size_t,
-                                       const float2,
-                                       Buffer<float2>&, const size_t, const size_t,
-                                       const Queue&, Event*);
+template void PUBLIC_API syr2k<float>  (const Layout, const Triangle, const Transpose,
+                                        const size_t, const size_t,
+                                        const float,
+                                        const Buffer<float>&, const size_t, const size_t,
+                                        const Buffer<float>&, const size_t, const size_t,
+                                        const float,
+                                        Buffer<float>&, const size_t, const size_t,
+                                        const Queue&, Event*);
+template void PUBLIC_API syr2k<double> (const Layout, const Triangle, const Transpose,
+                                        const size_t, const size_t,
+                                        const double,
+                                        const Buffer<double>&, const size_t, const size_t,
+                                        const Buffer<double>&, const size_t, const size_t,
+                                        const double,
+                                        Buffer<double>&, const size_t, const size_t,
+                                        const Queue&, Event*);
+template void PUBLIC_API syr2k<float2> (const Layout, const Triangle, const Transpose,
+                                        const size_t, const size_t,
+                                        const float2,
+                                        const Buffer<float2>&, const size_t, const size_t,
+                                        const Buffer<float2>&, const size_t, const size_t,
+                                        const float2,
+                                        Buffer<float2>&, const size_t, const size_t,
+                                        const Queue&, Event*);
 template void PUBLIC_API syr2k<double2>(const Layout, const Triangle, const Transpose,
                                         const size_t, const size_t,
                                         const double2,
@@ -1830,14 +1702,14 @@ template void PUBLIC_API syr2k<double2>(const Layout, const Triangle, const Tran
                                         const double2,
                                         Buffer<double2>&, const size_t, const size_t,
                                         const Queue&, Event*);
-template void PUBLIC_API syr2k<half>(const Layout, const Triangle, const Transpose,
-                                     const size_t, const size_t,
-                                     const half,
-                                     const Buffer<half>&, const size_t, const size_t,
-                                     const Buffer<half>&, const size_t, const size_t,
-                                     const half,
-                                     Buffer<half>&, const size_t, const size_t,
-                                     const Queue&, Event*);
+template void PUBLIC_API syr2k<half>   (const Layout, const Triangle, const Transpose,
+                                        const size_t, const size_t,
+                                        const half,
+                                        const Buffer<half>&, const size_t, const size_t,
+                                        const Buffer<half>&, const size_t, const size_t,
+                                        const half,
+                                        Buffer<half>&, const size_t, const size_t,
+                                        const Queue&, Event*);
 
 // Rank-2K update of a hermitian matrix: CHER2K/ZHER2K
 template <typename T, typename U>
@@ -1859,14 +1731,14 @@ void her2k(const Layout layout, const Triangle triangle, const Transpose ab_tran
                     c_buffer, c_offset, c_ld);
 }
 
-template void PUBLIC_API her2k<float2,float>(const Layout, const Triangle, const Transpose,
-                                             const size_t, const size_t,
-                                             const float2,
-                                             const Buffer<float2>&, const size_t, const size_t,
-                                             const Buffer<float2>&, const size_t, const size_t,
-                                             const float,
-                                             Buffer<float2>&, const size_t, const size_t,
-                                             const Queue&, Event*);
+template void PUBLIC_API her2k<float2,float>  (const Layout, const Triangle, const Transpose,
+                                               const size_t, const size_t,
+                                               const float2,
+                                               const Buffer<float2>&, const size_t, const size_t,
+                                               const Buffer<float2>&, const size_t, const size_t,
+                                               const float,
+                                               Buffer<float2>&, const size_t, const size_t,
+                                               const Queue&, Event*);
 template void PUBLIC_API her2k<double2,double>(const Layout, const Triangle, const Transpose,
                                                const size_t, const size_t,
                                                const double2,
@@ -1879,87 +1751,74 @@ template void PUBLIC_API her2k<double2,double>(const Layout, const Triangle, con
 // Triangular matrix-matrix multiplication: STRMM/DTRMM/CTRMM/ZTRMM/HTRMM
 template <typename T>
 void trmm(const Layout layout, const Side side, const Triangle triangle, const Transpose a_transpose, const Diagonal diagonal,
-          const size_t m, const size_t n,
-          const T alpha,
+          const size_t m, const size_t n, const T alpha,
           const Buffer<T>& a_buffer, const size_t a_offset, const size_t a_ld,
           Buffer<T>& b_buffer, const size_t b_offset, const size_t b_ld,
           const Queue& queue, Event* event) {
     auto routine = Xtrmm<T>(queue, event);
     routine.DoTrmm(layout, side, triangle, a_transpose, diagonal,
-                   m, n,
-                   alpha,
+                   m, n, alpha,
                    a_buffer, a_offset, a_ld,
                    b_buffer, b_offset, b_ld);
 }
 
-template void PUBLIC_API trmm<float>(const Layout, const Side, const Triangle, const Transpose, const Diagonal,
-                                     const size_t, const size_t,
-                                     const float,
-                                     const Buffer<float>&, const size_t, const size_t,
-                                     Buffer<float>&, const size_t, const size_t,
-                                     const Queue&, Event*);
-template void PUBLIC_API trmm<double>(const Layout, const Side, const Triangle, const Transpose, const Diagonal,
-                                      const size_t, const size_t,
-                                      const double,
-                                      const Buffer<double>&, const size_t, const size_t,
-                                      Buffer<double>&, const size_t, const size_t,
-                                      const Queue&, Event*);
-template void PUBLIC_API trmm<float2>(const Layout, const Side, const Triangle, const Transpose, const Diagonal,
-                                      const size_t, const size_t,
-                                      const float2,
-                                      const Buffer<float2>&, const size_t, const size_t,
-                                      Buffer<float2>&, const size_t, const size_t,
-                                      const Queue&, Event*);
+template void PUBLIC_API trmm<float>  (const Layout, const Side, const Triangle, const Transpose, const Diagonal,
+                                       const size_t, const size_t, const float,
+                                       const Buffer<float>&, const size_t, const size_t,
+                                       Buffer<float>&, const size_t, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API trmm<double> (const Layout, const Side, const Triangle, const Transpose, const Diagonal,
+                                       const size_t, const size_t, const double,
+                                       const Buffer<double>&, const size_t, const size_t,
+                                       Buffer<double>&, const size_t, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API trmm<float2> (const Layout, const Side, const Triangle, const Transpose, const Diagonal,
+                                       const size_t, const size_t, const float2,
+                                       const Buffer<float2>&, const size_t, const size_t,
+                                       Buffer<float2>&, const size_t, const size_t,
+                                       const Queue&, Event*);
 template void PUBLIC_API trmm<double2>(const Layout, const Side, const Triangle, const Transpose, const Diagonal,
-                                       const size_t, const size_t,
-                                       const double2,
+                                       const size_t, const size_t, const double2,
                                        const Buffer<double2>&, const size_t, const size_t,
                                        Buffer<double2>&, const size_t, const size_t,
                                        const Queue&, Event*);
-template void PUBLIC_API trmm<half>(const Layout, const Side, const Triangle, const Transpose, const Diagonal,
-                                    const size_t, const size_t,
-                                    const half,
-                                    const Buffer<half>&, const size_t, const size_t,
-                                    Buffer<half>&, const size_t, const size_t,
-                                    const Queue&, Event*);
+template void PUBLIC_API trmm<half>   (const Layout, const Side, const Triangle, const Transpose, const Diagonal,
+                                       const size_t, const size_t, const half,
+                                       const Buffer<half>&, const size_t, const size_t,
+                                       Buffer<half>&, const size_t, const size_t,
+                                       const Queue&, Event*);
 
 // Solves a triangular system of equations: STRSM/DTRSM/CTRSM/ZTRSM
 template <typename T>
 void trsm(const Layout layout, const Side side, const Triangle triangle, const Transpose a_transpose, const Diagonal diagonal,
-          const size_t m, const size_t n,
-          const T alpha,
+          const size_t m, const size_t n, const T alpha,
           const Buffer<T>& a_buffer, const size_t a_offset, const size_t a_ld,
           Buffer<T>& b_buffer, const size_t b_offset, const size_t b_ld,
           const Queue& queue, Event* event) {
     auto routine = Xtrsm<T>(queue, event);
     routine.DoTrsm(layout, side, triangle, a_transpose, diagonal,
-                   m, n,
-                   alpha,
+                   m, n, alpha,
                    a_buffer, a_offset, a_ld,
                    b_buffer, b_offset, b_ld);
 }
 
-template void PUBLIC_API trsm<float>(const Layout, const Side, const Triangle, const Transpose, const Diagonal,
-                                     const size_t, const size_t,
-                                     const float,
-                                     const Buffer<float>&, const size_t, const size_t,
-                                     Buffer<float>&, const size_t, const size_t,
-                                     const Queue&, Event*);
-template void PUBLIC_API trsm<double>(const Layout, const Side, const Triangle, const Transpose, const Diagonal,
-                                      const size_t, const size_t,
-                                      const double,
-                                      const Buffer<double>&, const size_t, const size_t,
-                                      Buffer<double>&, const size_t, const size_t,
-                                      const Queue&, Event*);
-template void PUBLIC_API trsm<float2>(const Layout, const Side, const Triangle, const Transpose, const Diagonal,
-                                      const size_t, const size_t,
-                                      const float2,
-                                      const Buffer<float2>&, const size_t, const size_t,
-                                      Buffer<float2>&, const size_t, const size_t,
-                                      const Queue&, Event*);
+template void PUBLIC_API trsm<float>  (const Layout, const Side, const Triangle, const Transpose, const Diagonal,
+                                       const size_t, const size_t, const float,
+                                       const Buffer<float>&, const size_t, const size_t,
+                                       Buffer<float>&, const size_t, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API trsm<double> (const Layout, const Side, const Triangle, const Transpose, const Diagonal,
+                                       const size_t, const size_t, const double,
+                                       const Buffer<double>&, const size_t, const size_t,
+                                       Buffer<double>&, const size_t, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API trsm<float2> (const Layout, const Side, const Triangle, const Transpose, const Diagonal,
+                                       const size_t, const size_t, const float2,
+                                       const Buffer<float2>&, const size_t, const size_t,
+                                       Buffer<float2>&, const size_t, const size_t,
+                                       const Queue&, Event*);
 template void PUBLIC_API trsm<double2>(const Layout, const Side, const Triangle, const Transpose, const Diagonal,
-                                       const size_t, const size_t,
-                                       const double2,
+                                       const size_t, const size_t, const double2,
                                        const Buffer<double2>&, const size_t, const size_t,
                                        Buffer<double2>&, const size_t, const size_t,
                                        const Queue&, Event*);
@@ -1986,27 +1845,27 @@ void had(const size_t n,
                   z_buffer, z_offset, z_inc);
 }
 
-template void PUBLIC_API had<float>(const size_t,
-                                    const float,
-                                    const Buffer<float>&, const size_t, const size_t,
-                                    const Buffer<float>&, const size_t, const size_t,
-                                    const float,
-                                    Buffer<float>&, const size_t, const size_t,
-                                    const Queue&, Event*);
-template void PUBLIC_API had<double>(const size_t,
-                                     const double,
-                                     const Buffer<double>&, const size_t, const size_t,
-                                     const Buffer<double>&, const size_t, const size_t,
-                                     const double,
-                                     Buffer<double>&, const size_t, const size_t,
-                                     const Queue&, Event*);
-template void PUBLIC_API had<float2>(const size_t,
-                                     const float2,
-                                     const Buffer<float2>&, const size_t, const size_t,
-                                     const Buffer<float2>&, const size_t, const size_t,
-                                     const float2,
-                                     Buffer<float2>&, const size_t, const size_t,
-                                     const Queue&, Event*);
+template void PUBLIC_API had<float>  (const size_t,
+                                      const float,
+                                      const Buffer<float>&, const size_t, const size_t,
+                                      const Buffer<float>&, const size_t, const size_t,
+                                      const float,
+                                      Buffer<float>&, const size_t, const size_t,
+                                      const Queue&, Event*);
+template void PUBLIC_API had<double> (const size_t,
+                                      const double,
+                                      const Buffer<double>&, const size_t, const size_t,
+                                      const Buffer<double>&, const size_t, const size_t,
+                                      const double,
+                                      Buffer<double>&, const size_t, const size_t,
+                                      const Queue&, Event*);
+template void PUBLIC_API had<float2> (const size_t,
+                                      const float2,
+                                      const Buffer<float2>&, const size_t, const size_t,
+                                      const Buffer<float2>&, const size_t, const size_t,
+                                      const float2,
+                                      Buffer<float2>&, const size_t, const size_t,
+                                      const Queue&, Event*);
 template void PUBLIC_API had<double2>(const size_t,
                                       const double2,
                                       const Buffer<double2>&, const size_t, const size_t,
@@ -2014,100 +1873,120 @@ template void PUBLIC_API had<double2>(const size_t,
                                       const double2,
                                       Buffer<double2>&, const size_t, const size_t,
                                       const Queue&, Event*);
-template void PUBLIC_API had<half>(const size_t,
-                                   const half,
-                                   const Buffer<half>&, const size_t, const size_t,
-                                   const Buffer<half>&, const size_t, const size_t,
-                                   const half,
-                                   Buffer<half>&, const size_t, const size_t,
-                                   const Queue&, Event*);
+template void PUBLIC_API had<half>   (const size_t,
+                                      const half,
+                                      const Buffer<half>&, const size_t, const size_t,
+                                      const Buffer<half>&, const size_t, const size_t,
+                                      const half,
+                                      Buffer<half>&, const size_t, const size_t,
+                                      const Queue&, Event*);
 
 // Scaling and out-place transpose/copy (non-BLAS function): SOMATCOPY/DOMATCOPY/COMATCOPY/ZOMATCOPY/HOMATCOPY
 template <typename T>
 void omatcopy(const Layout layout, const Transpose a_transpose,
-              const size_t m, const size_t n,
-              const T alpha,
+              const size_t m, const size_t n, const T alpha,
               const Buffer<T>& a_buffer, const size_t a_offset, const size_t a_ld,
               Buffer<T>& b_buffer, const size_t b_offset, const size_t b_ld,
               const Queue& queue, Event* event) {
     auto routine = Xomatcopy<T>(queue, event);
-    routine.DoOmatcopy(layout, a_transpose,
-                       m, n,
-                       alpha,
+    routine.DoOmatcopy(layout, a_transpose, m, n, alpha,
                        a_buffer, a_offset, a_ld,
                        b_buffer, b_offset, b_ld);
 }
 
-template void PUBLIC_API omatcopy<float>(const Layout, const Transpose,
-                                         const size_t, const size_t,
-                                         const float,
-                                         const Buffer<float>&, const size_t, const size_t,
-                                         Buffer<float>&, const size_t, const size_t,
-                                         const Queue&, Event*);
-template void PUBLIC_API omatcopy<double>(const Layout, const Transpose,
-                                          const size_t, const size_t,
-                                          const double,
-                                          const Buffer<double>&, const size_t, const size_t,
-                                          Buffer<double>&, const size_t, const size_t,
-                                          const Queue&, Event*);
-template void PUBLIC_API omatcopy<float2>(const Layout, const Transpose,
-                                          const size_t, const size_t,
-                                          const float2,
-                                          const Buffer<float2>&, const size_t, const size_t,
-                                          Buffer<float2>&, const size_t, const size_t,
-                                          const Queue&, Event*);
+template void PUBLIC_API omatcopy<float>  (const Layout, const Transpose,
+                                           const size_t, const size_t, const float,
+                                           const Buffer<float>&, const size_t, const size_t,
+                                           Buffer<float>&, const size_t, const size_t,
+                                           const Queue&, Event*);
+template void PUBLIC_API omatcopy<double> (const Layout, const Transpose,
+                                           const size_t, const size_t, const double,
+                                           const Buffer<double>&, const size_t, const size_t,
+                                           Buffer<double>&, const size_t, const size_t,
+                                           const Queue&, Event*);
+template void PUBLIC_API omatcopy<float2> (const Layout, const Transpose,
+                                           const size_t, const size_t, const float2,
+                                           const Buffer<float2>&, const size_t, const size_t,
+                                           Buffer<float2>&, const size_t, const size_t,
+                                           const Queue&, Event*);
 template void PUBLIC_API omatcopy<double2>(const Layout, const Transpose,
-                                           const size_t, const size_t,
-                                           const double2,
+                                           const size_t, const size_t, const double2,
                                            const Buffer<double2>&, const size_t, const size_t,
                                            Buffer<double2>&, const size_t, const size_t,
                                            const Queue&, Event*);
-template void PUBLIC_API omatcopy<half>(const Layout, const Transpose,
-                                        const size_t, const size_t,
-                                        const half,
-                                        const Buffer<half>&, const size_t, const size_t,
-                                        Buffer<half>&, const size_t, const size_t,
-                                        const Queue&, Event*);
+template void PUBLIC_API omatcopy<half>   (const Layout, const Transpose,
+                                           const size_t, const size_t, const half,
+                                           const Buffer<half>&, const size_t, const size_t,
+                                           Buffer<half>&, const size_t, const size_t,
+                                           const Queue&, Event*);
 
 // Im2col function (non-BLAS function): SIM2COL/DIM2COL/CIM2COL/ZIM2COL/HIM2COL
 template <typename T>
 void im2col(const KernelMode kernel_mode,
-            const size_t channels, const size_t height, const size_t width, const size_t kernel_h, const size_t kernel_w, const size_t pad_h, const size_t pad_w, const size_t stride_h, const size_t stride_w, const size_t dilation_h, const size_t dilation_w,
+            const size_t channels, const size_t height, const size_t width,
+            const size_t kernel_h, const size_t kernel_w,
+            const size_t pad_h, const size_t pad_w,
+            const size_t stride_h, const size_t stride_w,
+            const size_t dilation_h, const size_t dilation_w,
             const Buffer<T>& im_buffer, const size_t im_offset,
             Buffer<T>& col_buffer, const size_t col_offset,
             const Queue& queue, Event* event) {
     auto routine = Xim2col<T>(queue, event);
     routine.DoIm2col(kernel_mode,
-                     channels, height, width, kernel_h, kernel_w, pad_h, pad_w, stride_h, stride_w, dilation_h, dilation_w,
+                     channels, height, width,
+                     kernel_h, kernel_w,
+                     pad_h, pad_w,
+                     stride_h, stride_w,
+                     dilation_h, dilation_w,
                      im_buffer, im_offset,
                      col_buffer, col_offset);
 }
 
-template void PUBLIC_API im2col<float>(const KernelMode,
-                                       const size_t, const size_t, const size_t, const size_t, const size_t, const size_t, const size_t, const size_t, const size_t, const size_t, const size_t,
-                                       const Buffer<float>&, const size_t,
-                                       Buffer<float>&, const size_t,
-                                       const Queue&, Event*);
-template void PUBLIC_API im2col<double>(const KernelMode,
-                                        const size_t, const size_t, const size_t, const size_t, const size_t, const size_t, const size_t, const size_t, const size_t, const size_t, const size_t,
-                                        const Buffer<double>&, const size_t,
-                                        Buffer<double>&, const size_t,
-                                        const Queue&, Event*);
-template void PUBLIC_API im2col<float2>(const KernelMode,
-                                        const size_t, const size_t, const size_t, const size_t, const size_t, const size_t, const size_t, const size_t, const size_t, const size_t, const size_t,
-                                        const Buffer<float2>&, const size_t,
-                                        Buffer<float2>&, const size_t,
-                                        const Queue&, Event*);
+template void PUBLIC_API im2col<float>  (const KernelMode,
+                                         const size_t, const size_t, const size_t,
+                                         const size_t, const size_t,
+                                         const size_t, const size_t,
+                                         const size_t, const size_t,
+                                         const size_t, const size_t,
+                                         const Buffer<float>&, const size_t,
+                                         Buffer<float>&, const size_t,
+                                         const Queue&, Event*);
+template void PUBLIC_API im2col<double> (const KernelMode,
+                                         const size_t, const size_t, const size_t,
+                                         const size_t, const size_t,
+                                         const size_t, const size_t,
+                                         const size_t, const size_t,
+                                         const size_t, const size_t,
+                                         const Buffer<double>&, const size_t,
+                                         Buffer<double>&, const size_t,
+                                         const Queue&, Event*);
+template void PUBLIC_API im2col<float2> (const KernelMode,
+                                         const size_t, const size_t, const size_t,
+                                         const size_t, const size_t,
+                                         const size_t, const size_t,
+                                         const size_t, const size_t,
+                                         const size_t, const size_t,
+                                         const Buffer<float2>&, const size_t,
+                                         Buffer<float2>&, const size_t,
+                                         const Queue&, Event*);
 template void PUBLIC_API im2col<double2>(const KernelMode,
-                                         const size_t, const size_t, const size_t, const size_t, const size_t, const size_t, const size_t, const size_t, const size_t, const size_t, const size_t,
+                                         const size_t, const size_t, const size_t,
+                                         const size_t, const size_t,
+                                         const size_t, const size_t,
+                                         const size_t, const size_t,
+                                         const size_t, const size_t,
                                          const Buffer<double2>&, const size_t,
                                          Buffer<double2>&, const size_t,
                                          const Queue&, Event*);
-template void PUBLIC_API im2col<half>(const KernelMode,
-                                      const size_t, const size_t, const size_t, const size_t, const size_t, const size_t, const size_t, const size_t, const size_t, const size_t, const size_t,
-                                      const Buffer<half>&, const size_t,
-                                      Buffer<half>&, const size_t,
-                                      const Queue&, Event*);
+template void PUBLIC_API im2col<half>   (const KernelMode,
+                                         const size_t, const size_t, const size_t,
+                                         const size_t, const size_t,
+                                         const size_t, const size_t,
+                                         const size_t, const size_t,
+                                         const size_t, const size_t,
+                                         const Buffer<half>&, const size_t,
+                                         Buffer<half>&, const size_t,
+                                         const Queue&, Event*);
 
 // Col2im function (non-BLAS function): SCOL2IM/DCOL2IM/CCOL2IM/ZCOL2IM/HCOL2IM
 template <typename T>
@@ -2131,33 +2010,33 @@ void col2im(const KernelMode kernel_mode,
                      im_buffer, im_offset);
 }
 
-template void PUBLIC_API col2im<float>(const KernelMode,
-                                       const size_t, const size_t, const size_t,
-                                       const size_t, const size_t,
-                                       const size_t, const size_t,
-                                       const size_t, const size_t,
-                                       const size_t, const size_t,
-                                       const Buffer<float>&, const size_t,
-                                       Buffer<float>&, const size_t,
-                                       const Queue&, Event*);
-template void PUBLIC_API col2im<double>(const KernelMode,
-                                        const size_t, const size_t, const size_t,
-                                        const size_t, const size_t,
-                                        const size_t, const size_t,
-                                        const size_t, const size_t,
-                                        const size_t, const size_t,
-                                        const Buffer<double>&, const size_t,
-                                        Buffer<double>&, const size_t,
-                                        const Queue&, Event*);
-template void PUBLIC_API col2im<float2>(const KernelMode,
-                                        const size_t, const size_t, const size_t,
-                                        const size_t, const size_t,
-                                        const size_t, const size_t,
-                                        const size_t, const size_t,
-                                        const size_t, const size_t,
-                                        const Buffer<float2>&, const size_t,
-                                        Buffer<float2>&, const size_t,
-                                        const Queue&, Event*);
+template void PUBLIC_API col2im<float>  (const KernelMode,
+                                         const size_t, const size_t, const size_t,
+                                         const size_t, const size_t,
+                                         const size_t, const size_t,
+                                         const size_t, const size_t,
+                                         const size_t, const size_t,
+                                         const Buffer<float>&, const size_t,
+                                         Buffer<float>&, const size_t,
+                                         const Queue&, Event*);
+template void PUBLIC_API col2im<double> (const KernelMode,
+                                         const size_t, const size_t, const size_t,
+                                         const size_t, const size_t,
+                                         const size_t, const size_t,
+                                         const size_t, const size_t,
+                                         const size_t, const size_t,
+                                         const Buffer<double>&, const size_t,
+                                         Buffer<double>&, const size_t,
+                                         const Queue&, Event*);
+template void PUBLIC_API col2im<float2> (const KernelMode,
+                                         const size_t, const size_t, const size_t,
+                                         const size_t, const size_t,
+                                         const size_t, const size_t,
+                                         const size_t, const size_t,
+                                         const size_t, const size_t,
+                                         const Buffer<float2>&, const size_t,
+                                         Buffer<float2>&, const size_t,
+                                         const Queue&, Event*);
 template void PUBLIC_API col2im<double2>(const KernelMode,
                                          const size_t, const size_t, const size_t,
                                          const size_t, const size_t,
@@ -2167,15 +2046,15 @@ template void PUBLIC_API col2im<double2>(const KernelMode,
                                          const Buffer<double2>&, const size_t,
                                          Buffer<double2>&, const size_t,
                                          const Queue&, Event*);
-template void PUBLIC_API col2im<half>(const KernelMode,
-                                      const size_t, const size_t, const size_t,
-                                      const size_t, const size_t,
-                                      const size_t, const size_t,
-                                      const size_t, const size_t,
-                                      const size_t, const size_t,
-                                      const Buffer<half>&, const size_t,
-                                      Buffer<half>&, const size_t,
-                                      const Queue&, Event*);
+template void PUBLIC_API col2im<half>   (const KernelMode,
+                                         const size_t, const size_t, const size_t,
+                                         const size_t, const size_t,
+                                         const size_t, const size_t,
+                                         const size_t, const size_t,
+                                         const size_t, const size_t,
+                                         const Buffer<half>&, const size_t,
+                                         Buffer<half>&, const size_t,
+                                         const Queue&, Event*);
 
 // Batched convolution as GEMM (non-BLAS function): SCONVGEMM/DCONVGEMM/HCONVGEMM
 template <typename T>
@@ -2203,17 +2082,17 @@ void convgemm(const KernelMode kernel_mode,
                        result_buffer, result_offset);
 }
 
-template void PUBLIC_API convgemm<float>(const KernelMode,
-                                         const size_t, const size_t, const size_t,
-                                         const size_t, const size_t,
-                                         const size_t, const size_t,
-                                         const size_t, const size_t,
-                                         const size_t, const size_t,
-                                         const size_t, const size_t,
-                                         const Buffer<float>&, const size_t,
-                                         const Buffer<float>&, const size_t,
-                                         Buffer<float>&, const size_t,
-                                         const Queue&, Event*);
+template void PUBLIC_API convgemm<float> (const KernelMode,
+                                          const size_t, const size_t, const size_t,
+                                          const size_t, const size_t,
+                                          const size_t, const size_t,
+                                          const size_t, const size_t,
+                                          const size_t, const size_t,
+                                          const size_t, const size_t,
+                                          const Buffer<float>&, const size_t,
+                                          const Buffer<float>&, const size_t,
+                                          Buffer<float>&, const size_t,
+                                          const Queue&, Event*);
 template void PUBLIC_API convgemm<double>(const KernelMode,
                                           const size_t, const size_t, const size_t,
                                           const size_t, const size_t,
@@ -2225,24 +2104,23 @@ template void PUBLIC_API convgemm<double>(const KernelMode,
                                           const Buffer<double>&, const size_t,
                                           Buffer<double>&, const size_t,
                                           const Queue&, Event*);
-template void PUBLIC_API convgemm<half>(const KernelMode,
-                                        const size_t, const size_t, const size_t,
-                                        const size_t, const size_t,
-                                        const size_t, const size_t,
-                                        const size_t, const size_t,
-                                        const size_t, const size_t,
-                                        const size_t, const size_t,
-                                        const Buffer<half>&, const size_t,
-                                        const Buffer<half>&, const size_t,
-                                        Buffer<half>&, const size_t,
-                                        const Queue&, Event*);
+template void PUBLIC_API convgemm<half>  (const KernelMode,
+                                          const size_t, const size_t, const size_t,
+                                          const size_t, const size_t,
+                                          const size_t, const size_t,
+                                          const size_t, const size_t,
+                                          const size_t, const size_t,
+                                          const size_t, const size_t,
+                                          const Buffer<half>&, const size_t,
+                                          const Buffer<half>&, const size_t,
+                                          Buffer<half>&, const size_t,
+                                          const Queue&, Event*);
 
 // Batched version of AXPY: SAXPYBATCHED/DAXPYBATCHED/CAXPYBATCHED/ZAXPYBATCHED/HAXPYBATCHED
 template <typename T>
-void axpyBatched(const size_t n,
-                 const T *alphas,
-                 const Buffer<T>& x_buffer, const size_t *x_offsets, const size_t x_inc,
-                 Buffer<T>& y_buffer, const size_t *y_offsets, const size_t y_inc,
+void axpyBatched(const size_t n, const T* alphas,
+                 const Buffer<T>& x_buffer, const size_t* x_offsets, const size_t x_inc,
+                 Buffer<T>& y_buffer, const size_t* y_offsets, const size_t y_inc,
                  const size_t batch_count,
                  const Queue& queue, Event* event) {
     auto routine = XaxpyBatched<T>(queue, event);
@@ -2254,53 +2132,47 @@ void axpyBatched(const size_t n,
       x_offsets_cpp.push_back(x_offsets[batch]);
       y_offsets_cpp.push_back(y_offsets[batch]);
     }
-    routine.DoAxpyBatched(n,
-                          alphas_cpp,
+    routine.DoAxpyBatched(n, alphas_cpp,
                           x_buffer, x_offsets_cpp, x_inc,
                           y_buffer, y_offsets_cpp, y_inc,
                           batch_count);
 }
 
-template void PUBLIC_API axpyBatched<float>(const size_t,
-                                            const float*,
-                                            const Buffer<float>&, const size_t*, const size_t,
-                                            Buffer<float>&, const size_t*, const size_t,
-                                            const size_t,
-                                            const Queue&, Event*);
-template void PUBLIC_API axpyBatched<double>(const size_t,
-                                             const double*,
-                                             const Buffer<double>&, const size_t*, const size_t,
-                                             Buffer<double>&, const size_t*, const size_t,
-                                             const size_t,
-                                             const Queue&, Event*);
-template void PUBLIC_API axpyBatched<float2>(const size_t,
-                                             const float2*,
-                                             const Buffer<float2>&, const size_t*, const size_t,
-                                             Buffer<float2>&, const size_t*, const size_t,
-                                             const size_t,
-                                             const Queue&, Event*);
-template void PUBLIC_API axpyBatched<double2>(const size_t,
-                                              const double2*,
+template void PUBLIC_API axpyBatched<float>  (const size_t, const float*,
+                                              const Buffer<float>&, const size_t*, const size_t,
+                                              Buffer<float>&, const size_t*, const size_t,
+                                              const size_t,
+                                              const Queue&, Event*);
+template void PUBLIC_API axpyBatched<double> (const size_t, const double*,
+                                              const Buffer<double>&, const size_t*, const size_t,
+                                              Buffer<double>&, const size_t*, const size_t,
+                                              const size_t,
+                                              const Queue&, Event*);
+template void PUBLIC_API axpyBatched<float2> (const size_t, const float2*,
+                                              const Buffer<float2>&, const size_t*, const size_t,
+                                              Buffer<float2>&, const size_t*, const size_t,
+                                              const size_t,
+                                              const Queue&, Event*);
+template void PUBLIC_API axpyBatched<double2>(const size_t, const double2*,
                                               const Buffer<double2>&, const size_t*, const size_t,
                                               Buffer<double2>&, const size_t*, const size_t,
                                               const size_t,
                                               const Queue&, Event*);
-template void PUBLIC_API axpyBatched<half>(const size_t,
-                                           const half*,
-                                           const Buffer<half>&, const size_t*, const size_t,
-                                           Buffer<half>&, const size_t*, const size_t,
-                                           const size_t,
-                                           const Queue&, Event*);
+template void PUBLIC_API axpyBatched<half>   (const size_t, const half*,
+                                              const Buffer<half>&, const size_t*, const size_t,
+                                              Buffer<half>&, const size_t*, const size_t,
+                                              const size_t,
+                                              const Queue&, Event*);
 
 // Batched version of GEMM: SGEMMBATCHED/DGEMMBATCHED/CGEMMBATCHED/ZGEMMBATCHED/HGEMMBATCHED
 template <typename T>
 void gemmBatched(const Layout layout, const Transpose a_transpose, const Transpose b_transpose,
                  const size_t m, const size_t n, const size_t k,
-                 const T *alphas,
-                 const Buffer<T>& a_buffer, const size_t *a_offsets, const size_t a_ld,
-                 const Buffer<T>& b_buffer, const size_t *b_offsets, const size_t b_ld,
-                 const T *betas,
-                 Buffer<T>& c_buffer, const size_t *c_offsets, const size_t c_ld,
+                 const T* alphas,
+                 const Buffer<T>& a_buffer, const size_t* a_offsets, const size_t a_ld,
+                 const Buffer<T>& b_buffer, const size_t* b_offsets, const size_t b_ld,
+                 const T* betas,
+                 Buffer<T>& c_buffer, const size_t* c_offsets, const size_t c_ld,
                  const size_t batch_count,
                  const Queue& queue, Event* event) {
     auto routine = XgemmBatched<T>(queue, event);
@@ -2326,33 +2198,33 @@ void gemmBatched(const Layout layout, const Transpose a_transpose, const Transpo
                           batch_count);
 }
 
-template void PUBLIC_API gemmBatched<float>(const Layout, const Transpose, const Transpose,
-                                            const size_t, const size_t, const size_t,
-                                            const float*,
-                                            const Buffer<float>&, const size_t*, const size_t,
-                                            const Buffer<float>&, const size_t*, const size_t,
-                                            const float*,
-                                            Buffer<float>&, const size_t*, const size_t,
-                                            const size_t,
-                                            const Queue&, Event*);
-template void PUBLIC_API gemmBatched<double>(const Layout, const Transpose, const Transpose,
-                                             const size_t, const size_t, const size_t,
-                                             const double*,
-                                             const Buffer<double>&, const size_t*, const size_t,
-                                             const Buffer<double>&, const size_t*, const size_t,
-                                             const double*,
-                                             Buffer<double>&, const size_t*, const size_t,
-                                             const size_t,
-                                             const Queue&, Event*);
-template void PUBLIC_API gemmBatched<float2>(const Layout, const Transpose, const Transpose,
-                                             const size_t, const size_t, const size_t,
-                                             const float2*,
-                                             const Buffer<float2>&, const size_t*, const size_t,
-                                             const Buffer<float2>&, const size_t*, const size_t,
-                                             const float2*,
-                                             Buffer<float2>&, const size_t*, const size_t,
-                                             const size_t,
-                                             const Queue&, Event*);
+template void PUBLIC_API gemmBatched<float>  (const Layout, const Transpose, const Transpose,
+                                              const size_t, const size_t, const size_t,
+                                              const float*,
+                                              const Buffer<float>&, const size_t*, const size_t,
+                                              const Buffer<float>&, const size_t*, const size_t,
+                                              const float*,
+                                              Buffer<float>&, const size_t*, const size_t,
+                                              const size_t,
+                                              const Queue&, Event*);
+template void PUBLIC_API gemmBatched<double> (const Layout, const Transpose, const Transpose,
+                                              const size_t, const size_t, const size_t,
+                                              const double*,
+                                              const Buffer<double>&, const size_t*, const size_t,
+                                              const Buffer<double>&, const size_t*, const size_t,
+                                              const double*,
+                                              Buffer<double>&, const size_t*, const size_t,
+                                              const size_t,
+                                              const Queue&, Event*);
+template void PUBLIC_API gemmBatched<float2> (const Layout, const Transpose, const Transpose,
+                                              const size_t, const size_t, const size_t,
+                                              const float2*,
+                                              const Buffer<float2>&, const size_t*, const size_t,
+                                              const Buffer<float2>&, const size_t*, const size_t,
+                                              const float2*,
+                                              Buffer<float2>&, const size_t*, const size_t,
+                                              const size_t,
+                                              const Queue&, Event*);
 template void PUBLIC_API gemmBatched<double2>(const Layout, const Transpose, const Transpose,
                                               const size_t, const size_t, const size_t,
                                               const double2*,
@@ -2362,15 +2234,15 @@ template void PUBLIC_API gemmBatched<double2>(const Layout, const Transpose, con
                                               Buffer<double2>&, const size_t*, const size_t,
                                               const size_t,
                                               const Queue&, Event*);
-template void PUBLIC_API gemmBatched<half>(const Layout, const Transpose, const Transpose,
-                                           const size_t, const size_t, const size_t,
-                                           const half*,
-                                           const Buffer<half>&, const size_t*, const size_t,
-                                           const Buffer<half>&, const size_t*, const size_t,
-                                           const half*,
-                                           Buffer<half>&, const size_t*, const size_t,
-                                           const size_t,
-                                           const Queue&, Event*);
+template void PUBLIC_API gemmBatched<half>   (const Layout, const Transpose, const Transpose,
+                                              const size_t, const size_t, const size_t,
+                                              const half*,
+                                              const Buffer<half>&, const size_t*, const size_t,
+                                              const Buffer<half>&, const size_t*, const size_t,
+                                              const half*,
+                                              Buffer<half>&, const size_t*, const size_t,
+                                              const size_t,
+                                              const Queue&, Event*);
 
 // StridedBatched version of GEMM: SGEMMSTRIDEDBATCHED/DGEMMSTRIDEDBATCHED/CGEMMSTRIDEDBATCHED/ZGEMMSTRIDEDBATCHED/HGEMMSTRIDEDBATCHED
 template <typename T>
@@ -2394,33 +2266,33 @@ void gemmStridedBatched(const Layout layout, const Transpose a_transpose, const 
                                  batch_count);
 }
 
-template void PUBLIC_API gemmStridedBatched<float>(const Layout, const Transpose, const Transpose,
-                                                   const size_t, const size_t, const size_t,
-                                                   const float,
-                                                   const Buffer<float>&, const size_t, const size_t, const size_t,
-                                                   const Buffer<float>&, const size_t, const size_t, const size_t,
-                                                   const float,
-                                                   Buffer<float>&, const size_t, const size_t, const size_t,
-                                                   const size_t,
-                                                   const Queue&, Event*);
-template void PUBLIC_API gemmStridedBatched<double>(const Layout, const Transpose, const Transpose,
-                                                    const size_t, const size_t, const size_t,
-                                                    const double,
-                                                    const Buffer<double>&, const size_t, const size_t, const size_t,
-                                                    const Buffer<double>&, const size_t, const size_t, const size_t,
-                                                    const double,
-                                                    Buffer<double>&, const size_t, const size_t, const size_t,
-                                                    const size_t,
-                                                    const Queue&, Event*);
-template void PUBLIC_API gemmStridedBatched<float2>(const Layout, const Transpose, const Transpose,
-                                                    const size_t, const size_t, const size_t,
-                                                    const float2,
-                                                    const Buffer<float2>&, const size_t, const size_t, const size_t,
-                                                    const Buffer<float2>&, const size_t, const size_t, const size_t,
-                                                    const float2,
-                                                    Buffer<float2>&, const size_t, const size_t, const size_t,
-                                                    const size_t,
-                                                    const Queue&, Event*);
+template void PUBLIC_API gemmStridedBatched<float>  (const Layout, const Transpose, const Transpose,
+                                                     const size_t, const size_t, const size_t,
+                                                     const float,
+                                                     const Buffer<float>&, const size_t, const size_t, const size_t,
+                                                     const Buffer<float>&, const size_t, const size_t, const size_t,
+                                                     const float,
+                                                     Buffer<float>&, const size_t, const size_t, const size_t,
+                                                     const size_t,
+                                                     const Queue&, Event*);
+template void PUBLIC_API gemmStridedBatched<double> (const Layout, const Transpose, const Transpose,
+                                                     const size_t, const size_t, const size_t,
+                                                     const double,
+                                                     const Buffer<double>&, const size_t, const size_t, const size_t,
+                                                     const Buffer<double>&, const size_t, const size_t, const size_t,
+                                                     const double,
+                                                     Buffer<double>&, const size_t, const size_t, const size_t,
+                                                     const size_t,
+                                                     const Queue&, Event*);
+template void PUBLIC_API gemmStridedBatched<float2> (const Layout, const Transpose, const Transpose,
+                                                     const size_t, const size_t, const size_t,
+                                                     const float2,
+                                                     const Buffer<float2>&, const size_t, const size_t, const size_t,
+                                                     const Buffer<float2>&, const size_t, const size_t, const size_t,
+                                                     const float2,
+                                                     Buffer<float2>&, const size_t, const size_t, const size_t,
+                                                     const size_t,
+                                                     const Queue&, Event*);
 template void PUBLIC_API gemmStridedBatched<double2>(const Layout, const Transpose, const Transpose,
                                                      const size_t, const size_t, const size_t,
                                                      const double2,
@@ -2430,15 +2302,15 @@ template void PUBLIC_API gemmStridedBatched<double2>(const Layout, const Transpo
                                                      Buffer<double2>&, const size_t, const size_t, const size_t,
                                                      const size_t,
                                                      const Queue&, Event*);
-template void PUBLIC_API gemmStridedBatched<half>(const Layout, const Transpose, const Transpose,
-                                                  const size_t, const size_t, const size_t,
-                                                  const half,
-                                                  const Buffer<half>&, const size_t, const size_t, const size_t,
-                                                  const Buffer<half>&, const size_t, const size_t, const size_t,
-                                                  const half,
-                                                  Buffer<half>&, const size_t, const size_t, const size_t,
-                                                  const size_t,
-                                                  const Queue&, Event*);
+template void PUBLIC_API gemmStridedBatched<half>   (const Layout, const Transpose, const Transpose,
+                                                     const size_t, const size_t, const size_t,
+                                                     const half,
+                                                     const Buffer<half>&, const size_t, const size_t, const size_t,
+                                                     const Buffer<half>&, const size_t, const size_t, const size_t,
+                                                     const half,
+                                                     Buffer<half>&, const size_t, const size_t, const size_t,
+                                                     const size_t,
+                                                     const Queue&, Event*);
 
 // Vector clamp (non-BLAS function): SCLAMP/DCLAMP/HCLAMP
 template <typename T>
@@ -2449,26 +2321,26 @@ void clamp(const size_t n, const T min, const T max,
     routine.DoClamp(n, min, max, x_buffer, x_offset, x_inc);
 }
 
-template void PUBLIC_API clamp<float>(const size_t, const float, const float,
-                                      Buffer<float>&, const size_t, const size_t,
-                                      const Queue&, Event*);
+template void PUBLIC_API clamp<float> (const size_t, const float, const float,
+                                       Buffer<float>&, const size_t, const size_t,
+                                       const Queue&, Event*);
 template void PUBLIC_API clamp<double>(const size_t, const double, const double,
                                        Buffer<double>&, const size_t, const size_t,
                                        const Queue&, Event*);
-template void PUBLIC_API clamp<half>(const size_t, const half, const half,
-                                     Buffer<half>&, const size_t, const size_t,
-                                     const Queue&, Event*);
+template void PUBLIC_API clamp<half>  (const size_t, const half, const half,
+                                       Buffer<half>&, const size_t, const size_t,
+                                       const Queue&, Event*);
 
 // =================================================================================================
 
 // Retrieves the required size of the temporary buffer for the GEMM kernel (optional)
 template <typename T>
-void gemmTempBufferSize(const Layout layout, const Transpose a_transpose, const Transpose b_transpose,
-                        const size_t m, const size_t n, const size_t k,
-                        const size_t a_offset, const size_t a_ld,
-                        const size_t b_offset, const size_t b_ld,
-                        const size_t c_offset, const size_t c_ld,
-                        const Queue& queue, size_t& temp_buffer_size) {
+size_t gemmTempBufferSize(const Layout layout, const Transpose a_transpose, const Transpose b_transpose,
+                          const size_t m, const size_t n, const size_t k,
+                          const size_t a_offset, const size_t a_ld,
+                          const size_t b_offset, const size_t b_ld,
+                          const size_t c_offset, const size_t c_ld,
+                          const Queue& queue) {
     // Retrieves the tuning database
     const auto device = queue.context().device(); // FIXME
     const auto kernel_names = std::vector<std::string>{"Xgemm", "GemmRoutine"};
@@ -2476,38 +2348,39 @@ void gemmTempBufferSize(const Layout layout, const Transpose a_transpose, const 
     Routine::InitDatabase(device, kernel_names, PrecisionValue<T>(), {}, db);
 
     // Computes the buffer size
+    size_t temp_buffer_size;
     if (Xgemm<T>::UseDirectKernel(m, n, k, db["XGEMM_MIN_INDIRECT_SIZE"])) {
       temp_buffer_size = 0;
+    } else {
+      temp_buffer_size = Xgemm<T>::GetTempSize(
+          layout, a_transpose, b_transpose, m, n, k,
+          a_offset, a_ld, b_offset, b_ld, c_offset, c_ld,
+          db["MWG"], db["NWG"], db["KWG"] * db["KREG"],
+          db["GEMMK"]);
     }
-    else {
-      temp_buffer_size = Xgemm<T>::GetTempSize(layout, a_transpose, b_transpose, m, n, k,
-                                               a_offset, a_ld, b_offset, b_ld, c_offset, c_ld,
-                                               db["MWG"], db["NWG"], db["KWG"] * db["KREG"],
-                                               db["GEMMK"]);
-    }
-    temp_buffer_size *= sizeof(T); // translate from num-elements to bytes
+    return temp_buffer_size;
 }
 
-template void PUBLIC_API gemmTempBufferSize<float>(const Layout, const Transpose, const Transpose,
-                                                   const size_t, const size_t, const size_t,
-                                                   const size_t, const size_t, const size_t, const size_t,
-                                                   const size_t, const size_t, const Queue&, size_t&);
-template void PUBLIC_API gemmTempBufferSize<double>(const Layout, const Transpose, const Transpose,
-                                                    const size_t, const size_t, const size_t,
-                                                    const size_t, const size_t, const size_t, const size_t,
-                                                    const size_t, const size_t, const Queue&, size_t&);
-template void PUBLIC_API gemmTempBufferSize<float2>(const Layout, const Transpose, const Transpose,
-                                                    const size_t, const size_t, const size_t,
-                                                    const size_t, const size_t, const size_t, const size_t,
-                                                    const size_t, const size_t, const Queue&, size_t&);
-template void PUBLIC_API gemmTempBufferSize<double2>(const Layout, const Transpose, const Transpose,
-                                                     const size_t, const size_t, const size_t,
-                                                     const size_t, const size_t, const size_t, const size_t,
-                                                     const size_t, const size_t, const Queue&, size_t&);
-template void PUBLIC_API gemmTempBufferSize<half>(const Layout, const Transpose, const Transpose,
-                                                  const size_t, const size_t, const size_t,
-                                                  const size_t, const size_t, const size_t, const size_t,
-                                                  const size_t, const size_t, const Queue&, size_t&);
+template size_t PUBLIC_API gemmTempBufferSize<float>  (const Layout, const Transpose, const Transpose,
+                                                       const size_t, const size_t, const size_t,
+                                                       const size_t, const size_t, const size_t, const size_t,
+                                                       const size_t, const size_t, const Queue&);
+template size_t PUBLIC_API gemmTempBufferSize<double> (const Layout, const Transpose, const Transpose,
+                                                       const size_t, const size_t, const size_t,
+                                                       const size_t, const size_t, const size_t, const size_t,
+                                                       const size_t, const size_t, const Queue&);
+template size_t PUBLIC_API gemmTempBufferSize<float2> (const Layout, const Transpose, const Transpose,
+                                                       const size_t, const size_t, const size_t,
+                                                       const size_t, const size_t, const size_t, const size_t,
+                                                       const size_t, const size_t, const Queue&);
+template size_t PUBLIC_API gemmTempBufferSize<double2>(const Layout, const Transpose, const Transpose,
+                                                       const size_t, const size_t, const size_t,
+                                                       const size_t, const size_t, const size_t, const size_t,
+                                                       const size_t, const size_t, const Queue&);
+template size_t PUBLIC_API gemmTempBufferSize<half>   (const Layout, const Transpose, const Transpose,
+                                                       const size_t, const size_t, const size_t,
+                                                       const size_t, const size_t, const size_t, const size_t,
+                                                       const size_t, const size_t, const Queue&);
 
 // =================================================================================================
 } // namespace gpgpu::blas

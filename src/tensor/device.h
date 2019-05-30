@@ -201,6 +201,7 @@ public:
 public:
     DevTensor<T>& operator+=(const DevTensor<T>& rhs);
     DevTensor<T>& operator-=(const DevTensor<T>& rhs);
+    DevTensor<T>& operator*=(const DevTensor<T>& rhs);
     DevTensor<T>& operator*=(const T& rhs);
 };
 
@@ -267,6 +268,37 @@ template <typename T>
 inline DevTensor<T> operator-(DevTensor<T>&& lhs, DevTensor<T>&& rhs) {
     lhs -= rhs;
     return lhs;
+}
+
+template <typename T>
+inline DevTensor<T>& DevTensor<T>::operator*=(const DevTensor<T>& rhs) {
+    gpgpu::blas::had(size(), T(1), buffer(), 0, 1, rhs.buffer(), 0, 1, T(0), buffer(), 0, 1, m_queue);
+    return *this;
+}
+
+template <typename T>
+inline DevTensor<T> operator*(const DevTensor<T>& lhs, const DevTensor<T>& rhs) {
+    auto R = lhs.copy();
+    R *= rhs;
+    return R;
+}
+
+template <typename T>
+inline DevTensor<T> operator*(DevTensor<T>&& lhs, const DevTensor<T>& rhs) {
+    lhs *= rhs;
+    return std::move(lhs);
+}
+
+template <typename T>
+inline DevTensor<T> operator*(const DevTensor<T>& lhs, DevTensor<T>&& rhs) {
+    rhs *= lhs;
+    return std::move(rhs);
+}
+
+template <typename T>
+inline DevTensor<T> operator*(DevTensor<T>&& lhs, DevTensor<T>&& rhs) {
+    lhs *= rhs;
+    return std::move(lhs);
 }
 
 template <typename T>

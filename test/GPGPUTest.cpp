@@ -87,10 +87,12 @@ TEST_F(GPGPUTest, Operator) {
 
     EXPECT_EQ((dev_A + dev_B).read(), A + B);
     EXPECT_EQ((dev_A - dev_B).read(), A - B);
+    EXPECT_EQ((dev_A * dev_B).read(), A * B);
     EXPECT_EQ((dev_A * 7.0f).read(), A * 7.0f);
     EXPECT_EQ((7.0f * dev_A).read(), 7.0f * A);
     EXPECT_EQ(((dev_A + dev_B) * 3.0f).read(), (A + B) * 3.0f);
     EXPECT_EQ((3.0f * (dev_A - dev_B)).read(), 3.0f * (A - B));
+    EXPECT_EQ(((dev_A + dev_B) * (dev_A - dev_B)).read(), ((A + B) * (A - B)));
 }
 
 TEST_F(GPGPUTest, VectorDotVector) {
