@@ -7,7 +7,7 @@
 using namespace tensor;
 
 static auto cl2cu =
-    #include "cl2cu.inc"
+    #include "cl2cu.cl"
 
 class GPGPUTest : public ::testing::Test {
 protected:

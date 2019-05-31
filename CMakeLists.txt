@@ -48,7 +48,7 @@ include_directories(${CUDA_INCLUDE_DIRS})
 
 # add sub-directories that we want CMake to scan
 add_subdirectory(gpgpu)
-include_directories(${gpgpu_SOURCE_DIR}/include)
+include_directories(${gpgpu_SOURCE_DIR}/include ${gpgpu_SOURCE_DIR}/src)
 add_subdirectory(src)
 
 include(cmake/googletest.cmake)

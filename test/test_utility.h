@@ -11,12 +11,14 @@ void timing(const std::string& name, int iteration, Body&& body) {
     for (int i = 0; i < iteration; i++)
         body();
     auto elapsed = high_resolution_clock::now() - start;
+
     auto seconds = duration_cast<duration<double>>(elapsed).count();
     std::cout << name << " elapsed "
               << std::fixed << std::setprecision(6)
-              << seconds
-              << "s, takes " << (seconds/iteration) << "s per iteration."
-              << std::endl;
+              << seconds << 's';
+    if (iteration > 1)
+        std::cout << " (" << (seconds/iteration) << "s per iteration)";
+    std::cout << std::endl;
 }
 
 #endif //_TEST_UTILITY_H
