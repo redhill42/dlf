@@ -23,6 +23,8 @@
     #define inline __inline
 #endif
 
+namespace gpgpu::blas {
+
 // =================================================================================================
 
 // The host data-type for half-precision floating-point (16-bit) is based on the `cl_half` OpenCL
@@ -247,5 +249,7 @@ inline float HalfToFloat(const half value) {
              exponent_table[value >> 10];
   return bits.f32;
 }
+
+} // namespace gpgpu::blas
 
 #endif //GPGPU_BLAS_HALF_H_

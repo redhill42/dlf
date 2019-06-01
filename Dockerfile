@@ -5,13 +5,13 @@
 # # Assemble the full dev environment. This is slow the first time.
 # docker build -t dlf-dev .
 #
-# # Mount your source in an iteractive container for quick testing:
+# # Mount your source in an interactive container for quick testing:
 # docker run -v `pwd`:/devel/dlf --privileged -ti dlf-dev bash
 #
 # # Run the test-suite:
 # docker run --privileged dlf-dev build/make.sh test
 
-FROM nvidia/cuda:10.1-devel-ubuntu18.04
+FROM nvidia/cuda:10.1-devel
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         git cmake wget libprotobuf-dev protobuf-compiler libgmp-dev && \

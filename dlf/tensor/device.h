@@ -16,8 +16,8 @@ class DevTensor {
     Shape m_shape;
     size_t m_size = 0;
 
-    mutable gpgpu::Queue m_queue;
-    mutable gpgpu::Buffer<T> m_data;
+    gpgpu::Queue m_queue;
+    gpgpu::Buffer<T> m_data;
 
 public:
     DevTensor() = default;

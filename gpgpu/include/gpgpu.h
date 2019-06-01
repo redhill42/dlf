@@ -556,32 +556,32 @@ public:
     size_t size() const noexcept { return m_size; }
     size_t data_size() const noexcept { return m_size * sizeof(T); }
 
-    void readAsync(Queue& queue, T* host, size_t size, size_t offset = 0, Event* event = nullptr) const {
+    void readAsync(const Queue& queue, T* host, size_t size, size_t offset = 0, Event* event = nullptr) const {
         auto ev = event== nullptr ? nullptr : event->raw();
         m_raw->read(queue.raw(), host, size*sizeof(T), offset*sizeof(T), ev);
     }
 
-    void read(Queue& queue, T* host, const size_t size, size_t offset = 0) const {
+    void read(const Queue& queue, T* host, const size_t size, size_t offset = 0) const {
         readAsync(queue, host, size, offset);
         queue.finish();
     }
 
-    void writeAsync(Queue& queue, const T* host, size_t size, size_t offset = 0, Event* event = nullptr) {
+    void writeAsync(const Queue& queue, const T* host, size_t size, size_t offset = 0, Event* event = nullptr) {
         auto ev = event== nullptr ? nullptr : event->raw();
         m_raw->write(queue.raw(), host, size*sizeof(T), offset*sizeof(T), ev);
     }
 
-    void write(Queue& queue, const T* host, size_t size, size_t offset = 0) {
+    void write(const Queue& queue, const T* host, size_t size, size_t offset = 0) {
         writeAsync(queue, host, size, offset);
         queue.finish();
     }
 
-    void copyToAsync(Queue &queue, Buffer &dest, size_t size, Event* event = nullptr) const {
+    void copyToAsync(const Queue &queue, Buffer &dest, size_t size, Event* event = nullptr) const {
         auto ev = event== nullptr ? nullptr : event->raw();
         m_raw->copyTo(queue.raw(), dest.raw(), size * sizeof(T), ev);
     }
 
-    void copyTo(Queue &queue, Buffer &dest, size_t size) const {
+    void copyTo(const Queue &queue, Buffer &dest, size_t size) const {
         copyToAsync(queue, dest, size);
         queue.finish();
     }
