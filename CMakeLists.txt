@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.1)
 
-project(DLFL CXX)
+project(DLF C CXX)
 set(CMAKE_CXX_STANDARD 17)
 
 # place binaries and libraries according to GNU standards
@@ -53,15 +53,17 @@ endif()
 # add sub-directories that we want CMake to scan
 add_subdirectory(gpgpu)
 include_directories(${gpgpu_SOURCE_DIR}/include ${gpgpu_SOURCE_DIR}/src)
-add_subdirectory(src)
+add_subdirectory(dlf)
 
-include(cmake/googletest.cmake)
-fetch_googletest(${PROJECT_SOURCE_DIR}/cmake ${PROJECT_BINARY_DIR}/googletest)
-enable_testing()
-add_subdirectory(test)
+if(NOT DEFINED ENV{SKIP_TESTS})
+  include(cmake/googletest.cmake)
+  fetch_googletest(${PROJECT_SOURCE_DIR}/cmake ${PROJECT_BINARY_DIR}/googletest)
+  enable_testing()
+  add_subdirectory(test)
+endif()
 
 add_executable(demo main.cpp)
-target_link_libraries(demo gpgpu dlfl ${TBB_LIBRARIES})
+target_link_libraries(demo gpgpu dlf ${TBB_LIBRARIES})
 
 if (USE_MKL)
   target_link_libraries(demo ${MKL_LIBRARIES})
