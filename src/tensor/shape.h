@@ -2,8 +2,9 @@
 #define _TENSOR_SHAPE_HPP
 
 #include <vector>
+#include <cassert>
 
-namespace tensor {
+namespace dlf {
 
 /**
  * The Shape defines the dimensions of a Tensor.
@@ -70,7 +71,7 @@ public:
      * Shrink one level of dimensions.
      */
     Shape shrink() const {
-        return Shape(std::vector(std::next(m_dims.begin()), m_dims.end()));
+        return Shape(std::vector<size_t>(std::next(m_dims.begin()), m_dims.end()));
     }
 
     /**
@@ -91,6 +92,6 @@ public:
     bool next(std::vector<size_t>& index) const noexcept;
 };
 
-} //namespace tensor
+} //namespace dlf
 
 #endif //_SHAPE_HPP

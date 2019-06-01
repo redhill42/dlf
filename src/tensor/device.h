@@ -6,7 +6,7 @@
 #include "gpgpu.h"
 #include "gpblas.h"
 
-namespace tensor {
+namespace dlf {
 
 /**
  * A tensor which data allocated from compute devices such as GPU.
@@ -494,6 +494,6 @@ void clamp(DevTensor<T>& A, const T& minval, const T& maxval) {
     gpgpu::blas::clamp(A.size(), minval, maxval, A.buffer(), 0, 1, A.queue());
 }
 
-} // namespace tensor
+} // namespace dlf
 
 #endif //_TENSOR_DEVICE_H

@@ -1,6 +1,6 @@
 #include "tensor/shape.h"
 
-using namespace tensor;
+using namespace dlf;
 
 size_t Shape::size() const noexcept {
     if (m_dims.empty())

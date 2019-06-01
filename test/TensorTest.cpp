@@ -15,7 +15,7 @@
 #include <gmpxx.h>
 #endif
 
-using namespace tensor;
+using namespace dlf;
 namespace T = ::testing;
 
 class TensorTest : public ::testing::Test {
@@ -629,7 +629,7 @@ TEST_F(TensorTest, TransformRValueOptimization) {
     {
         Tensor<int> a({2, 2}, {1, 2, 3, 4});
         Tensor<int> b({2, 2}, {5, 6, 7, 8});
-        Tensor<int> c = std::move(a).transform(b, std::plus());
+        Tensor<int> c = std::move(a).transform(b, std::plus<>());
         EXPECT_TRUE(a.empty());
         EXPECT_THAT(b, T::ElementsAre(5, 6, 7, 8));
         EXPECT_THAT(c, T::ElementsAre(6, 8, 10, 12));
@@ -638,7 +638,7 @@ TEST_F(TensorTest, TransformRValueOptimization) {
     {
         Tensor<int> a({2, 2}, {1, 2, 3, 4});
         Tensor<int> b({2, 2}, {5, 6, 7, 8});
-        Tensor<int> c = a.transform(std::move(b), std::plus());
+        Tensor<int> c = a.transform(std::move(b), std::plus<>());
         EXPECT_THAT(a, T::ElementsAre(1, 2, 3, 4));
         EXPECT_TRUE(b.empty());
         EXPECT_THAT(c, T::ElementsAre(6, 8, 10, 12));

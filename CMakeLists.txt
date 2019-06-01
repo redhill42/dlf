@@ -61,7 +61,7 @@ enable_testing()
 add_subdirectory(test)
 
 add_executable(demo main.cpp)
-target_link_libraries(demo gpgpu dlfl ${TBB_LIBS})
+target_link_libraries(demo gpgpu dlfl ${TBB_LIBRARIES})
 
 if (USE_MKL)
   target_link_libraries(demo ${MKL_LIBRARIES})

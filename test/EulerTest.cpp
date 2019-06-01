@@ -127,7 +127,7 @@ static long Problem210_par(long r) {
             }
             return sum;
         },
-        std::plus());
+        std::plus<>());
 
     ans *= 4;
     ans -= 4 * u * psi(u);

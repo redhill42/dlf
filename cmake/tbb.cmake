@@ -25,10 +25,10 @@ macro(fetch_tbb _download_module_path _download_root)
 
   if (CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(TBB_LIBRARY_DIRS ${TBB_SOURCE_DIR}/build/tbb_debug)
-    set(TBB_LIBS tbb_debug tbbmalloc_debug)
+    set(TBB_LIBRARIES tbb_debug tbbmalloc_debug)
   else (CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(TBB_LIBRARY_DIRS ${TBB_SOURCE_DIR}/build/tbb_release)
-    set(TBB_LIBS tbb tbbmalloc)
+    set(TBB_LIBRARIES tbb tbbmalloc)
   endif (CMAKE_BUILD_TYPE STREQUAL "Debug")
   link_directories(${TBB_LIBRARY_DIRS})
 

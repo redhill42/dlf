@@ -40,6 +40,11 @@ const half PrecisionTraits<half>::Zero{FloatToHalf(0.0f)};
 const half PrecisionTraits<half>::One{FloatToHalf(1.0f)};
 const half PrecisionTraits<half>::NegOne{FloatToHalf(-1.0f)};
 
+template <> const Precision PrecisionTraits<float>::precision{Precision::Single};
+template <> const Precision PrecisionTraits<double>::precision{Precision::Double};
+template <> const Precision PrecisionTraits<float2>::precision{Precision::ComplexSingle};
+template <> const Precision PrecisionTraits<double2>::precision{Precision::ComplexDouble};
+
 // =================================================================================================
 
 // Implements the string conversion using std::to_string if possible

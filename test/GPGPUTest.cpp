@@ -4,7 +4,7 @@
 #include "gmock/gmock.h"
 #include "test_utility.h"
 
-using namespace tensor;
+using namespace dlf;
 
 static auto cl2cu =
     #include "cl2cu.cl"

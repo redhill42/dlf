@@ -29,9 +29,7 @@ target_link_libraries(
   dlfl
   PRIVATE
     ${Protobuf_LIBRARIES}
-    ${TBB_LIBS}
+    ${TBB_LIBRARIES}
     ${MKL_LIBRARIES}
-    ${OpenCL_LIBRARY}
-    ${CUDA_LIBRARIES}
     gpgpu
 )

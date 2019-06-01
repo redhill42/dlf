@@ -7,10 +7,10 @@
 #include <iostream>
 
 #include "tensor/shape.h"
-#include "concurrent.h"
+#include "parallel.h"
 #include "os_blas.h"
 
-namespace tensor {
+namespace dlf {
 
 //==-------------------------------------------------------------------------
 // Tensor declaration
@@ -611,13 +611,13 @@ const T* Tensor<T>::printRec(std::ostream& out, const Shape& shape, size_t level
 template <typename T>
 template <typename F>
 inline Tensor<T>& Tensor<T>::apply(F f) {
-    kneron::concurrent::parallel_transform(begin(), end(), begin(), f);
+    parallel_transform(begin(), end(), begin(), f);
     return *this;
 }
 
 template <typename T>
 inline Tensor<T>& Tensor<T>::apply(T(*f)(T)) {
-    kneron::concurrent::parallel_transform(begin(), end(), begin(), f);
+    parallel_transform(begin(), end(), begin(), f);
     return *this;
 }
 
@@ -625,7 +625,7 @@ template <typename T>
 template <typename U, typename F>
 inline Tensor<T>& Tensor<T>::apply(const Tensor<U>& y, F f) {
     assert(shape() == y.shape());
-    kneron::concurrent::parallel_transform(begin(), end(), y.begin(), begin(), f);
+    parallel_transform(begin(), end(), y.begin(), begin(), f);
     return *this;
 }
 
@@ -633,7 +633,7 @@ template <typename T>
 template <typename F, typename U>
 inline Tensor<U> Tensor<T>::transform(F f) const {
     Tensor<U> res(shape());
-    kneron::concurrent::parallel_transform(begin(), end(), res.begin(), f);
+    parallel_transform(begin(), end(), res.begin(), f);
     return res;
 }
 
@@ -641,7 +641,7 @@ template <typename T>
 template <typename U, typename F>
 inline void Tensor<T>::transformTo(Tensor<U>& target, F f) const {
     assert(shape() == target.shape());
-    kneron::concurrent::parallel_transform(begin(), end(), target.begin(), f);
+    parallel_transform(begin(), end(), target.begin(), f);
 }
 
 template <typename T>
@@ -649,7 +649,7 @@ template <typename U, typename F, typename W>
 inline Tensor<W> Tensor<T>::transform(const Tensor<U>& y, F f) const {
     assert(shape() == y.shape());
     Tensor<W> z(shape());
-    kneron::concurrent::parallel_transform(begin(), end(), y.begin(), z.begin(), f);
+    parallel_transform(begin(), end(), y.begin(), z.begin(), f);
     return z;
 }
 
@@ -657,7 +657,7 @@ template <typename T>
 template <typename U, typename W, typename F>
 inline void Tensor<T>::transformTo(Tensor<W>& z, const Tensor<U>& y, F f) const {
     assert(shape() == y.shape() && shape() == z.shape());
-    kneron::concurrent::parallel_transform(begin(), end(), y.begin(), z.begin(), f);
+    parallel_transform(begin(), end(), y.begin(), z.begin(), f);
 }
 
 template <typename T>
@@ -676,7 +676,7 @@ template <typename T>
 template <typename F, typename>
 inline Tensor<T> Tensor<T>::transform(Tensor<T>&& y, F f) const & {
     assert(shape() == y.shape());
-    kneron::concurrent::parallel_transform(begin(), end(), y.begin(), y.begin(), f);
+    parallel_transform(begin(), end(), y.begin(), y.begin(), f);
     return std::move(y);
 }
 
@@ -818,7 +818,7 @@ T vector_dot_vector(size_t n, const T* A, const T* B) {
                 sum += *px++ * *py++;
             return sum;
         },
-        std::plus());
+        std::plus<T>());
 }
 
 template <typename T>
@@ -1022,7 +1022,7 @@ namespace impl {
 template <typename T>
 void copy_transpose(size_t r, size_t c, const T* src, T* dst) {
 #if HAS_MKL
-    if constexpr (cblas::IsBlasType<T>) {
+    if constexpr (blas::IsBlasType<T>) {
         mkl::omatcopy('R', 'T', r, c, T(1), src, c, dst, r);
         return;
     }
@@ -1042,7 +1042,7 @@ void copy_transpose(size_t r, size_t c, const T* src, T* dst) {
 template <typename T>
 void square_transpose(size_t n, T* A) {
 #if HAS_MKL
-    if constexpr (cblas::IsBlasType<T>) {
+    if constexpr (blas::IsBlasType<T>) {
         mkl::imatcopy('R', 'T', n, n, T(1), A, n, n);
         return;
     }
@@ -1063,7 +1063,7 @@ void square_transpose(size_t n, T* A) {
 template <typename T>
 void inplace_transpose(size_t r, size_t c, T* A) {
 #if HAS_MKL
-    if constexpr (cblas::IsBlasType<T>) {
+    if constexpr (blas::IsBlasType<T>) {
         mkl::imatcopy('R', 'T', r, c, T(1), A, c, r);
         return;
     }
@@ -1126,6 +1126,6 @@ void clamp(Tensor<T>& A, const T& minval, const T& maxval) {
     });
 }
 
-} // namespace tensor
+} // namespace dlf
 
 #endif //_TENSOR_HOST_H

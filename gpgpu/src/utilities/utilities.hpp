@@ -69,16 +69,11 @@ struct PrecisionTraits {
   static RealArg GetRealArg(const T value) { return value; }
 
   // Convert the template argument into a precision value
-  static constexpr Precision precision = Precision::Any;
+  static const Precision precision;
 
   // Returns false if this precision is not supported by the device.
   static bool Supported(const Device&) { return true; }
 };
-
-template <> constexpr Precision PrecisionTraits<float>::precision{Precision::Single};
-template <> constexpr Precision PrecisionTraits<double>::precision{Precision::Double};
-template <> constexpr Precision PrecisionTraits<float2>::precision{Precision::ComplexSingle};
-template <> constexpr Precision PrecisionTraits<double2>::precision{Precision::ComplexDouble};
 
 template <> inline bool PrecisionTraits<double>::Supported(const Device& device) {
   return device.supportsFP64();

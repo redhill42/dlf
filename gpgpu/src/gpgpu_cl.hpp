@@ -66,15 +66,15 @@ public:
     }
 
     std::string version() const override {
-        return getInfo<std::string>(CL_DEVICE_VERSION);
+        return getInfoStr(CL_DEVICE_VERSION);
     }
 
     std::string vendor() const override {
-        return getInfo<std::string>(CL_DEVICE_VENDOR);
+        return getInfoStr(CL_DEVICE_VENDOR);
     }
 
     std::string name() const override {
-        return getInfo<std::string>(CL_DEVICE_NAME);
+        return getInfoStr(CL_DEVICE_NAME);
     }
 
     DeviceType type() const override {
@@ -117,7 +117,7 @@ public:
     }
 
     std::string capabilities() const override {
-        return getInfo<std::string>(CL_DEVICE_EXTENSIONS);
+        return getInfoStr(CL_DEVICE_EXTENSIONS);
     }
 
     uint32_t coreClock() const override {
@@ -142,8 +142,7 @@ private:
     template <typename T>
     T getInfo(cl_device_info info) const;
 
-    template <>
-    std::string getInfo(cl_device_info info) const;
+    std::string getInfoStr(cl_device_info info) const;
 
     template <typename T>
     std::vector<T> getInfoVec(cl_device_info info) const;

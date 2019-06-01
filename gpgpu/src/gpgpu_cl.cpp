@@ -114,8 +114,7 @@ T clDevice::getInfo(cl_device_info info) const {
     return result;
 }
 
-template <>
-std::string clDevice::getInfo(cl_device_info info) const {
+std::string clDevice::getInfoStr(cl_device_info info) const {
     size_t bytes = 0;
     CheckError(clGetDeviceInfo(m_device, info, 0, nullptr, &bytes));
     std::string result;
