@@ -20,7 +20,7 @@
 
 #include "utilities/utilities.hpp"
 
-namespace gpgpu::blas {
+namespace gpgpu { namespace blas {
 // =================================================================================================
 
 // Compiles a program from source code
@@ -31,7 +31,7 @@ Program CompileFromSource(const std::string& source_string, const Precision prec
                           const size_t run_preprocessor); // 0: platform dependent, 1: always, 2: never
 
 // =================================================================================================
-} // namespace gpgpu::blas
+}} // namespace gpgpu::blas
 
 // GPGPU_BLAS_UTILITIES_COMPILE_H_
 #endif

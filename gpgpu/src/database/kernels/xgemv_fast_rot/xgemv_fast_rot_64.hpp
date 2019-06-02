@@ -7,7 +7,7 @@
 //
 // =================================================================================================
 
-namespace gpgpu::blas {
+namespace gpgpu { namespace blas {
 namespace database {
 
 const DatabaseEntry XgemvFastRotDouble = {
@@ -102,4 +102,4 @@ const DatabaseEntry XgemvFastRotDouble = {
 };
 
 } // namespace database
-} // namespace gpgpu::blas
+}} // namespace gpgpu::blas

@@ -16,7 +16,7 @@
 #include <string>
 #include <vector>
 
-namespace gpgpu::blas {
+namespace gpgpu { namespace blas {
 // =================================================================================================
 
 // Constructor: forwards to base class constructor
@@ -79,4 +79,4 @@ template class Xtbmv<float2>;
 template class Xtbmv<double2>;
 
 // =================================================================================================
-} // namespace gpgpu::blas
+}} // namespace gpgpu::blas

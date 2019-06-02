@@ -28,7 +28,7 @@ std::string MakeReason(const std::string &reason, const std::string &subreason) 
 
 } // anonymous namespace
 
-namespace gpgpu::blas {
+namespace gpgpu { namespace blas {
 // =================================================================================================
 
 BLASError::BLASError(StatusCode status, const std::string &subreason):
@@ -104,4 +104,4 @@ StatusCode DispatchExceptionCatchAll(const bool silent)
 
 // =================================================================================================
 
-} // namespace gpgpu::blas
+}} // namespace gpgpu::blas

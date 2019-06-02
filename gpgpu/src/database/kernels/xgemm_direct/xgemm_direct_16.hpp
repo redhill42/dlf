@@ -7,7 +7,7 @@
 //
 // =================================================================================================
 
-namespace gpgpu::blas {
+namespace gpgpu { namespace blas {
 namespace database {
 
 const DatabaseEntry XgemmDirectHalf = {
@@ -52,4 +52,4 @@ const DatabaseEntry XgemmDirectHalf = {
 };
 
 } // namespace database
-} // namespace gpgpu::blas
+}} // namespace gpgpu::blas

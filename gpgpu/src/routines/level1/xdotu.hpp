@@ -16,7 +16,7 @@
 
 #include "routines/level1/xdot.hpp"
 
-namespace gpgpu::blas {
+namespace gpgpu { namespace blas {
 // =================================================================================================
 
 // See comment at top of file for a description of the class
@@ -38,7 +38,7 @@ class Xdotu: public Xdot<T> {
 };
 
 // =================================================================================================
-} // namespace gpgpu::blas
+}} // namespace gpgpu::blas
 
 // GPGPU_BLAS_ROUTINES_XDOTU_H_
 #endif

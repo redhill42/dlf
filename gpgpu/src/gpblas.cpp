@@ -18,7 +18,7 @@
 #include "routines/routines.hpp"
 #include "gpblas.h"
 
-namespace gpgpu::blas {
+namespace gpgpu { namespace blas {
 
 // =================================================================================================
 // BLAS level-1 (vector-vector) routines
@@ -2383,4 +2383,4 @@ template size_t PUBLIC_API gemmTempBufferSize<half>   (const Layout, const Trans
                                                        const size_t, const size_t, const Queue&);
 
 // =================================================================================================
-} // namespace gpgpu::blas
+}} // namespace gpgpu::blas

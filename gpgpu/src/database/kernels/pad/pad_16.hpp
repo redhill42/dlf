@@ -7,7 +7,7 @@
 //
 // =================================================================================================
 
-namespace gpgpu::blas {
+namespace gpgpu { namespace blas {
 namespace database {
 
 const DatabaseEntry PadHalf = {
@@ -61,4 +61,4 @@ const DatabaseEntry PadHalf = {
 };
 
 } // namespace database
-} // namespace gpgpu::blas
+}} // namespace gpgpu::blas

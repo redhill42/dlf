@@ -18,7 +18,7 @@
 
 #include "routine.hpp"
 
-namespace gpgpu::blas {
+namespace gpgpu { namespace blas {
 // =================================================================================================
 
 // See comment at top of file for a description of the class
@@ -49,7 +49,7 @@ class Xherk: public Routine {
 };
 
 // =================================================================================================
-} // namespace gpgpu::blas
+}} // namespace gpgpu::blas
 
 // GPGPU_BLAS_ROUTINES_XHERK_H_
 #endif

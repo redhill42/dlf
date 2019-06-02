@@ -9,7 +9,7 @@
 
 #include "database/database_structure.hpp"
 
-namespace gpgpu::blas {
+namespace gpgpu { namespace blas {
 namespace database {
 
 extern const DatabaseEntry GemmRoutineHalf;
@@ -19,4 +19,4 @@ extern const DatabaseEntry GemmRoutineDouble;
 extern const DatabaseEntry GemmRoutineComplexDouble;
 
 } // namespace database
-} // namespace gpgpu::blas
+}} // namespace gpgpu::blas

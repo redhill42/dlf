@@ -7,7 +7,7 @@
 //
 // =================================================================================================
 
-namespace gpgpu::blas {
+namespace gpgpu { namespace blas {
 namespace database {
 
 const DatabaseEntry CopyComplexSingle = {
@@ -167,4 +167,4 @@ const DatabaseEntry CopyComplexSingle = {
 };
 
 } // namespace database
-} // namespace gpgpu::blas
+}} // namespace gpgpu::blas

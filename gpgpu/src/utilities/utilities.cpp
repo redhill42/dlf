@@ -31,7 +31,7 @@
 
 using namespace gpgpu;
 
-namespace gpgpu::blas {
+namespace gpgpu { namespace blas {
 // =================================================================================================
 
 const half PrecisionTraits<half>::Zero{FloatToHalf(0.0f)};
@@ -214,7 +214,7 @@ std::string AMDBoardName(const Device& device) {
 
     std::string name;
     name.resize(bytes);
-    clGetDeviceInfo(device_id, CL_DEVICE_BOARD_NAME_AMD, bytes, name.data(), nullptr);
+    clGetDeviceInfo(device_id, CL_DEVICE_BOARD_NAME_AMD, bytes, &name[0], nullptr);
     name.resize(strlen(name.c_str()));
     return name;
   }
@@ -353,4 +353,4 @@ void EuclidGCD(int a, int b, int &p, int &q, int &r) {
 }
 
 // =================================================================================================
-} // namespace gpgpu::blas
+}} // namespace gpgpu::blas

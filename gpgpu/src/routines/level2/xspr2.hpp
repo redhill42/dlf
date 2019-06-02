@@ -16,7 +16,7 @@
 
 #include "routines/level2/xher2.hpp"
 
-namespace gpgpu::blas {
+namespace gpgpu { namespace blas {
 // =================================================================================================
 
 // See comment at top of file for a description of the class
@@ -40,7 +40,7 @@ class Xspr2: public Xher2<T> {
 };
 
 // =================================================================================================
-} // namespace gpgpu::blas
+}} // namespace gpgpu::blas
 
 // GPGPU_BLAS_ROUTINES_XSPR2_H_
 #endif

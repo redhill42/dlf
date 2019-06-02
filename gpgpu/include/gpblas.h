@@ -34,7 +34,7 @@
   #define PUBLIC_API
 #endif
 
-namespace gpgpu::blas {
+namespace gpgpu { namespace blas {
 // =================================================================================================
 
 // Status codes. These codes can be returned by functions declared in this header file. The error
@@ -735,6 +735,6 @@ void PUBLIC_API OverrideParameters(const Device& device, const std::string& kern
                                    const Precision precision,
                                    const std::unordered_map<std::string,size_t>& parameters);
 
-} // namespace gpgpu::blas
+}} // namespace gpgpu::blas
 
 #endif //GPGPU_BLAS_H_

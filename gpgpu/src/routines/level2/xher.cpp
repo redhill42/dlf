@@ -15,7 +15,7 @@
 
 #include <string>
 
-namespace gpgpu::blas {
+namespace gpgpu { namespace blas {
 // =================================================================================================
 
 // Constructor: forwards to base class constructor
@@ -99,4 +99,4 @@ template class Xher<float2, float>;
 template class Xher<double2, double>;
 
 // =================================================================================================
-} // namespace gpgpu::blas
+}} // namespace gpgpu::blas

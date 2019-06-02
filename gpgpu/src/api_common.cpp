@@ -16,7 +16,7 @@
 #include "cache.hpp"
 #include "routines/routines.hpp"
 
-namespace gpgpu::blas {
+namespace gpgpu { namespace blas {
 // =================================================================================================
 
 // Clears the cache of stored binaries
@@ -173,4 +173,4 @@ void OverrideParameters(const Device& device, const std::string &kernel_name,
 }
 
 // =================================================================================================
-} // namespace gpgpu::blas
+}} // namespace gpgpu::blas

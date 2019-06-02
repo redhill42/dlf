@@ -18,7 +18,7 @@
 #include "database/database.hpp"
 #include "cache.hpp"
 
-namespace gpgpu::blas {
+namespace gpgpu { namespace blas {
 // =================================================================================================
 
 template <typename Key, typename Value>
@@ -126,4 +126,4 @@ template class Cache<DatabaseKey, Database>;
 template Database DatabaseCache::Get(const DatabaseKeyRef&, bool*) const;
 
 // =================================================================================================
-} // namespace gpgpu::blas
+}} // namespace gpgpu::blas

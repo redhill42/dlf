@@ -19,7 +19,7 @@
 #include "routine.hpp"
 #include "routines/level3/xherk.hpp"
 
-namespace gpgpu::blas {
+namespace gpgpu { namespace blas {
 // =================================================================================================
 
 // See comment at top of file for a description of the class
@@ -45,7 +45,7 @@ public:
 };
 
 // =================================================================================================
-} // namespace gpgpu::blas
+}} // namespace gpgpu::blas
 
 // GPGPU_BLAS_ROUTINES_XHER2K_H_
 #endif

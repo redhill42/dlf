@@ -16,7 +16,7 @@
 
 #include "routine.hpp"
 
-namespace gpgpu::blas {
+namespace gpgpu { namespace blas {
 // =================================================================================================
 
 template <typename T>
@@ -34,7 +34,7 @@ class Xinvert: public Routine {
 };
 
 // =================================================================================================
-} // namespace gpgpu::blas
+}} // namespace gpgpu::blas
 
 // GPGPU_BLAS_ROUTINES_XINVERT_H_
 #endif

@@ -20,13 +20,13 @@
 
 #include "utilities/utilities.hpp"
 
-namespace gpgpu::blas {
+namespace gpgpu { namespace blas {
 // =================================================================================================
 
 std::string PreprocessKernelSource(const std::string& kernel_source);
 
 // =================================================================================================
-} // namespace gpgpu::blas
+}} // namespace gpgpu::blas
 
 // GPGPU_BLAS_KERNEL_PREPROCESSOR_H_
 #endif

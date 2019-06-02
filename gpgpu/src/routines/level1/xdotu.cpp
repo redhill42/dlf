@@ -15,7 +15,7 @@
 
 #include <string>
 
-namespace gpgpu::blas {
+namespace gpgpu { namespace blas {
 // =================================================================================================
 
 // Constructor: forwards to base class constructor
@@ -46,4 +46,4 @@ template class Xdotu<float2>;
 template class Xdotu<double2>;
 
 // =================================================================================================
-} // namespace gpgpu::blas
+}} // namespace gpgpu::blas

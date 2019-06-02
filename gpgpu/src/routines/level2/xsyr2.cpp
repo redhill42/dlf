@@ -15,7 +15,7 @@
 
 #include <string>
 
-namespace gpgpu::blas {
+namespace gpgpu { namespace blas {
 // =================================================================================================
 
 // Constructor: forwards to base class constructor
@@ -50,4 +50,4 @@ template class Xsyr2<float>;
 template class Xsyr2<double>;
 
 // =================================================================================================
-} // namespace gpgpu::blas
+}} // namespace gpgpu::blas

@@ -18,7 +18,7 @@
 
 #include "routines/level2/xgemv.hpp"
 
-namespace gpgpu::blas {
+namespace gpgpu { namespace blas {
 // =================================================================================================
 
 // See comment at top of file for a description of the class
@@ -56,7 +56,7 @@ class Xtrsv: public Xgemv<T> {
 };
 
 // =================================================================================================
-} // namespace gpgpu::blas
+}} // namespace gpgpu::blas
 
 // GPGPU_BLAS_ROUTINES_XTRSV_H_
 #endif

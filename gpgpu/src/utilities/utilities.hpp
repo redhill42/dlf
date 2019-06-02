@@ -27,7 +27,7 @@
 #include "gpblas_half.h"
 #include "utilities/exceptions.hpp"
 
-namespace gpgpu::blas {
+namespace gpgpu { namespace blas {
 
 // =================================================================================================
 
@@ -193,7 +193,7 @@ bool IsPostNVIDIAVolta(const Device& device);
 // a * p + b * q = r = GCD(a, b)
 void EuclidGCD(int a, int b, int &p, int &q, int &r);
 
-} // namespace gpgpu::blas
+}} // namespace gpgpu::blas
 
 // GPGPU_BLAS_UTILITIES_H_
 #endif

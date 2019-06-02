@@ -20,7 +20,7 @@
 
 #include "utilities/utilities.hpp"
 
-namespace gpgpu::blas {
+namespace gpgpu { namespace blas {
 // =================================================================================================
 
 // The generic thread-safe cache. We assume that the Key may be a heavyweight struct that is not
@@ -103,7 +103,7 @@ extern template class Cache<DatabaseKey, Database>;
 extern template Database DatabaseCache::Get(const DatabaseKeyRef &, bool *) const;
 
 // =================================================================================================
-} // namespace gpgpu::blas
+}} // namespace gpgpu::blas
 
 // GPGPU_BLAS_CACHE_H_
 #endif

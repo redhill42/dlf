@@ -1,33 +1,36 @@
 #include <iostream>
 #include "gpgpu_cu.hpp"
 
-namespace gpgpu::cu {
+namespace gpgpu { namespace cu {
 
 static void check(CUresult status, const std::string& where) {
     if (status != CUDA_SUCCESS) {
+        const char* error_name;
+        const char* error_string;
+        cuGetErrorName(status, &error_name);
+        cuGetErrorString(status, &error_string);
         throw APIError(static_cast<int>(status), where,
-            "CUDA error: " + where + ": " + std::to_string(status));
+            "CUDA error: " + where + ": " +
+            error_name + " - " + error_string);
     }
 }
 
 static void checkDtor(CUresult status, const std::string& where) {
-    if (status != CUDA_SUCCESS) {
-        fprintf(stderr, "CUDA error: %s: %d (ignoring)\n", where.c_str(), status);
+    if (status != CUDA_SUCCESS && status != CUDA_ERROR_DEINITIALIZED) {
+        const char* error_name;
+        const char* error_string;
+        cuGetErrorName(status, &error_name);
+        cuGetErrorString(status, &error_string);
+        fprintf(stderr, "CUDA error: %s: %s - %s (ignoring)\n",
+            where.c_str(), error_name, error_string);
     }
 }
 
 static void checkNVRTC(nvrtcResult status, const std::string& where) {
     if (status != NVRTC_SUCCESS) {
-        const char* status_string = nvrtcGetErrorString(status);
+        const char* error_string = nvrtcGetErrorString(status);
         throw BuildError(status, where,
-            "CUDA NVRTC error: " + where + ": " + status_string);
-    }
-}
-
-static void checkNVRTCDtor(nvrtcResult status, const std::string& where) {
-    if (status != NVRTC_SUCCESS) {
-        const char* status_string = nvrtcGetErrorString(status);
-        fprintf(stderr, "CUDA NVRTC error: %s: %s (ignoring)\n", where.c_str(), status_string);
+            "CUDA NVRTC error: " + where + ": " + error_string);
     }
 }
 
@@ -41,10 +44,8 @@ static std::string trimCallString(const char* where) {
 }
 
 #define CheckError(call) check(call, trimCallString(#call))
-#define CheckNVRTC(call) checkNVRTC(call, trimCallString(#call))
-
 #define CheckErrorDtor(call) checkDtor(call, trimCallString(#call))
-#define CheckNVRTCDtor(call) checkNVRTCDtor(call, trimCallString(#call))
+#define CheckNVRTC(call) checkNVRTC(call, trimCallString(#call))
 
 std::shared_ptr<raw::Platform> probe() {
     static std::shared_ptr<raw::Platform> platform;
@@ -158,7 +159,7 @@ static std::string getBuildInfo(nvrtcProgram program) {
 
     std::string log;
     log.resize(bytes);
-    CheckNVRTC(nvrtcGetProgramLog(program, log.data()));
+    CheckNVRTC(nvrtcGetProgramLog(program, &log[0]));
     return log;
 }
 
@@ -185,7 +186,7 @@ std::shared_ptr<raw::Program> cuContext::compileProgram(
 
     std::string ir;
     ir.resize(bytes);
-    CheckNVRTC(nvrtcGetPTX(program, ir.data()));
+    CheckNVRTC(nvrtcGetPTX(program, &ir[0]));
 
     CheckNVRTC(nvrtcDestroyProgram(&program));
     return loadProgram(ir);
@@ -234,19 +235,19 @@ cuQueue::~cuQueue() {
         cublasDestroy(m_cublas);
 }
 
-void cuBuffer::read(raw::Queue& queue, void* host, size_t size, size_t offset, raw::Event*) const {
+void cuBuffer::read(const raw::Queue& queue, void* host, size_t size, size_t offset, raw::Event*) const {
     if (m_access == BufferAccess::kWriteOnly)
         throw LogicError("Buffer: reading from a write-only buffer");
     CheckError(cuMemcpyDtoHAsync(host, m_buffer+offset, size, *cuQueue::unwrap(queue)));
 }
 
-void cuBuffer::write(raw::Queue& queue, const void* host, size_t size, size_t offset, raw::Event*) {
+void cuBuffer::write(const raw::Queue& queue, const void* host, size_t size, size_t offset, raw::Event*) {
     if (m_access == BufferAccess::kReadOnly)
         throw LogicError("Buffer: writing to a read-only buffer");
     CheckError(cuMemcpyHtoDAsync(m_buffer+offset, host, size, *cuQueue::unwrap(queue)));
 }
 
-void cuBuffer::copyTo(raw::Queue& queue, raw::Buffer& dest, size_t size, raw::Event*) const {
+void cuBuffer::copyTo(const raw::Queue& queue, raw::Buffer& dest, size_t size, raw::Event*) const {
     CheckError(cuMemcpyDtoDAsync(*cuBuffer::unwrap(dest), m_buffer, size, *cuQueue::unwrap(queue)));
 }
 
@@ -282,16 +283,16 @@ void cuKernel::setArgument(size_t index, const void* value, size_t size) const {
         m_arguments_indices.resize(index+1);
     m_arguments_indices[index] = m_arguments_data.size();
 
-    char* end = &m_arguments_data[m_arguments_data.size()];
-    m_arguments_data.resize(m_arguments_data.size() + size);
-    memcpy(end, value, size);
+    size_t end = m_arguments_data.size();
+    m_arguments_data.resize(end + size);
+    memcpy(&m_arguments_data[end], value, size);
 }
 
 void cuKernel::setArgument(size_t index, const raw::Buffer& buffer) const {
     setArgument(index, cuBuffer::unwrap(buffer), sizeof(CUdeviceptr));
 }
 
-void cuKernel::launch(raw::Queue& queue,
+void cuKernel::launch(const raw::Queue& queue,
                       const std::vector<size_t>& global,
                       const std::vector<size_t>& local,
                       raw::Event* event,
@@ -326,4 +327,4 @@ void cuKernel::launch(raw::Queue& queue,
         CheckError(cuEventRecord(cuEvent::end(*event), q));
 }
 
-} // namespace gpgpu::cu
+}} // namespace gpgpu::cu

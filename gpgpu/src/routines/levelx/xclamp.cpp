@@ -3,7 +3,7 @@
 #include "string"
 #include "vector"
 
-namespace gpgpu::blas {
+namespace gpgpu { namespace blas {
 
 // Constructor: forwards to base class constructor
 template <typename T>
@@ -62,4 +62,4 @@ template class Xclamp<half>;
 template class Xclamp<float>;
 template class Xclamp<double>;
 
-} // namespace gpgpu::blas
+}} // namespace gpgpu::blas

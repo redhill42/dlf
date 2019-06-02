@@ -11,7 +11,7 @@
 
 #include "gpgpu.h"
 
-namespace gpgpu::cl {
+namespace gpgpu { namespace cl {
 
 class clPlatform;
 class clDevice;
@@ -220,9 +220,9 @@ public:
 
     ~clBuffer() override;
 
-    void read(raw::Queue& queue, void* host, size_t size, size_t offset, raw::Event* event) const override;
-    void write(raw::Queue& queue, const void* host, size_t size, size_t offset, raw::Event* event) override;
-    void copyTo(raw::Queue& queue, raw::Buffer& dest, size_t size, raw::Event* event) const override;
+    void read(const raw::Queue& queue, void* host, size_t size, size_t offset, raw::Event* event) const override;
+    void write(const raw::Queue& queue, const void* host, size_t size, size_t offset, raw::Event* event) override;
+    void copyTo(const raw::Queue& queue, raw::Buffer& dest, size_t size, raw::Event* event) const override;
 
     static cl_mem* unwrap(raw::Buffer& raw) {
         return &reinterpret_cast<clBuffer&>(raw).m_buffer;
@@ -267,7 +267,7 @@ public:
     void setArgument(size_t index, const void* value, size_t size) const override;
     void setArgument(size_t index, const raw::Buffer& buffer) const override;
 
-    void launch(raw::Queue& queue,
+    void launch(const raw::Queue& queue,
                 const std::vector<size_t>& global,
                 const std::vector<size_t>& local,
                 raw::Event* event,
@@ -276,6 +276,6 @@ public:
 
 std::shared_ptr<raw::Platform> probe();
 
-} // namespace gpgpu::cl
+}} // namespace gpgpu::cl
 
 #endif //_GPGPU_CL_H

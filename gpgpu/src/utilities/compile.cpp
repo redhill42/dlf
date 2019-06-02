@@ -17,7 +17,7 @@
 #include "routines/common.hpp"
 #include "preprocessor.hpp"
 
-namespace gpgpu::blas {
+namespace gpgpu { namespace blas {
 // =================================================================================================
 
 // Compiles a program from source code
@@ -120,4 +120,4 @@ Program CompileFromSource(const std::string& source_string,
 }
 
 // =================================================================================================
-} // namespace gpgpu::blas
+}} // namespace gpgpu::blas

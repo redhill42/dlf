@@ -9,7 +9,7 @@
 
 #include "database/database_structure.hpp"
 
-namespace gpgpu::blas {
+namespace gpgpu { namespace blas {
 namespace database {
 
 extern const DatabaseEntry TrsvRoutineHalf;
@@ -19,4 +19,4 @@ extern const DatabaseEntry TrsvRoutineDouble;
 extern const DatabaseEntry TrsvRoutineComplexDouble;
 
 } // namespace database
-} // namespace gpgpu::blas
+}} // namespace gpgpu::blas

@@ -18,7 +18,7 @@
 
 #include "routine.hpp"
 
-namespace gpgpu::blas {
+namespace gpgpu { namespace blas {
 // =================================================================================================
 
 // See comment at top of file for a description of the class
@@ -60,7 +60,7 @@ public:
 };
 
 // =================================================================================================
-} // namespace gpgpu::blas
+}} // namespace gpgpu::blas
 
 // GPGPU_BLAS_ROUTINES_XGEMMSTRIDEDBATCHED_H_
 #endif

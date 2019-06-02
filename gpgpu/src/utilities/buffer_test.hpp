@@ -17,7 +17,7 @@
 
 #include "utilities/utilities.hpp"
 
-namespace gpgpu::blas {
+namespace gpgpu { namespace blas {
 // =================================================================================================
 
 // Tests matrix 'A' for validity
@@ -105,7 +105,7 @@ void TestVectorIndex(const size_t n, const Buffer<T> &buffer, const size_t offse
 }
 
 // =================================================================================================
-} // namespace gpgpu::blas
+}} // namespace gpgpu::blas
 
 // GPGPU_BLAS_BUFFER_TEST_H_
 #endif

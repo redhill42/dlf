@@ -36,7 +36,7 @@
 
 #include "database/apple_cpu_fallback.hpp"
 
-namespace gpgpu::blas {
+namespace gpgpu { namespace blas {
 // =================================================================================================
 
 std::vector<database::DatabaseEntry> Database::database{};
@@ -343,4 +343,4 @@ std::string Database::CharArrayToString(const database::Name char_array) const {
 }
 
 // =================================================================================================
-} // namespace gpgpu::blas
+}} // namespace gpgpu::blas

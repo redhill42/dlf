@@ -23,7 +23,7 @@
     #define inline __inline
 #endif
 
-namespace gpgpu::blas {
+namespace gpgpu { namespace blas {
 
 // =================================================================================================
 
@@ -250,6 +250,6 @@ inline float HalfToFloat(const half value) {
   return bits.f32;
 }
 
-} // namespace gpgpu::blas
+}} // namespace gpgpu::blas
 
 #endif //GPGPU_BLAS_HALF_H_

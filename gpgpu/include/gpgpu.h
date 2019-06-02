@@ -243,9 +243,9 @@ class Buffer {
 public:
     virtual ~Buffer() = default;
 
-    virtual void read(Queue& queue, void* host, size_t size, size_t offset, Event* event) const = 0;
-    virtual void write(Queue& queue, const void* host, size_t size, size_t offset, Event* event) = 0;
-    virtual void copyTo(Queue &queue, Buffer &dest, size_t size, Event* event) const = 0;
+    virtual void read(const Queue& queue, void* host, size_t size, size_t offset, Event* event) const = 0;
+    virtual void write(const Queue& queue, const void* host, size_t size, size_t offset, Event* event) = 0;
+    virtual void copyTo(const Queue& queue, Buffer& dest, size_t size, Event* event) const = 0;
 };
 
 class Program {
@@ -264,7 +264,7 @@ public:
     virtual void setArgument(size_t index, const void* value, size_t size) const = 0;
     virtual void setArgument(size_t index, const Buffer& buffer) const = 0;
 
-    virtual void launch(Queue& queue,
+    virtual void launch(const Queue& queue,
                         const std::vector<size_t>& global,
                         const std::vector<size_t>& local,
                         Event* event,
@@ -507,7 +507,7 @@ class Queue {
 
 public:
     Queue() = default;
-    raw::Queue& raw() const noexcept { return *m_raw; }
+    const raw::Queue& raw() const noexcept { return *m_raw; }
 
     const Context& context() const noexcept {
         return m_context;

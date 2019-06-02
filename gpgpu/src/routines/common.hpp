@@ -23,7 +23,7 @@
 #include "utilities/compile.hpp"
 #include "database/database.hpp"
 
-namespace gpgpu::blas {
+namespace gpgpu { namespace blas {
 // =================================================================================================
 
 // Enqueues a kernel, waits for completion, and checks for errors
@@ -307,6 +307,6 @@ void PadCopyTransposeMatrixStridedBatched(const Queue& queue, const Device& devi
 }
 
 // =================================================================================================
-} // namespace gpgpu::blas
+}} // namespace gpgpu::blas
 
 #endif // GPGPU_BLAS_ROUTINES_COMMON_H_

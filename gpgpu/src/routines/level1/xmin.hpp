@@ -17,7 +17,7 @@
 #include "routine.hpp"
 #include "routines/level1/xamax.hpp"
 
-namespace gpgpu::blas {
+namespace gpgpu { namespace blas {
 // =================================================================================================
 
 // See comment at top of file for a description of the class
@@ -43,7 +43,7 @@ class Xmin: public Xamax<T> {
 };
 
 // =================================================================================================
-} // namespace gpgpu::blas
+}} // namespace gpgpu::blas
 
 // GPGPU_BLAS_ROUTINES_XMIN_H_
 #endif

@@ -17,7 +17,7 @@
 #include "routine.hpp"
 #include "routines/level1/xasum.hpp"
 
-namespace gpgpu::blas {
+namespace gpgpu { namespace blas {
 // =================================================================================================
 
 // See comment at top of file for a description of the class
@@ -43,7 +43,7 @@ class Xsum: public Xasum<T> {
 };
 
 // =================================================================================================
-} // namespace gpgpu::blas
+}} // namespace gpgpu::blas
 
 // GPGPU_BLAS_ROUTINES_XSUM_H_
 #endif

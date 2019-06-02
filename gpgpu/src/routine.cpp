@@ -18,7 +18,7 @@
 
 #include "routine.hpp"
 
-namespace gpgpu::blas {
+namespace gpgpu { namespace blas {
 // =================================================================================================
 
 // The constructor does all heavy work, errors are returned as exceptions
@@ -114,4 +114,4 @@ void Routine::InitProgram(std::initializer_list<const char *> source) {
 }
 
 // =================================================================================================
-} // namespace gpgpu::blas
+}} // namespace gpgpu::blas

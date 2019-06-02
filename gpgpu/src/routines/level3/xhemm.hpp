@@ -17,7 +17,7 @@
 
 #include "routines/level3/xgemm.hpp"
 
-namespace gpgpu::blas {
+namespace gpgpu { namespace blas {
 // =================================================================================================
 
 // See comment at top of file for a description of the class
@@ -48,7 +48,7 @@ class Xhemm: public Xgemm<T> {
 };
 
 // =================================================================================================
-} // namespace gpgpu::blas
+}} // namespace gpgpu::blas
 
 // GPGPU_BLAS_ROUTINES_XHEMM_H_
 #endif

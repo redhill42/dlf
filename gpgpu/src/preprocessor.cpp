@@ -32,7 +32,7 @@
 
 #include "preprocessor.hpp"
 
-namespace gpgpu::blas {
+namespace gpgpu { namespace blas {
 // =================================================================================================
 
 struct compare_longer_string {
@@ -602,4 +602,4 @@ std::string PreprocessKernelSource(const std::string& kernel_source) {
 }
 
 // =================================================================================================
-} // namespace gpgpu::blas
+}} // namespace gpgpu::blas

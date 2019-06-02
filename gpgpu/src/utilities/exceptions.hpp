@@ -18,7 +18,7 @@
 
 #include "utilities/utilities.hpp"
 
-namespace gpgpu::blas {
+namespace gpgpu { namespace blas {
 // =================================================================================================
 
 // Represents a semantic error in BLAS function arguments
@@ -45,6 +45,6 @@ StatusCode DispatchExceptionForC();
 
 // =================================================================================================
 
-} // namespace gpgpu::blas
+}} // namespace gpgpu::blas
 
 #endif // GPGPU_BLAS_EXCEPTIONS_H_

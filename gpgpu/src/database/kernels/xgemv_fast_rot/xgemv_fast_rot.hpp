@@ -9,7 +9,7 @@
 
 #include "database/database_structure.hpp"
 
-namespace gpgpu::blas {
+namespace gpgpu { namespace blas {
 namespace database {
 
 extern const DatabaseEntry XgemvFastRotHalf;
@@ -19,4 +19,4 @@ extern const DatabaseEntry XgemvFastRotDouble;
 extern const DatabaseEntry XgemvFastRotComplexDouble;
 
 } // namespace database
-} // namespace gpgpu::blas
+}} // namespace gpgpu::blas

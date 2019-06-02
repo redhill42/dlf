@@ -20,6 +20,7 @@ endif()
 
 # CMake project details
 project("gpgpu" C CXX)
+set(CMAKE_CXX_STANDARD 14)
 set(gpgpu_VERSION_MAJOR 1)
 set(gpgpu_VERSION_MINOR 5)
 set(gpgpu_VERSION_PATCH 0)

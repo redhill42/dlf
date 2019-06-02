@@ -17,7 +17,7 @@
 
 #include "routines/common.hpp"
 
-namespace gpgpu::blas {
+namespace gpgpu { namespace blas {
 // =================================================================================================
 
 // Enqueues a kernel, waits for completion, and checks for errors
@@ -153,4 +153,4 @@ template void FillVector<double2>(const Queue&, const Device&, const Program&,
                                   Buffer<double2>&, const double2, const size_t);
 
 // =================================================================================================
-} // namespace gpgpu::blas
+}} // namespace gpgpu::blas

@@ -18,7 +18,7 @@
 #include <string>
 #include <unordered_map>
 
-namespace gpgpu::blas {
+namespace gpgpu { namespace blas {
 // A special namespace to hold all the global constant variables
 namespace device_mapping {
 
@@ -50,7 +50,7 @@ const std::vector<std::string> kDeviceRemovals {
 
 // =================================================================================================
 } // namespace device_mapping
-} // namespace gpgpu::blas
+}} // namespace gpgpu::blas
 
 // GPGPU_BLAS_UTILITIES_DEVICE_MAPPING_H_
 #endif

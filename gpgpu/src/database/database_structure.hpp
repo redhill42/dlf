@@ -22,7 +22,7 @@
 // Just needed for 'Precision'
 #include "gpblas.h"
 
-namespace gpgpu::blas {
+namespace gpgpu { namespace blas {
 // A special namespace to hold all the global constant variables (including the database entries)
 namespace database {
 
@@ -65,6 +65,6 @@ struct DatabaseEntry {
 
 // =================================================================================================
 } // namespace database
-} // namespace gpgpu::blas
+}} // namespace gpgpu::blas
 
 #endif // GPGPU_BLAS_DATABASE_DATABASE_STRUCTURE_H_

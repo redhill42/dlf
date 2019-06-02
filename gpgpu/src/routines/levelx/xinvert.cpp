@@ -20,7 +20,7 @@
 #include <vector>
 #include <assert.h>
 
-namespace gpgpu::blas {
+namespace gpgpu { namespace blas {
 // =================================================================================================
 
 // Constructor: forwards to base class constructor
@@ -160,4 +160,4 @@ template class Xinvert<float2>;
 template class Xinvert<double2>;
 
 // =================================================================================================
-} // namespace gpgpu::blas
+}} // namespace gpgpu::blas

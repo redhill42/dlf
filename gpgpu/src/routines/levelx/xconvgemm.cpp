@@ -18,7 +18,7 @@
 #include "routines/levelx/xconvgemm.hpp"
 #include "routines/levelx/xim2col.hpp"
 
-namespace gpgpu::blas {
+namespace gpgpu { namespace blas {
 // =================================================================================================
 
 // Constructor: forwards to base class constructor
@@ -179,4 +179,4 @@ template class Xconvgemm<float2>;
 template class Xconvgemm<double2>;
 
 // =================================================================================================
-} // namespace gpgpu::blas
+}} // namespace gpgpu::blas

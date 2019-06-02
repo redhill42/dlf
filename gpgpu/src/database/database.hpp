@@ -24,7 +24,7 @@
 #include "utilities/utilities.hpp"
 #include "database/database_structure.hpp"
 
-namespace gpgpu::blas {
+namespace gpgpu { namespace blas {
 // =================================================================================================
 
 // See comment at top of file for a description of the class
@@ -118,6 +118,6 @@ class Databases {
 };
 
 // =================================================================================================
-} // namespace gpgpu_blas
+}} // namespace gpgpu::blas
 
 #endif // GPGPU_BLAS_DATABASE_H_

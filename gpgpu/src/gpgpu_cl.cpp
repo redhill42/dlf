@@ -2,7 +2,7 @@
 #include <iostream>
 #include "gpgpu_cl.hpp"
 
-namespace gpgpu::cl {
+namespace gpgpu { namespace cl {
 
 static void check(cl_int status, const std::string& where) {
     if (status != CL_SUCCESS) {
@@ -250,7 +250,7 @@ clEvent::~clEvent() {
         CheckErrorDtor(clReleaseEvent(m_event));
 }
 
-void clBuffer::read(raw::Queue& queue, void* host, size_t size, size_t offset, raw::Event* event) const {
+void clBuffer::read(const raw::Queue& queue, void* host, size_t size, size_t offset, raw::Event* event) const {
     if (m_access == BufferAccess::kWriteOnly)
         throw LogicError("Buffer: reading from a write-only buffer");
     CheckError(clEnqueueReadBuffer(
@@ -258,7 +258,7 @@ void clBuffer::read(raw::Queue& queue, void* host, size_t size, size_t offset, r
         offset, size, host, 0, nullptr, clEvent::unwrap(event)));
 }
 
-void clBuffer::write(raw::Queue& queue, const void* host, size_t size, size_t offset, raw::Event* event) {
+void clBuffer::write(const raw::Queue& queue, const void* host, size_t size, size_t offset, raw::Event* event) {
     if (m_access == BufferAccess::kReadOnly)
         throw LogicError("Buffer: writing to a read-only buffer");
     CheckError(clEnqueueWriteBuffer(
@@ -266,7 +266,7 @@ void clBuffer::write(raw::Queue& queue, const void* host, size_t size, size_t of
         offset, size, host, 0, nullptr, clEvent::unwrap(event)));
 }
 
-void clBuffer::copyTo(raw::Queue& queue, gpgpu::raw::Buffer& dest, size_t size, raw::Event* event) const {
+void clBuffer::copyTo(const raw::Queue& queue, gpgpu::raw::Buffer& dest, size_t size, raw::Event* event) const {
     CheckError(clEnqueueCopyBuffer(
         *clQueue::unwrap(queue),
         m_buffer, *clBuffer::unwrap(dest),
@@ -318,7 +318,7 @@ void clKernel::setArgument(size_t index, const raw::Buffer& buffer) const {
     setArgument(index, clBuffer::unwrap(buffer), sizeof(cl_mem));
 }
 
-void clKernel::launch(raw::Queue& queue,
+void clKernel::launch(const raw::Queue& queue,
                       const std::vector<size_t>& global,
                       const std::vector<size_t>& local,
                       raw::Event* event,
@@ -341,4 +341,4 @@ clKernel::~clKernel() {
         CheckErrorDtor(clReleaseKernel(m_kernel));
 }
 
-} // namespace gpgpu::cl
+}} // namespace gpgpu::cl
