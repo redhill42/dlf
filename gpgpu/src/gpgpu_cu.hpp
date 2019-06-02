@@ -2,16 +2,6 @@
 #define _GPGPU_CU_H
 
 #include "gpgpu.h"
-
-namespace gpgpu::cu {
-#if HAS_CUDA
-std::shared_ptr<raw::Platform> probe();
-#else
-inline std::shared_ptr<raw::Platform> probe() { return nullptr; }
-#endif
-}
-
-#if HAS_CUDA
 #include <cuda.h>
 #include <nvrtc.h>
 #include <cublas_v2.h>
@@ -263,7 +253,8 @@ public:
                 const std::vector<Event>& waitForEvents) const override;
 };
 
+std::shared_ptr<raw::Platform> probe();
+
 } // namespace gpgpu::cu
-#endif // HAS_CUDA
 
 #endif //_GPGPU_CU_H

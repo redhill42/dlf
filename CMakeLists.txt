@@ -35,20 +35,17 @@ if(USE_MKL)
   include_directories(${MKL_INCLUDE_DIRS})
 endif()
 
-# OpenCL (required)
+# OpenCL
 find_package(OpenCL REQUIRED)
 include_directories(${OpenCL_INCLUDE_DIRS})
 
-# CUDA (optional)
-find_package(CUDA)
-if(CUDA_FOUND)
-  add_definitions(-DHAS_CUDA=1)
-  find_cuda_helper_libs("cuda")
-  find_cuda_helper_libs("nvrtc")
-  find_cuda_helper_libs("cublas")
-  set(CUDA_LIBRARIES ${CUDA_cuda_LIBRARY} ${CUDA_nvrtc_LIBRARY} ${CUDA_cublas_LIBRARY})
-  include_directories(${CUDA_INCLUDE_DIRS})
-endif()
+# CUDA
+find_package(CUDA REQUIRED)
+find_cuda_helper_libs("cuda")
+find_cuda_helper_libs("nvrtc")
+find_cuda_helper_libs("cublas")
+set(CUDA_LIBRARIES ${CUDA_cuda_LIBRARY} ${CUDA_nvrtc_LIBRARY} ${CUDA_cublas_LIBRARY})
+include_directories(${CUDA_INCLUDE_DIRS})
 
 # add sub-directories that we want CMake to scan
 add_subdirectory(gpgpu)
