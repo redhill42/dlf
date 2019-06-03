@@ -214,7 +214,7 @@ cublasHandle_t cuQueue::getCublasHandle() const {
     if (m_cublas == nullptr) {
         // TODO: check error
         cublasCreate(&m_cublas);
-        cublasSetStream_v2(m_cublas, m_queue);
+        cublasSetStream(m_cublas, m_queue);
     }
     return m_cublas;
 }

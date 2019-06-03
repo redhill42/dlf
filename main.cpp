@@ -36,31 +36,130 @@ static void show_info() {
     printf("\nThe default device: %s\n", gpgpu::probe().device().name().c_str());
 }
 
-static void run_test() {
-    auto device = gpgpu::probe().device();
-    auto context = device.createContext();
+template <typename T, size_t N>
+static void print_matrix(const char* title, std::array<T, N> A) {
+    std::cout << title;
+    for (auto x : A)
+        std::cout << x << " ";
+    std::cout << std::endl;
+}
+
+static void gemm_test() {
+    constexpr size_t M = 3, K = 6, N = 4;
+
+    auto A = std::array<float, M*K> {
+        5, 10, 9, 1, 10, 3,
+        7,  6, 6, 6,  1, 1,
+        6,  2, 6, 10, 9, 3
+    };
+
+    auto A_t = std::array<float, M*K> {
+        5, 7, 6,
+        10, 6, 2,
+        9, 6, 6,
+        1, 6, 10,
+        10, 1, 9,
+        3, 1, 3
+    };
+
+    auto B = std::array<float, K*N> {
+        7,  1, 8,  7,
+        9,  5, 2,  6,
+        7,  8, 5,  7,
+        6,  9, 1,  1,
+        4, 10, 1, 10,
+        3,  8, 8,  5
+    };
+
+    auto B_t = std::array<float, K*N> {
+        7, 9, 7, 6, 4, 3,
+        1, 5, 8, 9, 10, 8,
+        8, 2, 5, 1, 1, 8,
+        7, 6, 7, 1, 10, 5
+    };
+
+    auto C = std::array<float, M*N> {
+        230, 254, 116, 199,
+        219, 236, 201, 252,
+        173, 148, 155, 167
+    };
+
+    auto R = std::array<float, M*N> {
+        1176, 1282, 628, 1145,
+        1033, 1022, 829, 1052,
+        933,  980, 715,  923
+    };
+
+    auto T = std::array<float, M*N> {};
+
+    auto context = gpgpu::probe().device().createContext();
     auto queue = context.createQueue();
-    constexpr size_t N = 1024;
 
-    auto host_A = std::array<float, N>();
-    auto host_B = std::array<float, N>();
+    auto dev_A = context.createBuffer<float>(A.size());
+    auto dev_A_t = context.createBuffer<float>(A_t.size());
+    auto dev_B = context.createBuffer<float>(B.size());
+    auto dev_B_t = context.createBuffer<float>(B_t.size());
+    auto dev_C = context.createBuffer<float>(C.size());
 
-    for (size_t i = 0; i < N; i++) {
-        host_A[i] = i;
-    }
+    dev_A.write(queue, A.data(), A.size());
+    dev_A_t.write(queue, A_t.data(), A_t.size());
+    dev_B.write(queue, B.data(), B.size());
+    dev_B_t.write(queue, B_t.data(), B_t.size());
 
-    auto dev_A = context.createBuffer<float>(N);
-    dev_A.write(queue, host_A.data(), host_A.size());
+    std::cout << "\nGEMM Test:\n";
 
-    gpgpu::blas::scal(N, 3.0f, dev_A, 0, 1, queue);
-    dev_A.read(queue, host_B.data(), host_B.size());
+    dev_C.write(queue, C.data(), C.size());
+    gpgpu::blas::gemm(gpgpu::blas::Layout::RowMajor,
+                      gpgpu::blas::Transpose::NoTrans,
+                      gpgpu::blas::Transpose::NoTrans,
+                      M, N, K,
+                      2.0f, dev_A, 0, K,
+                      dev_B, 0, N,
+                      3.0f, dev_C, 0, N,
+                      queue);
+    dev_C.read(queue, T.data(), T.size());
+    print_matrix("A . B:      ", T);
 
-    for (auto index : {4, 500, 1000}) {
-        std::cout << host_A[index] << " " << host_B[index] << std::endl;
-    }
+    dev_C.write(queue, C.data(), C.size());
+    gpgpu::blas::gemm(gpgpu::blas::Layout::RowMajor,
+                      gpgpu::blas::Transpose::Trans,
+                      gpgpu::blas::Transpose::NoTrans,
+                      M, N, K,
+                      2.0f, dev_A_t, 0, M,
+                      dev_B, 0, N,
+                      3.0f, dev_C, 0, N,
+                      queue);
+    dev_C.read(queue, T.data(), T.size());
+    print_matrix("T(A) . B:   ", T);
+
+    dev_C.write(queue, C.data(), C.size());
+    gpgpu::blas::gemm(gpgpu::blas::Layout::RowMajor,
+                      gpgpu::blas::Transpose::NoTrans,
+                      gpgpu::blas::Transpose::Trans,
+                      M, N, K,
+                      2.0f, dev_A, 0, K,
+                      dev_B_t, 0, K,
+                      3.0f, dev_C, 0, N,
+                      queue);
+    dev_C.read(queue, T.data(), T.size());
+    print_matrix("A . T(B):   ", T);
+
+    dev_C.write(queue, C.data(), C.size());
+    gpgpu::blas::gemm(gpgpu::blas::Layout::RowMajor,
+                      gpgpu::blas::Transpose::Trans,
+                      gpgpu::blas::Transpose::Trans,
+                      M, N, K,
+                      2.0f, dev_A_t, 0, M,
+                      dev_B_t, 0, K,
+                      3.0f, dev_C, 0, N,
+                      queue);
+    dev_C.read(queue, T.data(), T.size());
+    print_matrix("T(A) . T(B):", T);
+
+    print_matrix("Expected:   ", R);
 }
 
 int main() {
     show_info();
-    run_test();
+    gemm_test();
 }

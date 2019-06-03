@@ -17,14 +17,53 @@
 
 #include "routines/routines.hpp"
 #include "gpblas.h"
+#include "gpgpu_cu.hpp"
 
 namespace gpgpu { namespace blas {
+
+// =================================================================================================
+// cuBlas integration
+// =================================================================================================
+
+using namespace gpgpu::cu;
+
+template <typename T>
+constexpr cudaDataType CudaDataType = static_cast<cudaDataType>(-1);
+
+template <> constexpr cudaDataType CudaDataType<float>   = cudaDataType::CUDA_R_32F;
+template <> constexpr cudaDataType CudaDataType<double>  = cudaDataType::CUDA_R_64F;
+template <> constexpr cudaDataType CudaDataType<float2>  = cudaDataType::CUDA_C_32F;
+template <> constexpr cudaDataType CudaDataType<double2> = cudaDataType::CUDA_C_64F;
+template <> constexpr cudaDataType CudaDataType<half>    = cudaDataType::CUDA_R_16F;
+
+static cublasOperation_t CudaOp(Transpose trans) {
+    switch (trans) {
+    case Transpose::NoTrans:
+        return cublasOperation_t::CUBLAS_OP_N;
+    case Transpose::Trans:
+        return cublasOperation_t::CUBLAS_OP_T;
+    case Transpose::ConjTrans:
+        return cublasOperation_t::CUBLAS_OP_C;
+    }
+}
+
+template <typename T, typename CL, typename CU>
+inline void dispatch(const Queue& queue, CL&& cl, CU&& cu) {
+    if (std::is_same<T, half>::value || IsOpenCL(queue.context().device())) {
+        cl();
+    } else {
+        const cuQueue& q = static_cast<const cuQueue&>(queue.raw());
+        cu(q.getCublasHandle(), CudaDataType<T>);
+    }
+}
 
 // =================================================================================================
 // BLAS level-1 (vector-vector) routines
 // =================================================================================================
 
+//---------------------------------------------------------------------------
 // Generate givens plane rotation: SROTG/DROTG
+
 template <typename T>
 void rotg(Buffer<T>&, const size_t,
           Buffer<T>&, const size_t,
@@ -45,7 +84,9 @@ template void PUBLIC_API rotg<double>(Buffer<double>&, const size_t,
                                       Buffer<double>&, const size_t,
                                       const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Generate modified givens plane rotation: SROTMG/DROTMG
+
 template <typename T>
 void rotmg(Buffer<T>&, const size_t,
            Buffer<T>&, const size_t,
@@ -69,7 +110,9 @@ template void PUBLIC_API rotmg<double>(Buffer<double>&, const size_t,
                                        Buffer<double>&, const size_t,
                                        const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Apply givens plane rotation: SROT/DROT
+
 template <typename T>
 void rot(const size_t,
          Buffer<T>&, const size_t, const size_t,
@@ -90,7 +133,9 @@ template void PUBLIC_API rot<double>(const size_t,
                                      const double, const double,
                                      const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Apply modified givens plane rotation: SROTM/DROTM
+
 template <typename T>
 void rotm(const size_t,
           Buffer<T>&, const size_t, const size_t,
@@ -111,16 +156,46 @@ template void PUBLIC_API rotm<double>(const size_t,
                                       Buffer<double>&, const size_t,
                                       const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Swap two vectors: SSWAP/DSWAP/CSWAP/ZSWAP/HSWAP
+
+inline void cublasSwapEx(cublasHandle_t handle, int n, float* x, int incx, float* y, int incy) {
+    cublasSswap(handle, n, x, incx, y, incy);
+}
+
+inline void cublasSwapEx(cublasHandle_t handle, int n, double* x, int incx, double* y, int incy) {
+    cublasDswap(handle, n, x, incx, y, incy);
+}
+
+inline void cublasSwapEx(cublasHandle_t handle, int n, float2* x, int incx, float2* y, int incy) {
+    cublasCswap(handle, n, reinterpret_cast<cuComplex*>(x), incx, reinterpret_cast<cuComplex*>(y), incy);
+}
+
+inline void cublasSwapEx(cublasHandle_t handle, int n, double2* x, int incx, double2* y, int incy) {
+    cublasZswap(handle, n, reinterpret_cast<cuDoubleComplex*>(x), incx, reinterpret_cast<cuDoubleComplex*>(y), incy);
+}
+
+inline void cublasSwapEx(cublasHandle_t, int, half*, int, half*, int) {
+    throw BLASError(StatusCode::kNotImplemented);
+}
+
 template <typename T>
 void swap(const size_t n,
           Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
           Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
           const Queue& queue, Event* event) {
-    auto routine = Xswap<T>(queue, event);
-    routine.DoSwap(n,
-                   x_buffer, x_offset, x_inc,
-                   y_buffer, y_offset, y_inc);
+    dispatch<T>(queue,
+        [&]() {
+            auto routine = Xswap<T>(queue, event);
+            routine.DoSwap(n,
+                           x_buffer, x_offset, x_inc,
+                           y_buffer, y_offset, y_inc);
+        },
+        [&](auto h, auto) {
+            auto x = reinterpret_cast<T*>(*cuBuffer::unwrap(x_buffer)) + x_offset;
+            auto y = reinterpret_cast<T*>(*cuBuffer::unwrap(y_buffer)) + y_offset;
+            cublasSwapEx(h, n, x, x_inc, y, y_inc);
+        });
 }
 
 template void PUBLIC_API swap<float>  (const size_t,
@@ -144,13 +219,22 @@ template void PUBLIC_API swap<half>   (const size_t,
                                        Buffer<half>&, const size_t, const size_t,
                                        const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Vector scaling: SSCAL/DSCAL/CSCAL/ZSCAL/HSCAL
+
 template <typename T>
 void scal(const size_t n, const T alpha,
           Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
           const Queue& queue, Event* event) {
-    auto routine = Xscal<T>(queue, event);
-    routine.DoScal(n, alpha, x_buffer, x_offset, x_inc);
+    dispatch<T>(queue,
+        [&]() {
+            auto routine = Xscal<T>(queue, event);
+            routine.DoScal(n, alpha, x_buffer, x_offset, x_inc);
+        },
+        [&](auto h, auto t) {
+            auto x = reinterpret_cast<T*>(*cuBuffer::unwrap(x_buffer)) + x_offset;
+            cublasScalEx(h, n, &alpha, t, x, t, x_inc, t);
+        });
 }
 
 template void PUBLIC_API scal<float>  (const size_t, const float,
@@ -169,16 +253,46 @@ template void PUBLIC_API scal<half>   (const size_t, const half,
                                        Buffer<half>&, const size_t, const size_t,
                                        const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Vector copy: SCOPY/DCOPY/CCOPY/ZCOPY/HCOPY
+
+inline void cublasCopyEx(cublasHandle_t handle, int n, const float* x, int incx, float* y, int incy) {
+    cublasScopy(handle, n, x, incx, y, incy);
+}
+
+inline void cublasCopyEx(cublasHandle_t handle, int n, const double* x, int incx, double* y, int incy) {
+    cublasDcopy(handle, n, x, incx, y, incy);
+}
+
+inline void cublasCopyEx(cublasHandle_t handle, int n, const float2* x, int incx, float2* y, int incy) {
+    cublasCcopy(handle, n, reinterpret_cast<const cuComplex*>(x), incx, reinterpret_cast<cuComplex*>(y), incy);
+}
+
+inline void cublasCopyEx(cublasHandle_t handle, int n, const double2* x, int incx, double2* y, int incy) {
+    cublasZcopy(handle, n, reinterpret_cast<const cuDoubleComplex*>(x), incx, reinterpret_cast<cuDoubleComplex*>(y), incy);
+}
+
+inline void cublasCopyEx(cublasHandle_t, int, const half*, int, half*, int) {
+    throw BLASError(StatusCode::kNotImplemented);
+}
+
 template <typename T>
 void copy(const size_t n,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
           Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
           const Queue& queue, Event* event) {
-    auto routine = Xcopy<T>(queue, event);
-    routine.DoCopy(n,
-                   x_buffer, x_offset, x_inc,
-                   y_buffer, y_offset, y_inc);
+    dispatch<T>(queue,
+        [&]() {
+            auto routine = Xcopy<T>(queue, event);
+            routine.DoCopy(n,
+                           x_buffer, x_offset, x_inc,
+                           y_buffer, y_offset, y_inc);
+        },
+        [&](auto h, auto) {
+            auto x = reinterpret_cast<T*>(*cuBuffer::unwrap(x_buffer)) + x_offset;
+            auto y = reinterpret_cast<T*>(*cuBuffer::unwrap(y_buffer)) + y_offset;
+            cublasCopyEx(h, n, x, x_inc, y, y_inc);
+        });
 }
 
 template void PUBLIC_API copy<float>  (const size_t,
@@ -202,16 +316,26 @@ template void PUBLIC_API copy<half>   (const size_t,
                                        Buffer<half>&, const size_t, const size_t,
                                        const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Vector-times-constant plus vector: SAXPY/DAXPY/CAXPY/ZAXPY/HAXPY
+
 template <typename T>
 void axpy(const size_t n, const T alpha,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
           Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
           const Queue& queue, Event* event) {
-    auto routine = Xaxpy<T>(queue, event);
-    routine.DoAxpy(n, alpha,
-                   x_buffer, x_offset, x_inc,
-                   y_buffer, y_offset, y_inc);
+    dispatch<T>(queue,
+        [&]() {
+            auto routine = Xaxpy<T>(queue, event);
+            routine.DoAxpy(n, alpha,
+                           x_buffer, x_offset, x_inc,
+                           y_buffer, y_offset, y_inc);
+        },
+        [&](auto h, auto t) {
+            auto x = reinterpret_cast<T*>(*cuBuffer::unwrap(x_buffer)) + x_offset;
+            auto y = reinterpret_cast<T*>(*cuBuffer::unwrap(y_buffer)) + y_offset;
+            cublasAxpyEx(h, n, &alpha, t, x, t, x_inc, y, t, y_inc, t);
+        });
 }
 
 template void PUBLIC_API axpy<float>  (const size_t, const float,
@@ -235,18 +359,29 @@ template void PUBLIC_API axpy<half>   (const size_t, const half,
                                        Buffer<half>&, const size_t, const size_t,
                                        const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Dot product of two vectors: SDOT/DDOT/HDOT
+
 template <typename T>
 void dot(const size_t n,
          const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
          const Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
-         Buffer<T>& dot_buffer, const size_t dot_offset,
+         Buffer<T>& r_buffer, const size_t r_offset,
          const Queue& queue, Event* event) {
-    auto routine = Xdot<T>(queue, event);
-    routine.DoDot(n,
-                  x_buffer, x_offset, x_inc,
-                  y_buffer, y_offset, y_inc,
-                  dot_buffer, dot_offset);
+    dispatch<T>(queue,
+        [&]() {
+            auto routine = Xdot<T>(queue, event);
+            routine.DoDot(n,
+                          x_buffer, x_offset, x_inc,
+                          y_buffer, y_offset, y_inc,
+                          r_buffer, r_offset);
+        },
+        [&](auto h, auto t) {
+            auto x = reinterpret_cast<T*>(*cuBuffer::unwrap(x_buffer)) + x_offset;
+            auto y = reinterpret_cast<T*>(*cuBuffer::unwrap(y_buffer)) + y_offset;
+            auto r = reinterpret_cast<T*>(*cuBuffer::unwrap(r_buffer)) + r_offset;
+            cublasDotEx(h, n, x, t, x_inc, y, t, y_inc, r, t, t);
+        });
 }
 
 template void PUBLIC_API dot<float>  (const size_t,
@@ -265,18 +400,20 @@ template void PUBLIC_API dot<half>   (const size_t,
                                       Buffer<half>&, const size_t,
                                       const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Dot product of two complex vectors: CDOTU/ZDOTU
+
 template <typename T>
 void dotu(const size_t n,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
           const Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
-          Buffer<T>& dot_buffer, const size_t dot_offset,
+          Buffer<T>& r_buffer, const size_t r_offset,
           const Queue& queue, Event* event) {
     auto routine = Xdotu<T>(queue, event);
     routine.DoDotu(n,
                    x_buffer, x_offset, x_inc,
                    y_buffer, y_offset, y_inc,
-                   dot_buffer, dot_offset);
+                   r_buffer, r_offset);
 }
 
 template void PUBLIC_API dotu<float2> (const size_t,
@@ -290,18 +427,29 @@ template void PUBLIC_API dotu<double2>(const size_t,
                                        Buffer<double2>&, const size_t,
                                        const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Dot product of two complex vectors, one conjugated: CDOTC/ZDOTC
+
 template <typename T>
 void dotc(const size_t n,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
           const Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
-          Buffer<T>& dot_buffer, const size_t dot_offset,
+          Buffer<T>& r_buffer, const size_t r_offset,
           const Queue& queue, Event* event) {
-    auto routine = Xdotc<T>(queue, event);
-    routine.DoDotc(n,
-                   x_buffer, x_offset, x_inc,
-                   y_buffer, y_offset, y_inc,
-                   dot_buffer, dot_offset);
+    dispatch<T>(queue,
+        [&]() {
+            auto routine = Xdotc<T>(queue, event);
+            routine.DoDotc(n,
+                           x_buffer, x_offset, x_inc,
+                           y_buffer, y_offset, y_inc,
+                           r_buffer, r_offset);
+        },
+        [&](auto h, auto t) {
+            auto x = reinterpret_cast<T*>(*cuBuffer::unwrap(x_buffer)) + x_offset;
+            auto y = reinterpret_cast<T*>(*cuBuffer::unwrap(y_buffer)) + y_offset;
+            auto r = reinterpret_cast<T*>(*cuBuffer::unwrap(r_buffer)) + r_offset;
+            cublasDotcEx(h, n, x, t, x_inc, y, t, y_inc, r, t, t);
+        });
 }
 
 template void PUBLIC_API dotc<float2> (const size_t,
@@ -315,16 +463,26 @@ template void PUBLIC_API dotc<double2>(const size_t,
                                        Buffer<double2>&, const size_t,
                                        const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Euclidian norm of a vector: SNRM2/DNRM2/ScNRM2/DzNRM2/HNRM2
+
 template <typename T>
 void nrm2(const size_t n,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
-          Buffer<T>& nrm2_buffer, const size_t nrm2_offset,
+          Buffer<T>& r_buffer, const size_t r_offset,
           const Queue& queue, Event* event) {
-    auto routine = Xnrm2<T>(queue, event);
-    routine.DoNrm2(n,
-                   x_buffer, x_offset, x_inc,
-                   nrm2_buffer, nrm2_offset);
+    dispatch<T>(queue,
+        [&]() {
+            auto routine = Xnrm2<T>(queue, event);
+            routine.DoNrm2(n,
+                           x_buffer, x_offset, x_inc,
+                           r_buffer, r_offset);
+        },
+        [&](auto h, auto t) {
+            auto x = reinterpret_cast<T*>(*cuBuffer::unwrap(x_buffer)) + x_offset;
+            auto r = reinterpret_cast<T*>(*cuBuffer::unwrap(r_buffer)) + r_offset;
+            cublasNrm2Ex(h, n, x, t, x_inc, r, t, t);
+        });
 }
 
 template void PUBLIC_API nrm2<float>  (const size_t,
@@ -348,16 +506,18 @@ template void PUBLIC_API nrm2<half>   (const size_t,
                                        Buffer<half>&, const size_t,
                                        const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Absolute sum of values in a vector: SASUM/DASUM/ScASUM/DzASUM/HASUM
+
 template <typename T>
 void asum(const size_t n,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
-          Buffer<T>& asum_buffer, const size_t asum_offset,
+          Buffer<T>& r_buffer, const size_t r_offset,
           const Queue& queue, Event* event) {
     auto routine = Xasum<T>(queue, event);
     routine.DoAsum(n,
                    x_buffer, x_offset, x_inc,
-                   asum_buffer, asum_offset);
+                   r_buffer, r_offset);
 }
 
 template void PUBLIC_API asum<float>  (const size_t,
@@ -381,16 +541,18 @@ template void PUBLIC_API asum<half>   (const size_t,
                                        Buffer<half>&, const size_t,
                                        const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Sum of values in a vector (non-BLAS function): SSUM/DSUM/ScSUM/DzSUM/HSUM
+
 template <typename T>
 void sum(const size_t n,
          const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
-         Buffer<T>& sum_buffer, const size_t sum_offset,
+         Buffer<T>& r_buffer, const size_t r_offset,
          const Queue& queue, Event* event) {
     auto routine = Xsum<T>(queue, event);
     routine.DoSum(n,
                   x_buffer, x_offset, x_inc,
-                  sum_buffer, sum_offset);
+                  r_buffer, r_offset);
 }
 
 template void PUBLIC_API sum<float>  (const size_t,
@@ -414,16 +576,46 @@ template void PUBLIC_API sum<half>   (const size_t,
                                       Buffer<half>&, const size_t,
                                       const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Index of absolute maximum value in a vector: iSAMAX/iDAMAX/iCAMAX/iZAMAX/iHAMAX
+
+inline void cublasAmaxEx(cublasHandle_t handle, int n, const float* x, int incx, int* result) {
+    cublasIsamax(handle, n, x, incx, result);
+}
+
+inline void cublasAmaxEx(cublasHandle_t handle, int n, const double* x, int incx, int* result) {
+    cublasIdamax(handle, n, x, incx, result);
+}
+
+inline void cublasAmaxEx(cublasHandle_t handle, int n, const float2* x, int incx, int* result) {
+    cublasIcamax(handle, n, reinterpret_cast<const cuComplex*>(x), incx, result);
+}
+
+inline void cublasAmaxEx(cublasHandle_t handle, int n, const double2* x, int incx, int* result) {
+    cublasIzamax(handle, n, reinterpret_cast<const cuDoubleComplex*>(x), incx, result);
+}
+
+inline void cublasAmaxEx(cublasHandle_t, int, const half*, int, int*) {
+    throw BLASError(StatusCode::kNotImplemented);
+}
+
 template <typename T>
 void amax(const size_t n,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
-          Buffer<unsigned int>& imax_buffer, const size_t imax_offset,
+          Buffer<unsigned int>& r_buffer, const size_t r_offset,
           const Queue& queue, Event* event) {
-    auto routine = Xamax<T>(queue, event);
-    routine.DoAmax(n,
-                   x_buffer, x_offset, x_inc,
-                   imax_buffer, imax_offset);
+    dispatch<T>(queue,
+        [&]() {
+            auto routine = Xamax<T>(queue, event);
+            routine.DoAmax(n,
+                           x_buffer, x_offset, x_inc,
+                           r_buffer, r_offset);
+        },
+        [&](auto h, auto) {
+            auto x = reinterpret_cast<T*>(*cuBuffer::unwrap(x_buffer)) + x_offset;
+            auto r = reinterpret_cast<int*>(*cuBuffer::unwrap(r_buffer)) + r_offset;
+            cublasAmaxEx(h, n, x, x_inc, r);
+        });
 }
 
 template void PUBLIC_API amax<float>  (const size_t,
@@ -447,16 +639,46 @@ template void PUBLIC_API amax<half>   (const size_t,
                                        Buffer<unsigned int>&, const size_t,
                                        const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Index of absolute minimum value in a vector (non-BLAS function): iSAMIN/iDAMIN/iCAMIN/iZAMIN/iHAMIN
+
+inline void cublasAminEx(cublasHandle_t handle, int n, const float* x, int incx, int* result) {
+    cublasIsamin(handle, n, x, incx, result);
+}
+
+inline void cublasAminEx(cublasHandle_t handle, int n, const double* x, int incx, int* result) {
+    cublasIdamin(handle, n, x, incx, result);
+}
+
+inline void cublasAminEx(cublasHandle_t handle, int n, const float2* x, int incx, int* result) {
+    cublasIcamin(handle, n, reinterpret_cast<const cuComplex*>(x), incx, result);
+}
+
+inline void cublasAminEx(cublasHandle_t handle, int n, const double2* x, int incx, int* result) {
+    cublasIzamin(handle, n, reinterpret_cast<const cuDoubleComplex*>(x), incx, result);
+}
+
+inline void cublasAminEx(cublasHandle_t, int, const half*, int, int*) {
+    throw BLASError(StatusCode::kNotImplemented);
+}
+
 template <typename T>
 void amin(const size_t n,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
-          Buffer<unsigned int>& imin_buffer, const size_t imin_offset,
+          Buffer<unsigned int>& r_buffer, const size_t r_offset,
           const Queue& queue, Event* event) {
-    auto routine = Xamin<T>(queue, event);
-    routine.DoAmin(n,
-                   x_buffer, x_offset, x_inc,
-                   imin_buffer, imin_offset);
+    dispatch<T>(queue,
+        [&]() {
+            auto routine = Xamin<T>(queue, event);
+            routine.DoAmin(n,
+                           x_buffer, x_offset, x_inc,
+                           r_buffer, r_offset);
+        },
+        [&](auto h, auto) {
+            auto x = reinterpret_cast<T*>(*cuBuffer::unwrap(x_buffer)) + x_offset;
+            auto r = reinterpret_cast<int*>(*cuBuffer::unwrap(r_buffer)) + r_offset;
+            cublasAminEx(h, n, x, x_inc, r);
+        });
 }
 
 template void PUBLIC_API amin<float>  (const size_t,
@@ -480,16 +702,18 @@ template void PUBLIC_API amin<half>   (const size_t,
                                        Buffer<unsigned int>&, const size_t,
                                        const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Index of maximum value in a vector (non-BLAS function): iSMAX/iDMAX/iCMAX/iZMAX/iHMAX
+
 template <typename T>
 void max(const size_t n,
          const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
-         Buffer<unsigned int>& imax_buffer, const size_t imax_offset,
+         Buffer<unsigned int>& r_buffer, const size_t r_offset,
          const Queue& queue, Event* event) {
     auto routine = Xmax<T>(queue, event);
     routine.DoMax(n,
                   x_buffer, x_offset, x_inc,
-                  imax_buffer, imax_offset);
+                  r_buffer, r_offset);
 }
 
 template void PUBLIC_API max<float>  (const size_t,
@@ -513,16 +737,18 @@ template void PUBLIC_API max<half>   (const size_t,
                                       Buffer<unsigned int>&, const size_t,
                                       const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Index of minimum value in a vector (non-BLAS function): iSMIN/iDMIN/iCMIN/iZMIN/iHMIN
+
 template <typename T>
 void min(const size_t n,
          const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
-         Buffer<unsigned int>& imin_buffer, const size_t imin_offset,
+         Buffer<unsigned int>& r_buffer, const size_t r_offset,
          const Queue& queue, Event* event) {
     auto routine = Xmin<T>(queue, event);
     routine.DoMin(n,
                   x_buffer, x_offset, x_inc,
-                  imin_buffer, imin_offset);
+                  r_buffer, r_offset);
 }
 
 template void PUBLIC_API min<float>  (const size_t,
@@ -550,7 +776,52 @@ template void PUBLIC_API min<half>   (const size_t,
 // BLAS level-2 (matrix-vector) routines
 // =================================================================================================
 
+//---------------------------------------------------------------------------
 // General matrix-vector multiplication: SGEMV/DGEMV/CGEMV/ZGEMV/HGEMV
+
+inline void cublasGemvEx(cublasHandle_t handle, Transpose trans,
+                         int m, int n, float alpha,
+                         const float* a, int lda, const float* x, int x_inc,
+                         float beta, float* y, int y_inc) {
+    cublasSgemv(handle, CudaOp(trans), m, n, &alpha, a, lda, x, x_inc, &beta, y, y_inc);
+}
+
+inline void cublasGemvEx(cublasHandle_t handle, Transpose trans,
+                         int m, int n, double alpha,
+                         const double* a, int lda, const double* x, int x_inc,
+                         double beta, double* y, int y_inc) {
+    cublasDgemv(handle, CudaOp(trans), m, n, &alpha, a, lda, x, x_inc, &beta, y, y_inc);
+}
+
+inline void cublasGemvEx(cublasHandle_t handle, Transpose trans,
+                         int m, int n, float2 alpha,
+                         const float2* a, int lda, const float2* x, int x_inc,
+                         float2 beta, float2* y, int y_inc) {
+    cublasCgemv(handle, CudaOp(trans), m, n,
+                reinterpret_cast<cuComplex*>(&alpha),
+                reinterpret_cast<const cuComplex*>(a), lda,
+                reinterpret_cast<const cuComplex*>(x), x_inc,
+                reinterpret_cast<cuComplex*>(&beta),
+                reinterpret_cast<cuComplex*>(y), y_inc);
+}
+
+inline void cublasGemvEx(cublasHandle_t handle, Transpose trans,
+                         int m, int n, double2 alpha,
+                         const double2* a, int lda, const double2* x, int x_inc,
+                         double2 beta, double2* y, int y_inc) {
+    cublasZgemv(handle, CudaOp(trans), m, n,
+                reinterpret_cast<cuDoubleComplex*>(&alpha),
+                reinterpret_cast<const cuDoubleComplex*>(a), lda,
+                reinterpret_cast<const cuDoubleComplex*>(x), x_inc,
+                reinterpret_cast<cuDoubleComplex*>(&beta),
+                reinterpret_cast<cuDoubleComplex*>(y), y_inc);
+}
+
+inline void cublasGemvEx(cublasHandle_t, Transpose, int, int, half,
+                         const half*, int, const half*, int, half, half*, int) {
+    throw BLASError(StatusCode::kNotImplemented);
+}
+
 template <typename T>
 void gemv(const Layout layout, const Transpose a_transpose,
           const size_t m, const size_t n,
@@ -560,14 +831,29 @@ void gemv(const Layout layout, const Transpose a_transpose,
           const T beta,
           Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
           const Queue& queue, Event* event) {
-    auto routine = Xgemv<T>(queue, event);
-    routine.DoGemv(layout, a_transpose,
-                   m, n,
-                   alpha,
-                   a_buffer, a_offset, a_ld,
-                   x_buffer, x_offset, x_inc,
-                   beta,
-                   y_buffer, y_offset, y_inc);
+    dispatch<T>(queue,
+        [&]() {
+            auto routine = Xgemv<T>(queue, event);
+            routine.DoGemv(layout, a_transpose,
+                           m, n,
+                           alpha,
+                           a_buffer, a_offset, a_ld,
+                           x_buffer, x_offset, x_inc,
+                           beta,
+                           y_buffer, y_offset, y_inc);
+        },
+        [&](auto h, auto) {
+            auto a = reinterpret_cast<T*>(*cuBuffer::unwrap(a_buffer)) + a_offset;
+            auto x = reinterpret_cast<T*>(*cuBuffer::unwrap(x_buffer)) + x_offset;
+            auto y = reinterpret_cast<T*>(*cuBuffer::unwrap(y_buffer)) + y_offset;
+
+            if (layout == Layout::RowMajor) {
+                auto transA = (a_transpose==Transpose::NoTrans) ? Transpose::Trans : Transpose::NoTrans;
+                cublasGemvEx(h, transA, n, m, alpha, a, a_ld, x, x_inc, beta, y, y_inc);
+            } else {
+                cublasGemvEx(h, a_transpose, m, n, alpha, a, a_ld, x, x_inc, beta, y, y_inc);
+            }
+        });
 }
 
 template void PUBLIC_API gemv<float>  (const Layout, const Transpose,
@@ -611,7 +897,9 @@ template void PUBLIC_API gemv<half>   (const Layout, const Transpose,
                                        Buffer<half>&, const size_t, const size_t,
                                        const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // General banded matrix-vector multiplication: SGBMV/DGBMV/CGBMV/ZGBMV/HGBMV
+
 template <typename T>
 void gbmv(const Layout layout, const Transpose a_transpose,
           const size_t m, const size_t n, const size_t kl, const size_t ku,
@@ -672,7 +960,9 @@ template void PUBLIC_API gbmv<half>   (const Layout, const Transpose,
                                        Buffer<half>&, const size_t, const size_t,
                                        const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Hermitian matrix-vector multiplication: CHEMV/ZHEMV
+
 template <typename T>
 void hemv(const Layout layout, const Triangle triangle, const size_t n,
           const T alpha,
@@ -705,7 +995,9 @@ template void PUBLIC_API hemv<double2>(const Layout, const Triangle, const size_
                                        Buffer<double2>&, const size_t, const size_t,
                                        const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Hermitian banded matrix-vector multiplication: CHBMV/ZHBMV
+
 template <typename T>
 void hbmv(const Layout layout, const Triangle triangle,
           const size_t n, const size_t k,
@@ -742,7 +1034,9 @@ template void PUBLIC_API hbmv<double2>(const Layout, const Triangle,
                                        Buffer<double2>&, const size_t, const size_t,
                                        const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Hermitian packed matrix-vector multiplication: CHPMV/ZHPMV
+
 template <typename T>
 void hpmv(const Layout layout, const Triangle triangle, const size_t n,
           const T alpha,
@@ -775,7 +1069,9 @@ template void PUBLIC_API hpmv<double2>(const Layout, const Triangle, const size_
                                        Buffer<double2>&, const size_t, const size_t,
                                        const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Symmetric matrix-vector multiplication: SSYMV/DSYMV/HSYMV
+
 template <typename T>
 void symv(const Layout layout, const Triangle triangle, const size_t n,
           const T alpha,
@@ -815,7 +1111,9 @@ template void PUBLIC_API symv<half>  (const Layout, const Triangle, const size_t
                                       Buffer<half>&, const size_t, const size_t,
                                       const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Symmetric banded matrix-vector multiplication: SSBMV/DSBMV/HSBMV
+
 template <typename T>
 void sbmv(const Layout layout, const Triangle triangle,
           const size_t n, const size_t k,
@@ -859,7 +1157,9 @@ template void PUBLIC_API sbmv<half>  (const Layout, const Triangle,
                                       Buffer<half>&, const size_t, const size_t,
                                       const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Symmetric packed matrix-vector multiplication: SSPMV/DSPMV/HSPMV
+
 template <typename T>
 void spmv(const Layout layout, const Triangle triangle, const size_t n,
           const T alpha,
@@ -899,7 +1199,9 @@ template void PUBLIC_API spmv<half>  (const Layout, const Triangle, const size_t
                                       Buffer<half>&, const size_t, const size_t,
                                       const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Triangular matrix-vector multiplication: STRMV/DTRMV/CTRMV/ZTRMV/HTRMV
+
 template <typename T>
 void trmv(const Layout layout, const Triangle triangle, const Transpose a_transpose, const Diagonal diagonal,
                 const size_t n,
@@ -939,7 +1241,9 @@ template void PUBLIC_API trmv<half>   (const Layout, const Triangle, const Trans
                                        Buffer<half>&, const size_t, const size_t,
                                        const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Triangular banded matrix-vector multiplication: STBMV/DTBMV/CTBMV/ZTBMV/HTBMV
+
 template <typename T>
 void tbmv(const Layout layout, const Triangle triangle, const Transpose a_transpose, const Diagonal diagonal,
           const size_t n, const size_t k,
@@ -979,7 +1283,9 @@ template void PUBLIC_API tbmv<half>   (const Layout, const Triangle, const Trans
                                        Buffer<half>&, const size_t, const size_t,
                                        const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Triangular packed matrix-vector multiplication: STPMV/DTPMV/CTPMV/ZTPMV/HTPMV
+
 template <typename T>
 void tpmv(const Layout layout, const Triangle triangle, const Transpose a_transpose, const Diagonal diagonal,
           const size_t n,
@@ -1019,7 +1325,9 @@ template void PUBLIC_API tpmv<half>   (const Layout, const Triangle, const Trans
                                        Buffer<half>&, const size_t, const size_t,
                                        const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Solves a triangular system of equations: STRSV/DTRSV/CTRSV/ZTRSV
+
 template <typename T>
 void trsv(const Layout layout, const Triangle triangle, const Transpose a_transpose, const Diagonal diagonal,
           const size_t n,
@@ -1054,7 +1362,9 @@ template void PUBLIC_API trsv<double2>(const Layout, const Triangle, const Trans
                                        Buffer<double2>&, const size_t, const size_t,
                                        const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Solves a banded triangular system of equations: STBSV/DTBSV/CTBSV/ZTBSV
+
 template <typename T>
 void tbsv(const Layout, const Triangle, const Transpose, const Diagonal,
           const size_t, const size_t,
@@ -1085,7 +1395,9 @@ template void PUBLIC_API tbsv<double2>(const Layout, const Triangle, const Trans
                                        Buffer<double2>&, const size_t, const size_t,
                                        const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Solves a packed triangular system of equations: STPSV/DTPSV/CTPSV/ZTPSV
+
 template <typename T>
 void tpsv(const Layout, const Triangle, const Transpose, const Diagonal,
           const size_t,
@@ -1116,7 +1428,9 @@ template void PUBLIC_API tpsv<double2>(const Layout, const Triangle, const Trans
                                        Buffer<double2>&, const size_t, const size_t,
                                        const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // General rank-1 matrix update: SGER/DGER/HGER
+
 template <typename T>
 void ger(const Layout layout, const size_t m, const size_t n, const T alpha,
          const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
@@ -1146,7 +1460,9 @@ template void PUBLIC_API ger<half>  (const Layout, const size_t, const size_t, c
                                      Buffer<half>&, const size_t, const size_t,
                                      const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // General rank-1 complex matrix update: CGERU/ZGERU
+
 template <typename T>
 void geru(const Layout layout, const size_t m, const size_t n, const T alpha,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
@@ -1171,7 +1487,9 @@ template void PUBLIC_API geru<double2>(const Layout, const size_t, const size_t,
                                        Buffer<double2>&, const size_t, const size_t,
                                        const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // General rank-1 complex conjugated matrix update: CGERC/ZGERC
+
 template <typename T>
 void gerc(const Layout layout, const size_t m, const size_t n, const T alpha,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
@@ -1196,7 +1514,9 @@ template void PUBLIC_API gerc<double2>(const Layout, const size_t, const size_t,
                                        Buffer<double2>&, const size_t, const size_t,
                                        const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Hermitian rank-1 matrix update: CHER/ZHER
+
 template <typename T>
 void her(const Layout layout, const Triangle triangle, const size_t n, const T alpha,
          const Buffer<std::complex<T>>& x_buffer, const size_t x_offset, const size_t x_inc,
@@ -1217,7 +1537,9 @@ template void PUBLIC_API her<double>(const Layout, const Triangle, const size_t,
                                      Buffer<std::complex<double>>&, const size_t, const size_t,
                                      const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Hermitian packed rank-1 matrix update: CHPR/ZHPR
+
 template <typename T>
 void hpr(const Layout layout, const Triangle triangle, const size_t n, const T alpha,
          const Buffer<std::complex<T>>& x_buffer, const size_t x_offset, const size_t x_inc,
@@ -1238,7 +1560,9 @@ template void PUBLIC_API hpr<double>(const Layout, const Triangle, const size_t,
                                      Buffer<std::complex<double>>&, const size_t,
                                      const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Hermitian rank-2 matrix update: CHER2/ZHER2
+
 template <typename T>
 void her2(const Layout layout, const Triangle triangle, const size_t n, const T alpha,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
@@ -1263,7 +1587,9 @@ template void PUBLIC_API her2<double2>(const Layout, const Triangle, const size_
                                        Buffer<double2>&, const size_t, const size_t,
                                        const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Hermitian packed rank-2 matrix update: CHPR2/ZHPR2
+
 template <typename T>
 void hpr2(const Layout layout, const Triangle triangle, const size_t n, const T alpha,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
@@ -1288,7 +1614,9 @@ template void PUBLIC_API hpr2<double2>(const Layout, const Triangle, const size_
                                        Buffer<double2>&, const size_t,
                                        const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Symmetric rank-1 matrix update: SSYR/DSYR/HSYR
+
 template <typename T>
 void syr(const Layout layout, const Triangle triangle, const size_t n, const T alpha,
          const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
@@ -1313,7 +1641,9 @@ template void PUBLIC_API syr<half>  (const Layout, const Triangle, const size_t,
                                      Buffer<half>&, const size_t, const size_t,
                                      const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Symmetric packed rank-1 matrix update: SSPR/DSPR/HSPR
+
 template <typename T>
 void spr(const Layout layout, const Triangle triangle, const size_t n, const T alpha,
          const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
@@ -1338,7 +1668,9 @@ template void PUBLIC_API spr<half>  (const Layout, const Triangle, const size_t,
                                      Buffer<half>&, const size_t,
                                      const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Symmetric rank-2 matrix update: SSYR2/DSYR2/HSYR2
+
 template <typename T>
 void syr2(const Layout layout, const Triangle triangle, const size_t n, const T alpha,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
@@ -1368,7 +1700,9 @@ template void PUBLIC_API syr2<half>  (const Layout, const Triangle, const size_t
                                       Buffer<half>&, const size_t, const size_t,
                                       const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Symmetric packed rank-2 matrix update: SSPR2/DSPR2/HSPR2
+
 template <typename T>
 void spr2(const Layout layout, const Triangle triangle, const size_t n, const T alpha,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
@@ -1402,7 +1736,9 @@ template void PUBLIC_API spr2<half>  (const Layout, const Triangle, const size_t
 // BLAS level-3 (matrix-matrix) routines
 // =================================================================================================
 
+//---------------------------------------------------------------------------
 // General matrix-matrix multiplication: SGEMM/DGEMM/CGEMM/ZGEMM/HGEMM
+
 template <typename T>
 void gemm(const Layout layout, const Transpose a_transpose, const Transpose b_transpose,
           const size_t m, const size_t n, const size_t k,
@@ -1413,15 +1749,33 @@ void gemm(const Layout layout, const Transpose a_transpose, const Transpose b_tr
           Buffer<T>& c_buffer, const size_t c_offset, const size_t c_ld,
           const Queue& queue, Event* event,
           Buffer<T>* temp_buffer) {
-    auto routine = Xgemm<T>(queue, event);
-    routine.DoGemm(layout, a_transpose, b_transpose,
-                   m, n, k,
-                   alpha,
-                   a_buffer, a_offset, a_ld,
-                   b_buffer, b_offset, b_ld,
-                   beta,
-                   c_buffer, c_offset, c_ld,
-                   temp_buffer);
+    dispatch<T>(queue,
+        [&]() {
+            auto routine = Xgemm<T>(queue, event);
+            routine.DoGemm(layout, a_transpose, b_transpose,
+                           m, n, k,
+                           alpha,
+                           a_buffer, a_offset, a_ld,
+                           b_buffer, b_offset, b_ld,
+                           beta,
+                           c_buffer, c_offset, c_ld,
+                           temp_buffer);
+        },
+        [&](auto h, auto t) {
+            auto a = reinterpret_cast<T*>(*cuBuffer::unwrap(a_buffer)) + a_offset;
+            auto b = reinterpret_cast<T*>(*cuBuffer::unwrap(b_buffer)) + b_offset;
+            auto c = reinterpret_cast<T*>(*cuBuffer::unwrap(c_buffer)) + c_offset;
+
+            if (layout == Layout::RowMajor) {
+                cublasGemmEx(h, CudaOp(b_transpose), CudaOp(a_transpose),
+                             n, m, k, &alpha, b, t, b_ld, a, t, a_ld, &beta, c, t, c_ld, t,
+                             cublasGemmAlgo_t::CUBLAS_GEMM_DFALT);
+            } else {
+                cublasGemmEx(h, CudaOp(a_transpose), CudaOp(b_transpose),
+                             m, n, k, &alpha, a, t, a_ld, b, t, b_ld, &beta, c, t, c_ld, t,
+                             cublasGemmAlgo_t::CUBLAS_GEMM_DFALT);
+            }
+        });
 }
 
 template void PUBLIC_API gemm(const Layout, const Transpose, const Transpose,
@@ -1465,7 +1819,9 @@ template void PUBLIC_API gemm(const Layout, const Transpose, const Transpose,
                               Buffer<half>&, const size_t, const size_t,
                               const Queue&, Event*, Buffer<half>*);
 
+//---------------------------------------------------------------------------
 // Symmetric matrix-matrix multiplication: SSYMM/DSYMM/CSYMM/ZSYMM/HSYMM
+
 template <typename T>
 void symm(const Layout layout, const Side side, const Triangle triangle,
           const size_t m, const size_t n,
@@ -1526,7 +1882,9 @@ template void PUBLIC_API symm<half>   (const Layout, const Side, const Triangle,
                                        Buffer<half>&, const size_t, const size_t,
                                        const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Hermitian matrix-matrix multiplication: CHEMM/ZHEMM
+
 template <typename T>
 void hemm(const Layout layout, const Side side, const Triangle triangle,
           const size_t m, const size_t n,
@@ -1563,7 +1921,9 @@ template void PUBLIC_API hemm<double2>(const Layout, const Side, const Triangle,
                                        Buffer<double2>&, const size_t, const size_t,
                                        const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Rank-K update of a symmetric matrix: SSYRK/DSYRK/CSYRK/ZSYRK/HSYRK
+
 template <typename T>
 void syrk(const Layout layout, const Triangle triangle, const Transpose a_transpose,
           const size_t n, const size_t k,
@@ -1617,7 +1977,9 @@ template void PUBLIC_API syrk<half>   (const Layout, const Triangle, const Trans
                                        Buffer<half>&, const size_t, const size_t,
                                        const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Rank-K update of a hermitian matrix: CHERK/ZHERK
+
 template <typename T>
 void herk(const Layout layout, const Triangle triangle, const Transpose a_transpose,
           const size_t n, const size_t k,
@@ -1650,7 +2012,9 @@ template void PUBLIC_API herk<double>(const Layout, const Triangle, const Transp
                                       Buffer<std::complex<double>>&, const size_t, const size_t,
                                       const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Rank-2K update of a symmetric matrix: SSYR2K/DSYR2K/CSYR2K/ZSYR2K/HSYR2K
+
 template <typename T>
 void syr2k(const Layout layout, const Triangle triangle, const Transpose ab_transpose,
            const size_t n, const size_t k,
@@ -1711,7 +2075,9 @@ template void PUBLIC_API syr2k<half>   (const Layout, const Triangle, const Tran
                                         Buffer<half>&, const size_t, const size_t,
                                         const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Rank-2K update of a hermitian matrix: CHER2K/ZHER2K
+
 template <typename T, typename U>
 void her2k(const Layout layout, const Triangle triangle, const Transpose ab_transpose,
            const size_t n, const size_t k,
@@ -1748,7 +2114,9 @@ template void PUBLIC_API her2k<double2,double>(const Layout, const Triangle, con
                                                Buffer<double2>&, const size_t, const size_t,
                                                const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Triangular matrix-matrix multiplication: STRMM/DTRMM/CTRMM/ZTRMM/HTRMM
+
 template <typename T>
 void trmm(const Layout layout, const Side side, const Triangle triangle, const Transpose a_transpose, const Diagonal diagonal,
           const size_t m, const size_t n, const T alpha,
@@ -1788,7 +2156,9 @@ template void PUBLIC_API trmm<half>   (const Layout, const Side, const Triangle,
                                        Buffer<half>&, const size_t, const size_t,
                                        const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Solves a triangular system of equations: STRSM/DTRSM/CTRSM/ZTRSM
+
 template <typename T>
 void trsm(const Layout layout, const Side side, const Triangle triangle, const Transpose a_transpose, const Diagonal diagonal,
           const size_t m, const size_t n, const T alpha,
@@ -1827,7 +2197,9 @@ template void PUBLIC_API trsm<double2>(const Layout, const Side, const Triangle,
 // Extra non-BLAS routines (level-X)
 // =================================================================================================
 
+//---------------------------------------------------------------------------
 // Element-wise vector product (Hadamard): SHAD/DHAD/CHAD/ZHAD/HHAD
+
 template <typename T>
 void had(const size_t n,
          const T alpha,
@@ -1881,7 +2253,9 @@ template void PUBLIC_API had<half>   (const size_t,
                                       Buffer<half>&, const size_t, const size_t,
                                       const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Scaling and out-place transpose/copy (non-BLAS function): SOMATCOPY/DOMATCOPY/COMATCOPY/ZOMATCOPY/HOMATCOPY
+
 template <typename T>
 void omatcopy(const Layout layout, const Transpose a_transpose,
               const size_t m, const size_t n, const T alpha,
@@ -1920,7 +2294,9 @@ template void PUBLIC_API omatcopy<half>   (const Layout, const Transpose,
                                            Buffer<half>&, const size_t, const size_t,
                                            const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Im2col function (non-BLAS function): SIM2COL/DIM2COL/CIM2COL/ZIM2COL/HIM2COL
+
 template <typename T>
 void im2col(const KernelMode kernel_mode,
             const size_t channels, const size_t height, const size_t width,
@@ -1988,7 +2364,9 @@ template void PUBLIC_API im2col<half>   (const KernelMode,
                                          Buffer<half>&, const size_t,
                                          const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Col2im function (non-BLAS function): SCOL2IM/DCOL2IM/CCOL2IM/ZCOL2IM/HCOL2IM
+
 template <typename T>
 void col2im(const KernelMode kernel_mode,
             const size_t channels, const size_t height, const size_t width,
@@ -2056,7 +2434,9 @@ template void PUBLIC_API col2im<half>   (const KernelMode,
                                          Buffer<half>&, const size_t,
                                          const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Batched convolution as GEMM (non-BLAS function): SCONVGEMM/DCONVGEMM/HCONVGEMM
+
 template <typename T>
 void convgemm(const KernelMode kernel_mode,
               const size_t channels, const size_t height, const size_t width,
@@ -2116,7 +2496,9 @@ template void PUBLIC_API convgemm<half>  (const KernelMode,
                                           Buffer<half>&, const size_t,
                                           const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Batched version of AXPY: SAXPYBATCHED/DAXPYBATCHED/CAXPYBATCHED/ZAXPYBATCHED/HAXPYBATCHED
+
 template <typename T>
 void axpyBatched(const size_t n, const T* alphas,
                  const Buffer<T>& x_buffer, const size_t* x_offsets, const size_t x_inc,
@@ -2164,7 +2546,9 @@ template void PUBLIC_API axpyBatched<half>   (const size_t, const half*,
                                               const size_t,
                                               const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Batched version of GEMM: SGEMMBATCHED/DGEMMBATCHED/CGEMMBATCHED/ZGEMMBATCHED/HGEMMBATCHED
+
 template <typename T>
 void gemmBatched(const Layout layout, const Transpose a_transpose, const Transpose b_transpose,
                  const size_t m, const size_t n, const size_t k,
@@ -2182,11 +2566,11 @@ void gemmBatched(const Layout layout, const Transpose a_transpose, const Transpo
     auto b_offsets_cpp = std::vector<size_t>();
     auto c_offsets_cpp = std::vector<size_t>();
     for (auto batch = size_t{0}; batch < batch_count; ++batch) {
-      alphas_cpp.push_back(alphas[batch]);
-      betas_cpp.push_back(betas[batch]);
-      a_offsets_cpp.push_back(a_offsets[batch]);
-      b_offsets_cpp.push_back(b_offsets[batch]);
-      c_offsets_cpp.push_back(c_offsets[batch]);
+        alphas_cpp.push_back(alphas[batch]);
+        betas_cpp.push_back(betas[batch]);
+        a_offsets_cpp.push_back(a_offsets[batch]);
+        b_offsets_cpp.push_back(b_offsets[batch]);
+        c_offsets_cpp.push_back(c_offsets[batch]);
     }
     routine.DoGemmBatched(layout, a_transpose, b_transpose,
                           m, n, k,
@@ -2244,7 +2628,9 @@ template void PUBLIC_API gemmBatched<half>   (const Layout, const Transpose, con
                                               const size_t,
                                               const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // StridedBatched version of GEMM: SGEMMSTRIDEDBATCHED/DGEMMSTRIDEDBATCHED/CGEMMSTRIDEDBATCHED/ZGEMMSTRIDEDBATCHED/HGEMMSTRIDEDBATCHED
+
 template <typename T>
 void gemmStridedBatched(const Layout layout, const Transpose a_transpose, const Transpose b_transpose,
                         const size_t m, const size_t n, const size_t k,
@@ -2312,7 +2698,9 @@ template void PUBLIC_API gemmStridedBatched<half>   (const Layout, const Transpo
                                                      const size_t,
                                                      const Queue&, Event*);
 
+//---------------------------------------------------------------------------
 // Vector clamp (non-BLAS function): SCLAMP/DCLAMP/HCLAMP
+
 template <typename T>
 void clamp(const size_t n, const T minval, const T maxval,
            Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
