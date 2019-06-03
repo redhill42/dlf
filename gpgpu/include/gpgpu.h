@@ -157,7 +157,13 @@ class Kernel;
 
 class Platform {
 public:
+    Platform() = default;
     virtual ~Platform() = default;
+
+    Platform(const Platform&) = delete;
+    Platform(Platform&&) = delete;
+    Platform& operator=(const Platform&) = delete;
+    Platform& operator=(Platform&&) = delete;
 
     virtual PlatformID  id() const noexcept = 0;
     virtual APITypes    api() const noexcept = 0;
@@ -178,7 +184,13 @@ public:
 
 class Device {
 public:
+    Device() = default;
     virtual ~Device() = default;
+
+    Device(const Device&) = delete;
+    Device(Device&&) = delete;
+    Device& operator=(const Device&) = delete;
+    Device& operator=(Device&&) = delete;
 
     // Information
     virtual DeviceID    id() const noexcept = 0;
@@ -210,7 +222,13 @@ public:
 
 class Context {
 public:
+    Context() = default;
     virtual ~Context() = default;
+
+    Context(const Context&) = delete;
+    Context(Context&&) = delete;
+    Context& operator=(const Context&) = delete;
+    Context& operator=(Context&&) = delete;
 
     virtual ContextID id() const noexcept = 0;
 
@@ -218,13 +236,20 @@ public:
     virtual std::shared_ptr<Event> createEvent() const = 0;
     virtual std::shared_ptr<Buffer> createBuffer(size_t size, BufferAccess access) const = 0;
 
-    virtual std::shared_ptr<Program> compileProgram(const char* source, const std::vector<std::string>& options) const = 0;
+    virtual std::shared_ptr<Program> compileProgram(
+        const char* source, const std::vector<std::string>& options) const = 0;
     virtual std::shared_ptr<Program> loadProgram(const std::string& binary) const = 0;
 };
 
 class Queue {
 public:
+    Queue() = default;
     virtual ~Queue() = default;
+
+    Queue(const Queue&) = delete;
+    Queue(Queue&&) = delete;
+    Queue& operator=(const Queue&) = delete;
+    Queue& operator=(Queue&&) = delete;
 
     virtual QueueID id() const noexcept = 0;
     virtual void finish(Event& event) const = 0;
@@ -233,7 +258,13 @@ public:
 
 class Event {
 public:
+    Event() = default;
     virtual ~Event() = default;
+
+    Event(const Event&) = delete;
+    Event(Event&&) = delete;
+    Event& operator=(const Event&) = delete;
+    Event& operator=(Event&&) = delete;
 
     virtual void waitForCompletion() const = 0;
     virtual float getElapsedTime() const = 0;
@@ -241,7 +272,13 @@ public:
 
 class Buffer {
 public:
+    Buffer() = default;
     virtual ~Buffer() = default;
+
+    Buffer(const Buffer&) = delete;
+    Buffer(Buffer&&) = delete;
+    Buffer& operator=(const Buffer&) = delete;
+    Buffer& operator=(Buffer&&) = delete;
 
     virtual void read(const Queue& queue, void* host, size_t size, size_t offset, Event* event) const = 0;
     virtual void write(const Queue& queue, const void* host, size_t size, size_t offset, Event* event) = 0;
@@ -250,14 +287,27 @@ public:
 
 class Program {
 public:
+    Program() = default;
     virtual ~Program() = default;
+
+    Program(const Program&) = delete;
+    Program(Program&&) = delete;
+    Program& operator=(const Program&) = delete;
+    Program& operator=(Program&&) = delete;
+
     virtual std::string getIR() const = 0;
     virtual std::shared_ptr<Kernel> getKernel(const char* name) const = 0;
 };
 
 class Kernel {
 public:
+    Kernel() = default;
     virtual ~Kernel() = default;
+
+    Kernel(const Kernel&) = delete;
+    Kernel(Kernel&&) = delete;
+    Kernel& operator=(const Kernel&) = delete;
+    Kernel& operator=(Kernel&&) = delete;
 
     virtual uint64_t localMemoryUsage(const Device& device) const = 0;
 
