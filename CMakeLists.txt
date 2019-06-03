@@ -52,13 +52,6 @@ add_subdirectory(gpgpu)
 include_directories(${gpgpu_SOURCE_DIR}/include ${gpgpu_SOURCE_DIR}/src)
 add_subdirectory(dlf)
 
-if(NOT DEFINED ENV{SKIP_TESTS})
-  include(cmake/googletest.cmake)
-  fetch_googletest(${PROJECT_SOURCE_DIR}/cmake ${PROJECT_BINARY_DIR}/googletest)
-  enable_testing()
-  add_subdirectory(test)
-endif()
-
 add_executable(demo main.cpp)
 target_link_libraries(demo gpgpu dlf ${TBB_LIBRARIES})
 
