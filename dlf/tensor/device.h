@@ -484,16 +484,6 @@ DevTensor<T> gemm(const T& alpha, const DevTensor<T>& A, const DevTensor<T>& B,
     return R;
 }
 
-/**
- * For each tensor element x, if x compares less than minval, x is minval;
- * otherwise if maxval is comapres less than x, x is maxval; otherwise
- * x is unchanged.
- */
-template <typename T>
-void clamp(DevTensor<T>& A, const T& minval, const T& maxval) {
-    gpgpu::blas::clamp(A.size(), minval, maxval, A.buffer(), 0, 1, A.queue());
-}
-
 } // namespace dlf
 
 #endif //_TENSOR_DEVICE_H

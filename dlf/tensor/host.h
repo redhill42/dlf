@@ -1114,18 +1114,6 @@ Tensor<T> transpose(const Tensor<T>& A) {
     return B;
 }
 
-/**
- * For each tensor element x, if x compares less than minval, x is minval;
- * otherwise if maxval is comapres less than x, x is maxval; otherwise
- * x is unchanged.
- */
-template <typename T>
-void clamp(Tensor<T>& A, const T& minval, const T& maxval) {
-    A.apply([&](auto&& x) {
-        return std::clamp(x, minval, maxval);
-    });
-}
-
 } // namespace dlf
 
 #endif //_TENSOR_HOST_H

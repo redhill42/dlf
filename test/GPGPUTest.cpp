@@ -212,27 +212,3 @@ TEST_F(GPGPUTest, GEMM) {
         EXPECT_THAT(dev_T.read(), R);
     });
 }
-
-static void clamp_test(const size_t n, const gpgpu::Queue& queue) {
-    using namespace testing;
-    constexpr auto min = -5.0f, max = 5.0f;
-
-    auto A = Tensor<float>::random({n}, -10.0f, 10.0f);
-    auto dev_A = DevTensor(A, queue);
-
-    clamp(dev_A, min, max);
-    auto B = dev_A.read();
-
-    clamp(A, min, max);
-
-    EXPECT_THAT(A, Each(AllOf(Ge(min), Le(max))));
-    EXPECT_THAT(B, Each(AllOf(Ge(min), Le(max))));
-    EXPECT_EQ(A, B);
-}
-
-TEST_F(GPGPUTest, Xclamp) {
-    doTest([](auto const& queue) {
-        clamp_test(500, queue);
-        clamp_test(1024, queue);
-    });
-}
