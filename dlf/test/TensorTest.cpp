@@ -160,39 +160,6 @@ TEST_F(TensorTest, ElementAccess) {
     ASSERT_NE(t, t2);
 }
 
-TEST_F(TensorTest, Slice) {
-    Tensor<int32_t> s1({3,4}, {
-         1,  2,  3,  4,
-         5,  6,  7,  8,
-         9, 10, 11, 12
-    });
-    Tensor<int32_t> s2({3,4}, {
-        13, 14, 15, 16,
-        17, 18, 19, 20,
-        21, 22, 23, 24
-    });
-
-    EXPECT_EQ(t1[0], s1);
-    EXPECT_EQ(t1[1], s2);
-
-    auto ts1 = t1[1][1];
-    auto ts2 = ts1; // make copy
-
-    EXPECT_THAT(ts1, T::ElementsAre(17, 18, 19, 20));
-    EXPECT_NE(ts1.data(), ts2.data());
-
-    ts1(2) = 100; // shallow change original tensor
-    EXPECT_EQ(t1(1,1,2), 100);
-
-    ts2(3) = 200; // should not change original tensor
-    EXPECT_EQ(t1(1,1,3), 20);
-
-    // change on original tensor should reflect on sliced tensor
-    t1(1,1,1) = 50;
-    EXPECT_EQ(ts1(1), 50);
-    EXPECT_EQ(ts2(1), 18); // no change on copy
-}
-
 template <typename F>
 void TensorTest::testBinaryOp(const Tensor<int32_t>& t, const F& f) {
     int next = 0;
@@ -521,8 +488,8 @@ TEST_F(TensorTest, Transpose) {
 
 template <typename T>
 static void test_transpose_in_place() {
-    for (size_t i = 0; i <= 5; i++) {
-        for (size_t j = 0; j <= 5; j++) {
+    for (size_t i = 1; i <= 5; i++) {
+        for (size_t j = 1; j <= 5; j++) {
             auto a = Tensor<T>::range({i, j}, 1);
             auto b = transpose(a); // assume out-of-place transposition is correct
             transpose(a, &a); // in-place transpose

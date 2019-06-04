@@ -84,6 +84,30 @@ TEST_F(GPGPUTest, CompileProgram) {
     });
 }
 
+TEST_F(GPGPUTest, DevTensorCopyConstructor) {
+    doTest([](auto const& queue) {
+        auto A = Tensor<float>::range({2, 3, 4}, 11);
+        auto dev_A = DevTensor(A, queue);
+        auto dev_B = dev_A;
+        EXPECT_EQ(dev_B.read(), A);
+    });
+}
+
+TEST_F(GPGPUTest, DevTensorCopyAssignment) {
+    doTest([](auto const& queue) {
+        Shape shape{2, 3, 4};
+        auto A = Tensor<float>::range(shape, 1);
+        auto B = Tensor<float>::range(shape, 3);
+        auto dev_A = DevTensor<float>(shape, queue);
+        auto dev_B = DevTensor<float>(shape, queue);
+        dev_A.write(A);
+        dev_B.write(B);
+        EXPECT_EQ(dev_B.read(), B);
+        dev_B = dev_A;
+        EXPECT_EQ(dev_B.read(), A);
+    });
+}
+
 TEST_F(GPGPUTest, Operator) {
     doTest([](auto const& queue) {
         auto A = Tensor<float>::range({2, 3, 4}, 11);
@@ -178,18 +202,34 @@ TEST_F(GPGPUTest, MatrixDotMatrix) {
 TEST_F(GPGPUTest, GEMM) {
     doTest([](auto const& queue) {
         Tensor<float> A({3, 6}, {
-            5, 10, 9, 1, 10, 3,
-            7, 6, 6, 6, 1, 1,
-            6, 2, 6, 10, 9, 3
+            5, 10, 9,  1, 10, 3,
+            7,  6, 6,  6,  1, 1,
+            6,  2, 6, 10,  9, 3
+        });
+
+        Tensor<float> A_t({6, 3}, {
+             5,  7,  6,
+            10,  6,  2,
+             9,  6,  6,
+             1,  6, 10,
+            10,  1,  9,
+             3,  1,  3
         });
 
         Tensor<float> B({6, 4}, {
-            7, 1, 8, 7,
-            9, 5, 2, 6,
-            7, 8, 5, 7,
-            6, 9, 1, 1,
-            4, 10, 1, 10,
-            3, 8, 8, 5
+            7,  1,  8,  7,
+            9,  5,  2,  6,
+            7,  8,  5,  7,
+            6,  9,  1,  1,
+            4, 10,  1, 10,
+            3,  8,  8,  5
+        });
+
+        Tensor<float> B_t({4, 6}, {
+            7, 9, 7, 6,  4, 3,
+            1, 5, 8, 9, 10, 8,
+            8, 2, 5, 1,  1, 8,
+            7, 6, 7, 1, 10, 5
         });
 
         Tensor<float> C({3, 4}, {
@@ -201,14 +241,25 @@ TEST_F(GPGPUTest, GEMM) {
         Tensor<float> R({3, 4}, {
             1176, 1282, 628, 1145,
             1033, 1022, 829, 1052,
-            933, 980, 715, 923
+             933,  980, 715,  923
         });
 
         auto dev_A = DevTensor(A, queue);
+        auto dev_A_t = DevTensor(A_t, queue);
         auto dev_B = DevTensor(B, queue);
+        auto dev_B_t = DevTensor(B_t, queue);
         auto dev_C = DevTensor(C, queue);
 
-        auto dev_T = gemm(2.0f, dev_A, dev_B, 3.0f, dev_C);
+        auto dev_T = gemm(2.0f, dev_A, dev_B, 3.0f, dev_C, false, false);
+        EXPECT_THAT(dev_T.read(), R);
+
+        dev_T = gemm(2.0f, dev_A_t, dev_B, 3.0f, dev_C, true, false);
+        EXPECT_THAT(dev_T.read(), R);
+
+        dev_T = gemm(2.0f, dev_A, dev_B_t, 3.0f, dev_C, false, true);
+        EXPECT_THAT(dev_T.read(), R);
+
+        dev_T = gemm(2.0f, dev_A_t, dev_B_t, 3.0f, dev_C, true, true);
         EXPECT_THAT(dev_T.read(), R);
     });
 }

@@ -23,15 +23,12 @@ namespace dlf {
  * @tparam T the data type of the tensor.
  */
 template <typename T>
-class Tensor {
-    Shape m_shape;
-    size_t m_size = 0;
+class Tensor : public Shaped {
     T* m_data = nullptr;
     std::unique_ptr<T[]> m_alloc_data;
 
     void init() {
-        m_size = m_shape.size();
-        m_alloc_data = std::make_unique<T[]>(m_size);
+        m_alloc_data = std::make_unique<T[]>(size());
         m_data = m_alloc_data.get();
     }
 
@@ -99,8 +96,7 @@ public: // Constructors
      *
      * @param shape the tensor shape
      */
-    explicit Tensor(const Shape& shape); // NOLINT(modernize-pass-by-value)
-    explicit Tensor(Shape&& shape);
+    explicit Tensor(Shape shape);
 
     /**
      * Construct a tensor with input iterator denoted by [begin,end).
@@ -168,8 +164,9 @@ public: // Constructors
      *
      * @param shape the tensor dimension
      * @param n the starting value in the tensor data.
+     * @param step the increment step
      */
-    static Tensor range(Shape shape, T n);
+    static Tensor range(Shape shape, T n, T step = T{1});
 
     /**
      * Create a tensor filled with random data.
@@ -188,70 +185,6 @@ public: // Constructors
     Tensor& operator=(Tensor&& t) noexcept;
 
 public: // Attributes
-    /**
-     * Returns the shape of this tensor.
-     */
-    const Shape& shape() const noexcept {
-        return m_shape;
-    }
-
-    /**
-     * Reshape the tensor without changing tensor data. The new shape
-     * should be compatible with the original shape. At most one
-     * dimension of the new shape can be -1. In this case, the
-     * actual dimension value is inferred from the size of the tensor
-     * and the remaining dimensions.
-     *
-     * @param newshape specifies the new shape.
-     * @return true if shape changed, false if new shape is not
-     * compatible with current shape.
-     */
-    bool reshape(Shape newshape) {
-        return m_shape.reshape(std::move(newshape));
-    }
-
-    /**
-     * Return true if this is an empty tensor.
-     */
-    bool empty() const noexcept {
-        return m_size == 0;
-    }
-
-    /**
-     * Returns true if this tensor represent a 1-dimensional vector.
-     */
-    bool is_vector() const noexcept {
-        return m_shape.rank() == 1;
-    }
-
-    /**
-     * Returns true if this tensor represents a 2-dimensional matrix.
-     */
-    bool is_matrix() const noexcept {
-        return m_shape.rank() == 2;
-    }
-
-    /**
-     * Returns true if this tensor is a square matrix.
-     */
-    bool is_square() const noexcept {
-        return is_matrix() && m_shape[0] == m_shape[1];
-    }
-
-    /**
-     * Returns the total size of this tensor.
-     */
-    size_t size() const noexcept {
-        return m_size;
-    }
-
-    /**
-     * Returns the maximal size.
-     */
-    size_t max_size() const noexcept {
-        return m_size;
-    }
-
     /**
      * Returns the raw data elements.
      */
@@ -277,13 +210,6 @@ public: // Attributes
      */
     template <typename... Args, typename = RequireIndexes<Args...>>
     T& operator()(Args... args) noexcept;
-
-    /**
-     * Returns a slice of tensor at the given index. The returned tensor
-     * share the underlying data with this tensor, so the lifetime of the
-     * returned tensor cannot exceed this tensor.
-     */
-    Tensor operator[](size_t index);
 
     /**
      * Equality test for two tensors.
@@ -406,51 +332,42 @@ private: // Implementation
 //==-------------------------------------------------------------------------
 
 template <typename T>
-Tensor<T>::Tensor(const Shape& shape) // NOLINT(modernize-pass-by-value)
-    : m_shape(shape)
-{
-    init();
-}
-
-template <typename T>
-Tensor<T>::Tensor(Shape&& shape)
-    : m_shape(std::move(shape))
+Tensor<T>::Tensor(Shape shape)
+    : Shaped(std::move(shape))
 {
     init();
 }
 
 template <typename T>
 Tensor<T>::Tensor(Shape shape, T* data)
-    : m_shape(std::move(shape))
+    : Shaped(std::move(shape))
 {
     m_data = data;
-    m_size = m_shape.size();
 }
 
 template <typename T>
 template <typename It>
 Tensor<T>::Tensor(Shape shape, It begin, RequireInputIterator<It> end)
-    : m_shape(std::move(shape))
+    : Shaped(std::move(shape))
 {
     init();
-    assert(std::distance(begin, end) == m_size);
+    assert(std::distance(begin, end) == size());
     std::copy(begin, end, m_data);
 }
 
 template <typename T>
 Tensor<T>::Tensor(Shape shape, std::unique_ptr<T[]> data)
-    : m_shape(std::move(shape)), m_alloc_data(std::move(data))
+    : Shaped(std::move(shape)), m_alloc_data(std::move(data))
 {
     m_data = m_alloc_data.get();
-    m_size = m_shape.size();
 }
 
 template <typename T>
 Tensor<T>::Tensor(Shape shape, std::initializer_list<T> il)
-    : m_shape(std::move(shape))
+    : Shaped(std::move(shape))
 {
     init();
-    assert(m_size == il.size());
+    assert(size() == il.size());
     std::copy(il.begin(), il.end(), m_data);
 }
 
@@ -477,11 +394,11 @@ Tensor<T> Tensor<T>::identity(size_t n, const T& value) {
 }
 
 template <typename T>
-Tensor<T> Tensor<T>::range(Shape shape, T n) {
+Tensor<T> Tensor<T>::range(Shape shape, T n, T step) {
     Tensor<T> res(std::move(shape));
     T* p = res.data();
-    for (size_t k = res.size(); k-- != 0; )
-        *p++ = n++;
+    for (size_t k = res.size(); k-- != 0; n += step)
+        *p++ = n;
     return res;
 }
 
@@ -504,30 +421,27 @@ Tensor<T> Tensor<T>::random(Shape shape, const T& low, const T& high) {
 }
 
 template <typename T>
-Tensor<T>::Tensor(const Tensor& t)
-    : m_shape(t.m_shape), m_size(t.m_size)
+Tensor<T>::Tensor(const Tensor& t) : Shaped(t)
 {
-    m_alloc_data = std::make_unique<T[]>(m_size);
+    m_alloc_data = std::make_unique<T[]>(size());
     m_data = m_alloc_data.get();
     std::copy(t.begin(), t.end(), m_data);
 }
 
 template <typename T>
 Tensor<T>& Tensor<T>::operator=(const Tensor& t) {
-    m_shape = t.m_shape;
-    if (m_size != t.m_size || m_alloc_data == nullptr) {
-        m_size = t.m_size;
-        m_alloc_data = std::make_unique<T[]>(m_size);
+    if (size() != t.size() || m_alloc_data == nullptr) {
+        m_alloc_data = std::make_unique<T[]>(t.size());
         m_data = m_alloc_data.get();
     }
+    Shaped::operator=(t);
     std::copy(t.begin(), t.end(), m_data);
     return *this;
 }
 
 template <typename T>
 Tensor<T>::Tensor(Tensor&& t) noexcept
-    : m_shape(std::move(t.m_shape)),
-      m_size(std::exchange(t.m_size, 0)),
+    : Shaped(std::move(t)),
       m_data(std::exchange(t.m_data, nullptr)),
       m_alloc_data(std::move(t.m_alloc_data))
 {
@@ -535,8 +449,7 @@ Tensor<T>::Tensor(Tensor&& t) noexcept
 
 template <typename T>
 Tensor<T>& Tensor<T>::operator=(Tensor&& t) noexcept {
-    m_shape = std::move(t.m_shape);
-    m_size = std::exchange(t.m_size, 0);
+    Shaped::operator=(std::move(t));
     m_data = std::exchange(t.m_data, nullptr);
     m_alloc_data = std::move(t.m_alloc_data);
     return *this;
@@ -566,17 +479,6 @@ template<typename T>
 template<typename... Args, typename>
 inline T& Tensor<T>::operator()(Args... args) noexcept {
     return data()[shape().offset({size_t(args)...})];
-}
-
-template <typename T>
-Tensor<T> Tensor<T>::operator[](size_t index) {
-    assert(m_shape.rank() > 1);
-    assert(index < m_shape[0]);
-
-    auto slice_shape = m_shape.shrink();
-    auto slice_size = slice_shape.size();
-    auto slice_data = data() + index * slice_size;
-    return wrap(std::move(slice_shape), slice_data);
 }
 
 template <typename T>
@@ -803,11 +705,14 @@ inline Tensor<T> operator-(Tensor<T>&& x) {
 namespace impl {
 
 template <typename T>
-T vector_dot_vector(size_t n, const T* A, const T* B) {
-    if constexpr (std::is_same_v<T, float> || std::is_same_v<T, double>) {
-        return blas::dot(n, A, 1, B, 1);
-    }
+inline std::enable_if_t<std::is_same<T,float>::value || std::is_same<T,double>::value, T>
+dot(size_t n, const T* A, const T* B) {
+    return blas::dot(n, A, 1, B, 1);
+}
 
+template <typename T>
+std::enable_if_t<!(std::is_same<T,float>::value || std::is_same<T,double>::value), T>
+dot(size_t n, const T* A, const T* B) {
     return tbb::parallel_reduce(
         tbb::blocked_range<size_t>(0, n, GRAINSIZE),
         T{},
@@ -822,15 +727,16 @@ T vector_dot_vector(size_t n, const T* A, const T* B) {
 }
 
 template <typename T>
-void matrix_dot_vector(size_t m, size_t n, const T* A, const T* B, T* C) {
-    if constexpr (blas::IsBlasType<T>) {
-        blas::gemv(blas::Layout::RowMajor, blas::Transpose::NoTrans,
-                    m, n, T(1), A, n, B, 1, T(0), C, 1);
-        return;
-    }
+inline std::enable_if_t<blas::IsBlasType<T>>
+gemv(size_t m, size_t n, const T* A, const T* B, T* C, size_t lda) {
+    blas::gemv(blas::Layout::RowMajor, blas::Transpose::NoTrans, m, n, T(1), A, lda, B, 1, T(0), C, 1);
+}
 
+template <typename T>
+std::enable_if_t<!blas::IsBlasType<T>>
+gemv(size_t m, size_t n, const T* A, const T* B, T* C, size_t lda) {
     tbb::parallel_for(tbb::blocked_range<size_t>(0, m, GRAINSIZE), [&](auto&& r) {
-        auto px = A + r.begin() * n;
+        auto px = A + r.begin() * lda;
         auto pz = C + r.begin();
         for (size_t k = r.size(); k-- != 0; ) {
             auto py = B;
@@ -843,22 +749,22 @@ void matrix_dot_vector(size_t m, size_t n, const T* A, const T* B, T* C) {
 }
 
 template <typename T>
-void matrix_dot_matrix(size_t m, size_t k, size_t n, const T* A, const T* B, T* C) {
-    if constexpr (blas::IsBlasType<T>) {
-        blas::gemm(blas::Layout::RowMajor,
-                   blas::Transpose::NoTrans,
-                   blas::Transpose::NoTrans,
-                   m, n, k, T(1), A, k, B, n, T(0), C, n);
-        return;
-    }
+inline std::enable_if_t<blas::IsBlasType<T>>
+gemm(size_t m, size_t n, size_t k, const T* A, const T* B, T* C, size_t lda, size_t ldb, size_t ldc) {
+    blas::gemm(blas::Layout::RowMajor, blas::Transpose::NoTrans, blas::Transpose::NoTrans,
+               m, n, k, T(1), A, lda, B, ldb, T(0), C, ldc);
+}
 
+template <typename T>
+std::enable_if_t<!blas::IsBlasType<T>>
+gemm(size_t m, size_t n, size_t k, const T* A, const T* B, T* C, size_t lda, size_t ldb, size_t ldc) {
     tbb::parallel_for(tbb::blocked_range2d<size_t>(0, m, 32, 0, n, 32), [&](auto &&r) {
         for (size_t i = r.rows().begin(); i != r.rows().end(); i++) {
             for (size_t j = r.cols().begin(); j != r.cols().end(); j++) {
                 T v{};
                 for (size_t t = 0; t < k; t++)
-                    v += A[i * k + t] * B[t * n + j];
-                C[i * n + j] = std::move(v);
+                    v += A[i * lda + t] * B[t * ldb + j];
+                C[i * ldc + j] = std::move(v);
             }
         }
     });
@@ -873,27 +779,39 @@ void matrix_dot_matrix(size_t m, size_t k, size_t n, const T* A, const T* B, T* 
 template <typename T>
 Tensor<T>& inner(const Tensor<T>& A, const Tensor<T>& B, Tensor<T>* C) {
     assert(C != &A && C != &B);
+
     if (A.is_vector() && B.is_vector()) {
-        auto n = A.shape()[0];
-        assert(n == B.shape()[0]);
-        assert(C->is_vector() && 1 == C->shape()[0]);
-        *C->data() = impl::vector_dot_vector(n, A.data(), B.data());
-    } else if (A.is_vector() && B.is_matrix()) {
-        auto [k, n] = B.shape().extent();
-        assert(k == A.shape()[0]);
-        assert(C->is_vector() && n == C->shape()[0]);
-        impl::matrix_dot_matrix(1, k, n, A.data(), B.data(), C->data());
+        auto n = A.extent(0);
+        assert(n == B.extent(0));
+        assert(C->is_vector() && 1 == C->extent(0));
+        *C->data() = impl::dot(n, A.data(), B.data());
     } else if (A.is_matrix() && B.is_vector()) {
-        auto [m, n] = A.shape().extent();
-        assert(n == B.shape()[0]);
-        assert(C->is_vector() && m == C->shape()[0]);
-        impl::matrix_dot_vector(m, n, A.data(), B.data(), C->data());
-    } else if (A.is_matrix() && B.is_matrix()) {
-        auto [m, k] = A.shape().extent();
-        auto [p, n] = B.shape().extent();
-        assert(k == p);
-        assert(C->shape() == Shape({m, n}));
-        impl::matrix_dot_matrix(m, k, n, A.data(), B.data(), C->data());
+        auto m = A.extent(0), n = A.extent(1);
+        assert(n == B.extent(0));
+        assert(C->is_vector() && m == C->extent(0));
+        impl::gemv(m, n, A.data(), B.data(), C->data(), A.stride(0));
+    } else if ((A.is_vector() || A.is_matrix()) && B.is_matrix()) {
+        Shape A_shape, B_shape, C_shape;
+
+        if (A.is_vector()) {
+            assert(C->is_vector());
+            A_shape = Shape({1, A.extent(0)});
+            B_shape = B.shape();
+            C_shape = Shape({1, C->extent(0)});
+        } else {
+            assert(C->is_matrix());
+            A_shape = A.shape();
+            B_shape = B.shape();
+            C_shape = C->shape();
+        }
+
+        assert(A_shape.extent(1) == B_shape.extent(0));
+        assert(C_shape.extent(0) == A_shape.extent(0));
+        assert(C_shape.extent(1) == B_shape.extent(1));
+
+        impl::gemm(C_shape.extent(0), C_shape.extent(1), A_shape.extent(1),
+                   A.data(), B.data(), C->data(),
+                   A_shape.stride(0), B_shape.stride(0), C_shape.stride(0));
     } else {
         assert(false);
     }
@@ -903,27 +821,26 @@ Tensor<T>& inner(const Tensor<T>& A, const Tensor<T>& B, Tensor<T>* C) {
 template <typename T>
 Tensor<T> inner(const Tensor<T>& A, const Tensor<T>& B) {
     if (A.is_vector() && B.is_vector()) {
-        auto n = A.shape()[0];
-        assert(n == B.shape()[0]);
-        return Tensor<T>({1}, {impl::vector_dot_vector(n, A.data(), B.data())});
-    } else if (A.is_vector() && B.is_matrix()) {
-        auto [k, n] = B.shape().extent();
-        assert(k == A.shape()[0]);
-        Tensor<T> C({n});
-        impl::matrix_dot_matrix(1, k, n, A.data(), B.data(), C.data());
+        assert(A.shape() == B.shape());
+        Tensor<T> C({1});
+        inner(A, B, &C);
         return C;
     } else if (A.is_matrix() && B.is_vector()) {
-        auto [m, n] = A.shape().extent();
-        assert(n == B.shape()[0]);
-        Tensor<T> C({m});
-        impl::matrix_dot_vector(m, n, A.data(), B.data(), C.data());
+        assert(A.extent(1) == B.extent(0));
+        Tensor<T> C({A.extent(0)});
+        return inner(A, B, &C);
+        return C;
+    } else if (A.is_vector() && B.is_matrix()) {
+        assert(A.extent(0) == B.extent(0));
+        Tensor<T> C({B.extent(1)});
+        inner(A, B, &C);
         return C;
     } else if (A.is_matrix() && B.is_matrix()) {
-        auto [m, k] = A.shape().extent();
-        auto [p, n] = B.shape().extent();
+        auto m = A.extent(0), k = A.extent(1);
+        auto p = B.extent(0), n = B.extent(1);
         assert(k == p);
         Tensor<T> C({m, n});
-        impl::matrix_dot_matrix(m, k, n, A.data(), B.data(), C.data());
+        inner(A, B, &C);
         return C;
     } else {
         assert(false);
@@ -935,7 +852,7 @@ template <typename T>
 Tensor<T> pow(const Tensor<T>& x, long n) {
     assert(x.is_square() && n >= 0);
     if (n == 0)
-        return Tensor<T>::identity(x.shape()[0]);
+        return Tensor<T>::identity(x.extent(0));
     n--;
 
     auto A = x, B = x, t = x;
@@ -957,14 +874,14 @@ void gemm(const T& alpha, const Tensor<T>& A, const Tensor<T>& B,
           bool transA = false, bool transB = false)
 {
     assert(A.is_matrix() && B.is_matrix() && C->is_matrix());
-    auto [m, k] = A.shape().extent();
+    auto m = A.extent(0), k = A.extent(1);
+    auto p = B.extent(0), n = B.extent(1);
+    const auto lda = A.stride(0), ldb = B.stride(0), ldc = C->stride(0);
+
     if (transA)
         std::swap(m, k);
-
-    auto [p, n] = B.shape().extent();
     if (transB)
         std::swap(p, n);
-
     assert(k == p);
     assert(C->shape() == Shape({m, n}));
 
@@ -972,12 +889,8 @@ void gemm(const T& alpha, const Tensor<T>& A, const Tensor<T>& B,
         blas::gemm(blas::Layout::RowMajor,
                    transA ? blas::Transpose::Trans : blas::Transpose::NoTrans,
                    transB ? blas::Transpose::Trans : blas::Transpose::NoTrans,
-                   m, n, k,
-                   alpha,
-                   A.data(), A.shape()[1],
-                   B.data(), B.shape()[1],
-                   beta,
-                   C->data(), n);
+                   m, n, k, alpha, A.data(), A.stride(0), B.data(), B.stride(0),
+                   beta, C->data(), C->stride(0));
         return;
     }
 
@@ -986,15 +899,15 @@ void gemm(const T& alpha, const Tensor<T>& A, const Tensor<T>& B,
         return;
     }
 
-    tbb::parallel_for(tbb::blocked_range2d<size_t>(0, m, 32, 0, n, 32), [&, m=m, k=k, n=n](auto &&r) {
-        size_t incX = transA ? m : 1;
-        size_t incY = transB ? 1 : n;
+    tbb::parallel_for(tbb::blocked_range2d<size_t>(0, m, 32, 0, n, 32), [&](auto&& r) {
+        size_t incX = transA ? lda : 1;
+        size_t incY = transB ? 1 : ldb;
         for (size_t i = r.rows().begin(); i != r.rows().end(); i++) {
-            T* pz = &C->data()[i * n + r.cols().begin()];
+            T* pz = &C->data()[i * ldc + r.cols().begin()];
             for (size_t j = r.cols().begin(); j != r.cols().end(); j++) {
-                const T* px = A.data() + (transA ? i : i*k);
-                const T* py = B.data() + (transB ? j*k : j);
-                T v = *pz * beta;
+                const T* px = A.data() + (transA ? i : i*lda);
+                const T* py = B.data() + (transB ? j*ldb : j);
+                T v = beta == T(0) ? T(0) : *pz * beta;
                 for (size_t t = 0; t < k; t++) {
                     v += alpha * *px * *py;
                     px += incX;
@@ -1085,7 +998,7 @@ void inplace_transpose(size_t r, size_t c, T* A) {
 template <typename T>
 void transpose(const Tensor<T>& from, Tensor<T>* to) {
     assert(from.is_matrix() && to->is_matrix());
-    auto [r, c] = from.shape().extent();
+    auto r = from.extent(0), c = from.extent(1);
     if (&from == to) {
         if (r == c) {
             impl::square_transpose(r, to->data());
@@ -1108,7 +1021,7 @@ void transpose(const Tensor<T>& from, Tensor<T>* to) {
 template <typename T>
 Tensor<T> transpose(const Tensor<T>& A) {
     assert(A.is_matrix());
-    auto [r, c] = A.shape().extent();
+    auto r = A.extent(0), c = A.extent(1);
     Tensor<T> B = Tensor<T>({c, r});
     impl::copy_transpose(r, c, A.data(), B.data());
     return B;
