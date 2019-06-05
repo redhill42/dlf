@@ -1,49 +1,28 @@
 #include "tensor.h"
-#include "gpgpu.h"
-#include "gtest/gtest.h"
-#include "gmock/gmock.h"
 #include "test_utility.h"
+#include "GPGPUTest.h"
 
 using namespace dlf;
 
-static auto cl2cu =
-    #include "cl2cu.cl"
+static gpgpu::Program compile(const gpgpu::Queue& queue, std::string source) {
+    auto context = queue.context();
+    auto device = context.device();
 
-class GPGPUTest : public ::testing::Test {
-protected:
-    template <typename Test>
-    void doTest(Test&& test) {
-        // Initialize the GPGPU platform and devices. This initializes the
-        // OpenCL/CUDA back-end selects all devices on the platform.
-        auto devices = gpgpu::probe().devices(gpgpu::DeviceType::GPU);
-
-        for (auto const& device : devices) {
-            // Create GPGPU context and queue for each device. The queue can
-            // be used to schedule commands such as launching a kernel or
-            // perform a device-host memory copy.
-            auto context = device.createContext();
-            auto queue = context.createQueue();
-
-            // Run the test on the queue
-            test(queue);
-        }
+    // Translate OpenCL kernel code into CUDA.
+    if (device.platform().api() == gpgpu::APITypes::CUDA) {
+        auto cl2cu =
+            #include "kernels/opencl_to_cuda.cl"
+            ;
+        source = cl2cu + source;
     }
 
-    static gpgpu::Program compile(const gpgpu::Queue& queue, std::string source) {
-        auto context = queue.context();
-        auto device = context.device();
+    // Creates a new program based on the kernel string. Then, builds
+    // this program and checks for any compilation errors. If there
+    // are any, they are printed and execution is halted.
+    return context.compileProgram(source.c_str(), {});
+}
 
-        // Translate OpenCL kernel code into CUDA.
-        if (device.platform().api() == gpgpu::APITypes::CUDA) {
-            source = cl2cu + source;
-        }
-
-        // Creates a new program based on the kernel string. Then, builds
-        // this program and checks for any compilation errors. If there
-        // are any, they are printed and execution is halted.
-        return context.compileProgram(source.c_str(), {});
-    }
-};
+std::vector<gpgpu::Queue> GPGPUTest::queues;
 
 static auto program_source = R"(
 __kernel void multiply(__global float* x, __global float* y, const int factor) {
@@ -109,7 +88,7 @@ TEST_F(GPGPUTest, DevTensorCopyAssignment) {
     });
 }
 
-TEST_F(GPGPUTest, Operator) {
+TEST_F(GPGPUTest, DevTensorOperators) {
     doTest([](auto const& queue) {
         auto A = Tensor<float>::range({2, 3, 4}, 11);
         auto B = Tensor<float>::range({2, 3, 4}, 5);
@@ -251,16 +230,9 @@ TEST_F(GPGPUTest, GEMM) {
         auto dev_B_t = DevTensor<float>(B_t, queue);
         auto dev_C = DevTensor<float>(C, queue);
 
-        auto dev_T = gemm(2.0f, dev_A, dev_B, 3.0f, dev_C, false, false);
-        EXPECT_THAT(dev_T.read(), R);
-
-        dev_T = gemm(2.0f, dev_A_t, dev_B, 3.0f, dev_C, true, false);
-        EXPECT_THAT(dev_T.read(), R);
-
-        dev_T = gemm(2.0f, dev_A, dev_B_t, 3.0f, dev_C, false, true);
-        EXPECT_THAT(dev_T.read(), R);
-
-        dev_T = gemm(2.0f, dev_A_t, dev_B_t, 3.0f, dev_C, true, true);
-        EXPECT_THAT(dev_T.read(), R);
+        EXPECT_EQ(R, gemm(2.0f, dev_A, dev_B, 3.0f, dev_C, false, false).read());
+        EXPECT_EQ(R, gemm(2.0f, dev_A_t, dev_B, 3.0f, dev_C, true, false).read());
+        EXPECT_EQ(R, gemm(2.0f, dev_A, dev_B_t, 3.0f, dev_C, false, true).read());
+        EXPECT_EQ(R, gemm(2.0f, dev_A_t, dev_B_t, 3.0f, dev_C, true, true).read());
     });
 }

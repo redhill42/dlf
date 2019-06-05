@@ -380,7 +380,12 @@ void dot(const size_t n,
             auto x = reinterpret_cast<T*>(*cuBuffer::unwrap(x_buffer)) + x_offset;
             auto y = reinterpret_cast<T*>(*cuBuffer::unwrap(y_buffer)) + y_offset;
             auto r = reinterpret_cast<T*>(*cuBuffer::unwrap(r_buffer)) + r_offset;
+
+            cublasPointerMode_t mode;
+            cublasGetPointerMode(h, &mode);
+            cublasSetPointerMode(h, cublasPointerMode_t::CUBLAS_POINTER_MODE_DEVICE);
             cublasDotEx(h, n, x, t, x_inc, y, t, y_inc, r, t, t);
+            cublasSetPointerMode(h, mode);
         });
 }
 
@@ -481,7 +486,12 @@ void nrm2(const size_t n,
         [&](auto h, auto t) {
             auto x = reinterpret_cast<T*>(*cuBuffer::unwrap(x_buffer)) + x_offset;
             auto r = reinterpret_cast<T*>(*cuBuffer::unwrap(r_buffer)) + r_offset;
+
+            cublasPointerMode_t mode;
+            cublasGetPointerMode(h, &mode);
+            cublasSetPointerMode(h, cublasPointerMode_t::CUBLAS_POINTER_MODE_DEVICE);
             cublasNrm2Ex(h, n, x, t, x_inc, r, t, t);
+            cublasSetPointerMode(h, mode);
         });
 }
 
@@ -614,7 +624,12 @@ void amax(const size_t n,
         [&](auto h, auto) {
             auto x = reinterpret_cast<T*>(*cuBuffer::unwrap(x_buffer)) + x_offset;
             auto r = reinterpret_cast<int*>(*cuBuffer::unwrap(r_buffer)) + r_offset;
+
+            cublasPointerMode_t mode;
+            cublasGetPointerMode(h, &mode);
+            cublasSetPointerMode(h, cublasPointerMode_t::CUBLAS_POINTER_MODE_DEVICE);
             cublasAmaxEx(h, n, x, x_inc, r);
+            cublasSetPointerMode(h, mode);
         });
 }
 
@@ -677,7 +692,12 @@ void amin(const size_t n,
         [&](auto h, auto) {
             auto x = reinterpret_cast<T*>(*cuBuffer::unwrap(x_buffer)) + x_offset;
             auto r = reinterpret_cast<int*>(*cuBuffer::unwrap(r_buffer)) + r_offset;
+
+            cublasPointerMode_t mode;
+            cublasGetPointerMode(h, &mode);
+            cublasSetPointerMode(h, cublasPointerMode_t::CUBLAS_POINTER_MODE_DEVICE);
             cublasAminEx(h, n, x, x_inc, r);
+            cublasSetPointerMode(h, mode);
         });
 }
 

@@ -1,31 +1,11 @@
 // Use parallel algorithms to solve Euler Project problems.
 
 #include <tbb/tbb.h>
-#include "gpgpu.h"
 #include "routine.hpp"
-#include "gtest/gtest.h"
-#include "gmock/gmock.h"
 #include "test_utility.h"
+#include "GPGPUTest.h"
 
-class EulerTest : public testing::Test {
-protected:
-    template <typename Test>
-    void doTest(Test&& test) {
-        // Initialize the GPGPU platform and devices. This initializes the
-        // OpenCL/CUDA back-end selects all devices on the platform.
-        auto devices = gpgpu::probe().devices(gpgpu::DeviceType::GPU);
-
-        for (auto const& device : devices) {
-            // Create GPGPU context and queue for each device. The queue can
-            // be used to schedule commands such as launching a kernel or
-            // perform a device-host memory copy.
-            auto queue = device.createContext().createQueue();
-
-            // Run the test on the queue
-            test(queue);
-        }
-    }
-};
+class EulerTest : public GPGPUTest {};
 
 class Problem : public gpgpu::blas::Routine {
 public:

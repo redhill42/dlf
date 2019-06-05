@@ -84,10 +84,10 @@ protected:
   const std::vector<std::string> kernel_names_;
 
   // The OpenCL objects, accessible only from derived classes
-  Queue queue_;
+  const Queue& queue_;
   Event* event_;
-  Context context_;
-  Device device_;
+  const Context& context_;
+  const Device& device_;
 
   // Compiled program (either retrieved from cache or compiled in slow path)
   Program program_;

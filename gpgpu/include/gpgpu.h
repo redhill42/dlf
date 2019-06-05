@@ -638,19 +638,14 @@ public:
 };
 
 class Program {
-    Context m_context;
     std::shared_ptr<raw::Program> m_raw;
 
     friend class Context;
-    Program(Context context, std::shared_ptr<raw::Program> program)
-        : m_context(std::move(context)), m_raw(std::move(program)) {}
+    Program(std::shared_ptr<raw::Program> program)
+        : m_raw(std::move(program)) {}
 
 public:
     Program() = default;
-
-    const Context& context() const noexcept {
-        return m_context;
-    }
 
     std::string getIR() const;
     Kernel getKernel(const char* name) const;
@@ -658,14 +653,19 @@ public:
 };
 
 class Kernel {
+    Program m_program;
     std::shared_ptr<raw::Kernel> m_raw;
 
     friend class Program;
-    explicit Kernel(std::shared_ptr<raw::Kernel> kernel)
-        : m_raw(std::move(kernel)) {}
+    explicit Kernel(Program program, std::shared_ptr<raw::Kernel> kernel)
+        : m_program(std::move(program)), m_raw(std::move(kernel)) {}
 
 public:
     Kernel() = default;
+
+    const Program& program() const noexcept {
+        return m_program;
+    }
 
     uint64_t localMemoryUsage(const Device& device) const {
         return m_raw->localMemoryUsage(device.raw());
@@ -761,11 +761,11 @@ inline float Event::getElapsedTime() const {
 inline Program Context::compileProgram(
     const char* source, const std::vector<std::string>& options) const
 {
-    return Program(*this, m_raw->compileProgram(source, options));
+    return Program(m_raw->compileProgram(source, options));
 }
 
 inline Program Context::loadProgram(const std::string& binary) const {
-    return Program(*this, m_raw->loadProgram(binary));
+    return Program(m_raw->loadProgram(binary));
 }
 
 inline std::string Program::getIR() const {
@@ -773,7 +773,7 @@ inline std::string Program::getIR() const {
 }
 
 inline Kernel Program::getKernel(const char* name) const {
-    return Kernel(m_raw->getKernel(name));
+    return Kernel(*this, m_raw->getKernel(name));
 }
 
 inline Kernel Program::getKernel(const std::string& name) const {

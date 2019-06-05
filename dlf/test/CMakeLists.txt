@@ -1,6 +1,6 @@
 file(GLOB_RECURSE DLF_TESTS "${CMAKE_CURRENT_LIST_DIR}/*.cpp")
 add_executable(unit_tests ${DLF_TESTS})
-target_link_libraries(unit_tests gtest gmock gpgpu dlf ${TBB_LIBRARIES})
+target_link_libraries(unit_tests gmock_main gpgpu dlf ${TBB_LIBRARIES})
 
 if (USE_MKL)
   target_link_libraries(unit_tests ${MKL_LIBRARIES})

@@ -520,26 +520,20 @@ TEST_F(TensorTest, Apply) {
     checkDataTransform(t1, f);
 }
 
-template <typename T>
-static void ChainedApplyTest() {
-    constexpr T PI  = 3.14159;
-    constexpr T E   = 2.71828;
-    constexpr T PHI = 1.61803;
-    constexpr T SR2 = 1.41421;
+TEST_F(TensorTest, ChainedApply) {
+    constexpr double PI  = 3.14159;
+    constexpr double E   = 2.71828;
+    constexpr double PHI = 1.61803;
+    constexpr double SR2 = 1.41421;
 
-    auto sin_f  = [](T x) -> T { return sin(x); };
-    auto sqrt_f = [](T x) -> T { return sqrt(x); };
+    auto sin_f  = [](double x) { return sin(x); };
+    auto sqrt_f = [](double x) { return sqrt(x); };
 
-    Tensor<T> t({2,2}, {PI, E, PHI, SR2});
+    Tensor<double> t({2,2}, {PI, E, PHI, SR2});
     t.apply(sin_f).apply(sqrt_f);
 
-    auto f = [](T x){ return sqrt(sin(x)); };
+    auto f = [](double x) { return sqrt(sin(x)); };
     EXPECT_THAT(t, testing::ElementsAre(f(PI), f(E), f(PHI), f(SR2)));
-}
-
-TEST_F(TensorTest, ChainedApply) {
-    ChainedApplyTest<double>();
-    ChainedApplyTest<float>();
 }
 
 TEST_F(TensorTest, Transform) {

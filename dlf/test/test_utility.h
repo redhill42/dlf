@@ -13,7 +13,10 @@ void timing(const std::string& name, int iteration, Body&& body) {
 
     auto seconds = duration_cast<duration<double>>(elapsed).count();
     std::cout << name << " elapsed "
-              << std::fixed << std::setprecision(6)
+              << std::fixed
+              #if __cplusplus > 201402L
+              << std::setprecision(6)
+              #endif
               << seconds << 's';
     if (iteration > 1)
         std::cout << " (" << (seconds/iteration) << "s per iteration)";
