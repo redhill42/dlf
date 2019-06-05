@@ -5,6 +5,7 @@
 #include <random>
 #include <iostream>
 
+#include "utility.h"
 #include "tensor/shape.h"
 #include "parallel.h"
 #include "os_blas.h"
@@ -63,16 +64,16 @@ private: // Concepts
     template <typename InputIterator>
     using RequireInputIterator =
         std::enable_if_t<
-            std::is_convertible_v<
+            std::is_convertible<
                 typename std::iterator_traits<InputIterator>::iterator_category,
-                std::input_iterator_tag> &&
-            std::is_constructible_v<
-                T, typename std::iterator_traits<InputIterator>::reference>,
+                std::input_iterator_tag>::value &&
+            std::is_constructible<
+                T, typename std::iterator_traits<InputIterator>::reference>::value,
             InputIterator>;
 
     template <typename... Args>
     using RequireIndexes =
-        std::enable_if_t<std::conjunction_v<std::is_convertible<Args, size_t>...>>;
+        std::enable_if_t<cxx::conjunction<std::is_convertible<Args, size_t>...>::value>;
 
 private:
     /**
@@ -175,7 +176,7 @@ public: // Constructors
      * @param high the highest random value
      * @return a tensor that filled with random data.
      */
-    static Tensor random(Shape shape, const T& low, const T& high);
+    static Tensor random(Shape shape, T low, T high);
 
     // Copy and move constructors/assignments.
     Tensor(const Tensor& t);
@@ -224,7 +225,7 @@ public: // Attributes
 
 public: // Operators
 #define DECLARE_OPERATOR(op) \
-    template <typename U, typename = std::enable_if_t<std::is_convertible_v<U,T>>> \
+    template <typename U, typename = std::enable_if_t<std::is_convertible<U,T>::value>> \
     Tensor& operator op(const Tensor<U>& y); \
     Tensor& operator op(const T& b);
 
@@ -245,15 +246,6 @@ public: // Transformations
     Tensor& apply(F f);
 
     /**
-     * Apply the function pointer on tensor's elements. This is a workaround for
-     * overloaded function deduction issue.
-     *
-     * @param f the function pointer
-     * @return *this (useful for chained operation)
-     */
-    Tensor& apply(T(*f)(T));
-
-    /**
      * Transform two tensor's elements by applying a binary function.
      *
      * @param y another tensor involved in apply.
@@ -270,7 +262,7 @@ public: // Transformations
      * @param f the unary function
      * @return the transformed tensor
      */
-    template <typename F, typename U = std::invoke_result_t<F,T>>
+    template <typename F, typename U = cxx::invoke_result_t<F,T>>
     Tensor<U> transform(F f) const;
 
     /**
@@ -291,7 +283,7 @@ public: // Transformations
      * @param f the function to be applied.
      * @return the Tensor that contains transformed elements.
      */
-    template <typename U, typename F, typename W = std::invoke_result_t<F,T,U>>
+    template <typename U, typename F, typename W = cxx::invoke_result_t<F,T,U>>
     Tensor<W> transform(const Tensor<U>& y, F f) const;
 
     /**
@@ -306,11 +298,11 @@ public: // Transformations
     void transformTo(Tensor<W>& z, const Tensor<U>& y, F f) const;
 
     // Rvalue optimization for transformations.
-    template <typename F, typename = std::enable_if_t<std::is_same_v<std::invoke_result_t<F,T>,T>>>
+    template <typename F, typename = std::enable_if_t<std::is_same<cxx::invoke_result_t<F,T>,T>::value>>
     Tensor<T> transform(F f) &&;
-    template <typename F, typename = std::enable_if_t<std::is_same_v<std::invoke_result_t<F,T,T>,T>>>
+    template <typename F, typename = std::enable_if_t<std::is_same<cxx::invoke_result_t<F,T,T>,T>::value>>
     Tensor<T> transform(const Tensor<T>& y, F f) &&;
-    template <typename F, typename = std::enable_if_t<std::is_same_v<std::invoke_result_t<F,T,T>,T>>>
+    template <typename F, typename = std::enable_if_t<std::is_same<cxx::invoke_result_t<F,T,T>,T>::value>>
     Tensor<T> transform(Tensor<T>&& y, F f) const &;
 
     /**
@@ -402,21 +394,28 @@ Tensor<T> Tensor<T>::range(Shape shape, T n, T step) {
 }
 
 template <typename T>
-Tensor<T> Tensor<T>::random(Shape shape, const T& low, const T& high) {
-    static_assert(std::is_arithmetic_v<T>);
+Tensor<T> Tensor<T>::random(Shape shape, T low, T high) {
+    static_assert(std::is_integral<T>::value, "Tensor::random: requires integral type");
+    std::random_device rd;
+    std::default_random_engine eng(rd());
+    auto rand = std::bind(std::uniform_int_distribution<T>(low, high), eng);
+    return build(std::move(shape), rand);
+}
 
-    std::random_device r;
-    std::default_random_engine eng(r());
+template <>
+inline Tensor<float> Tensor<float>::random(Shape shape, float low, float high) {
+    std::random_device rd;
+    std::default_random_engine eng(rd());
+    auto rand = std::bind(std::uniform_real_distribution<float>(low, high), eng);
+    return build(std::move(shape), rand);
+}
 
-    if constexpr (std::is_integral_v<T>) {
-        auto rand = std::bind(std::uniform_int_distribution<T>(low, high), eng);
-        return build(std::move(shape), rand);
-    }
-
-    if constexpr (std::is_floating_point_v<T>) {
-        auto rand = std::bind(std::uniform_real_distribution<T>(low, high), eng);
-        return build(std::move(shape), rand);
-    }
+template <>
+inline Tensor<double> Tensor<double>::random(Shape shape, double low, double high) {
+    std::random_device rd;
+    std::default_random_engine eng(rd());
+    auto rand = std::bind(std::uniform_real_distribution<double>(low, high), eng);
+    return build(std::move(shape), rand);
 }
 
 template <typename T>
@@ -512,12 +511,6 @@ const T* Tensor<T>::printRec(std::ostream& out, const Shape& shape, size_t level
 template <typename T>
 template <typename F>
 inline Tensor<T>& Tensor<T>::apply(F f) {
-    parallel_transform(begin(), end(), begin(), f);
-    return *this;
-}
-
-template <typename T>
-inline Tensor<T>& Tensor<T>::apply(T(*f)(T)) {
     parallel_transform(begin(), end(), begin(), f);
     return *this;
 }
@@ -726,13 +719,13 @@ dot(size_t n, const T* A, const T* B) {
 }
 
 template <typename T>
-inline std::enable_if_t<blas::IsBlasType<T>>
+inline std::enable_if_t<blas::RequireBlasType<T>>
 gemv(size_t m, size_t n, const T* A, const T* B, T* C, size_t lda) {
     blas::gemv(blas::Layout::RowMajor, blas::Transpose::NoTrans, m, n, T(1), A, lda, B, 1, T(0), C, 1);
 }
 
 template <typename T>
-std::enable_if_t<!blas::IsBlasType<T>>
+std::enable_if_t<!blas::RequireBlasType<T>>
 gemv(size_t m, size_t n, const T* A, const T* B, T* C, size_t lda) {
     tbb::parallel_for(tbb::blocked_range<size_t>(0, m, GRAINSIZE), [&](auto&& r) {
         auto px = A + r.begin() * lda;
@@ -748,14 +741,14 @@ gemv(size_t m, size_t n, const T* A, const T* B, T* C, size_t lda) {
 }
 
 template <typename T>
-inline std::enable_if_t<blas::IsBlasType<T>>
+inline std::enable_if_t<blas::RequireBlasType<T>>
 gemm(size_t m, size_t n, size_t k, const T* A, const T* B, T* C, size_t lda, size_t ldb, size_t ldc) {
     blas::gemm(blas::Layout::RowMajor, blas::Transpose::NoTrans, blas::Transpose::NoTrans,
                m, n, k, T(1), A, lda, B, ldb, T(0), C, ldc);
 }
 
 template <typename T>
-std::enable_if_t<!blas::IsBlasType<T>>
+std::enable_if_t<!blas::RequireBlasType<T>>
 gemm(size_t m, size_t n, size_t k, const T* A, const T* B, T* C, size_t lda, size_t ldb, size_t ldc) {
     tbb::parallel_for(tbb::blocked_range2d<size_t>(0, m, 32, 0, n, 32), [&](auto &&r) {
         for (size_t i = r.rows().begin(); i != r.rows().end(); i++) {
@@ -868,9 +861,10 @@ Tensor<T> pow(const Tensor<T>& x, long n) {
  * General matrix multiplication.
  */
 template <typename T>
-void gemm(const T& alpha, const Tensor<T>& A, const Tensor<T>& B,
-          const T& beta, Tensor<T>* C,
-          bool transA = false, bool transB = false)
+std::enable_if_t<!blas::RequireBlasType<T>>
+gemm(const T& alpha, const Tensor<T>& A, const Tensor<T>& B,
+     const T& beta, Tensor<T>* C,
+     bool transA = false, bool transB = false)
 {
     assert(A.is_matrix() && B.is_matrix() && C->is_matrix());
     auto m = A.extent(0), k = A.extent(1);
@@ -883,15 +877,6 @@ void gemm(const T& alpha, const Tensor<T>& A, const Tensor<T>& B,
         std::swap(p, n);
     assert(k == p);
     assert(C->shape() == Shape({m, n}));
-
-    if constexpr (blas::IsBlasType<T>) {
-        blas::gemm(blas::Layout::RowMajor,
-                   transA ? blas::Transpose::Trans : blas::Transpose::NoTrans,
-                   transB ? blas::Transpose::Trans : blas::Transpose::NoTrans,
-                   m, n, k, alpha, A.data(), A.stride(0), B.data(), B.stride(0),
-                   beta, C->data(), C->stride(0));
-        return;
-    }
 
     if (alpha == T(0)) {
         *C *= beta;
@@ -919,6 +904,30 @@ void gemm(const T& alpha, const Tensor<T>& A, const Tensor<T>& B,
 }
 
 template <typename T>
+std::enable_if_t<blas::RequireBlasType<T>>
+gemm(const T& alpha, const Tensor<T>& A, const Tensor<T>& B,
+     const T& beta, Tensor<T>* C,
+     bool transA = false, bool transB = false)
+{
+    assert(A.is_matrix() && B.is_matrix() && C->is_matrix());
+    auto m = A.extent(0), k = A.extent(1);
+    auto p = B.extent(0), n = B.extent(1);
+
+    if (transA)
+        std::swap(m, k);
+    if (transB)
+        std::swap(p, n);
+    assert(k == p);
+    assert(C->shape() == Shape({m, n}));
+
+    blas::gemm(blas::Layout::RowMajor,
+               transA ? blas::Transpose::Trans : blas::Transpose::NoTrans,
+               transB ? blas::Transpose::Trans : blas::Transpose::NoTrans,
+               m, n, k, alpha, A.data(), A.stride(0), B.data(), B.stride(0),
+               beta, C->data(), C->stride(0));
+}
+
+template <typename T>
 Tensor<T> gemm(const T& alpha, const Tensor<T>& A, const Tensor<T>& B,
                const T& beta, const Tensor<T>& C,
                bool transA = false, bool transB = false)
@@ -930,16 +939,18 @@ Tensor<T> gemm(const T& alpha, const Tensor<T>& A, const Tensor<T>& B,
 
 namespace impl {
 
-// Simple case: transpose with copy
-template <typename T>
-void copy_transpose(size_t r, size_t c, const T* src, T* dst) {
 #if HAS_MKL
-    if constexpr (blas::IsBlasType<T>) {
-        mkl::omatcopy('R', 'T', r, c, T(1), src, c, dst, r);
-        return;
-    }
+template <typename T>
+constexpr bool RequireMKL = blas::RequireBlasType<T>;
+#else
+template <typename T>
+constexpr bool RequireMKL = false;
 #endif
 
+// Simple case: transpose with copy
+template <typename T>
+std::enable_if_t<!RequireMKL<T>>
+copy_transpose(size_t r, size_t c, const T* src, T* dst) {
     tbb::parallel_for(tbb::blocked_range<size_t>(0, c, GRAINSIZE), [=](auto&& rr) {
         T* py = dst + rr.begin()*r;
         for (size_t i = rr.begin(); i != rr.end(); i++) {
@@ -952,14 +963,8 @@ void copy_transpose(size_t r, size_t c, const T* src, T* dst) {
 
 // Easy case: in-place transpose a square matrix
 template <typename T>
-void square_transpose(size_t n, T* A) {
-#if HAS_MKL
-    if constexpr (blas::IsBlasType<T>) {
-        mkl::imatcopy('R', 'T', n, n, T(1), A, n, n);
-        return;
-    }
-#endif
-
+std::enable_if_t<!RequireMKL<T>>
+square_transpose(size_t n, T* A) {
     tbb::parallel_for(tbb::blocked_range<size_t>(0, n, GRAINSIZE), [=](auto&& r) {
         T* px = A;
         for (size_t i = r.begin(); i != r.end(); i++) {
@@ -973,18 +978,32 @@ void square_transpose(size_t n, T* A) {
 // Hard case: in-place transpose a non-square matrix
 // https://en.wikipedia.org/wiki/In-place_matrix_transposition
 template <typename T>
-void inplace_transpose(size_t r, size_t c, T* A) {
-#if HAS_MKL
-    if constexpr (blas::IsBlasType<T>) {
-        mkl::imatcopy('R', 'T', r, c, T(1), A, c, r);
-        return;
-    }
-#endif
-
+std::enable_if_t<!RequireMKL<T>>
+inplace_transpose(size_t r, size_t c, T* A) {
     // naive implementation
     Tensor<T> t({r, c}, A, A+r*c);
     copy_transpose(r, c, t.data(), A);
 }
+
+#if HAS_MKL
+template <typename T>
+std::enable_if_t<RequireMKL<T>>
+copy_transpose(size_t r, size_t c, const T* src, T* dst) {
+    mkl::omatcopy('R', 'T', r, c, T(1), src, c, dst, r);
+}
+
+template <typename T>
+std::enable_if_t<RequireMKL<T>>
+square_transpose(size_t n, T* A) {
+    mkl::imatcopy('R', 'T', n, n, T(1), A, n, n);
+}
+
+template <typename T>
+std::enable_if_t<RequireMKL<T>>
+inplace_transpose(size_t r, size_t c, T* A) {
+    mkl::imatcopy('R', 'T', r, c, T(1), A, c, r);
+}
+#endif
 
 } // namespace impl
 

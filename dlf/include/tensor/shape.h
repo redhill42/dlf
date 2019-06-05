@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <cassert>
+#include <cstdlib>
 
 namespace dlf {
 

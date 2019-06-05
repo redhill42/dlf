@@ -1,4 +1,5 @@
 #include "tensor/shape.h"
+#include "utility.h"
 
 using namespace dlf;
 
@@ -21,13 +22,13 @@ void Shape::init(const std::vector<size_t>& extents) noexcept {
 
 Shape::Shape(Shape&& rhs)
     : m_dims(std::move(rhs.m_dims)),
-      m_size(std::exchange(rhs.m_size, 0))
+      m_size(cxx::exchange(rhs.m_size, 0))
 {
 }
 
 Shape& Shape::operator=(Shape&& rhs) {
     m_dims = std::move(rhs.m_dims);
-    m_size = std::exchange(rhs.m_size, 0);
+    m_size = cxx::exchange(rhs.m_size, 0);
     return *this;
 }
 

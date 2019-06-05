@@ -11,7 +11,8 @@
 # # Run the test-suite:
 # docker run --privileged dlf-dev build/make.sh test
 
-FROM nvidia/cuda:10.1-devel
+ARG CUDA_VERSION
+FROM nvidia/cuda:${CUDA_VERSION}-devel
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         git cmake wget libprotobuf-dev protobuf-compiler libgmp-dev && \

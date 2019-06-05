@@ -22,13 +22,13 @@ target_include_directories(
   PUBLIC
     ${CMAKE_CURRENT_LIST_DIR}/include
     ${CMAKE_CURRENT_BINARY_DIR}
-    ${Protobuf_INCLUDE_DIR}
+    ${PROTOBUF_INCLUDE_DIRS}
 )
 
 target_link_libraries(
   dlf
   PRIVATE
-    ${Protobuf_LIBRARIES}
+    ${PROTOBUF_LIBRARIES}
     ${TBB_LIBRARIES}
     ${MKL_LIBRARIES}
     gpgpu

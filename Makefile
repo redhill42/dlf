@@ -9,6 +9,9 @@ DOCKERFILE := $(shell bash -c 'source build/detect-daemon-osarch && echo $${DOCK
 DOCKER_ENVS := \
     -e SKIP_TESTS
 
+CUDA_VERSION := $(if $(CUDA_VERSION),$(CUDA_VERSION),10.1)
+DOCKER_BUILD_ARGS += --build-arg CUDA_VERSION="$(CUDA_VERSION)"
+
 # to allow `make BIND_DIR=. shell` or `make BIND_DIR= test`
 # (default to no bind mount if DOCKER_HOST is set)
 BIND_DIR := $(if $(BINDDIR),$(BINDDIR),bundles)

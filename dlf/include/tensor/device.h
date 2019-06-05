@@ -46,7 +46,7 @@ public:
     }
 
     /**
-     * Asynchronously read data from deivce.
+     * Asynchronously read data from device.
      */
     Tensor<T> readAsync() const {
         Tensor<T> host(shape());

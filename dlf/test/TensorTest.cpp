@@ -1,6 +1,5 @@
 #include <cmath>
 #include <complex>
-#include <variant>
 #include "gtest/gtest.h"
 #include "gmock/gmock.h"
 #include "test_utility.h"
@@ -236,16 +235,16 @@ TEST_F(TensorTest, BinaryOpWithDifferentElementType) {
     auto b = y; b += x;
     EXPECT_THAT(b, T::ElementsAre(3.1+1, 3.2+2, 3.3+3, 5.5+4, 5.6+5, 5.7+6));
 
-    static_assert(std::is_same_v<decltype(x+y), Tensor<double>>);
+    static_assert(std::is_same<decltype(x+y), Tensor<double>>::value, "");
     EXPECT_THAT(x+y, T::ElementsAre(1+3.1, 2+3.2, 3+3.3, 4+5.5, 5+5.6, 6+5.7));
 
-    static_assert(std::is_same_v<decltype(y-x), Tensor<double>>);
+    static_assert(std::is_same<decltype(y-x), Tensor<double>>::value, "");
     EXPECT_THAT(y-x, T::ElementsAre(3.1-1, 3.2-2, 3.3-3, 5.5-4, 5.6-5, 5.7-6));
 
-    static_assert(std::is_same_v<decltype(x+5.5), Tensor<double>>);
+    static_assert(std::is_same<decltype(x+5.5), Tensor<double>>::value, "");
     EXPECT_THAT(x+5.5, T::ElementsAre(1+5.5, 2+5.5, 3+5.5, 4+5.5, 5+5.5, 6+5.5));
 
-    static_assert(std::is_same_v<decltype(5.5-x), Tensor<double>>);
+    static_assert(std::is_same<decltype(5.5-x), Tensor<double>>::value, "");
     EXPECT_THAT(5.5-x, T::ElementsAre(5.5-1, 5.5-2, 5.5-3, 5.5-4, 5.5-5, 5.5-6));
 
     EXPECT_THAT(-x, T::ElementsAre(-1, -2, -3, -4, -5, -6));
@@ -444,10 +443,13 @@ static void gemm_test() {
          933,  980, 715,  923
     });
 
-    EXPECT_THAT(gemm(T(2), a, b, T(3), c, false, false), r);
-    EXPECT_THAT(gemm(T(2), transpose(a), b, T(3), c, true, false), r);
-    EXPECT_THAT(gemm(T(2), a, transpose(b), T(3), c, false, true), r);
-    EXPECT_THAT(gemm(T(2), transpose(a), transpose(b), T(3), c, true, true), r);
+    EXPECT_EQ(gemm(T(2), a, b, T(3), c, false, false), r);
+    EXPECT_EQ(gemm(T(2), transpose(a), b, T(3), c, true, false), r);
+    EXPECT_EQ(gemm(T(2), a, transpose(b), T(3), c, false, true), r);
+    EXPECT_EQ(gemm(T(2), transpose(a), transpose(b), T(3), c, true, true), r);
+
+    gemm(T(2), a, b, T(3), &c);
+    EXPECT_EQ(c, r);
 }
 
 TEST_F(TensorTest, Gemm) {
@@ -496,8 +498,8 @@ static void test_transpose_in_place() {
             EXPECT_EQ(a, b);
         }
     }
-
 }
+
 TEST_F(TensorTest, TransposeInPlace) {
     test_transpose_in_place<int>();
     test_transpose_in_place<float>();
@@ -525,11 +527,13 @@ static void ChainedApplyTest() {
     constexpr T PHI = 1.61803;
     constexpr T SR2 = 1.41421;
 
-    Tensor<T> t({2,2}, {PI, E, PHI, SR2});
-    t.apply(sin).apply(sqrt);
+    auto sin_f  = [](T x) -> T { return sin(x); };
+    auto sqrt_f = [](T x) -> T { return sqrt(x); };
 
-    static_assert(std::is_same_v<decltype(sin(PI)), T>);
-    auto f = [](auto x){ return sqrt(sin(x)); };
+    Tensor<T> t({2,2}, {PI, E, PHI, SR2});
+    t.apply(sin_f).apply(sqrt_f);
+
+    auto f = [](T x){ return sqrt(sin(x)); };
     EXPECT_THAT(t, testing::ElementsAre(f(PI), f(E), f(PHI), f(SR2)));
 }
 
@@ -543,7 +547,7 @@ TEST_F(TensorTest, Transform) {
         SCOPED_TRACE("");
         auto f = static_cast<double(*)(double)>(sin);
         auto t = t1.transform(f);
-        static_assert(std::is_same_v<decltype(t), Tensor<double>>);
+        static_assert(std::is_same<decltype(t), Tensor<double>>::value, "");
         checkDataTransform(t, f);
     }
 
@@ -551,7 +555,7 @@ TEST_F(TensorTest, Transform) {
         SCOPED_TRACE("");
         auto f = [](auto x) { return std::complex<int>(x, x * 2); };
         auto t = t1.transform(f);
-        static_assert(std::is_same_v<decltype(t), Tensor<std::complex<int>>>);
+        static_assert(std::is_same<decltype(t), Tensor<std::complex<int>>>::value, "");
         checkDataTransform(t, f);
     }
 }
@@ -566,7 +570,7 @@ TEST_F(TensorTest, TransformTo) {
 TEST_F(TensorTest, Cast) {
     SCOPED_TRACE("");
     auto t = t1.cast<double>();
-    static_assert(std::is_same_v<decltype(t), Tensor<double>>);
+    static_assert(std::is_same<decltype(t), Tensor<double>>::value, "");
     checkDataTransform(t, [](auto x){ return static_cast<double>(x); });
 }
 
@@ -644,8 +648,8 @@ TEST_F(TensorTest, Relu) {
     auto in = Tensor<int32_t>::random({100, 100}, -500, 500);
 
     // relu with 100 as max value
-    auto out = in.transform(Relu(100.0));
-    static_assert(std::is_same_v<decltype(out), Tensor<double>>);
+    auto out = in.transform(Relu<double>(100.0));
+    static_assert(std::is_same<decltype(out), Tensor<double>>::value, "");
 
     EXPECT_THAT(in, T::Contains(T::Lt(0)));
     EXPECT_THAT(in, T::Contains(T::Gt(100)));

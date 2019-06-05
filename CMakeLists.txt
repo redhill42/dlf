@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.1)
 
 project(DLF C CXX)
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 14)
 
 # place binaries and libraries according to GNU standards
 include(GNUInstallDirs)

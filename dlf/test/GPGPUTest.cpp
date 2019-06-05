@@ -21,7 +21,8 @@ protected:
             // Create GPGPU context and queue for each device. The queue can
             // be used to schedule commands such as launching a kernel or
             // perform a device-host memory copy.
-            auto queue = device.createContext().createQueue();
+            auto context = device.createContext();
+            auto queue = context.createQueue();
 
             // Run the test on the queue
             test(queue);
@@ -59,7 +60,7 @@ TEST_F(GPGPUTest, CompileProgram) {
 
         // Creates two new device buffers and copies the host data to these
         // device buffer
-        auto dev_a = DevTensor(host_a, queue);
+        auto dev_a = DevTensor<float>(host_a, queue);
         auto dev_b = DevTensor<float>(host_a.shape(), queue);
 
         // Creates a 1-dimensional thread configuration with thread-blocks/work-groups
@@ -87,7 +88,7 @@ TEST_F(GPGPUTest, CompileProgram) {
 TEST_F(GPGPUTest, DevTensorCopyConstructor) {
     doTest([](auto const& queue) {
         auto A = Tensor<float>::range({2, 3, 4}, 11);
-        auto dev_A = DevTensor(A, queue);
+        auto dev_A = DevTensor<float>(A, queue);
         auto dev_B = dev_A;
         EXPECT_EQ(dev_B.read(), A);
     });
@@ -113,8 +114,8 @@ TEST_F(GPGPUTest, Operator) {
         auto A = Tensor<float>::range({2, 3, 4}, 11);
         auto B = Tensor<float>::range({2, 3, 4}, 5);
 
-        auto dev_A = DevTensor(A, queue);
-        auto dev_B = DevTensor(B, queue);
+        auto dev_A = DevTensor<float>(A, queue);
+        auto dev_B = DevTensor<float>(B, queue);
 
         EXPECT_EQ((dev_A + dev_B).read(), A + B);
         EXPECT_EQ((dev_A - dev_B).read(), A - B);
@@ -133,8 +134,8 @@ TEST_F(GPGPUTest, VectorDotVector) {
         auto B = Tensor<float>({4}, {4, 1, 9, 6});
         auto R = Tensor<float>({1}, {66});
 
-        auto dev_A = DevTensor(A, queue);
-        auto dev_B = DevTensor(B, queue);
+        auto dev_A = DevTensor<float>(A, queue);
+        auto dev_B = DevTensor<float>(B, queue);
         auto dev_C = DevTensor<float>({1}, queue);
 
         inner(dev_A, dev_B, &dev_C);
@@ -151,8 +152,8 @@ TEST_F(GPGPUTest, MatrixDotVector) {
         auto B = Tensor<float>({3}, {9, 6, 7});
         auto R = Tensor<float>({2}, {81, 141});
 
-        auto dev_A = DevTensor(A, queue);
-        auto dev_B = DevTensor(B, queue);
+        auto dev_A = DevTensor<float>(A, queue);
+        auto dev_B = DevTensor<float>(B, queue);
         auto dev_C = DevTensor<float>({2}, queue);
 
         inner(dev_A, dev_B, &dev_C);
@@ -169,8 +170,8 @@ TEST_F(GPGPUTest, VectorDoMatrix) {
         auto B = Tensor<float>({3, 2}, {2, 7, 3, 5, 9, 6});
         auto R = Tensor<float>({2}, {99, 135});
 
-        auto dev_A = DevTensor(A, queue);
-        auto dev_B = DevTensor(B, queue);
+        auto dev_A = DevTensor<float>(A, queue);
+        auto dev_B = DevTensor<float>(B, queue);
         auto dev_C = DevTensor<float>({2}, queue);
 
         inner(dev_A, dev_B, &dev_C);
@@ -187,8 +188,8 @@ TEST_F(GPGPUTest, MatrixDotMatrix) {
         auto B = Tensor<float>({3, 2}, {2, 7, 3, 5, 9, 6});
         auto R = Tensor<float>({2, 2}, {52, 67, 91, 116});
 
-        auto dev_A = DevTensor(A, queue);
-        auto dev_B = DevTensor(B, queue);
+        auto dev_A = DevTensor<float>(A, queue);
+        auto dev_B = DevTensor<float>(B, queue);
         auto dev_C = DevTensor<float>({2, 2}, queue);
 
         inner(dev_A, dev_B, &dev_C);
@@ -244,11 +245,11 @@ TEST_F(GPGPUTest, GEMM) {
              933,  980, 715,  923
         });
 
-        auto dev_A = DevTensor(A, queue);
-        auto dev_A_t = DevTensor(A_t, queue);
-        auto dev_B = DevTensor(B, queue);
-        auto dev_B_t = DevTensor(B_t, queue);
-        auto dev_C = DevTensor(C, queue);
+        auto dev_A = DevTensor<float>(A, queue);
+        auto dev_A_t = DevTensor<float>(A_t, queue);
+        auto dev_B = DevTensor<float>(B, queue);
+        auto dev_B_t = DevTensor<float>(B_t, queue);
+        auto dev_C = DevTensor<float>(C, queue);
 
         auto dev_T = gemm(2.0f, dev_A, dev_B, 3.0f, dev_C, false, false);
         EXPECT_THAT(dev_T.read(), R);

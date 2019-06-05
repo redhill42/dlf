@@ -19,12 +19,11 @@
 namespace blas {
 
 template <typename T>
-constexpr bool IsBlasType =
-    std::disjunction_v<
-        std::is_same<T, float>,
-        std::is_same<T, double>,
-        std::is_same<T, std::complex<float>>,
-        std::is_same<T, std::complex<double>>>;
+constexpr bool RequireBlasType =
+    std::is_same<T, float>::value ||
+    std::is_same<T, double>::value ||
+    std::is_same<T, std::complex<float>>::value ||
+    std::is_same<T, std::complex<double>>::value;
 
 enum class Layout {
     RowMajor = CblasRowMajor,
