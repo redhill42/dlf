@@ -1,5 +1,4 @@
-#ifndef _TENSOR_SHAPE_HPP
-#define _TENSOR_SHAPE_HPP
+#pragma once
 
 #include <vector>
 #include <cassert>
@@ -187,5 +186,3 @@ public:
 };
 
 } //namespace dlf
-
-#endif //_SHAPE_HPP

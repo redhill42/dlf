@@ -1,5 +1,4 @@
-#ifndef _TENSOR_HOST_H
-#define _TENSOR_HOST_H
+#pragma once
 
 #include <vector>
 #include <complex>
@@ -1028,5 +1027,3 @@ Tensor<T> transpose(const Tensor<T>& A) {
 }
 
 } // namespace dlf
-
-#endif //_TENSOR_HOST_H

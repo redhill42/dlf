@@ -1,5 +1,4 @@
-#ifndef _TEST_UTILITY_H
-#define _TEST_UTILITY_H
+#pragma once
 
 #include <chrono>
 #include <iostream>
@@ -20,5 +19,3 @@ void timing(const std::string& name, int iteration, Body&& body) {
         std::cout << " (" << (seconds/iteration) << "s per iteration)";
     std::cout << std::endl;
 }
-
-#endif //_TEST_UTILITY_H

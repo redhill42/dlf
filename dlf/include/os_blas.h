@@ -1,5 +1,4 @@
-#ifndef _OS_BLAS_H
-#define _OS_BLAS_H
+#pragma once
 
 #include <complex>
 
@@ -317,5 +316,3 @@ inline void omatcopy(char ordering, char trans, size_t rows, size_t cols, const 
 
 } // namespace mkl
 #endif // HAS_MKL
-
-#endif //_OS_BLAS_H

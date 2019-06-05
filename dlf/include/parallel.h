@@ -1,5 +1,4 @@
-#ifndef DLF_PARALLEL_H
-#define DLF_PARALLEL_H
+#pragma once
 
 #include <tbb/tbb.h>
 
@@ -63,5 +62,3 @@ parallel_transform(InputIterator1 first1, InputIterator1 last1, InputIterator2 f
 }
 
 } // namespace dlf
-
-#endif //DLF_PARALLEL_H

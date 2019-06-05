@@ -1,5 +1,4 @@
-#ifndef _TENSOR_DEVICE_H
-#define _TENSOR_DEVICE_H
+#pragma once
 
 #include "tensor/shape.h"
 #include "tensor/host.h"
@@ -416,5 +415,3 @@ DevTensor<T> gemm(const T& alpha, const DevTensor<T>& A, const DevTensor<T>& B,
 }
 
 } // namespace dlf
-
-#endif //_TENSOR_DEVICE_H
