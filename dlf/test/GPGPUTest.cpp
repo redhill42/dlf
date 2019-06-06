@@ -236,3 +236,111 @@ TEST_F(GPGPUTest, GEMM) {
         EXPECT_EQ(R, gemm(2.0f, dev_A_t, dev_B_t, 3.0f, dev_C, true, true).read());
     });
 }
+
+template <int N = 10, typename CBlas, typename GBlas>
+void test_blas_level1(const gpgpu::Queue& queue, CBlas&& cblas, GBlas&& gblas) {
+    auto alpha = static_cast<float>(rand() % N);
+
+    auto A = Tensor<int>::random({N}, -N, N).cast<float>();
+    auto B = Tensor<int>::random({N}, -N, N).cast<float>();
+
+    auto dev_A = DevTensor<float>(A, queue);
+    auto dev_B = DevTensor<float>(B, queue);
+
+    cblas(N, A, B, alpha);
+    gblas(N, dev_A, dev_B, alpha);
+
+    EXPECT_EQ(A, dev_A.read());
+    EXPECT_EQ(B, dev_B.read());
+}
+
+template <int N = 10, typename CBlas, typename GBlas>
+void test_blas_level1_r(const gpgpu::Queue& queue, CBlas&& cblas, GBlas&& gblas) {
+    auto A = Tensor<int>::random({N}, -N, N).cast<float>();
+    auto B = Tensor<int>::random({N}, -N, N).cast<float>();
+
+    auto dev_A = DevTensor<float>(A, queue);
+    auto dev_B = DevTensor<float>(B, queue);
+    auto dev_R = DevTensor<float>({1}, queue);
+
+    auto R = cblas(N, A, B);
+    gblas(N, dev_A, dev_B, dev_R);
+    EXPECT_NEAR(R, dev_R.read()(0), 0.0001f);
+}
+
+TEST_F(GPGPUTest, Xcopy) {
+    doTest([](auto const& queue) { test_blas_level1(queue,
+        [](auto N, auto& A, auto& B, auto) {
+            blas::copy(N, A.data(), 1, B.data(), 1);
+        },
+        [&](auto N, auto& A, auto& B, auto) {
+            gpgpu::blas::copy(N, A.buffer(), 0, 1, B.buffer(), 0, 1, queue);
+        });
+    });
+}
+
+TEST_F(GPGPUTest, Xswap) {
+    doTest([](auto const& queue) { test_blas_level1(queue,
+        [](auto N, auto& A, auto& B, auto) {
+            blas::swap(N, A.data(), 1, B.data(), 1);
+        },
+        [&](auto N, auto& A, auto& B, auto) {
+            gpgpu::blas::swap(N, A.buffer(), 0, 1, B.buffer(), 0, 1, queue);
+        });
+    });
+}
+
+TEST_F(GPGPUTest, Xscal) {
+    doTest([](auto const& queue) { test_blas_level1(queue,
+        [](auto N, auto& A, auto&, auto alpha) {
+            blas::scal(N, alpha, A.data(), 1);
+        },
+        [&](auto N, auto& A, auto&, auto alpha) {
+            gpgpu::blas::scal(N, alpha, A.buffer(), 0, 1, queue);
+        });
+    });
+}
+
+TEST_F(GPGPUTest, Xaxpy) {
+    doTest([](auto const& queue) { test_blas_level1(queue,
+        [](auto N, auto& A, auto& B, auto alpha) {
+            blas::axpy(N, alpha, A.data(), 1, B.data(), 1);
+        },
+        [&](auto N, auto& A, auto& B, auto alpha) {
+            gpgpu::blas::axpy(N, alpha, A.buffer(), 0, 1, B.buffer(), 0, 1, queue);
+        });
+    });
+}
+
+TEST_F(GPGPUTest, Xdot) {
+    doTest([](auto const& queue) { test_blas_level1_r(queue,
+        [](auto N, auto& A, auto& B) {
+            return blas::dot(N, A.data(), 1, B.data(), 1);
+        },
+        [&](auto N, auto& A, auto& B, auto& R) {
+            gpgpu::blas::dot(N, A.buffer(), 0, 1, B.buffer(), 0, 1, R.buffer(), 0, queue);
+        });
+    });
+}
+
+TEST_F(GPGPUTest, Xnrm2) {
+    doTest([](auto const& queue) { test_blas_level1_r(queue,
+        [](auto N, auto& A, auto&) {
+            return blas::nrm2(N, A.data(), 1);
+        },
+        [&](auto N, auto& A, auto&, auto& R) {
+            gpgpu::blas::nrm2(N, A.buffer(), 0, 1, R.buffer(), 0, queue);
+        });
+    });
+}
+
+TEST_F(GPGPUTest, Xasum) {
+    doTest([](auto const& queue) { test_blas_level1_r(queue,
+        [](auto N, auto& A, auto&) {
+            return blas::asum(N, A.data(), 1);
+        },
+        [&](auto N, auto& A, auto&, auto& R) {
+            gpgpu::blas::asum(N, A.buffer(), 0, 1, R.buffer(), 0, queue);
+        });
+    });
+}
