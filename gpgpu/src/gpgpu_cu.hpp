@@ -115,15 +115,20 @@ private:
 
 class cuContext final : public raw::Context {
     CUcontext m_context;
+    CUdevice m_device;
+
 public:
-    explicit cuContext(CUcontext context)
-        : m_context(context) {}
+    explicit cuContext(CUcontext context, CUdevice device)
+        : m_context(context), m_device(device) {}
 
     ~cuContext() override;
 
     ContextID id() const noexcept override {
         return reinterpret_cast<ContextID>(m_context);
     }
+
+    void activate() const override;
+    void deactivate() const override;
 
     std::shared_ptr<raw::Program> compileProgram(
         const char *source, const std::vector<std::string> &options) const override;

@@ -131,8 +131,24 @@ size_t cuDevice::getInfo(CUdevice_attribute info) const {
 
 std::shared_ptr<raw::Context> cuDevice::createContext() const {
     CUcontext context = nullptr;
-    CheckError(cuCtxCreate(&context, 0, m_device));
-    return std::make_shared<cuContext>(context);
+    CheckError(cuDevicePrimaryCtxRetain(&context, m_device));
+    CheckError(cuCtxSetCurrent(context));
+    return std::make_shared<cuContext>(context, m_device);
+}
+
+void cuContext::activate() const {
+    CheckError(cuCtxPushCurrent(m_context));
+}
+
+void cuContext::deactivate() const {
+    CheckError(cuCtxPopCurrent(nullptr));
+}
+
+cuContext::~cuContext() {
+    if (m_context) {
+        CheckErrorDtor(cuDevicePrimaryCtxRelease(m_device));
+        m_context = nullptr;
+    }
 }
 
 std::shared_ptr<raw::Queue> cuContext::createQueue() const {
@@ -197,11 +213,6 @@ std::shared_ptr<raw::Program> cuContext::loadProgram(const std::string& ir) cons
     CUmodule module;
     CheckError(cuModuleLoadDataEx(&module, ir.data(), 0, nullptr, nullptr));
     return std::make_shared<cuProgram>(module, ir);
-}
-
-cuContext::~cuContext() {
-    if (m_context)
-        CheckErrorDtor(cuCtxDestroy(m_context));
 }
 
 cuEvent::~cuEvent() {

@@ -56,6 +56,7 @@ private:
 
 class clDevice final : public raw::Device {
     cl_device_id m_device;
+
 public:
     explicit clDevice(cl_device_id id) : m_device(id) {}
 
@@ -160,6 +161,9 @@ public:
     ContextID id() const noexcept override {
         return reinterpret_cast<ContextID>(m_context);
     }
+
+    void activate() const override {}
+    void deactivate() const override {}
 
     std::shared_ptr<raw::Program> compileProgram(
         const char* source, const std::vector<std::string>& options) const override;

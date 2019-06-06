@@ -6,38 +6,42 @@
 
 class GPGPUTest : public ::testing::Test {
 protected:
-    static std::vector<gpgpu::Queue> queues;
+    static std::vector<gpgpu::Context> contexts;
 
     static void SetUpTestCase() {
         auto platform = gpgpu::probe();
 
-        if (platform.api() == gpgpu::APIType::OpenCL) {
-            // Initialize the GPGPU platform and devices. This initializes the
-            // OpenCL/CUDA back-end selects all devices on the platform.
-            auto devices = platform.devices(gpgpu::DeviceType::GPU);
+        // Initialize the GPGPU platform and devices. This initializes the
+        // OpenCL/CUDA back-end selects all devices on the platform.
+        auto devices = platform.devices(gpgpu::DeviceType::GPU);
 
-            // Create GPGPU context and queue for each device. The queue can
-            // be used to schedule commands such as launching a kernel or
-            // perform a device-host memory copy.
-            for (auto& dev : devices) {
-                queues.push_back(dev.createContext().createQueue());
+        // Create GPGPU context for each device.
+        for (auto& dev : devices) {
+            try {
+                contexts.push_back(dev.createContext());
+            } catch (gpgpu::APIError& e) {
+                std::cerr << "Warning: " << e.what() << std::endl;
             }
-        } else {
-            // FIXME: CUDA associate a context with current CPU thread, We'll
-            // implement this mode for OpenCL in the future. In the mean time,
-            // only one context should be created.
-            queues.push_back(platform.device().createContext().createQueue());
         }
     }
 
     static void TearDownTestCase() {
-        queues.clear();
+        contexts.clear();
     }
 
     template <typename Test>
     static void doTest(Test&& test) {
-        // Run the test on the queues
-        for (auto const& queue : queues) {
+        for (auto& context : contexts) {
+            // Activate the context and associate it to current thread.
+            // The context will be deactivated when control leaves the scope.
+            gpgpu::ContextActivation act(context);
+
+            // Create GPGPU queue for each context. The queue can be used to
+            // schedule commands such as launching a kernel or perform a
+            // device-host memory copy.
+            auto queue = context.createQueue();
+
+            // Run the test on the queues
             test(queue);
         }
     }

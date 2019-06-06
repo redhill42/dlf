@@ -22,7 +22,7 @@ static gpgpu::Program compile(const gpgpu::Queue& queue, std::string source) {
     return context.compileProgram(source.c_str(), {});
 }
 
-std::vector<gpgpu::Queue> GPGPUTest::queues;
+std::vector<gpgpu::Context> GPGPUTest::contexts;
 
 static auto program_source = R"(
 __kernel void multiply(__global float* x, __global float* y, const int factor) {

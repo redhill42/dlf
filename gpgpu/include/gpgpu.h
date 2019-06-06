@@ -232,6 +232,9 @@ public:
 
     virtual ContextID id() const noexcept = 0;
 
+    virtual void activate() const = 0;
+    virtual void deactivate() const = 0;
+
     virtual std::shared_ptr<Queue> createQueue() const = 0;
     virtual std::shared_ptr<Event> createEvent() const = 0;
     virtual std::shared_ptr<Buffer> createBuffer(size_t size, BufferAccess access) const = 0;
@@ -361,7 +364,7 @@ public:
     /**
      * Get all devices in this platform.
      */
-    std::vector<Device> devices(DeviceType type) const;
+    std::vector<Device> devices(DeviceType type = DeviceType::GPU) const;
 
     /**
      * Get the default device in this platform.
@@ -511,6 +514,20 @@ public:
     }
 
     /**
+     * Activate thi context and associate it to current CPU thread.
+     */
+    void activate() const {
+        m_raw->activate();
+    }
+
+    /**
+     * Deactivate this context and disassociate it from current CPU thread.
+     */
+    void deactivate() const {
+        m_raw->activate();
+    }
+
+    /**
      * Compile program from source.
      */
     Program compileProgram(const char* source, const std::vector<std::string>& options) const;
@@ -544,6 +561,25 @@ public:
     bool operator!=(const Context& other) const noexcept {
         return !(*this == other);
     }
+};
+
+/**
+ * The context activation guard.
+ */
+class ContextActivation {
+    const Context& m_context;
+
+public:
+    explicit ContextActivation(const Context& context) : m_context(context) {
+        m_context.activate();
+    }
+
+    ~ContextActivation() {
+        m_context.deactivate();
+    }
+
+    ContextActivation(const ContextActivation&) = delete;
+    ContextActivation& operator=(const ContextActivation&) = delete;
 };
 
 class Queue {
