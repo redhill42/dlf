@@ -151,9 +151,9 @@ std::shared_ptr<raw::Event> clContext::createEvent() const {
 
 std::shared_ptr<raw::Buffer> clContext::createBuffer(size_t size, BufferAccess access) const {
     auto flags = CL_MEM_READ_WRITE;
-    if (access == BufferAccess::kReadOnly)
+    if (access == BufferAccess::ReadOnly)
         flags = CL_MEM_READ_ONLY;
-    if (access == BufferAccess::kWriteOnly)
+    if (access == BufferAccess::WriteOnly)
         flags = CL_MEM_WRITE_ONLY;
     auto status = CL_SUCCESS;
     auto buffer = clCreateBuffer(m_context, flags, size, nullptr, &status);
@@ -251,7 +251,7 @@ clEvent::~clEvent() {
 }
 
 void clBuffer::read(const raw::Queue& queue, void* host, size_t size, size_t offset, raw::Event* event) const {
-    if (m_access == BufferAccess::kWriteOnly)
+    if (m_access == BufferAccess::WriteOnly)
         throw LogicError("Buffer: reading from a write-only buffer");
     CheckError(clEnqueueReadBuffer(
         *clQueue::unwrap(queue), m_buffer, CL_FALSE,
@@ -259,7 +259,7 @@ void clBuffer::read(const raw::Queue& queue, void* host, size_t size, size_t off
 }
 
 void clBuffer::write(const raw::Queue& queue, const void* host, size_t size, size_t offset, raw::Event* event) {
-    if (m_access == BufferAccess::kReadOnly)
+    if (m_access == BufferAccess::ReadOnly)
         throw LogicError("Buffer: writing to a read-only buffer");
     CheckError(clEnqueueWriteBuffer(
         *clQueue::unwrap(queue), m_buffer, CL_FALSE,

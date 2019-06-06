@@ -11,7 +11,7 @@ protected:
     static void SetUpTestCase() {
         auto platform = gpgpu::probe();
 
-        if (platform.api() == gpgpu::APITypes::OpenCL) {
+        if (platform.api() == gpgpu::APIType::OpenCL) {
             // Initialize the GPGPU platform and devices. This initializes the
             // OpenCL/CUDA back-end selects all devices on the platform.
             auto devices = platform.devices(gpgpu::DeviceType::GPU);

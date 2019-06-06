@@ -35,30 +35,21 @@ public:
   // Due to lack of std::optional<>, in case of a cache miss we return a default-constructed
   // Value and set the flag to false.
   template <typename U>
-  Value Get(const U &key, bool *in_cache) const;
+  Value Get(const U& key, bool* in_cache) const;
 
   // We do not return references to just stored object to avoid racing with Invalidate().
   // Caller is expected to store a temporary.
   void Store(Key&& key, Value value);
+
   void Invalidate();
 
   // Removes all entries with a given key
-  void Remove(const Key &key);
-  template <int I1, int I2> void RemoveBySubset(const Key &key); // currently supports 2 indices
+  void Remove(const Key& key);
 
-  static Cache<Key, Value> &Instance();
+  static Cache<Key, Value>& Instance();
 
 private:
-#if __cplusplus >= 201402L
-  // The std::less<void> allows to search in cache by an object comparable with Key, without
-  // constructing a temporary Key
-  // (see http://en.cppreference.com/w/cpp/utility/functional/less_void,
-  //      http://www.open-std.org/JTC1/SC22/WG21/docs/papers/2013/n3657.htm,
-  //      http://stackoverflow.com/questions/10536788/avoiding-key-construction-for-stdmapfind)
   std::map<Key, Value, std::less<void>> cache_;
-#else
-  std::vector<std::pair<Key, Value>> cache_;
-#endif
   mutable std::mutex cache_mutex_;
 
   static Cache<Key, Value> instance_;
@@ -69,24 +60,24 @@ private:
 // The key struct for the cache of compiled OpenCL binaries (device name and platform-dependent)
 // Order of fields: precision, routine_name, device_name (smaller fields first)
 typedef std::tuple<PlatformID, Precision, std::string, std::string> BinaryKey;
-typedef std::tuple<const PlatformID &, const Precision &, const std::string &, const std::string &> BinaryKeyRef;
+typedef std::tuple<const PlatformID&, const Precision&, const std::string&, const std::string&> BinaryKeyRef;
 
 typedef Cache<BinaryKey, std::string> BinaryCache;
 
 extern template class Cache<BinaryKey, std::string>;
-extern template std::string BinaryCache::Get(const BinaryKeyRef &, bool *) const;
+extern template std::string BinaryCache::Get(const BinaryKeyRef&, bool*) const;
 
 // =================================================================================================
 
 // The key struct for the cache of compiled OpenCL programs (context-dependent)
 // Order of fields: context, device_id, precision, routine_name (smaller fields first)
 typedef std::tuple<ContextID, DeviceID, Precision, std::string> ProgramKey;
-typedef std::tuple<const ContextID &, const DeviceID &, const Precision &, const std::string &> ProgramKeyRef;
+typedef std::tuple<const ContextID&, const DeviceID&, const Precision&, const std::string&> ProgramKeyRef;
 
 typedef Cache<ProgramKey, Program> ProgramCache;
 
 extern template class Cache<ProgramKey, Program>;
-extern template Program ProgramCache::Get(const ProgramKeyRef &, bool *) const;
+extern template Program ProgramCache::Get(const ProgramKeyRef&, bool*) const;
 
 // =================================================================================================
 
@@ -95,12 +86,12 @@ class Database;
 // The key struct for the cache of database maps.
 // Order of fields: platform_id, device_id, precision, kernel_name (smaller fields first)
 typedef std::tuple<PlatformID, DeviceID, Precision, std::string> DatabaseKey;
-typedef std::tuple<const PlatformID &, const DeviceID &, const Precision &, const std::string &> DatabaseKeyRef;
+typedef std::tuple<const PlatformID&, const DeviceID&, const Precision&, const std::string&> DatabaseKeyRef;
 
 typedef Cache<DatabaseKey, Database> DatabaseCache;
 
 extern template class Cache<DatabaseKey, Database>;
-extern template Database DatabaseCache::Get(const DatabaseKeyRef &, bool *) const;
+extern template Database DatabaseCache::Get(const DatabaseKeyRef&, bool*) const;
 
 // =================================================================================================
 }} // namespace gpgpu::blas

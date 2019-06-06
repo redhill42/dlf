@@ -18,8 +18,8 @@ class cuKernel;
 
 class cuPlatform final : public raw::Platform {
 public:
-    APITypes api() const noexcept override {
-        return APITypes::CUDA;
+    APIType api() const noexcept override {
+        return APIType::CUDA;
     }
 
     PlatformID id() const noexcept override {

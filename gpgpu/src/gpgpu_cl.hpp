@@ -31,8 +31,8 @@ public:
         return reinterpret_cast<PlatformID>(m_platform);
     }
 
-    APITypes api() const noexcept override {
-        return APITypes::OpenCL;
+    APIType api() const noexcept override {
+        return APIType::OpenCL;
     }
 
     std::string name() const override {

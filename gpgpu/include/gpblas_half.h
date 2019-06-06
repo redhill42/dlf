@@ -18,11 +18,6 @@
 #ifndef GPGPU_BLAS_HALF_H_
 #define GPGPU_BLAS_HALF_H_
 
-// MSVC 2013 doesn't fully support C99
-#ifdef _MSC_VER
-    #define inline __inline
-#endif
-
 namespace gpgpu { namespace blas {
 
 // =================================================================================================

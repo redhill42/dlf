@@ -116,13 +116,13 @@ public:
 //==-------------------------------------------------------------------------
 
 // Enumeration of API types
-enum class APITypes { OpenCL, CUDA };
+enum class APIType { OpenCL, CUDA };
 
 // Enumeration of device types
 enum class DeviceType { Default, CPU, GPU, Accelerator, All, Unknown };
 
 // Enumeration of buffer access types
-enum class BufferAccess { kReadOnly, kWriteOnly, kReadWrite };
+enum class BufferAccess { ReadOnly, WriteOnly, ReadWrite };
 
 using PlatformID = intptr_t;
 using DeviceID = intptr_t;
@@ -166,7 +166,7 @@ public:
     Platform& operator=(Platform&&) = delete;
 
     virtual PlatformID  id() const noexcept = 0;
-    virtual APITypes    api() const noexcept = 0;
+    virtual APIType     api() const noexcept = 0;
     virtual std::string name() const = 0;
     virtual std::string vendor() const = 0;
     virtual std::string version() const = 0;
@@ -342,7 +342,7 @@ public:
         return m_raw->id();
     }
 
-    APITypes api() const noexcept {
+    APIType api() const noexcept {
         return m_raw->api();
     }
 
@@ -535,7 +535,7 @@ public:
      * Create the device buffer.
      */
     template <typename T>
-    Buffer<T> createBuffer(size_t size, BufferAccess access = BufferAccess::kReadWrite) const;
+    Buffer<T> createBuffer(size_t size, BufferAccess access = BufferAccess::ReadWrite) const;
 
     bool operator==(const Context& other) const noexcept {
         return m_raw->id() == other.m_raw->id();

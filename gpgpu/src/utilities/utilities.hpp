@@ -167,8 +167,8 @@ double SquaredDifference(const T val1, const T val2);
 
 // =================================================================================================
 
-inline bool IsOpenCL(const Device& device) { return device.platform().api() == APITypes::OpenCL; }
-inline bool IsCUDA(const Device& device) { return device.platform().api() == APITypes::CUDA; }
+inline bool IsOpenCL(const Device& device) { return device.platform().api() == APIType::OpenCL; }
+inline bool IsCUDA(const Device& device) { return device.platform().api() == APIType::CUDA; }
 
 inline bool IsCPU(const Device& device) { return device.type() == DeviceType::CPU; }
 inline bool IsGPU(const Device& device) { return device.type() == DeviceType::GPU; }

@@ -236,13 +236,13 @@ cuQueue::~cuQueue() {
 }
 
 void cuBuffer::read(const raw::Queue& queue, void* host, size_t size, size_t offset, raw::Event*) const {
-    if (m_access == BufferAccess::kWriteOnly)
+    if (m_access == BufferAccess::WriteOnly)
         throw LogicError("Buffer: reading from a write-only buffer");
     CheckError(cuMemcpyDtoHAsync(host, m_buffer+offset, size, *cuQueue::unwrap(queue)));
 }
 
 void cuBuffer::write(const raw::Queue& queue, const void* host, size_t size, size_t offset, raw::Event*) {
-    if (m_access == BufferAccess::kReadOnly)
+    if (m_access == BufferAccess::ReadOnly)
         throw LogicError("Buffer: writing to a read-only buffer");
     CheckError(cuMemcpyHtoDAsync(m_buffer+offset, host, size, *cuQueue::unwrap(queue)));
 }

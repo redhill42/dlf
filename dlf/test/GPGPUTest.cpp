@@ -9,7 +9,7 @@ static gpgpu::Program compile(const gpgpu::Queue& queue, std::string source) {
     auto device = context.device();
 
     // Translate OpenCL kernel code into CUDA.
-    if (device.platform().api() == gpgpu::APITypes::CUDA) {
+    if (device.platform().api() == gpgpu::APIType::CUDA) {
         auto cl2cu =
             #include "kernels/opencl_to_cuda.cl"
             ;
