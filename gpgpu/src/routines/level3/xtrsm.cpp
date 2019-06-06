@@ -108,18 +108,13 @@ void Xtrsm<T>::TrsmColMajor(const Side side, const Triangle triangle,
   auto a_inv_buffer = context_.template createBuffer<T>(a_inv_size);
 
   // Fills the output buffer with zeros
-  auto eventWaitList = std::vector<Event>();
-  auto fill_matrix_event = context_.createEvent();
-  FillMatrix(queue_, device_, program_, &fill_matrix_event, eventWaitList,
+  FillMatrix(queue_, device_, program_, nullptr,
              x_one, x_two, x_ld, x_offset, x_buffer, ConstantZero<T>(), 16);
-  fill_matrix_event.waitForCompletion();
 
   // Inverts the diagonal blocks
-  auto diagonal_invert_event = context_.createEvent();
-  auto inverter = Xinvert<T>(queue_, &diagonal_invert_event);
+  auto inverter = Xinvert<T>(queue_, nullptr);
   inverter.InvertMatrixDiagonalBlocks(Layout::ColMajor, triangle, diagonal,
                                       k, block_size, a_buffer, a_offset, a_ld, a_inv_buffer);
-  diagonal_invert_event.waitForCompletion();
 
   // Derives properties based on the arguments
   const auto condition = ((triangle == Triangle::Upper && a_transpose != Transpose::NoTrans) ||
@@ -133,25 +128,21 @@ void Xtrsm<T>::TrsmColMajor(const Side side, const Triangle triangle,
       for (auto i = size_t{0}; i < m; i += block_size) {
         const auto gemm_alpha = (i == 0) ? alpha : ConstantOne<T>();
         const auto current_block_size = std::min(m - i, block_size);
-        auto gemm1_event = context_.createEvent();
-        auto gemm1 = Xgemm<T>(queue_, &gemm1_event);
+        auto gemm1 = Xgemm<T>(queue_, nullptr);
         gemm1.DoGemm(Layout::ColMajor, a_transpose, Transpose::NoTrans,
                      current_block_size, n, current_block_size, gemm_alpha,
                      a_inv_buffer, i * block_size, block_size,
                      b_buffer, b_offset + i, b_ld, ConstantZero<T>(),
                      x_buffer, x_offset + i, x_ld);
-        gemm1_event.waitForCompletion();
         if (i + block_size >= m) { break; }
 
         const auto this_a_offset = (a_transpose == Transpose::NoTrans) ? (i + block_size) + i * a_ld : i + (block_size + i) * a_ld;
-        auto gemm2_event = context_.createEvent();
-        auto gemm2 = Xgemm<T>(queue_, &gemm2_event);
+        auto gemm2 = Xgemm<T>(queue_, nullptr);
         gemm2.DoGemm(Layout::ColMajor, a_transpose, Transpose::NoTrans,
                      m - i - block_size, n, block_size, ConstantNegOne<T>(),
                      a_buffer, this_a_offset + a_offset, a_ld,
                      x_buffer, x_offset + i, x_ld, gemm_alpha,
                      b_buffer, b_offset + i + block_size, b_ld);
-        gemm2_event.waitForCompletion();
       }
     }
 
@@ -162,25 +153,21 @@ void Xtrsm<T>::TrsmColMajor(const Side side, const Triangle triangle,
       for (auto i = i_start; i >= 0; i -= static_cast<int>(block_size)) {
         const auto current_block_size = (i == i_start) ? special_block_size : block_size;
         const auto gemm_alpha = (i == i_start) ? alpha : ConstantOne<T>();
-        auto gemm1_event = context_.createEvent();
-        auto gemm1 = Xgemm<T>(queue_, &gemm1_event);
+        auto gemm1 = Xgemm<T>(queue_, nullptr);
         gemm1.DoGemm(Layout::ColMajor, a_transpose, Transpose::NoTrans,
                      current_block_size, n, current_block_size, gemm_alpha,
                      a_inv_buffer, i * block_size, block_size,
                      b_buffer, b_offset + i, b_ld, ConstantZero<T>(),
                      x_buffer, x_offset + i, x_ld);
-        gemm1_event.waitForCompletion();
         if (i - static_cast<int>(block_size) < 0) { break; }
 
         const auto this_a_offset = (a_transpose == Transpose::NoTrans) ? i * a_ld : i;
-        auto gemm2_event = context_.createEvent();
-        auto gemm2 = Xgemm<T>(queue_, &gemm2_event);
+        auto gemm2 = Xgemm<T>(queue_, nullptr);
         gemm2.DoGemm(Layout::ColMajor, a_transpose, Transpose::NoTrans,
                      i, n, current_block_size, ConstantNegOne<T>(),
                      a_buffer, this_a_offset + a_offset, a_ld,
                      x_buffer, x_offset + i, x_ld, gemm_alpha,
                      b_buffer, b_offset, b_ld);
-        gemm2_event.waitForCompletion();
       }
     }
   }
@@ -194,25 +181,21 @@ void Xtrsm<T>::TrsmColMajor(const Side side, const Triangle triangle,
       for (auto i = i_start; i >= 0; i -= static_cast<int>(block_size)) {
         const auto current_block_size = (i == i_start) ? special_block_size : block_size;
         const auto gemm_alpha = (i == i_start) ? alpha : ConstantOne<T>();
-        auto gemm1_event = context_.createEvent();
-        auto gemm1 = Xgemm<T>(queue_, &gemm1_event);
+        auto gemm1 = Xgemm<T>(queue_, nullptr);
         gemm1.DoGemm(Layout::ColMajor, Transpose::NoTrans, a_transpose,
                      m, current_block_size, current_block_size, gemm_alpha,
                      b_buffer, b_offset + i * b_ld, b_ld,
                      a_inv_buffer, i * block_size, block_size, ConstantZero<T>(),
                      x_buffer, x_offset + i * x_ld, x_ld);
-        gemm1_event.waitForCompletion();
         if (i - static_cast<int>(block_size) < 0) { break; }
 
         const auto this_a_offset = (a_transpose == Transpose::NoTrans) ? i : i * a_ld;
-        auto gemm2_event = context_.createEvent();
-        auto gemm2 = Xgemm<T>(queue_, &gemm2_event);
+        auto gemm2 = Xgemm<T>(queue_, nullptr);
         gemm2.DoGemm(Layout::ColMajor, Transpose::NoTrans, a_transpose,
                      m, i, current_block_size, ConstantNegOne<T>(),
                      x_buffer, x_offset + i * x_ld, x_ld,
                      a_buffer, this_a_offset + a_offset, a_ld, gemm_alpha,
                      b_buffer, b_offset, b_ld);
-        gemm2_event.waitForCompletion();
       }
     }
 
@@ -221,25 +204,21 @@ void Xtrsm<T>::TrsmColMajor(const Side side, const Triangle triangle,
       for (auto i = size_t{0}; i < n; i += block_size) {
         const auto gemm_alpha = (i == 0) ? alpha : ConstantOne<T>();
         const auto current_block_size = std::min(n - i, block_size);
-        auto gemm1_event = context_.createEvent();
-        auto gemm1 = Xgemm<T>(queue_, &gemm1_event);
+        auto gemm1 = Xgemm<T>(queue_, nullptr);
         gemm1.DoGemm(Layout::ColMajor, Transpose::NoTrans, a_transpose,
                      m, current_block_size, current_block_size, gemm_alpha,
                      b_buffer, b_offset + i * b_ld, b_ld,
                      a_inv_buffer, i * block_size, block_size, ConstantZero<T>(),
                      x_buffer, x_offset + i * x_ld, x_ld);
-        gemm1_event.waitForCompletion();
         if (i + block_size >= n) { break; }
 
         const auto this_a_offset = (a_transpose == Transpose::NoTrans) ? i + (block_size + i) * a_ld : (i + block_size) + i * a_ld;
-        auto gemm2_event = context_.createEvent();
-        auto gemm2 = Xgemm<T>(queue_, &gemm2_event);
+        auto gemm2 = Xgemm<T>(queue_, nullptr);
         gemm2.DoGemm(Layout::ColMajor, Transpose::NoTrans, a_transpose,
                      m, n - i - block_size, block_size, ConstantNegOne<T>(),
                      x_buffer, x_offset + i * x_ld, x_ld,
                      a_buffer, this_a_offset + a_offset, a_ld, gemm_alpha,
                      b_buffer, b_offset + (i + block_size) * b_ld, b_ld);
-        gemm2_event.waitForCompletion();
       }
     }
   }

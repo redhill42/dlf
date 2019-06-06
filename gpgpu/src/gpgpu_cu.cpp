@@ -295,8 +295,7 @@ void cuKernel::setArgument(size_t index, const raw::Buffer& buffer) const {
 void cuKernel::launch(const raw::Queue& queue,
                       const std::vector<size_t>& global,
                       const std::vector<size_t>& local,
-                      raw::Event* event,
-                      const std::vector<Event>&) const
+                      raw::Event* event) const
 {
     size_t grid[]{1, 1, 1};
     size_t block[]{1, 1, 1};

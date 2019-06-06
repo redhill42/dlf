@@ -39,12 +39,10 @@ void Xsyr2k<T>::DoSyr2k(const Layout layout, const Triangle triangle, const Tran
                         Buffer<T> &c_buffer, const size_t c_offset, const size_t c_ld) {
 
   // Runs the first matrix multiplication
-  auto first_syrk_event = this->context_.createEvent();
   const auto negated_ab_transpose = (ab_transpose != Transpose::NoTrans) ? Transpose::NoTrans : Transpose::Trans;
   SyrkAB(layout, triangle, ab_transpose, negated_ab_transpose, n, k, alpha,
          a_buffer, a_offset, a_ld, b_buffer, b_offset, b_ld, beta, c_buffer, c_offset, c_ld,
-         &first_syrk_event);
-  first_syrk_event.waitForCompletion();
+         nullptr);
 
   // Swaps the arguments for matrices A and B, and sets 'beta' to 1
   auto one = ConstantOne<T>();

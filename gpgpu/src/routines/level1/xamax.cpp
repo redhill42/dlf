@@ -59,15 +59,10 @@ void Xamax<T>::DoAmax(const size_t n,
   kernel1.setArgument(4, temp_buffer1);
   kernel1.setArgument(5, temp_buffer2);
 
-  // Event waiting list
-  auto eventWaitList = std::vector<Event>();
-
   // Launches the main kernel
   auto global1 = std::vector<size_t>{db_["WGS1"]*temp_size};
   auto local1 = std::vector<size_t>{db_["WGS1"]};
-  auto kernelEvent = context_.createEvent();
-  RunKernel(kernel1, queue_, device_, global1, local1, &kernelEvent);
-  eventWaitList.push_back(kernelEvent);
+  RunKernel(kernel1, queue_, device_, global1, local1, nullptr);
 
   // Sets the arguments for the epilogue kernel
   kernel2.setArgument(0, temp_buffer1);
@@ -78,7 +73,7 @@ void Xamax<T>::DoAmax(const size_t n,
   // Launches the epilogue kernel
   auto global2 = std::vector<size_t>{db_["WGS2"]};
   auto local2 = std::vector<size_t>{db_["WGS2"]};
-  RunKernel(kernel2, queue_, device_, global2, local2, event_, eventWaitList);
+  RunKernel(kernel2, queue_, device_, global2, local2, event_);
 }
 
 // =================================================================================================

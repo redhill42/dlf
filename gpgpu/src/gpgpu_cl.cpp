@@ -321,19 +321,12 @@ void clKernel::setArgument(size_t index, const raw::Buffer& buffer) const {
 void clKernel::launch(const raw::Queue& queue,
                       const std::vector<size_t>& global,
                       const std::vector<size_t>& local,
-                      raw::Event* event,
-                      const std::vector<Event>& waitForEvents) const
+                      raw::Event* event) const
 {
-    std::vector<cl_event> wait_list;
-    wait_list.reserve(waitForEvents.size());
-    for (const auto& ev : waitForEvents) {
-        wait_list.push_back(*clEvent::unwrap(ev.raw()));
-    }
-
     CheckError(clEnqueueNDRangeKernel(
         *clQueue::unwrap(queue), m_kernel,
         global.size(), nullptr, global.data(), local.data(),
-        wait_list.size(), wait_list.data(), clEvent::unwrap(event)));
+        0, nullptr, clEvent::unwrap(event)));
 }
 
 clKernel::~clKernel() {

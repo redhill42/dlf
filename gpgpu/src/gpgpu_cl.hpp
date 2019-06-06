@@ -270,8 +270,7 @@ public:
     void launch(const raw::Queue& queue,
                 const std::vector<size_t>& global,
                 const std::vector<size_t>& local,
-                raw::Event* event,
-                const std::vector<Event>& waitForEvents) const override;
+                raw::Event* event) const override;
 };
 
 std::shared_ptr<raw::Platform> probe();

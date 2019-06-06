@@ -317,8 +317,7 @@ public:
     virtual void launch(const Queue& queue,
                         const std::vector<size_t>& global,
                         const std::vector<size_t>& local,
-                        Event* event,
-                        const std::vector<gpgpu::Event>& waitForEvents) const = 0;
+                        Event* event) const = 0;
 };
 
 } // namespace raw
@@ -689,11 +688,10 @@ public:
     void launch(const Queue& queue,
                 const std::vector<size_t>& global,
                 const std::vector<size_t>& local,
-                Event* event = nullptr,
-                const std::vector<Event>& waitForEvents = emptyEvents) const
+                Event* event = nullptr) const
     {
         auto ev = event==nullptr ? nullptr : event->raw();
-        m_raw->launch(queue.raw(), global, local, ev, waitForEvents);
+        m_raw->launch(queue.raw(), global, local, ev);
     }
 
 private:
@@ -707,8 +705,6 @@ private:
         setArgument(index, std::forward<T>(first));
         setArgumentsRec(index+1, std::forward<Ts>(rest)...);
     }
-
-    static std::vector<Event> emptyEvents;
 };
 
 //==-------------------------------------------------------------------------

@@ -115,42 +115,32 @@ void Xherk<T,U>::HerkAB(const Layout layout, const Triangle triangle, const Tran
   auto b_temp = (b_no_temp) ? b_buffer : context_.createBuffer<T>(b_one_i * b_two_i);
   auto c_temp = context_.createBuffer<T>(n_ceiled*n_ceiled);
 
-  // Events of all kernels (including pre/post processing kernels)
-  auto eventWaitList = std::vector<Event>();
-  auto emptyEventList = std::vector<Event>();
-  
   // Runs the pre-processing kernel for matrix A. This transposes the matrix, but also pads zeros
   // to fill it up until it reaches a certain multiple of size (kernel parameter dependent). In
   // case nothing has to be done, these kernels can be skipped. Two copies are created.
   if (!a_no_temp) {
-    auto eventProcessA = context_.createEvent();
-    PadCopyTransposeMatrix(queue_, device_, db_, &eventProcessA, emptyEventList,
+    PadCopyTransposeMatrix(queue_, device_, db_, nullptr,
                            a_one, a_two, a_ld, a_offset, a_buffer,
                            a_one_i, a_two_i, a_one_i, 0, a_temp,
                            ConstantOne<T>(), program_,
                            true, a_do_transpose, a_conjugate);
-    eventWaitList.push_back(eventProcessA);
   }
   
   if (!b_no_temp) {
-    auto eventProcessB = context_.createEvent();
-    PadCopyTransposeMatrix(queue_, device_, db_, &eventProcessB, emptyEventList,
+    PadCopyTransposeMatrix(queue_, device_, db_, nullptr,
                            b_one, b_two, b_ld, b_offset, b_buffer,
                            b_one_i, b_two_i, b_one_i, 0, b_temp,
                            ConstantOne<T>(), program_,
                            true, b_do_transpose, b_conjugate);
-    eventWaitList.push_back(eventProcessB);
   }
 
   // Furthermore, also creates a (possibly padded) copy of matrix C, since it is not allowed to
   // modify the other triangle.
-  auto eventProcessC = context_.createEvent();
-  PadCopyTransposeMatrix(queue_, device_, db_, &eventProcessC, emptyEventList,
+  PadCopyTransposeMatrix(queue_, device_, db_, nullptr,
                          n, n, c_ld, c_offset, c_buffer,
                          n_ceiled, n_ceiled, n_ceiled, 0, c_temp,
                          ConstantOne<T>(), program_,
                          true, c_do_transpose, false);
-  eventWaitList.push_back(eventProcessC);
 
   // Retrieves the XgemmUpper or XgemmLower kernel from the compiled binary
   auto kernel = program_.getKernel(kernel_name);
@@ -172,15 +162,13 @@ void Xherk<T,U>::HerkAB(const Layout layout, const Triangle triangle, const Tran
   auto local = std::vector<size_t>{db_["MDIMC"], db_["NDIMC"]};
 
   // Launches the kernel
-  auto eventKernel = context_.createEvent();
-  RunKernel(kernel, queue_, device_, global, local, &eventKernel, eventWaitList);
-  eventWaitList.push_back(eventKernel);
+  RunKernel(kernel, queue_, device_, global, local, nullptr);
 
   // Runs the post-processing kernel
   const auto upper = Xgemm<T>::c_want_rotated_(db_["GEMMK"]) ? (triangle == Triangle::Lower) :
                      (triangle == Triangle::Upper);
   const auto lower = !upper;
-  PadCopyTransposeMatrix(queue_, device_, db_, final_event, eventWaitList,
+  PadCopyTransposeMatrix(queue_, device_, db_, final_event,
                          n_ceiled, n_ceiled, n_ceiled, 0, c_temp,
                          n, n, c_ld, c_offset, c_buffer,
                          ConstantOne<T>(), program_,

@@ -23,7 +23,7 @@ namespace gpgpu { namespace blas {
 // Enqueues a kernel, waits for completion, and checks for errors
 void RunKernel(const Kernel& kernel, const Queue& queue, const Device& device,
                std::vector<size_t> global, const std::vector<size_t>& local,
-               Event* event, const std::vector<Event>& waitForEvents) {
+               Event* event) {
 
   if (!local.empty()) {
     // Tests for validity of the local thread sizes
@@ -70,7 +70,7 @@ void RunKernel(const Kernel& kernel, const Queue& queue, const Device& device,
   #endif
 
   // Launches the kernel (and checks for launch errors)
-  kernel.launch(queue, global, local, event, waitForEvents);
+  kernel.launch(queue, global, local, event);
 
   // Prints the elapsed execution time in case of debugging in verbose mode
   #ifdef VERBOSE
@@ -86,7 +86,7 @@ void RunKernel(const Kernel& kernel, const Queue& queue, const Device& device,
 // Sets all elements of a matrix to a constant value
 template <typename T>
 void FillMatrix(const Queue& queue, const Device& device,
-                const Program& program, Event* event, const std::vector<Event>& waitForEvents,
+                const Program& program, Event* event,
                 const size_t m, const size_t n, const size_t ld, const size_t offset,
                 Buffer<T>& dest, const T constant_value, const size_t local_size) {
   auto kernel = program.getKernel("FillMatrix");
@@ -98,30 +98,30 @@ void FillMatrix(const Queue& queue, const Device& device,
   kernel.setArgument(5, GetRealArg(constant_value));
   auto local = std::vector<size_t>{local_size, 1};
   auto global = std::vector<size_t>{Ceil(m, local_size), n};
-  RunKernel(kernel, queue, device, global, local, event, waitForEvents);
+  RunKernel(kernel, queue, device, global, local, event);
 }
 
 // Compiles the above function
 template void FillMatrix<half>(const Queue&, const Device&, const Program&,
-                               Event*, const std::vector<Event>&, const size_t, const size_t, const size_t,
+                               Event*, const size_t, const size_t, const size_t,
                                const size_t, Buffer<half>&, const half, const size_t);
 template void FillMatrix<float>(const Queue&, const Device&, const Program&,
-                                Event*, const std::vector<Event>&, const size_t, const size_t, const size_t,
+                                Event*, const size_t, const size_t, const size_t,
                                 const size_t, Buffer<float>&, const float, const size_t);
 template void FillMatrix<double>(const Queue&, const Device&, const Program&,
-                                 Event*, const std::vector<Event>&, const size_t, const size_t, const size_t,
+                                 Event*, const size_t, const size_t, const size_t,
                                  const size_t, Buffer<double>&, const double, const size_t);
 template void FillMatrix<float2>(const Queue&, const Device&, const Program&,
-                                 Event*, const std::vector<Event>&, const size_t, const size_t, const size_t,
+                                 Event*, const size_t, const size_t, const size_t,
                                  const size_t, Buffer<float2>&, const float2, const size_t);
 template void FillMatrix<double2>(const Queue&, const Device&, const Program&,
-                                  Event*, const std::vector<Event>&, const size_t, const size_t, const size_t,
+                                  Event*, const size_t, const size_t, const size_t,
                                   const size_t, Buffer<double2>&, const double2, const size_t);
 
 // Sets all elements of a vector to a constant value
 template <typename T>
 void FillVector(const Queue &queue, const Device &device,
-                const Program& program, Event* event, const std::vector<Event>& waitForEvents,
+                const Program& program, Event* event,
                 const size_t n, const size_t inc, const size_t offset,
                 Buffer<T>& dest, const T constant_value, const size_t local_size) {
   auto kernel = program.getKernel("FillVector");
@@ -132,24 +132,24 @@ void FillVector(const Queue &queue, const Device &device,
   kernel.setArgument(4, GetRealArg(constant_value));
   auto local = std::vector<size_t>{local_size};
   auto global = std::vector<size_t>{Ceil(n, local_size)};
-  RunKernel(kernel, queue, device, global, local, event, waitForEvents);
+  RunKernel(kernel, queue, device, global, local, event);
 }
 
 // Compiles the above function
 template void FillVector<half>(const Queue&, const Device&, const Program&,
-                               Event*, const std::vector<Event>&, const size_t, const size_t, const size_t,
+                               Event*, const size_t, const size_t, const size_t,
                                Buffer<half>&, const half, const size_t);
 template void FillVector<float>(const Queue&, const Device&, const Program&,
-                                Event*, const std::vector<Event>&, const size_t, const size_t, const size_t,
+                                Event*, const size_t, const size_t, const size_t,
                                 Buffer<float>&, const float, const size_t);
 template void FillVector<double>(const Queue&, const Device&, const Program&,
-                                 Event*, const std::vector<Event>&, const size_t, const size_t, const size_t,
+                                 Event*, const size_t, const size_t, const size_t,
                                  Buffer<double>&, const double, const size_t);
 template void FillVector<float2>(const Queue&, const Device&, const Program&,
-                                 Event*, const std::vector<Event>&, const size_t, const size_t, const size_t,
+                                 Event*, const size_t, const size_t, const size_t,
                                  Buffer<float2>&, const float2, const size_t);
 template void FillVector<double2>(const Queue&, const Device&, const Program&,
-                                  Event*, const std::vector<Event>&, const size_t, const size_t, const size_t,
+                                  Event*, const size_t, const size_t, const size_t,
                                   Buffer<double2>&, const double2, const size_t);
 
 // =================================================================================================

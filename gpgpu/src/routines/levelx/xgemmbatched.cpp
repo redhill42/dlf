@@ -172,10 +172,6 @@ void XgemmBatched<T>::BatchedGemmIndirect(const size_t m, const size_t n, const 
   const auto b_temp = (b_no_temp) ? b_buffer : context_.createBuffer<T>(batch_count * b_one_i * b_two_i);
   const auto c_temp = (c_no_temp) ? c_buffer : context_.createBuffer<T>(batch_count * c_one_i * c_two_i);
 
-  // Events of all kernels (including pre/post processing kernels)
-  auto eventWaitList = std::vector<Event>();
-  auto emptyEventList = std::vector<Event>();
-
   // Runs the pre-processing kernel for matrix A. This transposes the matrix, but also pads zeros
   // to fill it up until it reaches a certain multiple of size (kernel parameter dependent). In
   // case nothing has to be done, these kernels can be skipped.
@@ -184,12 +180,10 @@ void XgemmBatched<T>::BatchedGemmIndirect(const size_t m, const size_t n, const 
     auto a_offsets_i_device = context_.createBuffer<int>(batch_count);
     a_offsets_device.write(queue_, a_offsets.data(), batch_count);
     a_offsets_i_device.write(queue_, a_offsets_i.data(), batch_count);
-    auto eventProcessA = context_.createEvent();
-    PadCopyTransposeMatrixBatched(queue_, device_, db_, &eventProcessA, emptyEventList,
+    PadCopyTransposeMatrixBatched(queue_, device_, db_, nullptr,
                                   a_one, a_two, a_ld, a_offsets_device, a_buffer,
                                   a_one_i, a_two_i, a_one_i, a_offsets_i_device, a_temp,
                                   program_, true, a_do_transpose, a_conjugate, batch_count);
-    eventWaitList.push_back(eventProcessA);
   }
 
   // As above, but now for matrix B
@@ -198,12 +192,10 @@ void XgemmBatched<T>::BatchedGemmIndirect(const size_t m, const size_t n, const 
     auto b_offsets_i_device = context_.createBuffer<int>(batch_count);
     b_offsets_device.write(queue_, b_offsets.data(), batch_count);
     b_offsets_i_device.write(queue_, b_offsets_i.data(), batch_count);
-    auto eventProcessB = context_.createEvent();
-    PadCopyTransposeMatrixBatched(queue_, device_, db_, &eventProcessB, emptyEventList,
+    PadCopyTransposeMatrixBatched(queue_, device_, db_, nullptr,
                                   b_one, b_two, b_ld, b_offsets_device, b_buffer,
                                   b_one_i, b_two_i, b_one_i, b_offsets_i_device, b_temp,
                                   program_, true, b_do_transpose, b_conjugate, batch_count);
-    eventWaitList.push_back(eventProcessB);
   }
 
   // As above, but now for matrix C
@@ -212,12 +204,10 @@ void XgemmBatched<T>::BatchedGemmIndirect(const size_t m, const size_t n, const 
   if (!c_no_temp) {
     c_offsets_device.write(queue_, c_offsets.data(), batch_count);
     c_offsets_i_device.write(queue_, c_offsets_i.data(), batch_count);
-    auto eventProcessC = context_.createEvent();
-    PadCopyTransposeMatrixBatched(queue_, device_, db_, &eventProcessC, emptyEventList,
+    PadCopyTransposeMatrixBatched(queue_, device_, db_, nullptr,
                                   c_one, c_two, c_ld, c_offsets_device, c_buffer,
                                   c_one_i, c_two_i, c_one_i, c_offsets_i_device, c_temp,
                                   program_, true, c_do_transpose, false, batch_count);
-    eventWaitList.push_back(eventProcessC);
   }
 
   // Retrieves the Xgemm kernel from the compiled binary
@@ -248,14 +238,12 @@ void XgemmBatched<T>::BatchedGemmIndirect(const size_t m, const size_t n, const 
   const auto local = std::vector<size_t>{db_["MDIMC"], db_["NDIMC"], 1};
 
   // Launches the kernel
-  auto eventKernel = context_.createEvent();
-  auto eventPointer = (!c_no_temp) ? &eventKernel : event_;
-  RunKernel(kernel, queue_, device_, global, local, eventPointer, eventWaitList);
+  auto eventPointer = (!c_no_temp) ? nullptr : event_;
+  RunKernel(kernel, queue_, device_, global, local, eventPointer);
 
   // Runs the post-processing kernel if needed
   if (!c_no_temp) {
-    eventWaitList.push_back(eventKernel);
-    PadCopyTransposeMatrixBatched(queue_, device_, db_, event_, eventWaitList,
+    PadCopyTransposeMatrixBatched(queue_, device_, db_, event_,
                                   c_one_i, c_two_i, c_one_i, c_offsets_i_device, c_temp,
                                   c_one, c_two, c_ld, c_offsets_device, c_buffer,
                                   program_, false, c_do_transpose, false, batch_count);

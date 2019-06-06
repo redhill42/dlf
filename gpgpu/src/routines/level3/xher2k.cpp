@@ -38,13 +38,11 @@ void Xher2k<T,U>::DoHer2k(const Layout layout, const Triangle triangle, const Tr
                           Buffer<T> &c_buffer, const size_t c_offset, const size_t c_ld) {
 
   // Runs the first matrix multiplication
-  auto first_herk_event = this->context_.createEvent();
   auto complex_beta = T{beta, static_cast<U>(0.0)};
   const auto negated_ab_transpose = (ab_transpose != Transpose::NoTrans) ? Transpose::NoTrans : Transpose::Trans;
   HerkAB(layout, triangle, ab_transpose, negated_ab_transpose, n, k, alpha,
          a_buffer, a_offset, a_ld, b_buffer, b_offset, b_ld, complex_beta, c_buffer, c_offset, c_ld,
-         &first_herk_event, false);
-  first_herk_event.waitForCompletion();
+         nullptr, false);
 
   // Swaps the arguments for matrices A and B, sets 'beta' to 1, and conjugate alpha
   auto conjugate_alpha = T{alpha.real(), -alpha.imag()};

@@ -29,23 +29,21 @@ namespace gpgpu { namespace blas {
 // Enqueues a kernel, waits for completion, and checks for errors
 void RunKernel(const Kernel& kernel, const Queue& queue, const Device& device,
                std::vector<size_t> global, const std::vector<size_t>& local,
-               Event* event, const std::vector<Event>& waitForEvents = {});
+               Event* event);
 
 // =================================================================================================
 
 // Sets all elements of a matrix to a constant value
 template <typename T>
 void FillMatrix(const Queue& queue, const Device& device,
-                const Program& program,
-                Event* event, const std::vector<Event>& waitForEvents,
+                const Program& program, Event* event,
                 const size_t m, const size_t n, const size_t ld, const size_t offset,
                 Buffer<T> &dest, const T constant_value, const size_t local_size);
 
 // Sets all elements of a vector to a constant value
 template <typename T>
 void FillVector(const Queue &queue, const Device &device,
-                const Program& program,
-                Event* event, const std::vector<Event>& waitForEvents,
+                const Program& program, Event* event,
                 const size_t n, const size_t inc, const size_t offset,
                 Buffer<T>& dest, const T constant_value, const size_t local_size);
 
@@ -55,8 +53,7 @@ void FillVector(const Queue &queue, const Device &device,
 // to write to symmetric and triangular matrices through optional arguments.
 template <typename T>
 void PadCopyTransposeMatrix(const Queue& queue, const Device& device,
-                            const Databases& db,
-                            Event* event, const std::vector<Event>& waitForEvents,
+                            const Databases& db, Event* event,
                             const size_t src_one, const size_t src_two,
                             const size_t src_ld, const size_t src_offset,
                             const Buffer<T>& src,
@@ -145,7 +142,7 @@ void PadCopyTransposeMatrix(const Queue& queue, const Device& device,
         dest_two / db["TRA_WPT"]
       };
       const auto local = std::vector<size_t>{db["TRA_DIM"], db["TRA_DIM"]};
-      RunKernel(kernel, queue, device, global, local, event, waitForEvents);
+      RunKernel(kernel, queue, device, global, local, event);
     }
     else {
       const auto global = std::vector<size_t>{
@@ -153,7 +150,7 @@ void PadCopyTransposeMatrix(const Queue& queue, const Device& device,
         Ceil(CeilDiv(dest_two, db["PADTRA_WPT"]), db["PADTRA_TILE"])
       };
       const auto local = std::vector<size_t>{db["PADTRA_TILE"], db["PADTRA_TILE"]};
-      RunKernel(kernel, queue, device, global, local, event, waitForEvents);
+      RunKernel(kernel, queue, device, global, local, event);
     }
   }
   else {
@@ -163,7 +160,7 @@ void PadCopyTransposeMatrix(const Queue& queue, const Device& device,
         dest_two / db["COPY_WPT"]
       };
       const auto local = std::vector<size_t>{db["COPY_DIMX"], db["COPY_DIMY"]};
-      RunKernel(kernel, queue, device, global, local, event, waitForEvents);
+      RunKernel(kernel, queue, device, global, local, event);
     }
     else {
       const auto global = std::vector<size_t>{
@@ -171,7 +168,7 @@ void PadCopyTransposeMatrix(const Queue& queue, const Device& device,
         Ceil(CeilDiv(dest_two, db["PAD_WPTY"]), db["PAD_DIMY"])
       };
       const auto local = std::vector<size_t>{db["PAD_DIMX"], db["PAD_DIMY"]};
-      RunKernel(kernel, queue, device, global, local, event, waitForEvents);
+      RunKernel(kernel, queue, device, global, local, event);
     }
   }
 }
@@ -179,8 +176,7 @@ void PadCopyTransposeMatrix(const Queue& queue, const Device& device,
 // Batched version of the above
 template <typename T>
 void PadCopyTransposeMatrixBatched(const Queue& queue, const Device& device,
-                                   const Databases& db,
-                                   Event* event, const std::vector<Event>& waitForEvents,
+                                   const Databases& db, Event* event,
                                    const size_t src_one, const size_t src_two,
                                    const size_t src_ld, const Buffer<int>& src_offsets,
                                    const Buffer<T>& src,
@@ -227,7 +223,7 @@ void PadCopyTransposeMatrixBatched(const Queue& queue, const Device& device,
       batch_count
     };
     const auto local = std::vector<size_t>{db["PADTRA_TILE"], db["PADTRA_TILE"], 1};
-    RunKernel(kernel, queue, device, global, local, event, waitForEvents);
+    RunKernel(kernel, queue, device, global, local, event);
   }
   else {
     const auto global = std::vector<size_t>{
@@ -236,15 +232,14 @@ void PadCopyTransposeMatrixBatched(const Queue& queue, const Device& device,
       batch_count
     };
     const auto local = std::vector<size_t>{db["PAD_DIMX"], db["PAD_DIMY"], 1};
-    RunKernel(kernel, queue, device, global, local, event, waitForEvents);
+    RunKernel(kernel, queue, device, global, local, event);
   }
 }
 
 // Batched version of the above
 template <typename T>
 void PadCopyTransposeMatrixStridedBatched(const Queue& queue, const Device& device,
-                                          const Databases& db,
-                                          Event* event, const std::vector<Event>& waitForEvents,
+                                          const Databases& db, Event* event,
                                           const size_t src_one, const size_t src_two,
                                           const size_t src_ld, const size_t src_offset,
                                           const size_t src_stride, const Buffer<T> &src,
@@ -293,7 +288,7 @@ void PadCopyTransposeMatrixStridedBatched(const Queue& queue, const Device& devi
         batch_count
     };
     const auto local = std::vector<size_t>{db["PADTRA_TILE"], db["PADTRA_TILE"], 1};
-    RunKernel(kernel, queue, device, global, local, event, waitForEvents);
+    RunKernel(kernel, queue, device, global, local, event);
   }
   else {
     const auto global = std::vector<size_t>{
@@ -302,7 +297,7 @@ void PadCopyTransposeMatrixStridedBatched(const Queue& queue, const Device& devi
         batch_count
     };
     const auto local = std::vector<size_t>{db["PAD_DIMX"], db["PAD_DIMY"], 1};
-    RunKernel(kernel, queue, device, global, local, event, waitForEvents);
+    RunKernel(kernel, queue, device, global, local, event);
   }
 }
 

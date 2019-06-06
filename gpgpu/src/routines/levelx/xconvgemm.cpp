@@ -93,14 +93,12 @@ void Xconvgemm<T>::DoConvgemm(const KernelMode kernel_mode,
       // im2col
       const auto im_batch_offset = batch_id * channels * height * width + im_offset;
       const auto col_batch_offset = batch_id * patch_size * num_patches;
-      auto im2col_event = context_.createEvent();
-      auto im2col = Xim2col<T>(queue_, &im2col_event);
+      auto im2col = Xim2col<T>(queue_, nullptr);
       im2col.DoIm2col(kernel_mode,
                       channels, height, width, kernel_h, kernel_w,
                       pad_h, pad_w, stride_h, stride_w, dilation_h, dilation_w,
                       im_buffer, im_batch_offset,
                       col_buffer, col_batch_offset);
-      im2col_event.waitForCompletion();
     }
   }
 

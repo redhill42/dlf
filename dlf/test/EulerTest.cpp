@@ -24,19 +24,15 @@ public:
         auto temp_size = 2*db_["WGS2"];
         auto temp_buffer = context_.createBuffer<long>(temp_size);
 
-        auto eventWaitList = std::vector<gpgpu::Event>();
-
         auto global1 = std::vector<size_t>{db_["WGS1"]*temp_size};
         auto local1 = std::vector<size_t>{db_["WGS1"]};
-        auto kernel_event = context_.createEvent();
         kernel1.setArguments(args..., temp_buffer);
-        gpgpu::blas::RunKernel(kernel1, queue_, device_, global1, local1, &kernel_event);
-        eventWaitList.push_back(kernel_event);
+        gpgpu::blas::RunKernel(kernel1, queue_, device_, global1, local1, nullptr);
 
         auto global2 = std::vector<size_t>{db_["WGS2"]};
         auto local2 = std::vector<size_t>{db_["WGS2"]};
         kernel2.setArguments(temp_buffer, ans_buffer);
-        gpgpu::blas::RunKernel(kernel2, queue_, device_, global2, local2, event_, eventWaitList);
+        gpgpu::blas::RunKernel(kernel2, queue_, device_, global2, local2, event_);
 
         long ans = 0;
         ans_buffer.read(queue_, &ans, 1);

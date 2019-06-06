@@ -24,6 +24,4 @@ std::vector<Device> Platform::devices(DeviceType type) const {
     return devices;
 }
 
-std::vector<Event> Kernel::emptyEvents;
-
 } // namespace gpgpu

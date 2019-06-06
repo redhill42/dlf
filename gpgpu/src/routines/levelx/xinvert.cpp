@@ -80,12 +80,9 @@ void Xinvert<T>::InvertMatrixDiagonalBlocks(const Layout layout, const Triangle 
   const auto name_postfix = (is_upper) ? "Upper" : "Lower";
 
   // Fills the output buffer with zeros
-  auto event_wait_list = std::vector<Event>();
-  auto fill_matrix_event = context_.createEvent();
-  FillMatrix(queue_, device_, program_, &fill_matrix_event, event_wait_list,
+  FillMatrix(queue_, device_, program_, nullptr,
              block_size, num_blocks * block_size, block_size, 0, dest, ConstantZero<T>(),
              16);
-  event_wait_list.push_back(fill_matrix_event);
 
   // Inverts the diagonal IB by IB inner blocks of the matrix: one block per work-group
   auto kernel = program_.getKernel("InvertDiagonalBlock");
@@ -99,10 +96,8 @@ void Xinvert<T>::InvertMatrixDiagonalBlocks(const Layout layout, const Triangle 
   kernel.setArgument(7, static_cast<int>(is_upper));
   const auto local_invert = std::vector<size_t>{internal_block_size};
   const auto global_invert = std::vector<size_t>{num_internal_blocks * internal_block_size};
-  auto base_kernel_event = context_.createEvent();
-  auto base_kernel_event_pointer = (internal_block_size == block_size) ? event_ : &base_kernel_event;
-  RunKernel(kernel, queue_, device_, global_invert, local_invert, base_kernel_event_pointer, event_wait_list);
-  if (internal_block_size == block_size) { event_wait_list.push_back(base_kernel_event); }
+  auto base_kernel_event_pointer = (internal_block_size == block_size) ? event_ : nullptr;
+  RunKernel(kernel, queue_, device_, global_invert, local_invert, base_kernel_event_pointer);
 
   // Builds up block_size x block_size blocks. For example, internal_block_size=16:
   // use   16 x 16  blocks to build  32 x 32  blocks,  1 x (1 x npages) grid,  4 x 4 threads;
@@ -128,9 +123,7 @@ void Xinvert<T>::InvertMatrixDiagonalBlocks(const Layout layout, const Triangle 
     kernel1.setArgument(5, static_cast<int>(current_size));
     kernel1.setArgument(6, static_cast<int>(npages));
     kernel1.setArgument(7, static_cast<int>(block_size));
-    auto kernel1_event = context_.createEvent();
-    RunKernel(kernel1, queue_, device_, global, local, &kernel1_event, event_wait_list);
-    event_wait_list.push_back(kernel1_event);
+    RunKernel(kernel1, queue_, device_, global, local, nullptr);
 
     // Part 2
     const bool is_last_kernel = (current_size * 2 >= block_size);
@@ -140,10 +133,8 @@ void Xinvert<T>::InvertMatrixDiagonalBlocks(const Layout layout, const Triangle 
     kernel2.setArgument(2, static_cast<int>(current_size));
     kernel2.setArgument(3, static_cast<int>(npages));
     kernel2.setArgument(4, static_cast<int>(block_size));
-    auto kernel2_event = context_.createEvent();
-    auto kernel2_event_pointer = (is_last_kernel) ? event_ : &kernel2_event;
-    RunKernel(kernel2, queue_, device_, global, local, kernel2_event_pointer, event_wait_list);
-    if (!is_last_kernel) { event_wait_list.push_back(kernel2_event); }
+    auto kernel2_event_pointer = (is_last_kernel) ? event_ : nullptr;
+    RunKernel(kernel2, queue_, device_, global, local, kernel2_event_pointer);
 
     // Exit in case we reach beyond the bounds of the input matrix
     if (current_size*2 >= n) { break; }
