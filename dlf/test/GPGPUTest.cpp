@@ -344,3 +344,48 @@ TEST_F(GPGPUTest, Xasum) {
         });
     });
 }
+
+static void device_filter_test(int num_devices, const char* env, const char* expect) {
+    auto filter = gpgpu::parseDeviceFilter(num_devices, env);
+    std::string actual;
+    for (size_t i = 0; i < filter.size(); i++) {
+        if (filter[i])
+            actual += std::to_string(i+1);
+    }
+    EXPECT_STREQ(expect, actual.c_str());
+}
+
+TEST_F(GPGPUTest, ParseDeviceFilter) {
+    device_filter_test(6, nullptr, "123456");
+    device_filter_test(6, "", "123456");
+
+    device_filter_test(6, "3", "3");
+    device_filter_test(6, "1,3,5", "135");
+    device_filter_test(6, "4,2", "24");
+
+    device_filter_test(6, "-3", "12456");
+    device_filter_test(6, "-1,-3,-5", "246");
+    device_filter_test(6, "-4,-2", "1356");
+
+    device_filter_test(6, "2-5", "2345");
+    device_filter_test(6, "2-4,3-5", "2345");
+
+    device_filter_test(6, "2-5,-3", "245");
+    device_filter_test(6, "-3,2-5", "245");
+    device_filter_test(6, "-2-5", "16");
+
+    device_filter_test(6, "3-10", "3456");
+    device_filter_test(6, "0-2", "12");
+    device_filter_test(6, "0-10", "123456");
+
+    device_filter_test(6, "-0", "123456");
+    device_filter_test(6, "-10", "123456");
+
+    device_filter_test(6, "2-1", "123456");
+    device_filter_test(6, "2-1,3", "3");
+    device_filter_test(6, "2-,3", "3");
+    device_filter_test(6, "-,3", "3");
+    device_filter_test(6, "3,-", "3");
+    device_filter_test(6, ",,1,,2,,3,,", "123");
+    device_filter_test(6, ".3-5", "345");
+}

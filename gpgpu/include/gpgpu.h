@@ -713,6 +713,9 @@ private:
 
 extern Platform probe();
 
+extern std::vector<bool> parseDeviceFilter(int num_devices, const char* env);
+extern std::vector<bool> parseDeviceFilter(int num_devices);
+
 //==-------------------------------------------------------------------------
 // Implementation
 //==-------------------------------------------------------------------------

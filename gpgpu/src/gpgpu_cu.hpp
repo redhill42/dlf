@@ -17,6 +17,8 @@ class cuProgram;
 class cuKernel;
 
 class cuPlatform final : public raw::Platform {
+    mutable std::shared_ptr<raw::Device> m_default_device;
+
 public:
     APIType api() const noexcept override {
         return APIType::CUDA;

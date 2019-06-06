@@ -66,27 +66,28 @@ std::shared_ptr<raw::Platform> probe() {
 }
 
 std::vector<std::shared_ptr<raw::Device>> cuPlatform::devices(DeviceType type) const {
-    if (type != DeviceType::GPU && type != DeviceType::All)
+    if (type != DeviceType::GPU && type != DeviceType::All && type != DeviceType::Default)
         return {};
 
     int num_devices = 0;
     CheckError(cuDeviceGetCount(&num_devices));
 
     std::vector<std::shared_ptr<raw::Device>> devices;
-    devices.reserve(num_devices);
+    auto filter = parseDeviceFilter(num_devices);
     for (int id = 0; id < num_devices; id++) {
-        CUdevice device;
-        CheckError(cuDeviceGet(&device, id));
-        devices.push_back(std::make_shared<cuDevice>(device));
+        if (filter[id]) {
+            CUdevice device;
+            CheckError(cuDeviceGet(&device, id));
+            devices.push_back(std::make_shared<cuDevice>(device));
+        }
     }
-
     return devices;
 }
 
 std::shared_ptr<raw::Device> cuPlatform::device() const {
-    CUdevice device;
-    CheckError(cuDeviceGet(&device, 0));
-    return std::make_shared<cuDevice>(device);
+    if (m_default_device == nullptr)
+        m_default_device = devices(DeviceType::GPU)[0];
+    return m_default_device;
 }
 
 std::string cuPlatform::version() const {

@@ -72,21 +72,19 @@ std::vector<std::shared_ptr<raw::Device>> clPlatform::devices(DeviceType type) c
     CheckError(clGetDeviceIDs(m_platform, cl_type, num_devices, device_ids.data(), nullptr));
 
     std::vector<std::shared_ptr<raw::Device>> devices;
-    devices.reserve(static_cast<size_t>(num_devices));
-    for (auto id : device_ids)
-        devices.push_back(std::make_shared<clDevice>(id));
+    auto filter = parseDeviceFilter(num_devices);
+    for (size_t i = 0; i < device_ids.size(); i++) {
+        if (filter[i]) {
+            auto id = device_ids[i];
+            devices.push_back(std::make_shared<clDevice>(id));
+        }
+    }
     return devices;
 }
 
 std::shared_ptr<raw::Device> clPlatform::device() const {
-    if (m_default_device == nullptr) {
-        cl_uint num_devices = 0;
-        cl_device_id device_id;
-        CheckError(clGetDeviceIDs(m_platform, CL_DEVICE_TYPE_DEFAULT, 1, &device_id, &num_devices));
-        if (num_devices == 0)
-            throw RuntimeError("OpenCL default device not found");
-        m_default_device = std::make_shared<clDevice>(device_id);
-    }
+    if (m_default_device == nullptr)
+        m_default_device = devices(DeviceType::Default)[0];
     return m_default_device;
 }
 
