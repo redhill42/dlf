@@ -31,6 +31,8 @@ protected:
 
     template <typename Test>
     static void doTest(Test&& test) {
+        EXPECT_FALSE(contexts.empty());
+
         for (auto& context : contexts) {
             // Activate the context and associate it to current thread.
             // The context will be deactivated when control leaves the scope.

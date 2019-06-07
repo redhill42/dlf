@@ -12,111 +12,110 @@ namespace dlf {
  */
 template <typename T>
 class DevTensor : public Shaped {
-    gpgpu::Queue m_queue;
     gpgpu::Buffer<T> m_data;
 
 public:
     DevTensor() = default;
 
-    DevTensor(Shape shape, gpgpu::Queue queue)
-        : Shaped(std::move(shape)), m_queue(std::move(queue))
+    DevTensor(Shape shape, const gpgpu::Queue& queue = gpgpu::current::queue())
+        : Shaped(std::move(shape))
     {
-        m_data = m_queue.context().template createBuffer<T>(size());
+        m_data = queue.context().template createBuffer<T>(size());
     }
 
-    DevTensor(const Tensor<T>& host, gpgpu::Queue queue)
-        : Shaped(host.shape()), m_queue(std::move(queue))
+    DevTensor(const Tensor<T>& host, const gpgpu::Queue& queue = gpgpu::current::queue())
+        : Shaped(host.shape())
     {
-        m_data = m_queue.context().template createBuffer<T>(size());
-        m_data.write(m_queue, host.data(), host.size());
+        m_data = queue.context().template createBuffer<T>(size());
+        m_data.write(queue, host.data(), host.size());
     }
 
-    DevTensor(Shape shape, gpgpu::Buffer<T> data, gpgpu::Queue queue)
-        : Shaped(std::move(shape)), m_data(std::move(data)), m_queue(std::move(queue))
+    DevTensor(Shape shape, gpgpu::Buffer<T> data)
+        : Shaped(std::move(shape)), m_data(std::move(data))
     {
     }
 
     /**
      * Read data from device.
      */
-    Tensor<T> read() const {
+    Tensor<T> read(const gpgpu::Queue& queue = gpgpu::current::queue()) const {
         Tensor<T> host(shape());
-        m_data.read(m_queue, host.data(), host.size());
+        m_data.read(queue, host.data(), host.size());
         return host;
     }
 
     /**
      * Asynchronously read data from device.
      */
-    Tensor<T> readAsync() const {
+    Tensor<T> readAsync(const gpgpu::Queue& queue = gpgpu::current::queue()) const {
         Tensor<T> host(shape());
-        m_data.readAsync(m_queue, host.data(), host.size());
+        m_data.readAsync(queue, host.data(), host.size());
         return host;
     };
 
     /**
      * Read data from device and store data into given host tensor.
      */
-    void read(Tensor<T>& host) const {
+    void read(Tensor<T>& host, const gpgpu::Queue& queue = gpgpu::current::queue()) const {
         assert(shape() == host.shape());
-        m_data.read(m_queue, host.data(), host.size());
+        m_data.read(queue, host.data(), host.size());
     }
 
     /**
      * Asynchronously read data from device and store data into given host tensor.
      */
-    void readAsync(Tensor<T>& host) const {
+    void readAsync(Tensor<T>& host, const gpgpu::Queue& queue = gpgpu::current::queue()) const {
         assert(shape() == host.shape());
-        m_data.readAsync(m_queue, host.data(), host.size());
+        m_data.readAsync(queue, host.data(), host.size());
     }
 
     /**
      * Write data into device.
      */
-    void write(const Tensor<T>& host) {
+    void write(const Tensor<T>& host, const gpgpu::Queue& queue = gpgpu::current::queue()) {
         assert(shape() == host.shape());
-        m_data.write(m_queue, host.data(), host.size());
+        m_data.write(queue, host.data(), host.size());
     }
 
     /**
      * Asynchronously write data into device.
      */
-    void writeAsync(const Tensor<T>& host) {
+    void writeAsync(const Tensor<T>& host, const gpgpu::Queue& queue = gpgpu::current::queue()) {
         assert(shape() == host.shape());
-        m_data.writeAsync(m_queue, host.data(), host.size());
+        m_data.writeAsync(queue, host.data(), host.size());
     }
 
     /**
      * Copy data into target.
      */
-    void copyTo(DevTensor<T>& dest) const {
+    void copyTo(DevTensor<T>& dest, const gpgpu::Queue& queue = gpgpu::current::queue()) const {
         assert(shape() == dest.shape());
-        m_data.copyTo(m_queue, dest.buffer(), size());
+        m_data.copyTo(queue, dest.buffer(), size());
     }
 
     /**
      * Asynchronously copy data into destination.
      */
-    void copyToAsync(DevTensor<T>& dest) const {
+    void copyToAsync(DevTensor<T>& dest, const gpgpu::Queue& queue = gpgpu::current::queue()) const {
         assert(shape() == dest.shape());
-        m_data.copyToAsync(m_queue, dest.buffer(), size());
+        m_data.copyToAsync(queue, dest.buffer(), size());
     }
 
     /**
      * Create a copy of this tensor.
      */
-    DevTensor<T> copy() const {
-        DevTensor<T> dest(shape(), m_queue);
-        m_data.copyTo(m_queue, dest.buffer(), size());
+    DevTensor<T> copy(const gpgpu::Queue& queue = gpgpu::current::queue()) const {
+        DevTensor<T> dest(shape(), queue);
+        m_data.copyTo(queue, dest.buffer(), size());
         return dest;
     }
 
     /**
      * Asynchronously create a copy of this tensor.
      */
-    DevTensor<T> copyAsync() const {
-        DevTensor<T> dest(shape(), m_queue);
-        m_data.copyToAsync(m_queue, dest.buffer(), size());
+    DevTensor<T> copyAsync(const gpgpu::Queue& queue = gpgpu::current::queue()) const {
+        DevTensor<T> dest(shape(), queue);
+        m_data.copyToAsync(queue, dest.buffer(), size());
         return dest;
     }
 
@@ -134,20 +133,6 @@ public:
         return m_data;
     }
 
-    /**
-     * Returns the queue associated with this device tensor.
-     */
-    gpgpu::Queue& queue() noexcept {
-        return m_queue;
-    }
-
-    /**
-     * Returns the queue associated with this device tensor.
-     */
-    const gpgpu::Queue& queue() const noexcept {
-        return m_queue;
-    }
-
 public:
     DevTensor<T>& operator+=(const DevTensor<T>& rhs);
     DevTensor<T>& operator-=(const DevTensor<T>& rhs);
@@ -158,7 +143,7 @@ public:
 template <typename T>
 inline DevTensor<T>& DevTensor<T>::operator+=(const DevTensor<T>& rhs) {
     assert(shape() == rhs.shape());
-    gpgpu::blas::axpy(size(), T(1), rhs.buffer(), 0, 1, buffer(), 0, 1, m_queue);
+    gpgpu::blas::axpy(size(), T(1), rhs.buffer(), 0, 1, buffer(), 0, 1, gpgpu::current::queue());
     return *this;
 }
 
@@ -190,7 +175,7 @@ inline DevTensor<T> operator+(DevTensor<T>&& lhs, DevTensor<T>&& rhs) {
 template <typename T>
 inline DevTensor<T>& DevTensor<T>::operator-=(const DevTensor<T>& rhs) {
     assert(shape() == rhs.shape());
-    gpgpu::blas::axpy(size(), T(-1), rhs.buffer(), 0, 1, buffer(), 0, 1, m_queue);
+    gpgpu::blas::axpy(size(), T(-1), rhs.buffer(), 0, 1, buffer(), 0, 1, gpgpu::current::queue());
     return *this;
 }
 
@@ -222,7 +207,7 @@ inline DevTensor<T> operator-(DevTensor<T>&& lhs, DevTensor<T>&& rhs) {
 
 template <typename T>
 inline DevTensor<T>& DevTensor<T>::operator*=(const DevTensor<T>& rhs) {
-    gpgpu::blas::had(size(), T(1), buffer(), 0, 1, rhs.buffer(), 0, 1, T(0), buffer(), 0, 1, m_queue);
+    gpgpu::blas::had(size(), T(1), buffer(), 0, 1, rhs.buffer(), 0, 1, T(0), buffer(), 0, 1, gpgpu::current::queue());
     return *this;
 }
 
@@ -253,7 +238,7 @@ inline DevTensor<T> operator*(DevTensor<T>&& lhs, DevTensor<T>&& rhs) {
 
 template <typename T>
 inline DevTensor<T>& DevTensor<T>::operator*=(const T& rhs) {
-    gpgpu::blas::scal(size(), rhs, buffer(), 0, 1, m_queue);
+    gpgpu::blas::scal(size(), rhs, buffer(), 0, 1, gpgpu::current::queue());
     return *this;
 }
 
@@ -288,15 +273,14 @@ inline DevTensor<T> operator*(const T& lhs, DevTensor<T>&& rhs) {
  * or matrix and have compatible dimensions.
  */
 template <typename T>
-DevTensor<T>& inner(const DevTensor<T>& A, const DevTensor<T>& B, DevTensor<T>* C) {
-    auto q = A.queue();
-    assert(q == B.queue() && q == C->queue());
-
+DevTensor<T>& inner(const DevTensor<T>& A, const DevTensor<T>& B, DevTensor<T>* C,
+                    const gpgpu::Queue& queue = gpgpu::current::queue())
+{
     if (A.is_vector() && B.is_vector()) {
         auto n = A.extent(0);
         assert(n == B.extent(0));
         assert(C->is_vector() && 1 == C->extent(0));
-        gpgpu::blas::dot(n, A.buffer(), 0, 1, B.buffer(), 0, 1, C->buffer(), 0, q);
+        gpgpu::blas::dot(n, A.buffer(), 0, 1, B.buffer(), 0, 1, C->buffer(), 0, queue);
     } else if (A.is_matrix() && B.is_vector()) {
         auto m = A.extent(0), n = A.extent(1);
         assert(n == B.extent(0));
@@ -306,7 +290,7 @@ DevTensor<T>& inner(const DevTensor<T>& A, const DevTensor<T>& B, DevTensor<T>* 
                           m, n, T(1),
                           A.buffer(), 0, A.stride(0),
                           B.buffer(), 0, 1, T(0),
-                          C->buffer(), 0, 1, q);
+                          C->buffer(), 0, 1, queue);
     } else if ((A.is_vector() || A.is_matrix()) && B.is_matrix()) {
         Shape A_shape, B_shape, C_shape;
 
@@ -334,7 +318,8 @@ DevTensor<T>& inner(const DevTensor<T>& A, const DevTensor<T>& B, DevTensor<T>* 
                           A.buffer(), 0, A_shape.stride(0),
                           B.buffer(), 0, B_shape.stride(0),
                           T(0),
-                          C->buffer(), 0, C_shape.stride(0), q);
+                          C->buffer(), 0, C_shape.stride(0),
+                          queue);
     } else {
         assert(false);
     }
@@ -342,29 +327,30 @@ DevTensor<T>& inner(const DevTensor<T>& A, const DevTensor<T>& B, DevTensor<T>* 
 }
 
 template <typename T>
-DevTensor<T> inner(const DevTensor<T>& A, const DevTensor<T>& B) {
-    assert(A.queue() == B.queue());
+DevTensor<T> inner(const DevTensor<T>& A, const DevTensor<T>& B,
+                   const gpgpu::Queue& queue = gpgpu::current::queue())
+{
     if (A.is_vector() && B.is_vector()) {
         assert(A.shape() == B.shape());
-        DevTensor<T> C({1}, A.queue());
-        inner(A, B, &C);
+        DevTensor<T> C({1}, queue);
+        inner(A, B, &C, queue);
         return C;
     } else if (A.is_matrix() && B.is_vector()) {
         assert(A.extent(1) == B.extent(0));
-        DevTensor<T> C({A.extent(0)}, A.queue());
-        inner(A, B, &C);
+        DevTensor<T> C({A.extent(0)}, queue);
+        inner(A, B, &C, queue);
         return C;
     } else if (A.is_vector() && B.is_matrix()) {
         assert(A.extent(0) == B.extent(0));
-        DevTensor<T> C({B.extent(1)}, A.queue());
-        inner(A, B, &C);
+        DevTensor<T> C({B.extent(1)}, queue);
+        inner(A, B, &C, queue);
         return C;
     } else if (A.is_matrix() && B.is_matrix()) {
         auto m = A.extent(0), k = A.extent(1);
         auto p = B.extent(0), n = B.extent(1);
         assert(k == p);
-        DevTensor<T> C({m, n}, A.queue());
-        inner(A, B, &C);
+        DevTensor<T> C({m, n}, queue);
+        inner(A, B, &C, queue);
         return C;
     } else {
         assert(false);
@@ -378,11 +364,9 @@ DevTensor<T> inner(const DevTensor<T>& A, const DevTensor<T>& B) {
 template <typename T>
 void gemm(const T& alpha, const DevTensor<T>& A, const DevTensor<T>& B,
           const T& beta, DevTensor<T>* C,
-          bool transA = false, bool transB = false)
+          bool transA = false, bool transB = false,
+          const gpgpu::Queue& queue = gpgpu::current::queue())
 {
-    auto q = A.queue();
-    assert(q == B.queue() && q == C->queue());
-
     assert(A.is_matrix() && B.is_matrix() && C->is_matrix());
     auto m = A.extent(0), k = A.extent(1);
     auto p = B.extent(0), n = B.extent(1);
@@ -402,15 +386,17 @@ void gemm(const T& alpha, const DevTensor<T>& A, const DevTensor<T>& B,
                       A.buffer(), 0, A.stride(0),
                       B.buffer(), 0, B.stride(0),
                       beta,
-                      C->buffer(), 0, C->stride(0), q);
+                      C->buffer(), 0, C->stride(0),
+                      queue);
 }
 
 template <typename T>
 DevTensor<T> gemm(const T& alpha, const DevTensor<T>& A, const DevTensor<T>& B,
                   const T& beta, DevTensor<T>& C,
-                  bool transA = false, bool transB = false) {
-    DevTensor<T> R = C.copy();
-    gemm(alpha, A, B, beta, &R, transA, transB);
+                  bool transA = false, bool transB = false,
+                  const gpgpu::Queue& queue = gpgpu::current::queue()) {
+    DevTensor<T> R = C.copy(queue);
+    gemm(alpha, A, B, beta, &R, transA, transB, queue);
     return R;
 }
 

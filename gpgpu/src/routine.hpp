@@ -43,19 +43,12 @@ public:
   {
     const auto platform_id = device.id();
     for (const auto& kernel_name : kernel_names) {
-      // Queries the cache to see whether or not the kernel parameter database is already there
-      bool has_db;
-      db(kernel_name) = DatabaseCache::Instance().Get(
+      // Queries the cache to see whether or not the kernel parameter database
+      // is already there. Builds the parameter database for this device and
+      // routine set and stores in the cache.
+      db(kernel_name) = DatabaseCache::Instance().StoreIfAbsent(
           DatabaseKeyRef{platform_id, device.id(), precision, kernel_name},
-          &has_db);
-      if (has_db) { continue; }
-
-      // Builds the parameter database for this device and routine set and stores it in the cache
-      log_debug("Searching database for kernel '" + kernel_name + "'");
-      db(kernel_name) = Database(device, kernel_name, precision, userDatabase);
-      DatabaseCache::Instance().Store(
-          DatabaseKey{platform_id, device.id(), precision, kernel_name},
-          Database{db(kernel_name)});
+          [&]() { return Database(device, kernel_name, precision, userDatabase); });
     }
   }
 

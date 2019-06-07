@@ -82,12 +82,6 @@ std::vector<std::shared_ptr<raw::Device>> clPlatform::devices(DeviceType type) c
     return devices;
 }
 
-std::shared_ptr<raw::Device> clPlatform::device() const {
-    if (m_default_device == nullptr)
-        m_default_device = devices(DeviceType::Default)[0];
-    return m_default_device;
-}
-
 std::string clPlatform::getInfo(cl_device_info info) const {
     size_t bytes = 0;
     CheckError(clGetPlatformInfo(m_platform, info, 0, nullptr, &bytes));

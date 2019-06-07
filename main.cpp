@@ -32,8 +32,6 @@ static void show_info() {
         printf(" > Total memory size            %" PRIu64 " bytes\n", device.memorySize());
         printf(" > Maximum allocatable memory   %" PRIu64 " bytes\n", device.maxAllocSize());
     }
-
-    printf("\nThe default device: %s\n", gpgpu::probe().device().name().c_str());
 }
 
 template <typename T, size_t N>
@@ -92,8 +90,8 @@ static void gemm_test() {
 
     auto T = std::array<float, M*N> {};
 
-    auto context = gpgpu::probe().device().createContext();
-    auto queue = context.createQueue();
+    auto context = gpgpu::current::context();
+    auto queue = gpgpu::current::queue();
 
     auto dev_A = context.createBuffer<float>(A.size());
     auto dev_A_t = context.createBuffer<float>(A_t.size());

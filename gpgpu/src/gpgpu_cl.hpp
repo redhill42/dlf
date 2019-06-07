@@ -23,7 +23,6 @@ class clKernel;
 
 class clPlatform final : public raw::Platform {
     cl_platform_id m_platform;
-    mutable std::shared_ptr<raw::Device> m_default_device;
 public:
     explicit clPlatform(cl_platform_id id) : m_platform(id) {}
 
@@ -48,7 +47,6 @@ public:
     }
 
     std::vector<std::shared_ptr<raw::Device>> devices(DeviceType type) const override;
-    std::shared_ptr<raw::Device> device() const override;
 
 private:
     std::string getInfo(cl_device_info info) const;
@@ -56,7 +54,6 @@ private:
 
 class clDevice final : public raw::Device {
     cl_device_id m_device;
-
 public:
     explicit clDevice(cl_device_id id) : m_device(id) {}
 

@@ -41,6 +41,20 @@ public:
   // Caller is expected to store a temporary.
   void Store(Key&& key, Value value);
 
+  template <typename Creator>
+  Value StoreIfAbsent(Key&& key, Creator&& creator) {
+      std::lock_guard<std::mutex> lock(cache_mutex_);
+
+      auto it = cache_.find(key);
+      if (it != cache_.end()) {
+          return it->second;
+      }
+
+      auto value = creator();
+      cache_.emplace(std::move(key), creator());
+      return value;
+  }
+
   void Invalidate();
 
   // Removes all entries with a given key

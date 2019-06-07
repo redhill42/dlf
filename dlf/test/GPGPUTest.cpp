@@ -1,3 +1,4 @@
+#include <future>
 #include "tensor.h"
 #include "test_utility.h"
 #include "GPGPUTest.h"
@@ -53,7 +54,7 @@ TEST_F(GPGPUTest, CompileProgram) {
         kernel.launch(queue, {dev_a.size()}, {kWorkGroupSize});
 
         // Reads the results back to the host memory
-        auto host_b = dev_b.read();
+        auto host_b = dev_b.read(queue);
 
         // Verify the result
         for (auto index : {4, 900, 1500}) {
@@ -65,46 +66,40 @@ TEST_F(GPGPUTest, CompileProgram) {
 }
 
 TEST_F(GPGPUTest, DevTensorCopyConstructor) {
-    doTest([](auto const& queue) {
-        auto A = Tensor<float>::range({2, 3, 4}, 11);
-        auto dev_A = DevTensor<float>(A, queue);
-        auto dev_B = dev_A;
-        EXPECT_EQ(dev_B.read(), A);
-    });
+    auto A = Tensor<float>::range({2, 3, 4}, 11);
+    auto dev_A = DevTensor<float>(A);
+    auto dev_B = dev_A;
+    EXPECT_EQ(dev_B.read(), A);
 }
 
 TEST_F(GPGPUTest, DevTensorCopyAssignment) {
-    doTest([](auto const& queue) {
-        Shape shape{2, 3, 4};
-        auto A = Tensor<float>::range(shape, 1);
-        auto B = Tensor<float>::range(shape, 3);
-        auto dev_A = DevTensor<float>(shape, queue);
-        auto dev_B = DevTensor<float>(shape, queue);
-        dev_A.write(A);
-        dev_B.write(B);
-        EXPECT_EQ(dev_B.read(), B);
-        dev_B = dev_A;
-        EXPECT_EQ(dev_B.read(), A);
-    });
+    Shape shape{2, 3, 4};
+    auto A = Tensor<float>::range(shape, 1);
+    auto B = Tensor<float>::range(shape, 3);
+    auto dev_A = DevTensor<float>(shape);
+    auto dev_B = DevTensor<float>(shape);
+    dev_A.write(A);
+    dev_B.write(B);
+    EXPECT_EQ(dev_B.read(), B);
+    dev_B = dev_A;
+    EXPECT_EQ(dev_B.read(), A);
 }
 
 TEST_F(GPGPUTest, DevTensorOperators) {
-    doTest([](auto const& queue) {
-        auto A = Tensor<float>::range({2, 3, 4}, 11);
-        auto B = Tensor<float>::range({2, 3, 4}, 5);
+    auto A = Tensor<float>::range({2, 3, 4}, 11);
+    auto B = Tensor<float>::range({2, 3, 4}, 5);
 
-        auto dev_A = DevTensor<float>(A, queue);
-        auto dev_B = DevTensor<float>(B, queue);
+    auto dev_A = DevTensor<float>(A);
+    auto dev_B = DevTensor<float>(B);
 
-        EXPECT_EQ((dev_A + dev_B).read(), A + B);
-        EXPECT_EQ((dev_A - dev_B).read(), A - B);
-        EXPECT_EQ((dev_A * dev_B).read(), A * B);
-        EXPECT_EQ((dev_A * 7.0f).read(), A * 7.0f);
-        EXPECT_EQ((7.0f * dev_A).read(), 7.0f * A);
-        EXPECT_EQ(((dev_A + dev_B) * 3.0f).read(), (A + B) * 3.0f);
-        EXPECT_EQ((3.0f * (dev_A - dev_B)).read(), 3.0f * (A - B));
-        EXPECT_EQ(((dev_A + dev_B) * (dev_A - dev_B)).read(), ((A + B) * (A - B)));
-    });
+    EXPECT_EQ((dev_A + dev_B).read(), A + B);
+    EXPECT_EQ((dev_A - dev_B).read(), A - B);
+    EXPECT_EQ((dev_A * dev_B).read(), A * B);
+    EXPECT_EQ((dev_A * 7.0f).read(), A * 7.0f);
+    EXPECT_EQ((7.0f * dev_A).read(), 7.0f * A);
+    EXPECT_EQ(((dev_A + dev_B) * 3.0f).read(), (A + B) * 3.0f);
+    EXPECT_EQ((3.0f * (dev_A - dev_B)).read(), 3.0f * (A - B));
+    EXPECT_EQ(((dev_A + dev_B) * (dev_A - dev_B)).read(), ((A + B) * (A - B)));
 }
 
 TEST_F(GPGPUTest, VectorDotVector) {
@@ -117,11 +112,11 @@ TEST_F(GPGPUTest, VectorDotVector) {
         auto dev_B = DevTensor<float>(B, queue);
         auto dev_C = DevTensor<float>({1}, queue);
 
-        inner(dev_A, dev_B, &dev_C);
-        EXPECT_EQ(dev_C.read(), R);
+        inner(dev_A, dev_B, &dev_C, queue);
+        EXPECT_EQ(dev_C.read(queue), R);
 
-        auto dev_T = inner(dev_A, dev_B);
-        EXPECT_EQ(dev_T.read(), R);
+        auto dev_T = inner(dev_A, dev_B, queue);
+        EXPECT_EQ(dev_T.read(queue), R);
     });
 }
 
@@ -135,11 +130,11 @@ TEST_F(GPGPUTest, MatrixDotVector) {
         auto dev_B = DevTensor<float>(B, queue);
         auto dev_C = DevTensor<float>({2}, queue);
 
-        inner(dev_A, dev_B, &dev_C);
-        EXPECT_EQ(dev_C.read(), R);
+        inner(dev_A, dev_B, &dev_C, queue);
+        EXPECT_EQ(dev_C.read(queue), R);
 
-        auto dev_T = inner(dev_A, dev_B);
-        EXPECT_EQ(dev_T.read(), R);
+        auto dev_T = inner(dev_A, dev_B, queue);
+        EXPECT_EQ(dev_T.read(queue), R);
     });
 }
 
@@ -153,11 +148,11 @@ TEST_F(GPGPUTest, VectorDoMatrix) {
         auto dev_B = DevTensor<float>(B, queue);
         auto dev_C = DevTensor<float>({2}, queue);
 
-        inner(dev_A, dev_B, &dev_C);
-        EXPECT_EQ(dev_C.read(), R);
+        inner(dev_A, dev_B, &dev_C, queue);
+        EXPECT_EQ(dev_C.read(queue), R);
 
-        auto dev_T = inner(dev_A, dev_B);
-        EXPECT_EQ(dev_T.read(), R);
+        auto dev_T = inner(dev_A, dev_B, queue);
+        EXPECT_EQ(dev_T.read(queue), R);
     });
 }
 
@@ -171,11 +166,11 @@ TEST_F(GPGPUTest, MatrixDotMatrix) {
         auto dev_B = DevTensor<float>(B, queue);
         auto dev_C = DevTensor<float>({2, 2}, queue);
 
-        inner(dev_A, dev_B, &dev_C);
-        EXPECT_EQ(dev_C.read(), R);
+        inner(dev_A, dev_B, &dev_C, queue);
+        EXPECT_EQ(dev_C.read(queue), R);
 
-        auto dev_T = inner(dev_A, dev_B);
-        EXPECT_EQ(dev_T.read(), R);
+        auto dev_T = inner(dev_A, dev_B, queue);
+        EXPECT_EQ(dev_T.read(queue), R);
     });
 }
 
@@ -230,10 +225,10 @@ TEST_F(GPGPUTest, GEMM) {
         auto dev_B_t = DevTensor<float>(B_t, queue);
         auto dev_C = DevTensor<float>(C, queue);
 
-        EXPECT_EQ(R, gemm(2.0f, dev_A, dev_B, 3.0f, dev_C, false, false).read());
-        EXPECT_EQ(R, gemm(2.0f, dev_A_t, dev_B, 3.0f, dev_C, true, false).read());
-        EXPECT_EQ(R, gemm(2.0f, dev_A, dev_B_t, 3.0f, dev_C, false, true).read());
-        EXPECT_EQ(R, gemm(2.0f, dev_A_t, dev_B_t, 3.0f, dev_C, true, true).read());
+        EXPECT_EQ(R, gemm(2.0f, dev_A, dev_B, 3.0f, dev_C, false, false, queue).read(queue));
+        EXPECT_EQ(R, gemm(2.0f, dev_A_t, dev_B, 3.0f, dev_C, true, false, queue).read(queue));
+        EXPECT_EQ(R, gemm(2.0f, dev_A, dev_B_t, 3.0f, dev_C, false, true, queue).read(queue));
+        EXPECT_EQ(R, gemm(2.0f, dev_A_t, dev_B_t, 3.0f, dev_C, true, true, queue).read(queue));
     });
 }
 
@@ -250,8 +245,8 @@ void test_blas_level1(const gpgpu::Queue& queue, CBlas&& cblas, GBlas&& gblas) {
     cblas(N, A, B, alpha);
     gblas(N, dev_A, dev_B, alpha);
 
-    EXPECT_EQ(A, dev_A.read());
-    EXPECT_EQ(B, dev_B.read());
+    EXPECT_EQ(A, dev_A.read(queue));
+    EXPECT_EQ(B, dev_B.read(queue));
 }
 
 template <int N = 10, typename CBlas, typename GBlas>
@@ -265,7 +260,7 @@ void test_blas_level1_r(const gpgpu::Queue& queue, CBlas&& cblas, GBlas&& gblas)
 
     auto R = cblas(N, A, B);
     gblas(N, dev_A, dev_B, dev_R);
-    EXPECT_NEAR(R, dev_R.read()(0), 0.0001f);
+    EXPECT_NEAR(R, dev_R.read(queue)(0), 0.0001f);
 }
 
 TEST_F(GPGPUTest, Xcopy) {
@@ -350,42 +345,64 @@ static void device_filter_test(int num_devices, const char* env, const char* exp
     std::string actual;
     for (size_t i = 0; i < filter.size(); i++) {
         if (filter[i])
-            actual += std::to_string(i+1);
+            actual += std::to_string(i);
     }
     EXPECT_STREQ(expect, actual.c_str());
 }
 
 TEST_F(GPGPUTest, ParseDeviceFilter) {
-    device_filter_test(6, nullptr, "123456");
-    device_filter_test(6, "", "123456");
+    device_filter_test(6, nullptr, "012345");
+    device_filter_test(6, "", "012345");
 
     device_filter_test(6, "3", "3");
     device_filter_test(6, "1,3,5", "135");
     device_filter_test(6, "4,2", "24");
 
-    device_filter_test(6, "-3", "12456");
-    device_filter_test(6, "-1,-3,-5", "246");
-    device_filter_test(6, "-4,-2", "1356");
+    device_filter_test(6, "-3", "01245");
+    device_filter_test(6, "-1,-3,-5", "024");
+    device_filter_test(6, "-4,-2", "0135");
 
     device_filter_test(6, "2-5", "2345");
     device_filter_test(6, "2-4,3-5", "2345");
 
     device_filter_test(6, "2-5,-3", "245");
     device_filter_test(6, "-3,2-5", "245");
-    device_filter_test(6, "-2-5", "16");
+    device_filter_test(6, "-2-4", "015");
 
-    device_filter_test(6, "3-10", "3456");
-    device_filter_test(6, "0-2", "12");
-    device_filter_test(6, "0-10", "123456");
+    device_filter_test(6, "3-10", "345");
+    device_filter_test(6, "0-2", "012");
+    device_filter_test(6, "0-10", "012345");
 
-    device_filter_test(6, "-0", "123456");
-    device_filter_test(6, "-10", "123456");
+    device_filter_test(6, "-0", "12345");
+    device_filter_test(6, "-10", "012345");
 
-    device_filter_test(6, "2-1", "123456");
+    device_filter_test(6, "2-1", "012345");
     device_filter_test(6, "2-1,3", "3");
     device_filter_test(6, "2-,3", "3");
     device_filter_test(6, "-,3", "3");
     device_filter_test(6, "3,-", "3");
     device_filter_test(6, ",,1,,2,,3,,", "123");
     device_filter_test(6, ".3-5", "345");
+}
+
+TEST(GPGPU, MultipleThreadContextActivation) {
+    constexpr int N = 100;
+    auto A = Tensor<int>::random({N}, -N, N).cast<float>();
+    auto B = Tensor<int>::random({N}, -N, N).cast<float>();
+
+    auto task = [&]() {
+        auto dev_R = DevTensor<float>({1});
+        auto dev_A = DevTensor<float>(A);
+        auto dev_B = DevTensor<float>(B);
+
+        inner(dev_A, dev_B, &dev_R);
+        return dev_R.read()(0);
+    };
+
+    auto r1 = std::async(std::launch::async, task);
+    auto r2 = std::async(std::launch::async, task);
+    float r = blas::dot(N, A.data(), 1, B.data(), 1);
+
+    EXPECT_EQ(r1.get(), r);
+    EXPECT_EQ(r2.get(), r);
 }

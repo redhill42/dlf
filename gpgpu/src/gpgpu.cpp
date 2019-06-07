@@ -1,4 +1,8 @@
+#include <algorithm>
 #include <numeric>
+#include <atomic>
+#include <iostream>
+
 #include "gpgpu.h"
 #include "gpgpu_cl.hpp"
 #include "gpgpu_cu.hpp"
@@ -58,13 +62,13 @@ std::vector<bool> parseDeviceFilter(int num_devices, const char* env) {
         if (*p == ',' || *p == '\0') {
             auto& v = excluded ? exclusion : inclusion;
             if (state == Digits) {
-                if (num > 0 && num <= num_devices)
-                    v[num-1] = true;
+                if (num >= 0 && num < num_devices) {
+                    v[num] = true;
+                }
             } else if (state == Range) {
-                auto end = std::min(num, num_devices);
-                beg = std::max(1, beg);
+                auto end = std::min(num, num_devices-1);
                 if (beg <= end) {
-                    std::fill(v.begin()+beg-1, v.begin()+end, true);
+                    std::fill(v.begin()+beg, v.begin()+end+1, true);
                 }
             }
 
@@ -117,6 +121,51 @@ std::vector<Device> Platform::devices(DeviceType type) const {
     for (const auto& dev : raw_devices)
         devices.emplace_back(*this, dev);
     return devices;
+}
+
+static std::vector<Context> initialize_global_contexts() {
+    auto devices = probe().devices(DeviceType::GPU);
+    auto contexts = std::vector<Context>();
+
+    for (size_t id = 0; id < devices.size(); id++) {
+        try {
+            contexts.push_back(devices[id].createContext());
+        } catch (APIError&) {
+            std::cerr << "Warning: failed to create context on device #" + std::to_string(id) << std::endl;
+        }
+    }
+    return contexts;
+}
+
+static Context select_current_context() {
+    static std::vector<Context> global_contexts = initialize_global_contexts();
+    static std::atomic<size_t> context_index(0); // round-robin select context
+
+    if (global_contexts.empty())
+        throw NoDeviceFound();
+
+    do {
+        size_t id = ++context_index;
+        if (id < global_contexts.size())
+            return global_contexts[id];
+        if (context_index.compare_exchange_strong(id, 0))
+            return global_contexts[0];
+    } while (true);
+}
+
+static thread_local Context current_context;
+static thread_local Queue current_queue;
+
+const Context& current::context() {
+    if (current_context.id() == 0)
+        current_context = select_current_context().activate();
+    return current_context;
+}
+
+const Queue& current::queue() {
+    if (current_queue.id() == 0)
+        current_queue = current::context().createQueue();
+    return current_queue;
 }
 
 } // namespace gpgpu

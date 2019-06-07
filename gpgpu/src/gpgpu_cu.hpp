@@ -17,8 +17,6 @@ class cuProgram;
 class cuKernel;
 
 class cuPlatform final : public raw::Platform {
-    mutable std::shared_ptr<raw::Device> m_default_device;
-
 public:
     APIType api() const noexcept override {
         return APIType::CUDA;
@@ -39,7 +37,6 @@ public:
     std::string version() const override;
 
     std::vector<std::shared_ptr<raw::Device>> devices(DeviceType type) const override;
-    std::shared_ptr<raw::Device> device() const override;
 };
 
 class cuDevice final : public raw::Device {
@@ -116,7 +113,6 @@ private:
 class cuContext final : public raw::Context {
     CUcontext m_context;
     CUdevice m_device;
-
 public:
     explicit cuContext(CUcontext context, CUdevice device)
         : m_context(context), m_device(device) {}

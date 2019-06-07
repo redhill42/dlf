@@ -41,12 +41,7 @@ Value Cache<Key, Value>::Get(const U& key, bool* in_cache) const {
 template <typename Key, typename Value>
 void Cache<Key, Value>::Store(Key&& key, Value value) {
   std::lock_guard<std::mutex> lock(cache_mutex_);
-
-  // emplace() into a map
-  auto r = cache_.emplace(std::move(key), std::move(value));
-  if (!r.second) {
-    throw LogicError("Cache::Store: object already in cache");
-  }
+  cache_.emplace(std::move(key), std::move(value));
 }
 
 template <typename Key, typename Value>

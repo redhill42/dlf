@@ -84,12 +84,6 @@ std::vector<std::shared_ptr<raw::Device>> cuPlatform::devices(DeviceType type) c
     return devices;
 }
 
-std::shared_ptr<raw::Device> cuPlatform::device() const {
-    if (m_default_device == nullptr)
-        m_default_device = devices(DeviceType::GPU)[0];
-    return m_default_device;
-}
-
 std::string cuPlatform::version() const {
     auto result = 0;
     CheckError(cuDriverGetVersion(&result));

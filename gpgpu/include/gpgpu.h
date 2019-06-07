@@ -111,6 +111,14 @@ public:
     {}
 };
 
+/**
+ * Represents no device found in the system.
+ */
+class NoDeviceFound : public RuntimeError {
+public:
+    NoDeviceFound() : RuntimeError("No device found") {}
+};
+
 //==-------------------------------------------------------------------------
 // Definitions
 //==-------------------------------------------------------------------------
@@ -175,11 +183,6 @@ public:
      * Get all devices in this platform.
      */
     virtual std::vector<std::shared_ptr<Device>> devices(DeviceType type) const = 0;
-
-    /**
-     * Get the default device in this platform.
-     */
-    virtual std::shared_ptr<Device> device() const = 0;
 };
 
 class Device {
@@ -366,11 +369,6 @@ public:
      */
     std::vector<Device> devices(DeviceType type = DeviceType::GPU) const;
 
-    /**
-     * Get the default device in this platform.
-     */
-    Device device() const;
-
     bool operator==(const Platform& other) const noexcept {
         return m_raw->id() == other.m_raw->id();
     }
@@ -510,21 +508,22 @@ public:
     }
 
     ContextID id() const noexcept {
-        return m_raw->id();
+        return m_raw == nullptr ? 0 : m_raw->id();
     }
 
     /**
      * Activate thi context and associate it to current CPU thread.
      */
-    void activate() const {
+    const Context& activate() const {
         m_raw->activate();
+        return *this;
     }
 
     /**
      * Deactivate this context and disassociate it from current CPU thread.
      */
     void deactivate() const {
-        m_raw->activate();
+        m_raw->deactivate();
     }
 
     /**
@@ -593,6 +592,10 @@ class Queue {
 public:
     Queue() = default;
     const raw::Queue& raw() const noexcept { return *m_raw; }
+
+    QueueID id() const noexcept {
+        return m_raw == nullptr ? 0 : m_raw->id();
+    }
 
     const Context& context() const noexcept {
         return m_context;
@@ -743,6 +746,21 @@ private:
     }
 };
 
+class current {
+public:
+    current() = delete; // disable construction
+
+    /**
+     * Returns the context associated with current thread.
+     */
+    static const Context& context();
+
+    /**
+     * Returns the queue associated with current thread.
+     */
+    static const Queue& queue();
+};
+
 //==-------------------------------------------------------------------------
 // Global functions
 //==-------------------------------------------------------------------------
@@ -755,10 +773,6 @@ extern std::vector<bool> parseDeviceFilter(int num_devices);
 //==-------------------------------------------------------------------------
 // Implementation
 //==-------------------------------------------------------------------------
-
-inline Device Platform::device() const {
-    return Device{*this, m_raw->device()};
-}
 
 inline Context Device::createContext() const {
     return Context{*this, m_raw->createContext()};
