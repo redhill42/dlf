@@ -159,6 +159,8 @@ template class Xgemv<float>;
 template class Xgemv<double>;
 template class Xgemv<float2>;
 template class Xgemv<double2>;
+template class Xgemv<int32_t>;
+template class Xgemv<int64_t>;
 
 // =================================================================================================
 }} // namespace gpgpu::blas

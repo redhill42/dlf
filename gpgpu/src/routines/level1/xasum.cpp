@@ -81,6 +81,8 @@ template class Xasum<float>;
 template class Xasum<double>;
 template class Xasum<float2>;
 template class Xasum<double2>;
+template class Xasum<int32_t>;
+template class Xasum<int64_t>;
 
 // =================================================================================================
 }} // namespace gpgpu::blas

@@ -88,6 +88,8 @@ template class Xdot<float>;
 template class Xdot<double>;
 template class Xdot<float2>;
 template class Xdot<double2>;
+template class Xdot<int32_t>;
+template class Xdot<int64_t>;
 
 // =================================================================================================
 }} // namespace gpgpu::blas

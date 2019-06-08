@@ -186,11 +186,11 @@ std::shared_ptr<raw::Program> cuContext::compileProgram(
         raw_options.push_back(option.c_str());
 
     auto status = nvrtcCompileProgram(program, raw_options.size(), raw_options.data());
-    if (status == NVRTC_ERROR_INVALID_INPUT)
+    if (status != NVRTC_SUCCESS) {
         std::cerr << getBuildInfo(program) << std::endl;
-    if (status != NVRTC_SUCCESS)
         nvrtcDestroyProgram(&program);
-    checkNVRTC(status, "nvrtcCompileProgram");
+        checkNVRTC(status, "nvrtcCompileProgram");
+    }
 
     size_t bytes = 0;
     CheckNVRTC(nvrtcGetPTXSize(program, &bytes));

@@ -79,6 +79,8 @@ template class Xomatcopy<float>;
 template class Xomatcopy<double>;
 template class Xomatcopy<float2>;
 template class Xomatcopy<double2>;
+template class Xomatcopy<int32_t>;
+template class Xomatcopy<int64_t>;
 
 // =================================================================================================
 }} // namespace gpgpu::blas

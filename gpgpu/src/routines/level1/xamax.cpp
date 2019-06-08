@@ -84,6 +84,8 @@ template class Xamax<float>;
 template class Xamax<double>;
 template class Xamax<float2>;
 template class Xamax<double2>;
+template class Xamax<int32_t>;
+template class Xamax<int64_t>;
 
 // =================================================================================================
 }} // namespace gpgpu::blas

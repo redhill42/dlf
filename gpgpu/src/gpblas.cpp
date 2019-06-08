@@ -36,6 +36,10 @@ template <> constexpr cudaDataType CudaDataType<float2>  = cudaDataType::CUDA_C_
 template <> constexpr cudaDataType CudaDataType<double2> = cudaDataType::CUDA_C_64F;
 template <> constexpr cudaDataType CudaDataType<half>    = cudaDataType::CUDA_R_16F;
 
+template <typename T>
+constexpr bool RequireCublas =
+    !(std::is_integral<T>::value || std::is_same<T, half>::value);
+
 static cublasOperation_t CudaOp(Transpose trans) {
     switch (trans) {
     case Transpose::NoTrans:
@@ -48,13 +52,20 @@ static cublasOperation_t CudaOp(Transpose trans) {
 }
 
 template <typename T, typename CL, typename CU>
-inline void dispatch(const Queue& queue, CL&& cl, CU&& cu) {
-    if (std::is_same<T, half>::value || IsOpenCL(queue.context().device())) {
+inline std::enable_if_t<RequireCublas<T>>
+dispatch(const Queue& queue, CL&& cl, CU&& cu) {
+    if (IsOpenCL(queue.context().device())) {
         cl();
     } else {
         const cuQueue& q = static_cast<const cuQueue&>(queue.raw());
         cu(q.getCublasHandle(), CudaDataType<T>);
     }
+}
+
+template <typename T, typename CL, typename CU>
+inline std::enable_if_t<!RequireCublas<T>>
+dispatch(const Queue&, CL&& cl, CU&&) {
+    cl();
 }
 
 // =================================================================================================
@@ -175,10 +186,6 @@ inline void cublasSwapEx(cublasHandle_t handle, int n, double2* x, int incx, dou
     cublasZswap(handle, n, reinterpret_cast<cuDoubleComplex*>(x), incx, reinterpret_cast<cuDoubleComplex*>(y), incy);
 }
 
-inline void cublasSwapEx(cublasHandle_t, int, half*, int, half*, int) {
-    throw BLASError(StatusCode::kNotImplemented);
-}
-
 template <typename T>
 void swap(const size_t n,
           Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
@@ -218,6 +225,14 @@ template void PUBLIC_API swap<half>   (const size_t,
                                        Buffer<half>&, const size_t, const size_t,
                                        Buffer<half>&, const size_t, const size_t,
                                        const Queue&, Event*);
+template void PUBLIC_API swap<int32_t>(const size_t,
+                                       Buffer<int32_t>&, const size_t, const size_t,
+                                       Buffer<int32_t>&, const size_t, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API swap<int64_t>(const size_t,
+                                       Buffer<int64_t>&, const size_t, const size_t,
+                                       Buffer<int64_t>&, const size_t, const size_t,
+                                       const Queue&, Event*);
 
 //---------------------------------------------------------------------------
 // Vector scaling: SSCAL/DSCAL/CSCAL/ZSCAL/HSCAL
@@ -252,6 +267,12 @@ template void PUBLIC_API scal<double2>(const size_t, const double2,
 template void PUBLIC_API scal<half>   (const size_t, const half,
                                        Buffer<half>&, const size_t, const size_t,
                                        const Queue&, Event*);
+template void PUBLIC_API scal<int32_t>(const size_t, const int32_t,
+                                       Buffer<int32_t>&, const size_t, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API scal<int64_t>(const size_t, const int64_t,
+                                       Buffer<int64_t>&, const size_t, const size_t,
+                                       const Queue&, Event*);
 
 //---------------------------------------------------------------------------
 // Vector copy: SCOPY/DCOPY/CCOPY/ZCOPY/HCOPY
@@ -270,10 +291,6 @@ inline void cublasCopyEx(cublasHandle_t handle, int n, const float2* x, int incx
 
 inline void cublasCopyEx(cublasHandle_t handle, int n, const double2* x, int incx, double2* y, int incy) {
     cublasZcopy(handle, n, reinterpret_cast<const cuDoubleComplex*>(x), incx, reinterpret_cast<cuDoubleComplex*>(y), incy);
-}
-
-inline void cublasCopyEx(cublasHandle_t, int, const half*, int, half*, int) {
-    throw BLASError(StatusCode::kNotImplemented);
 }
 
 template <typename T>
@@ -314,6 +331,14 @@ template void PUBLIC_API copy<double2>(const size_t,
 template void PUBLIC_API copy<half>   (const size_t,
                                        const Buffer<half>&, const size_t, const size_t,
                                        Buffer<half>&, const size_t, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API copy<int32_t>(const size_t,
+                                       const Buffer<int32_t>&, const size_t, const size_t,
+                                       Buffer<int32_t>&, const size_t, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API copy<int64_t>(const size_t,
+                                       const Buffer<int64_t>&, const size_t, const size_t,
+                                       Buffer<int64_t>&, const size_t, const size_t,
                                        const Queue&, Event*);
 
 //---------------------------------------------------------------------------
@@ -357,6 +382,14 @@ template void PUBLIC_API axpy<double2>(const size_t, const double2,
 template void PUBLIC_API axpy<half>   (const size_t, const half,
                                        const Buffer<half>&, const size_t, const size_t,
                                        Buffer<half>&, const size_t, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API axpy<int32_t>(const size_t, const int32_t,
+                                       const Buffer<int32_t>&, const size_t, const size_t,
+                                       Buffer<int32_t>&, const size_t, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API axpy<int64_t>(const size_t, const int64_t,
+                                       const Buffer<int64_t>&, const size_t, const size_t,
+                                       Buffer<int64_t>&, const size_t, const size_t,
                                        const Queue&, Event*);
 
 //---------------------------------------------------------------------------
@@ -403,6 +436,16 @@ template void PUBLIC_API dot<half>   (const size_t,
                                       const Buffer<half>&, const size_t, const size_t,
                                       const Buffer<half>&, const size_t, const size_t,
                                       Buffer<half>&, const size_t,
+                                      const Queue&, Event*);
+template void PUBLIC_API dot<int32_t>(const size_t,
+                                      const Buffer<int32_t>&, const size_t, const size_t,
+                                      const Buffer<int32_t>&, const size_t, const size_t,
+                                      Buffer<int32_t>&, const size_t,
+                                      const Queue&, Event*);
+template void PUBLIC_API dot<int64_t>(const size_t,
+                                      const Buffer<int64_t>&, const size_t, const size_t,
+                                      const Buffer<int64_t>&, const size_t, const size_t,
+                                      Buffer<int64_t>&, const size_t,
                                       const Queue&, Event*);
 
 //---------------------------------------------------------------------------
@@ -550,6 +593,14 @@ template void PUBLIC_API asum<half>   (const size_t,
                                        const Buffer<half>&, const size_t, const size_t,
                                        Buffer<half>&, const size_t,
                                        const Queue&, Event*);
+template void PUBLIC_API asum<int32_t>(const size_t,
+                                       const Buffer<int32_t>&, const size_t, const size_t,
+                                       Buffer<int32_t>&, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API asum<int64_t>(const size_t,
+                                       const Buffer<int64_t>&, const size_t, const size_t,
+                                       Buffer<int64_t>&, const size_t,
+                                       const Queue&, Event*);
 
 //---------------------------------------------------------------------------
 // Sum of values in a vector (non-BLAS function): SSUM/DSUM/ScSUM/DzSUM/HSUM
@@ -585,6 +636,14 @@ template void PUBLIC_API sum<half>   (const size_t,
                                       const Buffer<half>&, const size_t, const size_t,
                                       Buffer<half>&, const size_t,
                                       const Queue&, Event*);
+template void PUBLIC_API sum<int32_t>(const size_t,
+                                      const Buffer<int32_t>&, const size_t, const size_t,
+                                      Buffer<int32_t>&, const size_t,
+                                      const Queue&, Event*);
+template void PUBLIC_API sum<int64_t>(const size_t,
+                                      const Buffer<int64_t>&, const size_t, const size_t,
+                                      Buffer<int64_t>&, const size_t,
+                                      const Queue&, Event*);
 
 //---------------------------------------------------------------------------
 // Index of absolute maximum value in a vector: iSAMAX/iDAMAX/iCAMAX/iZAMAX/iHAMAX
@@ -603,10 +662,6 @@ inline void cublasAmaxEx(cublasHandle_t handle, int n, const float2* x, int incx
 
 inline void cublasAmaxEx(cublasHandle_t handle, int n, const double2* x, int incx, int* result) {
     cublasIzamax(handle, n, reinterpret_cast<const cuDoubleComplex*>(x), incx, result);
-}
-
-inline void cublasAmaxEx(cublasHandle_t, int, const half*, int, int*) {
-    throw BLASError(StatusCode::kNotImplemented);
 }
 
 template <typename T>
@@ -653,6 +708,14 @@ template void PUBLIC_API amax<half>   (const size_t,
                                        const Buffer<half>&, const size_t, const size_t,
                                        Buffer<unsigned int>&, const size_t,
                                        const Queue&, Event*);
+template void PUBLIC_API amax<int32_t>(const size_t,
+                                       const Buffer<int32_t>&, const size_t, const size_t,
+                                       Buffer<unsigned int>&, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API amax<int64_t>(const size_t,
+                                       const Buffer<int64_t>&, const size_t, const size_t,
+                                       Buffer<unsigned int>&, const size_t,
+                                       const Queue&, Event*);
 
 //---------------------------------------------------------------------------
 // Index of absolute minimum value in a vector (non-BLAS function): iSAMIN/iDAMIN/iCAMIN/iZAMIN/iHAMIN
@@ -671,10 +734,6 @@ inline void cublasAminEx(cublasHandle_t handle, int n, const float2* x, int incx
 
 inline void cublasAminEx(cublasHandle_t handle, int n, const double2* x, int incx, int* result) {
     cublasIzamin(handle, n, reinterpret_cast<const cuDoubleComplex*>(x), incx, result);
-}
-
-inline void cublasAminEx(cublasHandle_t, int, const half*, int, int*) {
-    throw BLASError(StatusCode::kNotImplemented);
 }
 
 template <typename T>
@@ -721,6 +780,14 @@ template void PUBLIC_API amin<half>   (const size_t,
                                        const Buffer<half>&, const size_t, const size_t,
                                        Buffer<unsigned int>&, const size_t,
                                        const Queue&, Event*);
+template void PUBLIC_API amin<int32_t>(const size_t,
+                                       const Buffer<int32_t>&, const size_t, const size_t,
+                                       Buffer<unsigned int>&, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API amin<int64_t>(const size_t,
+                                       const Buffer<int64_t>&, const size_t, const size_t,
+                                       Buffer<unsigned int>&, const size_t,
+                                       const Queue&, Event*);
 
 //---------------------------------------------------------------------------
 // Index of maximum value in a vector (non-BLAS function): iSMAX/iDMAX/iCMAX/iZMAX/iHMAX
@@ -756,6 +823,14 @@ template void PUBLIC_API max<half>   (const size_t,
                                       const Buffer<half>&, const size_t, const size_t,
                                       Buffer<unsigned int>&, const size_t,
                                       const Queue&, Event*);
+template void PUBLIC_API max<int32_t>(const size_t,
+                                      const Buffer<int32_t>&, const size_t, const size_t,
+                                      Buffer<unsigned int>&, const size_t,
+                                      const Queue&, Event*);
+template void PUBLIC_API max<int64_t>(const size_t,
+                                      const Buffer<int64_t>&, const size_t, const size_t,
+                                      Buffer<unsigned int>&, const size_t,
+                                      const Queue&, Event*);
 
 //---------------------------------------------------------------------------
 // Index of minimum value in a vector (non-BLAS function): iSMIN/iDMIN/iCMIN/iZMIN/iHMIN
@@ -789,6 +864,14 @@ template void PUBLIC_API min<double2>(const size_t,
                                       const Queue&, Event*);
 template void PUBLIC_API min<half>   (const size_t,
                                       const Buffer<half>&, const size_t, const size_t,
+                                      Buffer<unsigned int>&, const size_t,
+                                      const Queue&, Event*);
+template void PUBLIC_API min<int32_t>(const size_t,
+                                      const Buffer<int32_t>&, const size_t, const size_t,
+                                      Buffer<unsigned int>&, const size_t,
+                                      const Queue&, Event*);
+template void PUBLIC_API min<int64_t>(const size_t,
+                                      const Buffer<int64_t>&, const size_t, const size_t,
                                       Buffer<unsigned int>&, const size_t,
                                       const Queue&, Event*);
 
@@ -835,11 +918,6 @@ inline void cublasGemvEx(cublasHandle_t handle, Transpose trans,
                 reinterpret_cast<const cuDoubleComplex*>(x), x_inc,
                 reinterpret_cast<cuDoubleComplex*>(&beta),
                 reinterpret_cast<cuDoubleComplex*>(y), y_inc);
-}
-
-inline void cublasGemvEx(cublasHandle_t, Transpose, int, int, half,
-                         const half*, int, const half*, int, half, half*, int) {
-    throw BLASError(StatusCode::kNotImplemented);
 }
 
 template <typename T>
@@ -915,6 +993,22 @@ template void PUBLIC_API gemv<half>   (const Layout, const Transpose,
                                        const Buffer<half>&, const size_t, const size_t,
                                        const half,
                                        Buffer<half>&, const size_t, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API gemv<int32_t>(const Layout, const Transpose,
+                                       const size_t, const size_t,
+                                       const int32_t,
+                                       const Buffer<int32_t>&, const size_t, const size_t,
+                                       const Buffer<int32_t>&, const size_t, const size_t,
+                                       const int32_t,
+                                       Buffer<int32_t>&, const size_t, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API gemv<int64_t>(const Layout, const Transpose,
+                                       const size_t, const size_t,
+                                       const int64_t,
+                                       const Buffer<int64_t>&, const size_t, const size_t,
+                                       const Buffer<int64_t>&, const size_t, const size_t,
+                                       const int64_t,
+                                       Buffer<int64_t>&, const size_t, const size_t,
                                        const Queue&, Event*);
 
 //---------------------------------------------------------------------------
@@ -1838,6 +1932,22 @@ template void PUBLIC_API gemm(const Layout, const Transpose, const Transpose,
                               const half,
                               Buffer<half>&, const size_t, const size_t,
                               const Queue&, Event*, Buffer<half>*);
+template void PUBLIC_API gemm(const Layout, const Transpose, const Transpose,
+                              const size_t, const size_t, const size_t,
+                              const int32_t,
+                              const Buffer<int32_t>&, const size_t, const size_t,
+                              const Buffer<int32_t>&, const size_t, const size_t,
+                              const int32_t,
+                              Buffer<int32_t>&, const size_t, const size_t,
+                              const Queue&, Event*, Buffer<int32_t>*);
+template void PUBLIC_API gemm(const Layout, const Transpose, const Transpose,
+                              const size_t, const size_t, const size_t,
+                              const int64_t,
+                              const Buffer<int64_t>&, const size_t, const size_t,
+                              const Buffer<int64_t>&, const size_t, const size_t,
+                              const int64_t,
+                              Buffer<int64_t>&, const size_t, const size_t,
+                              const Queue&, Event*, Buffer<int64_t>*);
 
 //---------------------------------------------------------------------------
 // Symmetric matrix-matrix multiplication: SSYMM/DSYMM/CSYMM/ZSYMM/HSYMM
@@ -2272,6 +2382,20 @@ template void PUBLIC_API had<half>   (const size_t,
                                       const half,
                                       Buffer<half>&, const size_t, const size_t,
                                       const Queue&, Event*);
+template void PUBLIC_API had<int32_t>(const size_t,
+                                      const int32_t,
+                                      const Buffer<int32_t>&, const size_t, const size_t,
+                                      const Buffer<int32_t>&, const size_t, const size_t,
+                                      const int32_t,
+                                      Buffer<int32_t>&, const size_t, const size_t,
+                                      const Queue&, Event*);
+template void PUBLIC_API had<int64_t>(const size_t,
+                                      const int64_t,
+                                      const Buffer<int64_t>&, const size_t, const size_t,
+                                      const Buffer<int64_t>&, const size_t, const size_t,
+                                      const int64_t,
+                                      Buffer<int64_t>&, const size_t, const size_t,
+                                      const Queue&, Event*);
 
 //---------------------------------------------------------------------------
 // Scaling and out-place transpose/copy (non-BLAS function): SOMATCOPY/DOMATCOPY/COMATCOPY/ZOMATCOPY/HOMATCOPY
@@ -2312,6 +2436,16 @@ template void PUBLIC_API omatcopy<half>   (const Layout, const Transpose,
                                            const size_t, const size_t, const half,
                                            const Buffer<half>&, const size_t, const size_t,
                                            Buffer<half>&, const size_t, const size_t,
+                                           const Queue&, Event*);
+template void PUBLIC_API omatcopy<int32_t>(const Layout, const Transpose,
+                                           const size_t, const size_t, const int32_t,
+                                           const Buffer<int32_t>&, const size_t, const size_t,
+                                           Buffer<int32_t>&, const size_t, const size_t,
+                                           const Queue&, Event*);
+template void PUBLIC_API omatcopy<int64_t>(const Layout, const Transpose,
+                                           const size_t, const size_t, const int64_t,
+                                           const Buffer<int64_t>&, const size_t, const size_t,
+                                           Buffer<int64_t>&, const size_t, const size_t,
                                            const Queue&, Event*);
 
 //---------------------------------------------------------------------------

@@ -65,6 +65,18 @@ typedef struct { double s0; double s1; double s2; double s3;
                  double s4; double s5; double s6; double s7;
                  double s8; double s9; double s10; double s11;
                  double s12; double s13; double s14; double s15; } double16;
+typedef struct { int s0; int s1; int s2; int s3;
+		 int s4; int s5; int s6; int s7; } int8;
+typedef struct { int s0; int s1; int s2; int s3;
+		 int s4; int s5; int s6; int s7;
+		 int s8; int s9; int s10; int s11;
+		 int s12; int s13; int s14; int s15; } int16;
+typedef struct { long s0; long s1; long s2; long s3;
+		 long s4; long s5; long s6; long s7; } long8;
+typedef struct { long s0; long s1; long s2; long s3;
+		 long s4; long s5; long s6; long s7;
+		 long s8; long s9; long s10; long s11;
+		 long s12; long s13; long s14; long s15; } long16;
 
 // Replaces the OpenCL keywords with CUDA equivalent
 #define __kernel __placeholder__

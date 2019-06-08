@@ -112,6 +112,16 @@ inline bool PrecisionSupported(const Device& device) {
   return PrecisionTraits<T>::Supported(device);
 }
 
+inline bool IsIntegral(Precision precision) {
+    return static_cast<int>(precision) > 10000;
+}
+
+inline Precision DatabasePrecision(Precision precision) {
+    return IsIntegral(precision)
+        ? static_cast<Precision>(static_cast<int>(precision) - 10000)
+        : precision;
+}
+
 // =================================================================================================
 
 // Converts a value (e.g. an integer) to a string. This also covers special cases for GPGPU

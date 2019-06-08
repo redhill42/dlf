@@ -42,13 +42,14 @@ public:
       Databases& db)
   {
     const auto platform_id = device.id();
+    const Precision prec = DatabasePrecision(precision);
     for (const auto& kernel_name : kernel_names) {
       // Queries the cache to see whether or not the kernel parameter database
       // is already there. Builds the parameter database for this device and
       // routine set and stores in the cache.
       db(kernel_name) = DatabaseCache::Instance().StoreIfAbsent(
-          DatabaseKeyRef{platform_id, device.id(), precision, kernel_name},
-          [&]() { return Database(device, kernel_name, precision, userDatabase); });
+          DatabaseKeyRef{platform_id, device.id(), prec, kernel_name},
+          [&]() { return Database(device, kernel_name, prec, userDatabase); });
     }
   }
 

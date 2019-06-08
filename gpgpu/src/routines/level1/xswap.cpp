@@ -92,6 +92,8 @@ template class Xswap<float>;
 template class Xswap<double>;
 template class Xswap<float2>;
 template class Xswap<double2>;
+template class Xswap<int32_t>;
+template class Xswap<int64_t>;
 
 // =================================================================================================
 }} // namespace gpgpu::blas

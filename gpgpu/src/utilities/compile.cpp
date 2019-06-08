@@ -42,7 +42,7 @@ Program CompileFromSource(const std::string& source_string,
 
   // For specific devices, use the non-IEE754 compliant OpenCL mad() instruction. This can improve
   // performance, but might result in a reduced accuracy.
-  if (IsAMD(device) && IsGPU(device)) {
+  if (IsAMD(device) && IsGPU(device) && !IsIntegral(precision)) {
     header_string += "#define USE_CL_MAD 1\n";
   }
 

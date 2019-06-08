@@ -102,6 +102,8 @@ template class Xaxpy<float>;
 template class Xaxpy<double>;
 template class Xaxpy<float2>;
 template class Xaxpy<double2>;
+template class Xaxpy<int32_t>;
+template class Xaxpy<int64_t>;
 
 // =================================================================================================
 }} // namespace gpgpu::blas

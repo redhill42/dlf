@@ -111,6 +111,8 @@ template class Xhad<float>;
 template class Xhad<double>;
 template class Xhad<float2>;
 template class Xhad<double2>;
+template class Xhad<int32_t>;
+template class Xhad<int64_t>;
 
 // =================================================================================================
 }} // namespace gpgpu::blas

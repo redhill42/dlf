@@ -87,6 +87,8 @@ template class Xscal<float>;
 template class Xscal<double>;
 template class Xscal<float2>;
 template class Xscal<double2>;
+template class Xscal<int32_t>;
+template class Xscal<int64_t>;
 
 // =================================================================================================
 }} // namespace gpgpu::blas

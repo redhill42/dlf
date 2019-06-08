@@ -92,6 +92,8 @@ template class Xcopy<float>;
 template class Xcopy<double>;
 template class Xcopy<float2>;
 template class Xcopy<double2>;
+template class Xcopy<int32_t>;
+template class Xcopy<int64_t>;
 
 // =================================================================================================
 }} // namespace gpgpu::blas

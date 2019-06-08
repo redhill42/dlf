@@ -114,8 +114,12 @@ enum class Side       { Left = 141, Right = 142 };
 enum class KernelMode { CrossCorrelation = 151, Convolution = 152 };
 
 // Precision scoped enum (values in bits)
-enum class Precision  { Half = 16, Single = 32, Double = 64,
-                        ComplexSingle = 3232, ComplexDouble = 6464, Any = -1 };
+enum class Precision  {
+    Half = 16, Single = 32, Double = 64,
+    ComplexSingle = 3232, ComplexDouble = 6464,
+    Int = 10032, Long = 10064,
+    Any = -1
+};
 
 // =================================================================================================
 // BLAS level-1 (vector-vector) routines
