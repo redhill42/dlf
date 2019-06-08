@@ -16,7 +16,7 @@
 #include <cblas.h>
 #endif
 
-namespace blas {
+namespace cblas {
 
 template <typename T>
 constexpr bool RequireBlasType =
@@ -264,7 +264,7 @@ inline void gemm(Layout layout,
                 m, n, k, &alpha, A, lda, B, ldb, &beta, C, ldc);
 }
 
-} // namespace blas
+} // namespace cblas
 
 #if HAS_MKL
 namespace mkl {

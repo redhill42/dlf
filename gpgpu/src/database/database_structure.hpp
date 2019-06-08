@@ -20,7 +20,7 @@
 #include <map>
 
 // Just needed for 'Precision'
-#include "gpblas.h"
+#include "gblas.h"
 
 namespace gpgpu { namespace blas {
 // A special namespace to hold all the global constant variables (including the database entries)

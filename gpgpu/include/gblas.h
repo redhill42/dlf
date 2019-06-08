@@ -735,4 +735,7 @@ void PUBLIC_API OverrideParameters(const Device& device, const std::string& kern
 
 }} // namespace gpgpu::blas
 
+// Alias
+namespace gblas = gpgpu::blas;
+
 #endif //GPGPU_BLAS_H_

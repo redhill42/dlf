@@ -639,7 +639,7 @@ DEFINE_OPERATOR(/)
     template <> template <> \
     inline Tensor<T>& Tensor<T>::operator op##=(const Tensor<T>& rhs) { \
         assert(shape() == rhs.shape()); \
-        blas::axpby(size(), T(beta), rhs.data(), 1, T(alpha), data(), 1); \
+        cblas::axpby(size(), T(beta), rhs.data(), 1, T(alpha), data(), 1); \
         return *this; \
     } \
     template <> \
@@ -647,25 +647,25 @@ DEFINE_OPERATOR(/)
         assert(lhs.shape() == rhs.shape()); \
         Tensor<T> res(lhs.shape()); \
         std::copy(rhs.begin(), rhs.end(), res.begin()); \
-        blas::axpby(res.size(), T(alpha), lhs.data(), 1, T(beta), res.data(), 1); \
+        cblas::axpby(res.size(), T(alpha), lhs.data(), 1, T(beta), res.data(), 1); \
         return res; \
     } \
     template <> \
     inline Tensor<T> operator op(Tensor<T>&& lhs, const Tensor<T>& rhs) { \
         assert(lhs.shape() == rhs.shape()); \
-        blas::axpby(lhs.size(), T(beta), rhs.data(), 1, T(alpha), lhs.data(), 1); \
+        cblas::axpby(lhs.size(), T(beta), rhs.data(), 1, T(alpha), lhs.data(), 1); \
         return std::move(lhs); \
     } \
     template <> \
     inline Tensor<T> operator op(const Tensor<T>& lhs, Tensor<T>&& rhs) { \
         assert(lhs.shape() == rhs.shape()); \
-        blas::axpby(rhs.size(), T(alpha), lhs.data(), 1, T(beta), rhs.data(), 1); \
+        cblas::axpby(rhs.size(), T(alpha), lhs.data(), 1, T(beta), rhs.data(), 1); \
         return std::move(rhs); \
     } \
     template <> \
     inline Tensor<T> operator op(Tensor<T>&& lhs, Tensor<T>&& rhs) { \
         assert(lhs.shape() == rhs.shape()); \
-        blas::axpby(lhs.size(), T(alpha), lhs.data(), 1, T(beta), rhs.data(), 1); \
+        cblas::axpby(lhs.size(), T(alpha), lhs.data(), 1, T(beta), rhs.data(), 1); \
         return std::move(rhs); \
     }
 
@@ -699,7 +699,7 @@ namespace impl {
 template <typename T>
 inline std::enable_if_t<std::is_same<T,float>::value || std::is_same<T,double>::value, T>
 dot(size_t n, const T* A, const T* B) {
-    return blas::dot(n, A, 1, B, 1);
+    return cblas::dot(n, A, 1, B, 1);
 }
 
 template <typename T>
@@ -719,13 +719,13 @@ dot(size_t n, const T* A, const T* B) {
 }
 
 template <typename T>
-inline std::enable_if_t<blas::RequireBlasType<T>>
+inline std::enable_if_t<cblas::RequireBlasType<T>>
 gemv(size_t m, size_t n, const T* A, const T* B, T* C, size_t lda) {
-    blas::gemv(blas::Layout::RowMajor, blas::Transpose::NoTrans, m, n, T(1), A, lda, B, 1, T(0), C, 1);
+    cblas::gemv(cblas::Layout::RowMajor, cblas::Transpose::NoTrans, m, n, T(1), A, lda, B, 1, T(0), C, 1);
 }
 
 template <typename T>
-std::enable_if_t<!blas::RequireBlasType<T>>
+std::enable_if_t<!cblas::RequireBlasType<T>>
 gemv(size_t m, size_t n, const T* A, const T* B, T* C, size_t lda) {
     tbb::parallel_for(tbb::blocked_range<size_t>(0, m, GRAINSIZE), [&](auto&& r) {
         auto px = A + r.begin() * lda;
@@ -741,14 +741,14 @@ gemv(size_t m, size_t n, const T* A, const T* B, T* C, size_t lda) {
 }
 
 template <typename T>
-inline std::enable_if_t<blas::RequireBlasType<T>>
+inline std::enable_if_t<cblas::RequireBlasType<T>>
 gemm(size_t m, size_t n, size_t k, const T* A, const T* B, T* C, size_t lda, size_t ldb, size_t ldc) {
-    blas::gemm(blas::Layout::RowMajor, blas::Transpose::NoTrans, blas::Transpose::NoTrans,
-               m, n, k, T(1), A, lda, B, ldb, T(0), C, ldc);
+    cblas::gemm(cblas::Layout::RowMajor, cblas::Transpose::NoTrans, cblas::Transpose::NoTrans,
+                m, n, k, T(1), A, lda, B, ldb, T(0), C, ldc);
 }
 
 template <typename T>
-std::enable_if_t<!blas::RequireBlasType<T>>
+std::enable_if_t<!cblas::RequireBlasType<T>>
 gemm(size_t m, size_t n, size_t k, const T* A, const T* B, T* C, size_t lda, size_t ldb, size_t ldc) {
     tbb::parallel_for(tbb::blocked_range2d<size_t>(0, m, 32, 0, n, 32), [&](auto &&r) {
         for (size_t i = r.rows().begin(); i != r.rows().end(); i++) {
@@ -861,7 +861,7 @@ Tensor<T> pow(const Tensor<T>& x, long n) {
  * General matrix multiplication.
  */
 template <typename T>
-std::enable_if_t<!blas::RequireBlasType<T>>
+std::enable_if_t<!cblas::RequireBlasType<T>>
 gemm(const T& alpha, const Tensor<T>& A, const Tensor<T>& B,
      const T& beta, Tensor<T>* C,
      bool transA = false, bool transB = false)
@@ -904,7 +904,7 @@ gemm(const T& alpha, const Tensor<T>& A, const Tensor<T>& B,
 }
 
 template <typename T>
-std::enable_if_t<blas::RequireBlasType<T>>
+std::enable_if_t<cblas::RequireBlasType<T>>
 gemm(const T& alpha, const Tensor<T>& A, const Tensor<T>& B,
      const T& beta, Tensor<T>* C,
      bool transA = false, bool transB = false)
@@ -920,11 +920,11 @@ gemm(const T& alpha, const Tensor<T>& A, const Tensor<T>& B,
     assert(k == p);
     assert(C->shape() == Shape({m, n}));
 
-    blas::gemm(blas::Layout::RowMajor,
-               transA ? blas::Transpose::Trans : blas::Transpose::NoTrans,
-               transB ? blas::Transpose::Trans : blas::Transpose::NoTrans,
-               m, n, k, alpha, A.data(), A.stride(0), B.data(), B.stride(0),
-               beta, C->data(), C->stride(0));
+    cblas::gemm(cblas::Layout::RowMajor,
+                transA ? cblas::Transpose::Trans : cblas::Transpose::NoTrans,
+                transB ? cblas::Transpose::Trans : cblas::Transpose::NoTrans,
+                m, n, k, alpha, A.data(), A.stride(0), B.data(), B.stride(0),
+                beta, C->data(), C->stride(0));
 }
 
 template <typename T>
@@ -941,7 +941,7 @@ namespace impl {
 
 #if HAS_MKL
 template <typename T>
-constexpr bool RequireMKL = blas::RequireBlasType<T>;
+constexpr bool RequireMKL = cblas::RequireBlasType<T>;
 #else
 template <typename T>
 constexpr bool RequireMKL = false;

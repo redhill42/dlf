@@ -23,8 +23,8 @@
 #include <algorithm>
 #include <iterator>
 
-#include "gpblas.h"
-#include "gpblas_half.h"
+#include "gblas.h"
+#include "gblas_half.h"
 #include "utilities/exceptions.hpp"
 
 namespace gpgpu { namespace blas {

@@ -16,7 +16,7 @@
 #include <string>
 
 #include "routines/routines.hpp"
-#include "gpblas.h"
+#include "gblas.h"
 #include "gpgpu_cu.hpp"
 
 namespace gpgpu { namespace blas {

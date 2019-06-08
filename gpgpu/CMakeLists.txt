@@ -157,7 +157,7 @@ set(SOURCES
   src/gpgpu.cpp
   src/gpgpu_cl.cpp
   src/gpgpu_cu.cpp
-  src/gpblas.cpp
+  src/gblas.cpp
   src/database/database.cpp
   src/routines/common.cpp
   src/utilities/compile.cpp
@@ -171,8 +171,8 @@ set(SOURCES
 )
 set(PUBLIC_HEADERS
   include/gpgpu.h
-  include/gpblas_half.h
-  include/gpblas.h
+  include/gblas_half.h
+  include/gblas.h
 )
 set(HEADERS  # such that they can be discovered by IDEs such as CLion and Visual Studio
   src/database/apple_cpu_fallback.hpp

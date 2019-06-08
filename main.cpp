@@ -5,7 +5,7 @@
 #include <iostream>
 #include <cinttypes>
 #include "gpgpu.h"
-#include "gpblas.h"
+#include "gblas.h"
 
 static void show_info() {
     const auto platform = gpgpu::probe();
@@ -107,50 +107,50 @@ static void gemm_test() {
     std::cout << "\nGEMM Test:\n";
 
     dev_C.write(queue, C.data(), C.size());
-    gpgpu::blas::gemm(gpgpu::blas::Layout::RowMajor,
-                      gpgpu::blas::Transpose::NoTrans,
-                      gpgpu::blas::Transpose::NoTrans,
-                      M, N, K,
-                      2.0f, dev_A, 0, K,
-                      dev_B, 0, N,
-                      3.0f, dev_C, 0, N,
-                      queue);
+    gblas::gemm(gblas::Layout::RowMajor,
+                gblas::Transpose::NoTrans,
+                gblas::Transpose::NoTrans,
+                M, N, K,
+                2.0f, dev_A, 0, K,
+                dev_B, 0, N,
+                3.0f, dev_C, 0, N,
+                queue);
     dev_C.read(queue, T.data(), T.size());
     print_matrix("A . B:      ", T);
 
     dev_C.write(queue, C.data(), C.size());
-    gpgpu::blas::gemm(gpgpu::blas::Layout::RowMajor,
-                      gpgpu::blas::Transpose::Trans,
-                      gpgpu::blas::Transpose::NoTrans,
-                      M, N, K,
-                      2.0f, dev_A_t, 0, M,
-                      dev_B, 0, N,
-                      3.0f, dev_C, 0, N,
-                      queue);
+    gblas::gemm(gblas::Layout::RowMajor,
+                gblas::Transpose::Trans,
+                gblas::Transpose::NoTrans,
+                M, N, K,
+                2.0f, dev_A_t, 0, M,
+                dev_B, 0, N,
+                3.0f, dev_C, 0, N,
+                queue);
     dev_C.read(queue, T.data(), T.size());
     print_matrix("T(A) . B:   ", T);
 
     dev_C.write(queue, C.data(), C.size());
-    gpgpu::blas::gemm(gpgpu::blas::Layout::RowMajor,
-                      gpgpu::blas::Transpose::NoTrans,
-                      gpgpu::blas::Transpose::Trans,
-                      M, N, K,
-                      2.0f, dev_A, 0, K,
-                      dev_B_t, 0, K,
-                      3.0f, dev_C, 0, N,
-                      queue);
+    gblas::gemm(gblas::Layout::RowMajor,
+                gblas::Transpose::NoTrans,
+                gblas::Transpose::Trans,
+                M, N, K,
+                2.0f, dev_A, 0, K,
+                dev_B_t, 0, K,
+                3.0f, dev_C, 0, N,
+                queue);
     dev_C.read(queue, T.data(), T.size());
     print_matrix("A . T(B):   ", T);
 
     dev_C.write(queue, C.data(), C.size());
-    gpgpu::blas::gemm(gpgpu::blas::Layout::RowMajor,
-                      gpgpu::blas::Transpose::Trans,
-                      gpgpu::blas::Transpose::Trans,
-                      M, N, K,
-                      2.0f, dev_A_t, 0, M,
-                      dev_B_t, 0, K,
-                      3.0f, dev_C, 0, N,
-                      queue);
+    gblas::gemm(gblas::Layout::RowMajor,
+                gblas::Transpose::Trans,
+                gblas::Transpose::Trans,
+                M, N, K,
+                2.0f, dev_A_t, 0, M,
+                dev_B_t, 0, K,
+                3.0f, dev_C, 0, N,
+                queue);
     dev_C.read(queue, T.data(), T.size());
     print_matrix("T(A) . T(B):", T);
 
