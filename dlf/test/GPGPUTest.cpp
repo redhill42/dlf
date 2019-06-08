@@ -50,7 +50,7 @@ TEST_F(GPGPUTest, CompileProgram) {
 
         // Enqueues the kernel. Note that launching the kernel is always asynchronous
         // and thus requires finishing the queue in order to complete the operation.
-        kernel.setArguments(dev_a.buffer(), dev_b.buffer(), 2);
+        kernel.setArguments(dev_a.data(), dev_b.data(), 2);
         kernel.launch(queue, {dev_a.size()}, {kWorkGroupSize});
 
         // Reads the results back to the host memory
@@ -98,9 +98,18 @@ static void dev_tensor_operator_test() {
     EXPECT_EQ((dev_A * dev_B).read(), A * B);
     EXPECT_EQ((dev_A * T(7)).read(), A * T(7));
     EXPECT_EQ((T(7) * dev_A).read(), T(7) * A);
+
     EXPECT_EQ(((dev_A + dev_B) * T(3)).read(), (A + B) * T(3));
     EXPECT_EQ((T(3) * (dev_A - dev_B)).read(), T(3) * (A - B));
-    EXPECT_EQ(((dev_A + dev_B) * (dev_A - dev_B)).read(), ((A + B) * (A - B)));
+    EXPECT_EQ(((dev_A + dev_B) * (dev_A - dev_B)).read(), (A + B) * (A - B));
+
+    EXPECT_EQ((dev_A * T(3) + dev_B).read(), A * T(3) + B);
+    EXPECT_EQ((dev_A + dev_B * T(3)).read(), A + B * T(3));
+    EXPECT_EQ((dev_A * T(3) + dev_B * T(7)).read(), A * T(3) + B * T(7));
+
+    EXPECT_EQ((dev_A * T(3) - dev_B).read(), A * T(3) - B);
+    EXPECT_EQ((dev_A - dev_B * T(3)).read(), A - B * T(3));
+    EXPECT_EQ((dev_A * T(3) - dev_B * T(7)).read(), A * T(3) - B * T(7));
 }
 
 TEST_F(GPGPUTest, DevTensorOperators) {
@@ -319,7 +328,7 @@ TEST_F(GPGPUTest, Xcopy) {
                 cblas::copy(N, A.data(), 1, B.data(), 1);
             },
             [&](auto N, auto& A, auto& B, auto) {
-                gblas::copy(N, A.buffer(), 0, 1, B.buffer(), 0, 1, queue);
+                gblas::copy(N, A.data(), 1, B.data(), 1, queue);
             });
 
         blas_level1_test<int32_t>(queue,
@@ -327,7 +336,7 @@ TEST_F(GPGPUTest, Xcopy) {
                 std::copy(A.begin(), A.end(), B.begin());
             },
             [&](auto N, auto& A, auto& B, auto) {
-                gblas::copy(N, A.buffer(), 0, 1, B.buffer(), 0, 1, queue);
+                gblas::copy(N, A.data(), 1, B.data(), 1, queue);
             });
 
         blas_level1_test<int64_t>(queue,
@@ -335,7 +344,7 @@ TEST_F(GPGPUTest, Xcopy) {
                 std::copy(A.begin(), A.end(), B.begin());
             },
             [&](auto N, auto& A, auto& B, auto) {
-                gblas::copy(N, A.buffer(), 0, 1, B.buffer(), 0, 1, queue);
+                gblas::copy(N, A.data(), 1, B.data(), 1, queue);
             });
     });
 }
@@ -348,7 +357,7 @@ TEST_F(GPGPUTest, Xswap) {
                 cblas::swap(N, A.data(), 1, B.data(), 1);
             },
             [&](auto N, auto& A, auto& B, auto) {
-                gblas::swap(N, A.buffer(), 0, 1, B.buffer(), 0, 1, queue);
+                gblas::swap(N, A.data(), 1, B.data(), 1, queue);
             });
 
         blas_level1_test<int32_t>(queue,
@@ -356,7 +365,7 @@ TEST_F(GPGPUTest, Xswap) {
                 std::swap(A, B);
             },
             [&](auto N, auto& A, auto& B, auto) {
-                gblas::swap(N, A.buffer(), 0, 1, B.buffer(), 0, 1, queue);
+                gblas::swap(N, A.data(), 1, B.data(), 1, queue);
             });
 
         blas_level1_test<int64_t>(queue,
@@ -364,7 +373,7 @@ TEST_F(GPGPUTest, Xswap) {
                 std::swap(A, B);
             },
             [&](auto N, auto& A, auto& B, auto) {
-                gblas::swap(N, A.buffer(), 0, 1, B.buffer(), 0, 1, queue);
+                gblas::swap(N, A.data(), 1, B.data(), 1, queue);
             });
     });
 }
@@ -377,7 +386,7 @@ TEST_F(GPGPUTest, Xscal) {
                 cblas::scal(N, alpha, A.data(), 1);
             },
             [&](auto N, auto& A, auto&, auto alpha) {
-                gblas::scal(N, alpha, A.buffer(), 0, 1, queue);
+                gblas::scal(N, alpha, A.data(), 1, queue);
             });
 
         blas_level1_test<int32_t>(queue,
@@ -385,7 +394,7 @@ TEST_F(GPGPUTest, Xscal) {
                 A *= alpha;
             },
             [&](auto N, auto& A, auto&, auto alpha) {
-                gblas::scal(N, alpha, A.buffer(), 0, 1, queue);
+                gblas::scal(N, alpha, A.data(), 1, queue);
             });
 
         blas_level1_test<int64_t>(queue,
@@ -393,7 +402,7 @@ TEST_F(GPGPUTest, Xscal) {
                 A *= alpha;
             },
             [&](auto N, auto& A, auto&, auto alpha) {
-                gblas::scal(N, alpha, A.buffer(), 0, 1, queue);
+                gblas::scal(N, alpha, A.data(), 1, queue);
             });
     });
 }
@@ -406,7 +415,7 @@ TEST_F(GPGPUTest, Xaxpy) {
                 cblas::axpy(N, alpha, A.data(), 1, B.data(), 1);
             },
             [&](auto N, auto& A, auto& B, auto alpha) {
-                gblas::axpy(N, alpha, A.buffer(), 0, 1, B.buffer(), 0, 1, queue);
+                gblas::axpy(N, alpha, A.data(), 1, B.data(), 1, queue);
             });
 
         blas_level1_test<int32_t>(queue,
@@ -414,7 +423,7 @@ TEST_F(GPGPUTest, Xaxpy) {
                 A.transformTo(B, B, [=](auto a, auto b) { return alpha*a+b; });
             },
             [&](auto N, auto& A, auto& B, auto alpha) {
-                gblas::axpy(N, alpha, A.buffer(), 0, 1, B.buffer(), 0, 1, queue);
+                gblas::axpy(N, alpha, A.data(), 1, B.data(), 1, queue);
             });
 
         blas_level1_test<int64_t>(queue,
@@ -422,7 +431,7 @@ TEST_F(GPGPUTest, Xaxpy) {
                 A.transformTo(B, B, [=](auto a, auto b) { return alpha*a+b; });
             },
             [&](auto N, auto& A, auto& B, auto alpha) {
-                gblas::axpy(N, alpha, A.buffer(), 0, 1, B.buffer(), 0, 1, queue);
+                gblas::axpy(N, alpha, A.data(), 1, B.data(), 1, queue);
             });
     });
 }
@@ -435,7 +444,7 @@ TEST_F(GPGPUTest, Xdot) {
                 return cblas::dot(N, A.data(), 1, B.data(), 1);
             },
             [&](auto N, auto& A, auto& B, auto& R) {
-                gblas::dot(N, A.buffer(), 0, 1, B.buffer(), 0, 1, R.buffer(), 0, queue);
+                gblas::dot(N, A.data(), 1, B.data(), 1, R.data(), queue);
             });
 
         blas_level1_r_test<int32_t>(queue,
@@ -445,7 +454,7 @@ TEST_F(GPGPUTest, Xdot) {
                 return C(0);
             },
             [&](auto N, auto& A, auto& B, auto& R) {
-                gblas::dot(N, A.buffer(), 0, 1, B.buffer(), 0, 1, R.buffer(), 0, queue);
+                gblas::dot(N, A.data(), 1, B.data(), 1, R.data(), queue);
             });
 
         blas_level1_r_test<int64_t>(queue,
@@ -455,7 +464,7 @@ TEST_F(GPGPUTest, Xdot) {
                 return C(0);
             },
             [&](auto N, auto& A, auto& B, auto& R) {
-                gblas::dot(N, A.buffer(), 0, 1, B.buffer(), 0, 1, R.buffer(), 0, queue);
+                gblas::dot(N, A.data(), 1, B.data(), 1, R.data(), queue);
             });
     });
 }
@@ -468,7 +477,7 @@ TEST_F(GPGPUTest, Xnrm2) {
                 return cblas::nrm2(N, A.data(), 1);
             },
             [&](auto N, auto& A, auto&, auto& R) {
-                gblas::nrm2(N, A.buffer(), 0, 1, R.buffer(), 0, queue);
+                gblas::nrm2(N, A.data(), 1, R.data(), queue);
             });
     });
 }
@@ -481,7 +490,7 @@ TEST_F(GPGPUTest, Xasum) {
                 return cblas::asum(N, A.data(), 1);
             },
             [&](auto N, auto& A, auto&, auto& R) {
-                gblas::asum(N, A.buffer(), 0, 1, R.buffer(), 0, queue);
+                gblas::asum(N, A.data(), 1, R.data(), queue);
             });
 
         blas_level1_r_test<int32_t>(queue,
@@ -492,7 +501,7 @@ TEST_F(GPGPUTest, Xasum) {
                 return r;
             },
             [&](auto N, auto& A, auto&, auto& R) {
-                gblas::asum(N, A.buffer(), 0, 1, R.buffer(), 0, queue);
+                gblas::asum(N, A.data(), 1, R.data(), queue);
             });
 
         blas_level1_r_test<int64_t>(queue,
@@ -503,7 +512,7 @@ TEST_F(GPGPUTest, Xasum) {
                 return r;
             },
             [&](auto N, auto& A, auto&, auto& R) {
-                gblas::asum(N, A.buffer(), 0, 1, R.buffer(), 0, queue);
+                gblas::asum(N, A.data(), 1, R.data(), queue);
             });
     });
 }

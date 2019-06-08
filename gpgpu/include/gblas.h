@@ -131,7 +131,15 @@ void rotg(Buffer<T>& sa_buffer, const size_t sa_offset,
           Buffer<T>& sb_buffer, const size_t sb_offset,
           Buffer<T>& sc_buffer, const size_t sc_offset,
           Buffer<T>& ss_buffer, const size_t ss_offset,
-          const Queue& queue, Event* event = nullptr);
+          const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
+
+template <typename T>
+inline void rotg(Buffer<T>& sa_buffer, Buffer<T>& sb_buffer,
+                 Buffer<T>& sc_buffer, Buffer<T>& ss_buffer,
+                 const Queue& queue = gpgpu::current::queue())
+{
+    rotg(sa_buffer, 0, sb_buffer, 0, sc_buffer, 0, ss_buffer, 0, queue);
+}
 
 // Generate modified givens plane rotation: SROTMG/DROTMG
 template <typename T>
@@ -140,16 +148,34 @@ void rotmg(Buffer<T>& sd1_buffer, const size_t sd1_offset,
            Buffer<T>& sx1_buffer, const size_t sx1_offset,
            const Buffer<T>& sy1_buffer, const size_t sy1_offset,
            Buffer<T>& sparam_buffer, const size_t sparam_offset,
-           const Queue& queue, Event* event = nullptr);
+           const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
+
+template <typename T>
+inline void rotmg(Buffer<T>& sd1_buffer, Buffer<T>& sd2_buffer,
+                  Buffer<T>& sx1_buffer, const Buffer<T>& sy1_buffer,
+                  Buffer<T>& sparam_buffer,
+                  const Queue& queue = gpgpu::current::queue(), Event* event = nullptr)
+{
+    rotmg(sd1_buffer, 0, sd2_buffer, 0, sx1_buffer, 0, sy1_buffer, 0, sparam_buffer, 0, queue, event);
+}
 
 // Apply givens plane rotation: SROT/DROT
 template <typename T>
 void rot(const size_t n,
          Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
          Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
-         const T cos,
-         const T sin,
-         const Queue& queue, Event* event = nullptr);
+         const T cos, const T sin,
+         const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
+
+template <typename T>
+inline void rot(const size_t n,
+                Buffer<T>& x_buffer, const size_t x_inc,
+                Buffer<T>& y_buffer, const size_t y_inc,
+                const T cos, const T sin,
+                const Queue& queue = gpgpu::current::queue(), Event* event = nullptr)
+{
+    rot(n, x_buffer, 0, x_inc, y_buffer, 0, y_inc, cos, sin, queue, event);
+}
 
 // Apply modified givens plane rotation: SROTM/DROTM
 template <typename T>
@@ -157,36 +183,80 @@ void rotm(const size_t n,
           Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
           Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
           Buffer<T>& sparam_buffer, const size_t sparam_offset,
-          const Queue& queue, Event* event = nullptr);
+          const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
+
+template <typename T>
+inline void rotm(const size_t n,
+                 Buffer<T>& x_buffer, const size_t x_inc,
+                 Buffer<T>& y_buffer, const size_t y_inc,
+                 Buffer<T>& sparam_buffer,
+                 const Queue& queue = gpgpu::current::queue(), Event* event = nullptr)
+{
+    rotm(n, x_buffer, 0, x_inc, y_buffer, 0, y_inc, sparam_buffer, 0, queue, event);
+}
 
 // Swap two vectors: SSWAP/DSWAP/CSWAP/ZSWAP/HSWAP
 template <typename T>
 void swap(const size_t n,
           Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
           Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
-          const Queue& queue, Event* event = nullptr);
+          const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
+
+template <typename T>
+inline void swap(const size_t n,
+                 Buffer<T>& x_buffer, const size_t x_inc,
+                 Buffer<T>& y_buffer, const size_t y_inc,
+                 const Queue& queue = gpgpu::current::queue(), Event* event = nullptr)
+{
+    swap(n, x_buffer, 0, x_inc, y_buffer, 0, y_inc, queue, event);
+}
 
 // Vector scaling: SSCAL/DSCAL/CSCAL/ZSCAL/HSCAL
 template <typename T>
 void scal(const size_t n,
           const T alpha,
           Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
-          const Queue& queue, Event* event = nullptr);
+          const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
+
+template <typename T>
+inline void scal(const size_t n, const T alpha,
+                 Buffer<T>& x_buffer, const size_t x_inc,
+                 const Queue& queue = gpgpu::current::queue(), Event* event = nullptr)
+{
+    scal(n, alpha, x_buffer, 0, x_inc, queue, event);
+}
 
 // Vector copy: SCOPY/DCOPY/CCOPY/ZCOPY/HCOPY
 template <typename T>
 void copy(const size_t n,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
           Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
-          const Queue& queue, Event* event = nullptr);
+          const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
+
+template <typename T>
+inline void copy(const size_t n,
+                 const Buffer<T>& x_buffer, const size_t x_inc,
+                 Buffer<T>& y_buffer, const size_t y_inc,
+                 const Queue& queue = gpgpu::current::queue(), Event* event = nullptr)
+{
+    copy(n, x_buffer, 0, x_inc, y_buffer, 0, y_inc, queue, event);
+}
 
 // Vector-times-constant plus vector: SAXPY/DAXPY/CAXPY/ZAXPY/HAXPY
 template <typename T>
-void axpy(const size_t n,
-          const T alpha,
+void axpy(const size_t n, const T alpha,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
           Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
-          const Queue& queue, Event* event = nullptr);
+          const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
+
+template <typename T>
+inline void axpy(const size_t n, const T alpha,
+                 const Buffer<T>& x_buffer, const size_t x_inc,
+                 Buffer<T>& y_buffer, const size_t y_inc,
+                 const Queue& queue = gpgpu::current::queue(), Event* event = nullptr)
+{
+    axpy(n, alpha, x_buffer, 0, x_inc, y_buffer, 0, y_inc, queue, event);
+}
 
 // Dot product of two vectors: SDOT/DDOT/HDOT
 template <typename T>
@@ -194,7 +264,17 @@ void dot(const size_t n,
          const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
          const Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
          Buffer<T>& dot_buffer, const size_t dot_offset,
-         const Queue& queue, Event* event = nullptr);
+         const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
+
+template <typename T>
+inline void dot(const size_t n,
+                const Buffer<T>& x_buffer, const size_t x_inc,
+                const Buffer<T>& y_buffer, const size_t y_inc,
+                Buffer<T>& dot_buffer,
+                const Queue& queue = gpgpu::current::queue(), Event* event = nullptr)
+{
+    dot(n, x_buffer, 0, x_inc, y_buffer, 0, y_inc, dot_buffer, 0, queue, event);
+}
 
 // Dot product of two complex vectors: CDOTU/ZDOTU
 template <typename T>
@@ -202,7 +282,17 @@ void dotu(const size_t n,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
           const Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
           Buffer<T>& dot_buffer, const size_t dot_offset,
-          const Queue& queue, Event* event = nullptr);
+          const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
+
+template <typename T>
+inline void dotu(const size_t n,
+                 const Buffer<T>& x_buffer, const size_t x_inc,
+                 const Buffer<T>& y_buffer, const size_t y_inc,
+                 Buffer<T>& dot_buffer,
+                 const Queue& queue = gpgpu::current::queue(), Event* event = nullptr)
+{
+    dotu(n, x_buffer, 0, x_inc, y_buffer, 0, y_inc, dot_buffer, 0, queue, event);
+}
 
 // Dot product of two complex vectors, one conjugated: CDOTC/ZDOTC
 template <typename T>
@@ -210,56 +300,129 @@ void dotc(const size_t n,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
           const Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
           Buffer<T>& dot_buffer, const size_t dot_offset,
-          const Queue& queue, Event* event = nullptr);
+          const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
+
+template <typename T>
+inline void dotc(const size_t n,
+                 const Buffer<T>& x_buffer, const size_t x_inc,
+                 const Buffer<T>& y_buffer, const size_t y_inc,
+                 Buffer<T>& dot_buffer,
+                 const Queue& queue = gpgpu::current::queue(), Event* event = nullptr)
+{
+    dotc(n, x_buffer, 0, x_inc, y_buffer, 0, y_inc, dot_buffer, 0, queue, event);
+}
 
 // Euclidian norm of a vector: SNRM2/DNRM2/ScNRM2/DzNRM2/HNRM2
 template <typename T>
 void nrm2(const size_t n,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
           Buffer<T>& nrm2_buffer, const size_t nrm2_offset,
-          const Queue& queue, Event* event = nullptr);
+          const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
+
+template <typename T>
+inline void nrm2(const size_t n,
+                 const Buffer<T>& x_buffer, const size_t x_inc,
+                 Buffer<T>& nrm2_buffer,
+                 const Queue& queue = gpgpu::current::queue(), Event* event = nullptr)
+{
+    nrm2(n, x_buffer, 0, x_inc, nrm2_buffer, 0, queue, event);
+}
 
 // Absolute sum of values in a vector: SASUM/DASUM/ScASUM/DzASUM/HASUM
 template <typename T>
 void asum(const size_t n,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
           Buffer<T>& asum_buffer, const size_t asum_offset,
-          const Queue& queue, Event* event = nullptr);
+          const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
+
+template <typename T>
+inline void asum(const size_t n,
+                 const Buffer<T>& x_buffer, const size_t x_inc,
+                 Buffer<T>& asum_buffer,
+                 const Queue& queue = gpgpu::current::queue(), Event* event = nullptr)
+{
+    asum(n, x_buffer, 0, x_inc, asum_buffer, 0, queue, event);
+}
 
 // Sum of values in a vector (non-BLAS function): SSUM/DSUM/ScSUM/DzSUM/HSUM
 template <typename T>
 void sum(const size_t n,
          const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
          Buffer<T>& sum_buffer, const size_t sum_offset,
-         const Queue& queue, Event* event = nullptr);
+         const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
+
+template <typename T>
+inline void sum(const size_t n,
+                const Buffer<T>& x_buffer, const size_t x_inc,
+                Buffer<T>& sum_buffer,
+                const Queue& queue = gpgpu::current::queue(), Event* event = nullptr)
+{
+    sum(n, x_buffer, 0, x_inc, sum_buffer, 0, queue, event);
+}
 
 // Index of absolute maximum value in a vector: iSAMAX/iDAMAX/iCAMAX/iZAMAX/iHAMAX
 template <typename T>
 void amax(const size_t n,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
           Buffer<unsigned int>& imax_buffer, const size_t imax_offset,
-          const Queue& queue, Event* event = nullptr);
+          const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
+
+template <typename T>
+inline void amax(const size_t n,
+                 const Buffer<T>& x_buffer, const size_t x_inc,
+                 Buffer<unsigned int>& imax_buffer,
+                 const Queue& queue = gpgpu::current::queue(), Event* event = nullptr)
+{
+    amax(n, x_buffer, 0, x_inc, imax_buffer, 0, queue, event);
+}
 
 // Index of absolute minimum value in a vector (non-BLAS function): iSAMIN/iDAMIN/iCAMIN/iZAMIN/iHAMIN
 template <typename T>
 void amin(const size_t n,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
           Buffer<unsigned int>& imin_buffer, const size_t imin_offset,
-          const Queue& queue, Event* event = nullptr);
+          const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
+
+template <typename T>
+inline void amin(const size_t n,
+                 const Buffer<T>& x_buffer, const size_t x_inc,
+                 Buffer<unsigned int>& imin_buffer,
+                 const Queue& queue = gpgpu::current::queue(), Event* event = nullptr)
+{
+    amin(n, x_buffer, 0, x_inc, imin_buffer, 0, queue, event);
+}
 
 // Index of maximum value in a vector (non-BLAS function): iSMAX/iDMAX/iCMAX/iZMAX/iHMAX
 template <typename T>
 void max(const size_t n,
          const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
          Buffer<unsigned int>& imax_buffer, const size_t imax_offset,
-         const Queue& queue, Event* event = nullptr);
+         const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
+
+template <typename T>
+inline void max(const size_t n,
+                const Buffer<T>& x_buffer, const size_t x_inc,
+                Buffer<unsigned int>& imax_buffer,
+                const Queue& queue = gpgpu::current::queue(), Event* event = nullptr)
+{
+    max(n, x_buffer, 0, x_inc, imax_buffer, 0, queue, event);
+}
 
 // Index of minimum value in a vector (non-BLAS function): iSMIN/iDMIN/iCMIN/iZMIN/iHMIN
 template <typename T>
 void min(const size_t n,
          const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
          Buffer<unsigned int>& imin_buffer, const size_t imin_offset,
-         const Queue& queue, Event* event = nullptr);
+         const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
+
+template <typename T>
+inline void min(const size_t n,
+                const Buffer<T>& x_buffer, const size_t x_inc,
+                Buffer<unsigned int>& imin_buffer,
+                const Queue& queue = gpgpu::current::queue(), Event* event = nullptr)
+{
+    min(n, x_buffer, 0, x_inc, imin_buffer, 0, queue, event);
+}
 
 // =================================================================================================
 // BLAS level-2 (matrix-vector) routines
@@ -274,7 +437,20 @@ void gemv(const Layout layout, const Transpose a_transpose,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
           const T beta,
           Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
-          const Queue& queue, Event* event = nullptr);
+          const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
+
+template <typename T>
+inline void gemv(const Layout layout, const Transpose a_transpose,
+                 const size_t m, const size_t n,
+                 const T alpha,
+                 const Buffer<T>& a_buffer, const size_t a_ld,
+                 const Buffer<T>& x_buffer, const size_t x_inc,
+                 const T beta,
+                 Buffer<T>& y_buffer, const size_t y_inc,
+                 const Queue& queue = gpgpu::current::queue(), Event* event = nullptr)
+{
+    gemv(layout, a_transpose, m, n, alpha, a_buffer, 0, a_ld, x_buffer, 0, x_inc, beta, y_buffer, 0, y_inc, queue, event);
+}
 
 // General banded matrix-vector multiplication: SGBMV/DGBMV/CGBMV/ZGBMV/HGBMV
 template <typename T>
@@ -285,7 +461,7 @@ void gbmv(const Layout layout, const Transpose a_transpose,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
           const T beta,
           Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
-          const Queue& queue, Event* event = nullptr);
+          const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 // Hermitian matrix-vector multiplication: CHEMV/ZHEMV
 template <typename T>
@@ -296,7 +472,7 @@ void hemv(const Layout layout, const Triangle triangle,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
           const T beta,
           Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
-          const Queue& queue, Event* event = nullptr);
+          const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 // Hermitian banded matrix-vector multiplication: CHBMV/ZHBMV
 template <typename T>
@@ -307,7 +483,7 @@ void hbmv(const Layout layout, const Triangle triangle,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
           const T beta,
           Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
-          const Queue& queue, Event* event = nullptr);
+          const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 // Hermitian packed matrix-vector multiplication: CHPMV/ZHPMV
 template <typename T>
@@ -318,7 +494,7 @@ void hpmv(const Layout layout, const Triangle triangle,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
           const T beta,
           Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
-          const Queue& queue, Event* event = nullptr);
+          const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 // Symmetric matrix-vector multiplication: SSYMV/DSYMV/HSYMV
 template <typename T>
@@ -329,7 +505,7 @@ void symv(const Layout layout, const Triangle triangle,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
           const T beta,
           Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
-          const Queue& queue, Event* event = nullptr);
+          const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 // Symmetric banded matrix-vector multiplication: SSBMV/DSBMV/HSBMV
 template <typename T>
@@ -340,7 +516,7 @@ void sbmv(const Layout layout, const Triangle triangle,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
           const T beta,
           Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
-          const Queue& queue, Event* event = nullptr);
+          const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 // Symmetric packed matrix-vector multiplication: SSPMV/DSPMV/HSPMV
 template <typename T>
@@ -351,7 +527,7 @@ void spmv(const Layout layout, const Triangle triangle,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
           const T beta,
           Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
-          const Queue& queue, Event* event = nullptr);
+          const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 // Triangular matrix-vector multiplication: STRMV/DTRMV/CTRMV/ZTRMV/HTRMV
 template <typename T>
@@ -359,7 +535,7 @@ void trmv(const Layout layout, const Triangle triangle, const Transpose a_transp
           const size_t n,
           const Buffer<T>& a_buffer, const size_t a_offset, const size_t a_ld,
           Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
-          const Queue& queue, Event* event = nullptr);
+          const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 // Triangular banded matrix-vector multiplication: STBMV/DTBMV/CTBMV/ZTBMV/HTBMV
 template <typename T>
@@ -367,7 +543,7 @@ void tbmv(const Layout layout, const Triangle triangle, const Transpose a_transp
           const size_t n, const size_t k,
           const Buffer<T>& a_buffer, const size_t a_offset, const size_t a_ld,
           Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
-          const Queue& queue, Event* event = nullptr);
+          const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 // Triangular packed matrix-vector multiplication: STPMV/DTPMV/CTPMV/ZTPMV/HTPMV
 template <typename T>
@@ -375,7 +551,7 @@ void tpmv(const Layout layout, const Triangle triangle, const Transpose a_transp
           const size_t n,
           const Buffer<T>& ap_buffer, const size_t ap_offset,
           Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
-          const Queue& queue, Event* event = nullptr);
+          const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 // Solves a triangular system of equations: STRSV/DTRSV/CTRSV/ZTRSV
 template <typename T>
@@ -383,7 +559,7 @@ void trsv(const Layout layout, const Triangle triangle, const Transpose a_transp
           const size_t n,
           const Buffer<T>& a_buffer, const size_t a_offset, const size_t a_ld,
           Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
-          const Queue& queue, Event* event = nullptr);
+          const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 // Solves a banded triangular system of equations: STBSV/DTBSV/CTBSV/ZTBSV
 template <typename T>
@@ -391,7 +567,7 @@ void tbsv(const Layout layout, const Triangle triangle, const Transpose a_transp
           const size_t n, const size_t k,
           const Buffer<T>& a_buffer, const size_t a_offset, const size_t a_ld,
           Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
-          const Queue& queue, Event* event = nullptr);
+          const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 // Solves a packed triangular system of equations: STPSV/DTPSV/CTPSV/ZTPSV
 template <typename T>
@@ -399,7 +575,7 @@ void tpsv(const Layout layout, const Triangle triangle, const Transpose a_transp
           const size_t n,
           const Buffer<T>& ap_buffer, const size_t ap_offset,
           Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
-          const Queue& queue, Event* event = nullptr);
+          const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 // General rank-1 matrix update: SGER/DGER/HGER
 template <typename T>
@@ -409,7 +585,7 @@ void ger(const Layout layout,
          const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
          const Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
          Buffer<T>& a_buffer, const size_t a_offset, const size_t a_ld,
-         const Queue& queue, Event* event = nullptr);
+         const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 // General rank-1 complex matrix update: CGERU/ZGERU
 template <typename T>
@@ -419,7 +595,7 @@ void geru(const Layout layout,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
           const Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
           Buffer<T>& a_buffer, const size_t a_offset, const size_t a_ld,
-          const Queue& queue, Event* event = nullptr);
+          const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 // General rank-1 complex conjugated matrix update: CGERC/ZGERC
 template <typename T>
@@ -429,7 +605,7 @@ void gerc(const Layout layout,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
           const Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
           Buffer<T>& a_buffer, const size_t a_offset, const size_t a_ld,
-          const Queue& queue, Event* event = nullptr);
+          const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 // Hermitian rank-1 matrix update: CHER/ZHER
 template <typename T>
@@ -438,7 +614,7 @@ void her(const Layout layout, const Triangle triangle,
          const T alpha,
          const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
          Buffer<T>& a_buffer, const size_t a_offset, const size_t a_ld,
-         const Queue& queue, Event* event = nullptr);
+         const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 // Hermitian packed rank-1 matrix update: CHPR/ZHPR
 template <typename T>
@@ -447,7 +623,7 @@ void hpr(const Layout layout, const Triangle triangle,
          const T alpha,
          const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
          Buffer<T>& ap_buffer, const size_t ap_offset,
-         const Queue& queue, Event* event = nullptr);
+         const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 // Hermitian rank-2 matrix update: CHER2/ZHER2
 template <typename T>
@@ -457,7 +633,7 @@ void her2(const Layout layout, const Triangle triangle,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
           const Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
           Buffer<T>& a_buffer, const size_t a_offset, const size_t a_ld,
-          const Queue& queue, Event* event = nullptr);
+          const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 // Hermitian packed rank-2 matrix update: CHPR2/ZHPR2
 template <typename T>
@@ -467,7 +643,7 @@ void hpr2(const Layout layout, const Triangle triangle,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
           const Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
           Buffer<T>& ap_buffer, const size_t ap_offset,
-          const Queue& queue, Event* event = nullptr);
+          const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 // Symmetric rank-1 matrix update: SSYR/DSYR/HSYR
 template <typename T>
@@ -476,7 +652,7 @@ void syr(const Layout layout, const Triangle triangle,
          const T alpha,
          const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
          Buffer<T>& a_buffer, const size_t a_offset, const size_t a_ld,
-         const Queue& queue, Event* event = nullptr);
+         const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 // Symmetric packed rank-1 matrix update: SSPR/DSPR/HSPR
 template <typename T>
@@ -485,7 +661,7 @@ void spr(const Layout layout, const Triangle triangle,
          const T alpha,
          const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
          Buffer<T>& ap_buffer, const size_t ap_offset,
-         const Queue& queue, Event* event = nullptr);
+         const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 // Symmetric rank-2 matrix update: SSYR2/DSYR2/HSYR2
 template <typename T>
@@ -495,7 +671,7 @@ void syr2(const Layout layout, const Triangle triangle,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
           const Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
           Buffer<T>& a_buffer, const size_t a_offset, const size_t a_ld,
-          const Queue& queue, Event* event = nullptr);
+          const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 // Symmetric packed rank-2 matrix update: SSPR2/DSPR2/HSPR2
 template <typename T>
@@ -505,7 +681,7 @@ void spr2(const Layout layout, const Triangle triangle,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
           const Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
           Buffer<T>& ap_buffer, const size_t ap_offset,
-          const Queue& queue, Event* event = nullptr);
+          const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 // =================================================================================================
 // BLAS level-3 (matrix-matrix) routines
@@ -520,8 +696,24 @@ void gemm(const Layout layout, const Transpose a_transpose, const Transpose b_tr
           const Buffer<T>& b_buffer, const size_t b_offset, const size_t b_ld,
           const T beta,
           Buffer<T>& c_buffer, const size_t c_offset, const size_t c_ld,
-          const Queue& queue, Event* event = nullptr,
+          const Queue& queue = gpgpu::current::queue(), Event* event = nullptr,
           Buffer<T>* temp_buffer = nullptr);
+
+template <typename T>
+inline void gemm(const Layout layout, const Transpose a_transpose, const Transpose b_transpose,
+                 const size_t m, const size_t n, const size_t k,
+                 const T alpha,
+                 const Buffer<T>& a_buffer, const size_t a_ld,
+                 const Buffer<T>& b_buffer, const size_t b_ld,
+                 const T beta,
+                 Buffer<T>& c_buffer, const size_t c_ld,
+                 const Queue& queue = gpgpu::current::queue(), Event* event = nullptr,
+                 Buffer<T>* temp_buffer = nullptr)
+{
+    gemm(layout, a_transpose, b_transpose, m, n, k, alpha,
+         a_buffer, 0, a_ld, b_buffer, 0, b_ld, beta,
+         c_buffer, 0, c_ld, queue, event, temp_buffer);
+}
 
 // Symmetric matrix-matrix multiplication: SSYMM/DSYMM/CSYMM/ZSYMM/HSYMM
 template <typename T>
@@ -532,7 +724,7 @@ void symm(const Layout layout, const Side side, const Triangle triangle,
           const Buffer<T>& b_buffer, const size_t b_offset, const size_t b_ld,
           const T beta,
           Buffer<T>& c_buffer, const size_t c_offset, const size_t c_ld,
-          const Queue& queue, Event* event = nullptr);
+          const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 // Hermitian matrix-matrix multiplication: CHEMM/ZHEMM
 template <typename T>
@@ -543,7 +735,7 @@ void hemm(const Layout layout, const Side side, const Triangle triangle,
           const Buffer<T>& b_buffer, const size_t b_offset, const size_t b_ld,
           const T beta,
           Buffer<T>& c_buffer, const size_t c_offset, const size_t c_ld,
-          const Queue& queue, Event* event = nullptr);
+          const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 // Rank-K update of a symmetric matrix: SSYRK/DSYRK/CSYRK/ZSYRK/HSYRK
 template <typename T>
@@ -553,7 +745,7 @@ void syrk(const Layout layout, const Triangle triangle, const Transpose a_transp
           const Buffer<T>& a_buffer, const size_t a_offset, const size_t a_ld,
           const T beta,
           Buffer<T>& c_buffer, const size_t c_offset, const size_t c_ld,
-          const Queue& queue, Event* event = nullptr);
+          const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 // Rank-K update of a hermitian matrix: CHERK/ZHERK
 template <typename T>
@@ -563,7 +755,7 @@ void herk(const Layout layout, const Triangle triangle, const Transpose a_transp
           const Buffer<T>& a_buffer, const size_t a_offset, const size_t a_ld,
           const T beta,
           Buffer<T>& c_buffer, const size_t c_offset, const size_t c_ld,
-          const Queue& queue, Event* event = nullptr);
+          const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 // Rank-2K update of a symmetric matrix: SSYR2K/DSYR2K/CSYR2K/ZSYR2K/HSYR2K
 template <typename T>
@@ -574,7 +766,7 @@ void syr2k(const Layout layout, const Triangle triangle, const Transpose ab_tran
            const Buffer<T>& b_buffer, const size_t b_offset, const size_t b_ld,
            const T beta,
            Buffer<T>& c_buffer, const size_t c_offset, const size_t c_ld,
-           const Queue& queue, Event* event = nullptr);
+           const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 // Rank-2K update of a hermitian matrix: CHER2K/ZHER2K
 template <typename T, typename U>
@@ -585,7 +777,7 @@ void her2k(const Layout layout, const Triangle triangle, const Transpose ab_tran
            const Buffer<T>& b_buffer, const size_t b_offset, const size_t b_ld,
            const U beta,
            Buffer<T>& c_buffer, const size_t c_offset, const size_t c_ld,
-           const Queue& queue, Event* event = nullptr);
+           const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 // Triangular matrix-matrix multiplication: STRMM/DTRMM/CTRMM/ZTRMM/HTRMM
 template <typename T>
@@ -594,7 +786,7 @@ void trmm(const Layout layout, const Side side, const Triangle triangle, const T
           const T alpha,
           const Buffer<T>& a_buffer, const size_t a_offset, const size_t a_ld,
           Buffer<T>& b_buffer, const size_t b_offset, const size_t b_ld,
-          const Queue& queue, Event* event = nullptr);
+          const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 // Solves a triangular system of equations: STRSM/DTRSM/CTRSM/ZTRSM
 template <typename T>
@@ -603,7 +795,7 @@ void trsm(const Layout layout, const Side side, const Triangle triangle, const T
           const T alpha,
           const Buffer<T>& a_buffer, const size_t a_offset, const size_t a_ld,
           Buffer<T>& b_buffer, const size_t b_offset, const size_t b_ld,
-          const Queue& queue, Event* event = nullptr);
+          const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 // =================================================================================================
 // Extra non-BLAS routines (level-X)
@@ -617,7 +809,19 @@ void had(const size_t n,
          const Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
          const T beta,
          Buffer<T>& z_buffer, const size_t z_offset, const size_t z_inc,
-         const Queue& queue, Event* event = nullptr);
+         const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
+
+template <typename T>
+inline void had(const size_t n,
+                const T alpha,
+                const Buffer<T>& x_buffer, const size_t x_inc,
+                const Buffer<T>& y_buffer, const size_t y_inc,
+                const T beta,
+                Buffer<T>& z_buffer, const size_t z_inc,
+                const Queue& queue = gpgpu::current::queue(), Event* event = nullptr)
+{
+    had(n, alpha, x_buffer, 0, x_inc, y_buffer, 0, y_inc, beta, z_buffer, 0, z_inc, queue, event);
+}
 
 // Scaling and out-place transpose/copy (non-BLAS function): SOMATCOPY/DOMATCOPY/COMATCOPY/ZOMATCOPY/HOMATCOPY
 template <typename T>
@@ -626,7 +830,18 @@ void omatcopy(const Layout layout, const Transpose a_transpose,
               const T alpha,
               const Buffer<T>& a_buffer, const size_t a_offset, const size_t a_ld,
               Buffer<T>& b_buffer, const size_t b_offset, const size_t b_ld,
-              const Queue& queue, Event* event = nullptr);
+              const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
+
+template <typename T>
+inline void omatcopy(const Layout layout, const Transpose a_transpose,
+                     const size_t m, const size_t n,
+                     const T alpha,
+                     const Buffer<T>& a_buffer, const size_t a_ld,
+                     Buffer<T>& b_buffer, const size_t b_ld,
+                     const Queue& queue = gpgpu::current::queue(), Event* event = nullptr)
+{
+    omatcopy(layout, a_transpose, m, n, alpha, a_buffer, 0, a_ld, b_buffer, 0, b_ld, queue, event);
+}
 
 // Im2col function (non-BLAS function): SIM2COL/DIM2COL/CIM2COL/ZIM2COL/HIM2COL
 template <typename T>
@@ -638,7 +853,7 @@ void im2col(const KernelMode kernel_mode,
             const size_t dilation_h, const size_t dilation_w,
             const Buffer<T>& im_buffer, const size_t im_offset,
             Buffer<T>& col_buffer, const size_t col_offset,
-            const Queue& queue, Event* event = nullptr);
+            const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 // Col2im function (non-BLAS function): SCOL2IM/DCOL2IM/CCOL2IM/ZCOL2IM/HCOL2IM
 template <typename T>
@@ -650,7 +865,7 @@ void col2im(const KernelMode kernel_mode,
             const size_t dilation_h, const size_t dilation_w,
             const Buffer<T>& col_buffer, const size_t col_offset,
             Buffer<T>& im_buffer, const size_t im_offset,
-            const Queue& queue, Event* event = nullptr);
+            const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 // Batched convolution as GEMM (non-BLAS function): SCONVGEMM/DCONVGEMM/HCONVGEMM
 template <typename T>
@@ -664,7 +879,7 @@ void convgemm(const KernelMode kernel_mode,
               const Buffer<T>& im_buffer, const size_t im_offset,
               const Buffer<T>& kernel_buffer, const size_t kernel_offset,
               Buffer<T>& result_buffer, const size_t result_offset,
-              const Queue& queue, Event* event = nullptr);
+              const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 // Batched version of AXPY: SAXPYBATCHED/DAXPYBATCHED/CAXPYBATCHED/ZAXPYBATCHED/HAXPYBATCHED
 template <typename T>
@@ -673,7 +888,7 @@ void axpyBatched(const size_t n,
                  const Buffer<T>& x_buffer, const size_t *x_offsets, const size_t x_inc,
                  Buffer<T>& y_buffer, const size_t *y_offsets, const size_t y_inc,
                  const size_t batch_count,
-                 const Queue& queue, Event* event = nullptr);
+                 const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 // Batched version of GEMM: SGEMMBATCHED/DGEMMBATCHED/CGEMMBATCHED/ZGEMMBATCHED/HGEMMBATCHED
 template <typename T>
@@ -685,7 +900,7 @@ void gemmBatched(const Layout layout, const Transpose a_transpose, const Transpo
                  const T *betas,
                  Buffer<T>& c_buffer, const size_t *c_offsets, const size_t c_ld,
                  const size_t batch_count,
-                 const Queue& queue, Event* event = nullptr);
+                 const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 // StridedBatched version of GEMM: SGEMMSTRIDEDBATCHED/DGEMMSTRIDEDBATCHED/CGEMMSTRIDEDBATCHED/ZGEMMSTRIDEDBATCHED/HGEMMSTRIDEDBATCHED
 template <typename T>
@@ -697,7 +912,7 @@ void gemmStridedBatched(const Layout layout, const Transpose a_transpose, const 
                         const T beta,
                         Buffer<T>& c_buffer, const size_t c_offset, const size_t c_ld, const size_t c_stride,
                         const size_t batch_count,
-                        const Queue& queue, Event* event = nullptr);
+                        const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 // =================================================================================================
 
@@ -708,7 +923,7 @@ size_t gemmTempBufferSize(const Layout layout, const Transpose a_transpose, cons
                           const size_t a_offset, const size_t a_ld,
                           const size_t b_offset, const size_t b_ld,
                           const size_t c_offset, const size_t c_ld,
-                          const Queue& queue);
+                          const Queue& queue = gpgpu::current::queue());
 
 // =================================================================================================
 

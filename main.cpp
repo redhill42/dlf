@@ -4,8 +4,12 @@
 #include <cstdio>
 #include <iostream>
 #include <cinttypes>
+
 #include "gpgpu.h"
 #include "gblas.h"
+#include "tensor.h"
+
+using namespace dlf;
 
 static void show_info() {
     const auto platform = gpgpu::probe();
@@ -34,125 +38,107 @@ static void show_info() {
     }
 }
 
-template <typename T, size_t N>
-static void print_matrix(const char* title, std::array<T, N> A) {
-    std::cout << title;
-    for (auto x : A)
-        std::cout << x << " ";
-    std::cout << std::endl;
+template <typename T>
+inline void print_matrix(const char* title, Tensor<T> A) {
+    std::cout << title << A << std::endl;
 }
 
+template <typename T = int>
 static void gemm_test() {
     constexpr size_t M = 3, K = 6, N = 4;
 
-    auto A = std::array<float, M*K> {
+    auto A = Tensor<T>({M, K}, {
         5, 10, 9, 1, 10, 3,
         7,  6, 6, 6,  1, 1,
         6,  2, 6, 10, 9, 3
-    };
+    });
 
-    auto A_t = std::array<float, M*K> {
+    auto A_t = Tensor<T>({K, M}, {
         5, 7, 6,
         10, 6, 2,
         9, 6, 6,
         1, 6, 10,
         10, 1, 9,
         3, 1, 3
-    };
+    });
 
-    auto B = std::array<float, K*N> {
+    auto B = Tensor<T>({K, N}, {
         7,  1, 8,  7,
         9,  5, 2,  6,
         7,  8, 5,  7,
         6,  9, 1,  1,
         4, 10, 1, 10,
         3,  8, 8,  5
-    };
+    });
 
-    auto B_t = std::array<float, K*N> {
+    auto B_t = Tensor<T>({N, K}, {
         7, 9, 7, 6, 4, 3,
         1, 5, 8, 9, 10, 8,
         8, 2, 5, 1, 1, 8,
         7, 6, 7, 1, 10, 5
-    };
+    });
 
-    auto C = std::array<float, M*N> {
+    auto C = Tensor<T>({M, N}, {
         230, 254, 116, 199,
         219, 236, 201, 252,
         173, 148, 155, 167
-    };
+    });
 
-    auto R = std::array<float, M*N> {
+    auto R = Tensor<T>({M, N}, {
         1176, 1282, 628, 1145,
         1033, 1022, 829, 1052,
         933,  980, 715,  923
-    };
+    });
 
-    auto T = std::array<float, M*N> {};
+    auto dev_A = DevTensor<T>(A);
+    auto dev_A_t = DevTensor<T>(A_t);
+    auto dev_B = DevTensor<T>(B);
+    auto dev_B_t = DevTensor<T>(B_t);
+    auto dev_C = DevTensor<T>(C);
 
-    auto context = gpgpu::current::context();
-    auto queue = gpgpu::current::queue();
-
-    auto dev_A = context.createBuffer<float>(A.size());
-    auto dev_A_t = context.createBuffer<float>(A_t.size());
-    auto dev_B = context.createBuffer<float>(B.size());
-    auto dev_B_t = context.createBuffer<float>(B_t.size());
-    auto dev_C = context.createBuffer<float>(C.size());
-
-    dev_A.write(queue, A.data(), A.size());
-    dev_A_t.write(queue, A_t.data(), A_t.size());
-    dev_B.write(queue, B.data(), B.size());
-    dev_B_t.write(queue, B_t.data(), B_t.size());
+    auto alpha = T(2), beta = T(3);
 
     std::cout << "\nGEMM Test:\n";
 
-    dev_C.write(queue, C.data(), C.size());
+    dev_C.write(C);
     gblas::gemm(gblas::Layout::RowMajor,
                 gblas::Transpose::NoTrans,
                 gblas::Transpose::NoTrans,
                 M, N, K,
-                2.0f, dev_A, 0, K,
-                dev_B, 0, N,
-                3.0f, dev_C, 0, N,
-                queue);
-    dev_C.read(queue, T.data(), T.size());
-    print_matrix("A . B:      ", T);
+                alpha, dev_A.data(), dev_A.stride(0),
+                dev_B.data(), dev_B.stride(0),
+                beta, dev_C.data(), dev_C.stride(0));
+    print_matrix("A . B:      ", dev_C.read());
 
-    dev_C.write(queue, C.data(), C.size());
+    dev_C.write(C);
     gblas::gemm(gblas::Layout::RowMajor,
                 gblas::Transpose::Trans,
                 gblas::Transpose::NoTrans,
                 M, N, K,
-                2.0f, dev_A_t, 0, M,
-                dev_B, 0, N,
-                3.0f, dev_C, 0, N,
-                queue);
-    dev_C.read(queue, T.data(), T.size());
-    print_matrix("T(A) . B:   ", T);
+                alpha, dev_A_t.data(), dev_A_t.stride(0),
+                dev_B.data(), dev_B.stride(0),
+                beta, dev_C.data(), dev_C.stride(0));
+    print_matrix("T(A) . B:   ", dev_C.read());
 
-    dev_C.write(queue, C.data(), C.size());
+    dev_C.write(C);
     gblas::gemm(gblas::Layout::RowMajor,
                 gblas::Transpose::NoTrans,
                 gblas::Transpose::Trans,
                 M, N, K,
-                2.0f, dev_A, 0, K,
-                dev_B_t, 0, K,
-                3.0f, dev_C, 0, N,
-                queue);
-    dev_C.read(queue, T.data(), T.size());
-    print_matrix("A . T(B):   ", T);
+                alpha, dev_A.data(), dev_A.stride(0),
+                dev_B_t.data(), dev_B_t.stride(0),
+                beta, dev_C.data(), dev_C.stride(0));
+    print_matrix("A . T(B):   ", dev_C.read());
 
-    dev_C.write(queue, C.data(), C.size());
+    dev_C.write(C);
     gblas::gemm(gblas::Layout::RowMajor,
                 gblas::Transpose::Trans,
                 gblas::Transpose::Trans,
                 M, N, K,
-                2.0f, dev_A_t, 0, M,
-                dev_B_t, 0, K,
-                3.0f, dev_C, 0, N,
-                queue);
-    dev_C.read(queue, T.data(), T.size());
-    print_matrix("T(A) . T(B):", T);
+                alpha, dev_A_t.data(), dev_A_t.stride(0),
+                dev_B_t.data(), dev_B_t.stride(0),
+                beta, dev_C.data(), dev_C.stride(0));
+    print_matrix("T(A) . T(B):", dev_C.read());
 
     print_matrix("Expected:   ", R);
 }
