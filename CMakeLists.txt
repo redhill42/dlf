@@ -1,7 +1,11 @@
 cmake_minimum_required(VERSION 3.1)
 
 project(DLF C CXX)
-set(CMAKE_CXX_STANDARD 14)
+if("$ENV{CUDA_VERSION}" STREQUAL "8.0")
+  set(CMAKE_CXX_STANDARD 14)
+else()
+  set(CMAKE_CXX_STANDARD 17)
+endif()
 
 # place binaries and libraries according to GNU standards
 include(GNUInstallDirs)

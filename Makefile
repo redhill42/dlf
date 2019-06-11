@@ -4,13 +4,13 @@
 DOCKER_OSARCH := $(shell bash -c 'source build/detect-daemon-osarch && echo $${DOCKER_ENGINE_OSARCH:-$$DOCKER_CLIENT_OSARCH}')
 DOCKERFILE := $(shell bash -c 'source build/detect-daemon-osarch && echo $${DOCKERFILE}')
 
-# env vars passed through directly to Docker's build scripts
-# to allow things link `make KEEPBUNDLE=1 binary` easily
-DOCKER_ENVS := \
-    -e SKIP_TESTS
-
 CUDA_VERSION := $(if $(CUDA_VERSION),$(CUDA_VERSION),10.1)
 DOCKER_BUILD_ARGS += --build-arg CUDA_VERSION="$(CUDA_VERSION)"
+
+# env vars passed through directly to Docker's build scripts
+DOCKER_ENVS := \
+    -e SKIP_TESTS \
+    -e CUDA_VERSION="$(CUDA_VERSION)"
 
 # to allow `make BIND_DIR=. shell` or `make BIND_DIR= test`
 # (default to no bind mount if DOCKER_HOST is set)
