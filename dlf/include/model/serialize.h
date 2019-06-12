@@ -1,61 +1,36 @@
 #pragma once
 
+#include <stdexcept>
 #include "model.h"
-#include "onnx.pb.h"
 
 namespace dlf { namespace model {
 
-class Serializer {
-public:
-    template <typename Derived>
-    void load(const onnx::NodeProto& proto, Attributes<Derived>& attr);
+class ConvertError : public std::runtime_error {
+    std::string expanded_message;
 
-    void load(const onnx::TensorProto& proto, TensorData& tensor);
+public:
+    using std::runtime_error::runtime_error;
+
+    ConvertError(const std::string& message) : std::runtime_error(message) {}
+
+    const char* what() const noexcept override {
+        if (!expanded_message.empty())
+            return expanded_message.c_str();
+        return std::runtime_error::what();
+    }
+
+    void appendContext(const std::string& context) {
+        expanded_message = cxx::concat(
+            std::runtime_error::what(), "\n\n==> Context: ", context);
+    }
 };
 
-template <typename Derived>
-void Serializer::load(const onnx::NodeProto& proto, Attributes<Derived>& attr) {
-    auto size = proto.attribute_size();
-    for (int i = 0; i < size; i++) {
-        auto ap = proto.attribute(i);
-        auto name = Symbol(ap.name());
+#define fail_convert(...) throw ConvertError(cxx::concat(__VA_ARGS__))
 
-        switch (ap.type()) {
-        case onnx::AttributeProto::FLOAT:
-            attr.set_f(name, ap.f());
-            break;
+enum class ModelFormat {
+    ONNX
+};
 
-        case onnx::AttributeProto::INT:
-            attr.set_i(name, ap.i());
-            break;
-
-        case onnx::AttributeProto::STRING:
-            attr.set_s(name, ap.s());
-            break;
-
-        case onnx::AttributeProto::FLOATS: {
-            std::vector<float> fs(ap.floats().begin(), ap.floats().end());
-            attr.set_fs(name, std::move(fs));
-            break;
-          }
-
-        case onnx::AttributeProto::INTS: {
-            std::vector<int64_t> is(ap.ints().begin(), ap.ints().end());
-            attr.set_is(name, std::move(is));
-            break;
-          }
-
-        case onnx::AttributeProto::STRINGS: {
-            std::vector<std::string> ss(ap.strings().begin(), ap.strings().end());
-            attr.set_ss(name, std::move(ss));
-            break;
-          }
-
-        default:
-            // ignore other types now
-            break;
-        }
-    }
-}
+template <ModelFormat> std::unique_ptr<Graph> importModel(std::istream& input);
 
 }} // namespace dlf::model

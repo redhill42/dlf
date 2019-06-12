@@ -1,10 +1,12 @@
 #pragma once
 
+#include <string>
 #include <vector>
 #include <array>
 #include <iterator>
 #include <type_traits>
 #include <cassert>
+#include <sstream>
 
 // C++17 back ports
 namespace cxx {
@@ -201,5 +203,29 @@ public:
     }
 };
 #pragma clang diagnostic pop
+
+namespace detail {
+#if __cplusplus >= 201703L
+template <typename... Args>
+inline void concat(std::stringstream& ss, const Args&... args) {
+    (void)(ss << ... << args);
+}
+#else
+inline void concat(std::stringstream&) {}
+
+template <typename T, typename... Args>
+inline void concat(std::stringstream& ss, const T& t, const Args&... args) {
+    ss << t;
+    concat(ss, args...);
+}
+#endif
+}
+
+template <typename... Args>
+std::string concat(const Args&... args) {
+    std::stringstream ss;
+    detail::concat(ss, args...);
+    return ss.str();
+}
 
 } // namespace cxx
