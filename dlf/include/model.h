@@ -95,7 +95,7 @@ struct TensorVariant : std::variant<
     // When this field is present, the data_type field MUST be FLOAT or COMPLEX64.
     std::vector<float>,
 
-    // For double
+    // For double and complex128 values:
     // Complex128 tensors are encoded as a single array of doubles,
     // with the real components appearing in odd numbered positions,
     // and the corresponding imaginary component appearing in the
@@ -547,7 +547,6 @@ enum class AttributeKind : uint8_t {
     GRAPHS,
 };
 
-namespace detail {
 template <AttributeKind kind>
 struct AttributeKindTrait { using type = void; };
 
@@ -567,9 +566,7 @@ DEFINE_ATTRIBUTE_TYPE(INT, int64_t)
 DEFINE_ATTRIBUTE_TYPE(STRING, std::string)
 DEFINE_ATTRIBUTE_TYPE(TENSOR, TensorData)
 DEFINE_ATTRIBUTE_TYPE(GRAPH, std::shared_ptr<Graph>)
-
 #undef DEFINE_ATTRIBUTE_TYPE
-} // namespace detail
 
 #ifdef HAS_VARIANT
 
@@ -584,16 +581,16 @@ class Attributes {
 private:
     // Keep the same order in AttributeKind enum
     using AttributeVariant = std::variant<
-        detail::AttributeType<AttributeKind::FLOAT>,
-        detail::AttributeType<AttributeKind::INT>,
-        detail::AttributeType<AttributeKind::STRING>,
-        detail::AttributeType<AttributeKind::TENSOR>,
-        detail::AttributeType<AttributeKind::GRAPH>,
-        detail::AttributeType<AttributeKind::FLOATS>,
-        detail::AttributeType<AttributeKind::INTS>,
-        detail::AttributeType<AttributeKind::STRINGS>,
-        detail::AttributeType<AttributeKind::TENSORS>,
-        detail::AttributeType<AttributeKind::GRAPHS>
+        AttributeType<AttributeKind::FLOAT>,
+        AttributeType<AttributeKind::INT>,
+        AttributeType<AttributeKind::STRING>,
+        AttributeType<AttributeKind::TENSOR>,
+        AttributeType<AttributeKind::GRAPH>,
+        AttributeType<AttributeKind::FLOATS>,
+        AttributeType<AttributeKind::INTS>,
+        AttributeType<AttributeKind::STRINGS>,
+        AttributeType<AttributeKind::TENSORS>,
+        AttributeType<AttributeKind::GRAPHS>
     >;
 
     class AttributeValue {
@@ -646,7 +643,7 @@ public:
         return names;
     }
 
-    AttributeKind kindOf(Symbol name) const noexcept {
+    AttributeKind attributeKind(Symbol name) const noexcept {
         auto it = find(name, false);
         if (it != m_values.end())
             return it->kind();
@@ -662,7 +659,7 @@ public:
         return false;
     }
 
-    #define AT(k) detail::AttributeType<AttributeKind::k>
+    #define AT(k) AttributeType<AttributeKind::k>
     #define CREATE_ACCESSOR(kind, method) \
     Derived& set_##method(Symbol name, AT(kind) v) noexcept { \
         return set<AT(kind)>(name, std::move(v)); \
@@ -755,7 +752,7 @@ private:
     template <AttributeKind K>
     struct GenericAttributeValue : AttributeValue {
         static constexpr AttributeKind Kind = K;
-        using ValueType = detail::AttributeType<Kind>;
+        using ValueType = AttributeType<Kind>;
 
         Symbol m_name;
         ValueType m_value;
@@ -807,7 +804,7 @@ public:
         return names;
     }
 
-    AttributeKind kindOf(Symbol name) const noexcept {
+    AttributeKind attributeKind(Symbol name) const noexcept {
         auto it = find(name, false);
         if (it != m_values.end())
             return (*it)->kind();
@@ -908,7 +905,7 @@ private:
 /**
  * Each use is represented by this type, see Node::uses().
  * 'user' is the consumer of the value, offset is the index into
- * 'user's input this where the produces will be found.
+ * 'user's input where the produces will be found.
  */
 struct Use final {
     Node* user;
@@ -941,13 +938,13 @@ class Value final {
 
     Node* m_node;
     size_t m_offset;
+    size_t m_unique;    // unique id
 
     bool m_has_name = false;
     std::string m_name;
     DataType m_type;
     std::vector<size_t> m_dims;
 
-    size_t m_unique = 0;    // unique id
     size_t m_stage = 0;     // 0-forward, 1-backward, 2-double-backward, ...
     UseList m_uses;
 
@@ -973,6 +970,10 @@ public:
 
     size_t offset() const noexcept {
         return m_offset;
+    }
+
+    size_t unique() const noexcept {
+        return m_unique;
     }
 
     bool has_name() const noexcept {
@@ -1006,15 +1007,6 @@ public:
 
     Value* set_dims(std::vector<size_t> dims) noexcept {
         m_dims = std::move(dims);
-        return this;
-    }
-
-    size_t unique() const noexcept {
-        return m_unique;
-    }
-
-    Value* set_unique(size_t unique) noexcept {
-        m_unique = unique;
         return this;
     }
 
@@ -1063,6 +1055,44 @@ public:
 
 //==-------------------------------------------------------------------------
 
+// Forward declaration of all operators. These operators are defined in "model/operators.h"
+#define FORALL_OPERATORS(_) \
+  _(Add)                    \
+  _(BatchNormalization)     \
+  _(Conv)                   \
+  _(Flatten)                \
+  _(Gemm)                   \
+  _(GlobalAveragePool)      \
+  _(MaxPool)                \
+  _(Relu)
+
+#define FORWARD_DECLARE(op) class op;
+FORALL_OPERATORS(FORWARD_DECLARE)
+#undef FORWARD_DECLARE
+
+/**
+ * The generic visitor for the graph node.
+ */
+class Visitor {
+public:
+#define DEFINE_VISITOR(op) virtual void visit(op*) = 0;
+    FORALL_OPERATORS(DEFINE_VISITOR)
+#undef DEFINE_VISITOR
+
+    virtual void visit(Node*) = 0;
+    virtual ~Visitor() = default;
+};
+
+class NodeFactory {
+public:
+    virtual Node* createNode(Graph* graph, NodeKind kind) const = 0;
+    virtual ~NodeFactory() = default;
+
+    static const NodeFactory& default_factory();
+};
+
+//==-------------------------------------------------------------------------
+
 class Node : public Attributes<Node> {
     friend class Graph;
     friend class Value;
@@ -1081,7 +1111,6 @@ class Node : public Attributes<Node> {
     // node list.
     //
     // This list represents a topological sort.
-
     Node* next_in_graph[2] = { nullptr, nullptr };
     Node*& next() noexcept { return next_in_graph[kNextDirection]; }
     Node*& prev() noexcept { return next_in_graph[kPrevDirection]; }
@@ -1100,10 +1129,9 @@ class Node : public Attributes<Node> {
     std::string m_domain;
     std::string m_doc_string;
 
-protected:
+public:
     Node(Graph* graph, NodeKind kind);
 
-public:
     Node(const Node&) = delete;
     Node& operator=(const Node&) = delete;
 
@@ -1234,6 +1262,14 @@ public:
 
     const Value* input(size_t i) const {
         return m_inputs.at(i);
+    }
+
+    Value* output(size_t i) {
+        return m_outputs.at(i);
+    }
+
+    const Value* output(size_t i) const {
+        return m_outputs.at(i);
     }
 
     // Graphs
@@ -1465,6 +1501,10 @@ public:
         return static_cast<T*>(this);
     }
 
+    virtual void accept(Visitor& visitor) {
+        visitor.visit(this);
+    }
+
     virtual ~Node() = default;
 
 private:
@@ -1506,34 +1546,6 @@ private:
         this->next() = nullptr;
         this->prev() = nullptr;
     }
-
-protected:
-    /**
-     * Subclasses must override.
-     *
-     * This function is used by createClone to initialize a new version
-     * of a node in another graph. It should allocate a new instance of
-     * the same concrete type as 'this', but in graph 'g' which might be
-     * different than m_graph.
-     */
-    virtual Node* allocNewInstance(Graph* g) {
-        return new Node(g, kind());
-    }
-
-    /**
-     * Create a copy of all properties of Node s into this.
-     *
-     * Subclasses should extend if they have additional information to copy.
-     *
-     * 'this' will be allocated with s->allocNewInstance(g) so it should have
-     * the same concrete type as 's'
-     *
-     * Note: This does NOT clone stages.  You're expected to set the stage
-     * correctly if you are going to preserve it.
-     */
-    virtual void cloneFrom(Node* s) {
-//        copyAttributes(*s);
-    }
 };
 
 //==-------------------------------------------------------------------------
@@ -1541,6 +1553,8 @@ protected:
 class Graph {
     friend class Node;
     friend class Value;
+
+    const NodeFactory& m_factory;
 
     // Only used to keep track of allocated nodes. Actual representation
     // of Graph is done with inputs, outputs, nodes.
@@ -1560,7 +1574,8 @@ class Graph {
     std::string m_doc_string;
 
 public:
-    Graph() :
+    Graph(const NodeFactory& factory = NodeFactory::default_factory()) :
+        m_factory(factory),
         next_unique(0),
         new_node_stage(0),
         m_output(initOutput(createNode(kReturn))),
@@ -1655,23 +1670,13 @@ public:
         return new_node_stage;
     }
 
-    size_t registerOutput(Value* n) noexcept {
-        m_output->addInput(n);
-        return outputs().size() - 1;
+    Value* addOutput(Value* n) noexcept {
+        return m_output->addInput(n);
     }
 
     Node* createNode(NodeKind kind) noexcept {
         // Note: Node constructor adds node to all_nodes
-        return new Node(this, kind);
-    }
-
-    Node* createNode(NodeKind kind, cxx::array_ref<Value*> inputs, size_t num_outputs = 1) {
-        auto n = createNode(kind);
-        for (auto in : inputs)
-            n->addInput(in);
-        for (size_t i = 0; i < num_outputs; i++)
-            n->addOutput();
-        return n;
+        return m_factory.createNode(this, kind);
     }
 
     Node* appendNode(Node* n) {

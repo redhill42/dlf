@@ -198,12 +198,14 @@ std::unique_ptr<Graph> graphProtoToGraph(const GraphProto& gp, bool nested) {
         value_by_name[""] = n->addOutput()->set_name("");
     }
 
+    // Adding all inputs with type definition.
     for (auto& vp : gp.input()) {
         auto v = g->addInput()->set_name(vp.name());
         setValueType(v, vp.type().tensor_type());
         value_by_name[vp.name()] = v;
     }
 
+    // Adding all initializers with type and data.
     for (auto& init : gp.initializer()) {
         auto t = tensorProtoToTensor(init);
         if (!value_by_name.count(t.name())) {
@@ -216,6 +218,7 @@ std::unique_ptr<Graph> graphProtoToGraph(const GraphProto& gp, bool nested) {
         value_by_name[t.name()]->set_initializer(std::move(t));
     }
 
+    // Adding all nodes, defer determine value types of inputs and outputs.
     for (auto& np : gp.node()) {
         auto* n = g->createNode(np.op_type());
         g->appendNode(n);
@@ -229,6 +232,8 @@ std::unique_ptr<Graph> graphProtoToGraph(const GraphProto& gp, bool nested) {
             convertAttribute(ap, n);
         }
 
+        // we will connect inputs to other nodes' output later, we just
+        // record input names now.
         std::vector<std::string> inputs;
         copyTo(np.input(), inputs);
         inputs_by_node[n] = std::move(inputs);
@@ -241,22 +246,24 @@ std::unique_ptr<Graph> graphProtoToGraph(const GraphProto& gp, bool nested) {
             n->set_doc_string(np.doc_string());
     }
 
+    // Connect node's inputs to other nodes' output.
     for (auto n : g->nodes()) {
         auto search = inputs_by_node.find(n);
-        if (search == inputs_by_node.end())
-            continue;
-        for (auto& input : search->second) {
-            if (!value_by_name.count(input) && nested) {
-                // Undefined reference to an input in a nested block. This may be
-                // a captured value. Create a dummy node that we ignore later.
-                auto* undef = g->createNode(kCaptured);
-                value_by_name[input] = undef->addOutput()->set_name(input);
-                g->appendNode(undef);
+        if (search != inputs_by_node.end()) {
+            for (auto& input : search->second) {
+                if (!value_by_name.count(input) && nested) {
+                    // Undefined reference to an input in a nested block. This may be
+                    // a captured value. Create a dummy node that we ignore later.
+                    auto* undef = g->createNode(kCaptured);
+                    value_by_name[input] = undef->addOutput()->set_name(input);
+                    g->appendNode(undef);
+                }
+                n->addInput(value_by_name[input]);
             }
-            n->addInput(value_by_name.at(input));
         }
     }
 
+    // Fill in value type from output definition
     for (auto& vp : gp.output()) {
         if (!value_by_name.count(vp.name()) && nested) {
             // Same captured value logic as above. We can consider outputs of
@@ -269,9 +276,10 @@ std::unique_ptr<Graph> graphProtoToGraph(const GraphProto& gp, bool nested) {
         }
 
         setValueType(value_by_name[vp.name()], vp.type().tensor_type());
-        g->registerOutput(value_by_name[vp.name()]);
+        g->addOutput(value_by_name[vp.name()]);
     }
 
+    // Fill in value type from value_info definition
     for (auto& vp : gp.value_info()) {
         setValueType(value_by_name[vp.name()], vp.type().tensor_type());
     }

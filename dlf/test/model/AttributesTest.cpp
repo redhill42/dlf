@@ -12,24 +12,24 @@ class TestNode: public Attributes<TestNode> {};
 TEST(Attributes, General) {
     auto n = TestNode();
 
-    n.set_i(kOffset, 3).set_f(kvalue, 3.5).set_is(kdim, {1, 2, 3});
+    n.set_i(kgroup, 3).set_f(kvalue, 3.5).set_is(kdim, {1, 2, 3});
 
-    EXPECT_TRUE(n.hasAttribute(kOffset));
+    EXPECT_TRUE(n.hasAttribute(kgroup));
     EXPECT_TRUE(n.hasAttribute(kvalue));
     EXPECT_TRUE(n.hasAttribute(kdim));
 
-    EXPECT_EQ(n.kindOf(kOffset), AttributeKind::INT);
-    EXPECT_EQ(n.kindOf(kvalue), AttributeKind::FLOAT);
-    EXPECT_EQ(n.kindOf(kdim), AttributeKind::INTS);
+    EXPECT_EQ(n.attributeKind(kgroup), AttributeKind::INT);
+    EXPECT_EQ(n.attributeKind(kvalue), AttributeKind::FLOAT);
+    EXPECT_EQ(n.attributeKind(kdim), AttributeKind::INTS);
 
-    EXPECT_EQ(n.get_i(kOffset), 3);
+    EXPECT_EQ(n.get_i(kgroup), 3);
     EXPECT_EQ(n.get_f(kvalue), 3.5);
     EXPECT_EQ(n.get_is(kdim), std::vector<int64_t>({1, 2, 3}));
 
-    EXPECT_THAT(n.attributeNames(), testing::ElementsAre(kOffset, kvalue, kdim));
+    EXPECT_THAT(n.attributeNames(), testing::ElementsAre(kgroup, kvalue, kdim));
     EXPECT_TRUE(n.removeAttribute(kdim));
     EXPECT_FALSE(n.removeAttribute(kdim)); // should success
-    EXPECT_THAT(n.attributeNames(), testing::ElementsAre(kOffset, kvalue));
+    EXPECT_THAT(n.attributeNames(), testing::ElementsAre(kgroup, kvalue));
     EXPECT_FALSE(n.hasAttribute(kdim));
 }
 
@@ -59,7 +59,7 @@ TEST(Attributes, DefaultValue) {
     auto v = n.get_is(kdim, {1,2,3});
     EXPECT_EQ(v, std::vector<int64_t>({1,2,3}));
 
-    EXPECT_EQ(n.kindOf(kvalue), AttributeKind::INT);
-    EXPECT_EQ(n.kindOf(kalpha), AttributeKind::UNDEFINED);
-    EXPECT_EQ(n.kindOf("beta"), AttributeKind::UNDEFINED);
+    EXPECT_EQ(n.attributeKind(kvalue), AttributeKind::INT);
+    EXPECT_EQ(n.attributeKind(kalpha), AttributeKind::UNDEFINED);
+    EXPECT_EQ(n.attributeKind("beta"), AttributeKind::UNDEFINED);
 }

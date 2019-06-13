@@ -4,145 +4,97 @@
 #include <string>
 
 #define FORALL_BUILTIN_SYMBOLS(_) \
-  _(PythonOp)                     \
-  _(CppOp)                        \
-  _(Param)                        \
-  _(Select)                       \
-  _(Return)                       \
-  _(Eval)                         \
-  _(add)                          \
+  _(Abs)                          \
+  _(Acos)                         \
+  _(Acosh)                        \
   _(Add)                          \
-  _(Div)                          \
-  _(Mul)                          \
-  _(Neg)                          \
-  _(Sub)                          \
-  _(Pow)                          \
-  _(Sigmoid)                      \
+  _(And)                          \
   _(ArgMax)                       \
-  _(Concat)                       \
-  _(Softmax)                      \
-  _(LogSoftmax)                   \
-  _(Dropout)                      \
-  _(Tanh)                         \
-  _(mul)                          \
-  _(neg)                          \
-  _(sigmoid)                      \
-  _(tanh)                         \
-  _(Constant)                     \
-  _(cat)                          \
-  _(Slice)                        \
-  _(Squeeze)                      \
-  _(Undefined)                    \
-  _(FusionGroup)                  \
-  _(MatMul)                       \
-  _(Gemm)                         \
-  _(Tile)                         \
-  _(SubConstant)                  \
-  _(Scale)                        \
-  _(Transpose)                    \
-  _(Pad)                          \
-  _(Reshape)                      \
-  _(split)                        \
-  _(chunk)                        \
-  _(Offset)                       \
-  _(value)                        \
-  _(Subgraph)                     \
+  _(ArgMin)                       \
+  _(Asin)                         \
+  _(Asinh)                        \
+  _(Atan)                         \
+  _(Atanh)                        \
+  _(AveragePool)                  \
   _(BatchNormalization)           \
-  _(Conv)                         \
-  _(ConvTranspose)                \
-  _(is_test)                      \
-  _(epsilon)                      \
-  _(expand)                       \
-  _(Expand)                       \
-  _(order)                        \
-  _(momentum)                     \
-  _(consumed_inputs)              \
-  _(kernels)                      \
-  _(kernel_shape)                 \
-  _(kernel)                       \
-  _(scale)                        \
-  _(strides)                      \
-  _(stride)                       \
-  _(pads)                         \
-  _(pad)                          \
-  _(beta)                         \
-  _(alpha)                        \
-  _(dilations)                    \
-  _(dilation)                     \
-  _(broadcast)                    \
-  _(axis)                         \
-  _(ratio)                        \
-  _(size)                         \
-  _(dim)                          \
-  _(keepdims)                     \
-  _(perm)                         \
-  _(shape)                        \
-  _(axes)                         \
-  _(group)                        \
-  _(inplace)                      \
-  _(transA)                       \
-  _(transB)                       \
-  _(other)                        \
-  _(__and__)                      \
-  _(__lshift__)                   \
-  _(__or__)                       \
-  _(__rshift__)                   \
-  _(__xor__)                      \
-  _(abs)                          \
-  _(acos)                         \
-  _(asin)                         \
-  _(atan)                         \
-  _(atan2)                        \
-  _(ceil)                         \
-  _(clamp)                        \
-  _(cos)                          \
-  _(cosh)                         \
-  _(div)                          \
-  _(eq)                           \
-  _(equal)                        \
-  _(Exp)                          \
-  _(expm1)                        \
-  _(floor)                        \
-  _(fmod)                         \
-  _(frac)                         \
-  _(ge)                           \
-  _(gt)                           \
-  _(le)                           \
-  _(lerp)                         \
-  _(lgamma)                       \
-  _(Log)                          \
-  _(log1p)                        \
-  _(lt)                           \
-  _(max)                          \
-  _(min)                          \
-  _(ne)                           \
-  _(ones)                         \
-  _(pow)                          \
-  _(reciprocal)                   \
-  _(remainder)                    \
-  _(round)                        \
-  _(rsqrt)                        \
-  _(sin)                          \
-  _(sinh)                         \
-  _(Sqrt)                         \
-  _(sub)                          \
-  _(tan)                          \
-  _(trunc)                        \
-  _(zeros)                        \
-  _(exponent)                     \
-  _(device)                       \
-  _(mode)                         \
-  _(Identity)                     \
-  _(Loop)                         \
-  _(If)                           \
-  _(body)                         \
-  _(then_branch)                  \
-  _(else_branch)                  \
+  _(BitShift)                     \
   _(Captured)                     \
-  _(__control_inputs)             \
-  _(count_include_pad)            \
-  _(storage_order)                \
-  _(Unsqueeze)                    \
+  _(Cast)                         \
+  _(Ceil)                         \
+  _(Clip)                         \
+  _(Concat)                       \
+  _(Compress)                     \
+  _(Constant)                     \
+  _(ConstantOfShape)              \
+  _(Conv)                         \
+  _(ConvInteger)                  \
+  _(ConvTranspose)                \
+  _(Cos)                          \
+  _(Cosh)                         \
+  _(DepthToSpace)                 \
+  _(DequantizeLinear)             \
+  _(Div)                          \
+  _(Dropout)                      \
+  _(Elu)                          \
+  _(Equal)                        \
+  _(Erf)                          \
+  _(Exp)                          \
+  _(Expand)                       \
+  _(EyeLike)                      \
+  _(Flatten)                      \
+  _(Floor)                        \
+  _(GRU)                          \
+  _(Gather)                       \
+  _(Gemm)                         \
+  _(GlobalAveragePool)            \
+  _(GlobalLpPool)                 \
+  _(Greater)                      \
+  _(HardSigmoid)                  \
+  _(Hardmax)                      \
+  _(Identity)                     \
+  _(If)                           \
+  _(InstanceNormalization)        \
+  _(IsInf)                        \
+  _(IsNaN)                        \
+  _(LRN)                          \
+  _(LSTM)                         \
+  _(LeakyRelu)                    \
+  _(Less)                         \
+  _(Log)                          \
+  _(LogSoftmax)                   \
+  _(Loop)                         \
+  _(LpNormalization)              \
+  _(LpPool)                       \
+  _(MatMul)                       \
+  _(MatMulInteger)                \
+  _(Max)                          \
+  _(MaxPool)                      \
+  _(MaxRoiPool)                   \
+  _(MaxUnpool)                    \
+  _(Mean)                         \
+  _(Min)                          \
+  _(Mod)                          \
+  _(Mul)                          \
+  _(Multinomial)                  \
+  _(Neg)                          \
+  _(NonMaxSuppression)            \
+  _(NonZero)                      \
+  _(Not)                          \
+  _(OneHot)                       \
+  _(Or)                           \
+  _(PRelu)                        \
+  _(Pad)                          \
+  _(Param)                        \
+  _(Pow)                          \
+  _(QLinearConv)                  \
+  _(QLinearMatMul)                \
+  _(QuantizeLinear)               \
+  _(RNN)                          \
+  _(RandomNormal)                 \
+  _(RandomNormalLike)             \
+  _(RandomUniform)                \
+  _(RandomUniformLike)            \
+  _(Reciprocal)                   \
   _(ReduceL1)                     \
   _(ReduceL2)                     \
   _(ReduceLogSum)                 \
@@ -153,13 +105,139 @@
   _(ReduceProd)                   \
   _(ReduceSum)                    \
   _(ReduceSumSquare)              \
-  _(Cast)                         \
-  _(to)                           \
-  _(PRelu)                        \
-  _(Greater)                      \
-  _(Less)                         \
+  _(Relu)                         \
+  _(Reshape)                      \
+  _(Resize)                       \
+  _(Return)                       \
+  _(ReverseSequence)              \
+  _(RoiAlign)                     \
+  _(Round)                        \
+  _(Scan)                         \
+  _(Scatter)                      \
+  _(Selu)                         \
+  _(Shape)                        \
+  _(Shrink)                       \
+  _(Sigmoid)                      \
+  _(Sign)                         \
+  _(Sin)                          \
+  _(Sinh)                         \
+  _(Size)                         \
+  _(Slice)                        \
+  _(Softmax)                      \
+  _(Softplus)                     \
+  _(Softsign)                     \
+  _(SpaceToDepth)                 \
+  _(Select)                       \
+  _(Split)                        \
+  _(Sqrt)                         \
+  _(Squeeze)                      \
+  _(StringNormalizer)             \
+  _(Sub)                          \
+  _(Sum)                          \
+  _(Tan)                          \
+  _(Tanh)                         \
+  _(TfldfVectorizer)              \
+  _(ThresholdedRelu)              \
+  _(Tile)                         \
+  _(TopK)                         \
+  _(Transpose)                    \
+  _(Undefined)                    \
+  _(Unsequeeze)                   \
+  _(Upsample)                     \
+  _(Where)                        \
+  _(Xor)                          \
+                                  \
+  _(abs)                          \
+  _(acos)                         \
+  _(add)                          \
+  _(alpha)                        \
+  _(asin)                         \
+  _(atan)                         \
+  _(atan2)                        \
+  _(auto_pad)                     \
+  _(axes)                         \
+  _(axis)                         \
+  _(beta)                         \
+  _(body)                         \
+  _(broadcast)                    \
+  _(cat)                          \
+  _(ceil)                         \
+  _(ceil_mode)                    \
+  _(chunk)                        \
+  _(clamp)                        \
+  _(consumed_inputs)              \
+  _(cos)                          \
+  _(cosh)                         \
+  _(count_include_pad)            \
+  _(device)                       \
+  _(dilation)                     \
+  _(dilations)                    \
+  _(dim)                          \
+  _(div)                          \
+  _(else_branch)                  \
+  _(epsilon)                      \
+  _(eq)                           \
+  _(equal)                        \
+  _(expand)                       \
+  _(expm1)                        \
+  _(exponent)                     \
+  _(floor)                        \
+  _(fmod)                         \
+  _(frac)                         \
+  _(ge)                           \
+  _(group)                        \
+  _(gt)                           \
+  _(inplace)                      \
+  _(is_test)                      \
+  _(keepdims)                     \
+  _(kernel)                       \
+  _(kernels)                      \
+  _(kernel_shape)                 \
+  _(le)                           \
+  _(lerp)                         \
+  _(lgamma)                       \
+  _(log1p)                        \
+  _(lt)                           \
+  _(max)                          \
+  _(min)                          \
+  _(mode)                         \
+  _(momentum)                     \
+  _(mul)                          \
+  _(ne)                           \
+  _(neg)                          \
+  _(ones)                         \
+  _(order)                        \
+  _(other)                        \
+  _(pad)                          \
+  _(pads)                         \
+  _(perm)                         \
+  _(pow)                          \
+  _(ratio)                        \
+  _(reciprocal)                   \
+  _(remainder)                    \
+  _(round)                        \
+  _(rsqrt)                        \
+  _(scale)                        \
   _(scales)                       \
-  _(Upsample)
+  _(shape)                        \
+  _(sigmoid)                      \
+  _(sin)                          \
+  _(sinh)                         \
+  _(size)                         \
+  _(split)                        \
+  _(storage_order)                \
+  _(stride)                       \
+  _(strides)                      \
+  _(sub)                          \
+  _(tan)                          \
+  _(tanh)                         \
+  _(then_branch)                  \
+  _(to)                           \
+  _(transA)                       \
+  _(transB)                       \
+  _(trunc)                        \
+  _(value)                        \
+  _(zeros)
 
 namespace dlf { namespace model {
 
@@ -175,25 +253,25 @@ class Symbol {
 
 public:
     Symbol() {}
-    /*implicit*/ Symbol(BuiltinSymbol value) : m_value(value) {}
+    /*implicit*/ constexpr Symbol(BuiltinSymbol value) : m_value(value) {}
     /*implicit*/ Symbol(const std::string& s);
     /*implicit*/ Symbol(const char* s) : Symbol(std::string(s)) {}
 
-    uint32_t val() const noexcept { return m_value; }
+    constexpr operator uint32_t() const noexcept { return m_value; }
+    constexpr uint32_t val() const noexcept { return m_value; }
     const char* str() const noexcept;
-
-    operator uint32_t() const noexcept { return m_value; }
 };
 
-inline bool operator==(Symbol lhs, Symbol rhs) noexcept {
+inline constexpr bool operator==(Symbol lhs, Symbol rhs) noexcept {
     return static_cast<uint32_t>(lhs) == static_cast<uint32_t>(rhs);
 }
 
 // necessary to prevent ambiguous overload resolutions
-inline bool operator==(BuiltinSymbol lhs, Symbol rhs) noexcept {
+inline constexpr bool operator==(BuiltinSymbol lhs, Symbol rhs) noexcept {
     return static_cast<uint32_t>(lhs) == static_cast<uint32_t>(rhs);
 }
-inline bool operator==(Symbol lhs, BuiltinSymbol rhs) noexcept {
+
+inline constexpr bool operator==(Symbol lhs, BuiltinSymbol rhs) noexcept {
     return static_cast<uint32_t>(lhs) == static_cast<uint32_t>(rhs);
 }
 
