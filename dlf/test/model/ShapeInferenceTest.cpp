@@ -7,18 +7,10 @@ using namespace dlf::model;
 TEST(ShapeInference, Conv) {
     Graph g;
 
-    Value* X = g.addInput();
-    X->set_type(DataType::FLOAT);
-    X->set_dims({1, 3, 224, 224});
-
-    Value* W = g.addInput();
-    W->set_type(DataType::FLOAT);
-    W->set_dims({64, 3, 7, 7});
-
     Node* conv = g.createNode(kConv);
-    conv->addInput(X);
-    conv->addInput(W);
-    Value* Y = conv->addOutput();
+    conv->addInput(g.addInput("X", DataType::FLOAT, {1, 3, 224, 224}));
+    conv->addInput(g.addInput("W", DataType::FLOAT, {64, 3, 7, 7}));
+    Value* Y = conv->addOutput("Y");
 
     conv->set_is(kdilations, {1, 1});
     conv->set_i(kgroup, 1);
@@ -29,32 +21,20 @@ TEST(ShapeInference, Conv) {
     ShapeInference::Instance().infer(conv);
 
     EXPECT_EQ(Y->type(), DataType::FLOAT);
-    EXPECT_EQ(Y->dims(), std::vector<size_t>({1, 64, 112, 112}));
+    EXPECT_EQ(Y->dims(), Dims({1, 64, 112, 112}));
 }
 
 TEST(ShapeInference, Gemm) {
     Graph g;
 
-    Value* A = g.addInput();
-    A->set_type(DataType::FLOAT);
-    A->set_dims({3, 7});
-
-    Value* B = g.addInput();
-    B->set_type(DataType::FLOAT);
-    B->set_dims({7, 4});
-
-    Value* C = g.addInput();
-    C->set_type(DataType::FLOAT);
-    C->set_dims({3, 4});
-
     Node* gemm = g.createNode(kGemm);
-    gemm->addInput(A);
-    gemm->addInput(B);
-    gemm->addInput(C);
-    Value* Y = gemm->addOutput();
+    gemm->addInput(g.addInput("A", DataType::FLOAT, {3, 7}));
+    gemm->addInput(g.addInput("B", DataType::FLOAT, {7, 4}));
+    gemm->addInput(g.addInput("C", DataType::FLOAT, {3, 4}));
+    Value* Y = gemm->addOutput("Y");
 
     ShapeInference::Instance().infer(gemm);
 
     EXPECT_EQ(Y->type(), DataType::FLOAT);
-    EXPECT_EQ(Y->dims(), std::vector<size_t>({3, 4}));
+    EXPECT_EQ(Y->dims(), Dims({3, 4}));
 }

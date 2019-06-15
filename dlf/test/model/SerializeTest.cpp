@@ -35,9 +35,9 @@ TEST_F(SerializeTest, Parse) {
     ASSERT_EQ(x->inputs().size(), 2);
     EXPECT_EQ(x->X()->name(), "data");
     EXPECT_EQ(x->X()->type(), DataType::FLOAT);
-    EXPECT_EQ(x->X()->dims(), std::vector<size_t>({1, 3, 224, 224}));
+    EXPECT_EQ(x->X()->dims(), Dims({1, 3, 224, 224}));
     EXPECT_EQ(x->W()->type(), DataType::FLOAT);
-    EXPECT_EQ(x->W()->dims(), std::vector<size_t>({64, 3, 7, 7}));
+    EXPECT_EQ(x->W()->dims(), Dims({64, 3, 7, 7}));
     EXPECT_TRUE(x->W()->has_initializer());
 
     EXPECT_EQ(x->outputs().size(), 1);

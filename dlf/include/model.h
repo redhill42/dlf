@@ -63,6 +63,8 @@ enum class DataType : int32_t {
     COMPLEX128,     // complex with float64 real and imaginary components
 };
 
+using Dims = std::vector<size_t>;
+
 template <typename T> constexpr DataType DataTypeTrait = DataType::UNDEFINED;
 template <> constexpr DataType DataTypeTrait<float> = DataType::FLOAT;
 template <> constexpr DataType DataTypeTrait<uint8_t> = DataType::UINT8;
@@ -234,7 +236,7 @@ DEFINE_TENSOR_VARIANT(std::string, m_string_data)
 class TensorData final {
 private:
     // The shape of the tensor.
-    std::vector<size_t> m_dims;
+    Dims m_dims;
 
     // The data type of the tensor.
     DataType m_type = DataType::UNDEFINED;
@@ -268,14 +270,14 @@ private:
 public:
     TensorData() = default;
 
-    TensorData(std::vector<size_t> dims, DataType type)
+    TensorData(Dims dims, DataType type)
         : m_dims(std::move(dims)), m_type(type)
     {
         m_data.init(type);
     }
 
     template <typename Iterator>
-    TensorData(std::vector<size_t> dims, Iterator first, Iterator last)
+    TensorData(Dims dims, Iterator first, Iterator last)
         : m_dims(std::move(dims))
     {
         m_type = DataTypeTrait<typename std::iterator_traits<Iterator>::value_type>;
@@ -295,15 +297,15 @@ public:
         set_data(tensor.begin(), tensor.end());
     }
 
-    const std::vector<size_t>& dims() const noexcept {
+    const Dims& dims() const noexcept {
         return m_dims;
     }
 
-    std::vector<size_t>& dims() noexcept {
+    Dims& dims() noexcept {
         return m_dims;
     }
 
-    void set_dims(std::vector<size_t> dims) noexcept {
+    void set_dims(Dims dims) noexcept {
         m_dims = std::move(dims);
     }
 
@@ -920,7 +922,6 @@ struct Use final {
 
 // The list types are intentionally simple, but we type-def
 // them here so if we need to change them, refactoring will be easier.
-using NodeList = std::vector<Node*>;
 using ValueList = std::vector<Value*>;
 using UseList = std::vector<Use>;
 using NodeKind = Symbol;
@@ -936,23 +937,18 @@ class Value final {
     friend class Node;
     friend class Graph;
 
-    Node* m_node;
-    size_t m_offset;
-    size_t m_unique;    // unique id
-
-    bool m_has_name = false;
-    std::string m_name;
-    DataType m_type;
-    std::vector<size_t> m_dims;
-
-    size_t m_stage = 0;     // 0-forward, 1-backward, 2-double-backward, ...
-    UseList m_uses;
-
-    bool m_has_initializer = false;
-    TensorData m_initializer;
+    Node*           m_node;
+    size_t          m_offset;
+    std::string     m_name;
+    DataType        m_type;
+    Dims            m_dims;
+    size_t          m_stage = 0; // 0-forward, 1-backward, 2-double-backward, ...
+    UseList         m_uses;
+    bool            m_has_initializer = false;
+    TensorData      m_initializer;
 
 public:
-    Value(Node* node, size_t offset);
+    Value(Node* node, size_t offset, std::string name);
 
     Value(const Value&) = delete;
     Value& operator=(const Value&) = delete;
@@ -972,24 +968,8 @@ public:
         return m_offset;
     }
 
-    size_t unique() const noexcept {
-        return m_unique;
-    }
-
-    bool has_name() const noexcept {
-        return m_has_name;
-    }
-
     std::string name() const noexcept {
-        if (has_name())
-            return m_name;
-        return std::to_string(unique());
-    }
-
-    Value* set_name(std::string name) {
-        m_has_name = true;
-        m_name = std::move(name);
-        return this;
+        return m_name;
     }
 
     DataType type() const noexcept {
@@ -1001,11 +981,11 @@ public:
         return this;
     }
 
-    const std::vector<size_t> dims() const noexcept {
+    const Dims dims() const noexcept {
         return m_dims;
     }
 
-    Value* set_dims(std::vector<size_t> dims) noexcept {
+    Value* set_dims(Dims dims) noexcept {
         m_dims = std::move(dims);
         return this;
     }
@@ -1380,8 +1360,8 @@ public:
         m_inputs.clear();
     }
 
-    Value* addOutput() {
-        auto v = new Value(this, m_outputs.size());
+    Value* addOutput(std::string name) {
+        auto v = new Value(this, m_outputs.size(), std::move(name));
         m_outputs.push_back(v);
         return v;
     }
@@ -1570,8 +1550,7 @@ class Graph {
     std::unordered_set<const Node*> all_nodes;
     std::unordered_set<const Value*> all_values;
 
-    size_t next_unique;
-    size_t new_node_stage;
+    size_t new_node_stage = 0;
 
     // Holds outputs in a way that can be reflected as a Use object.
     // Also used as the beginning/end of the circular node list to avoid
@@ -1585,8 +1564,6 @@ class Graph {
 public:
     Graph(const NodeFactory& factory = NodeFactory::Instance()) :
         m_factory(factory),
-        next_unique(0),
-        new_node_stage(0),
         m_output(initOutput(createNode(kReturn))),
         m_input(createNode(kParam))
     {}
@@ -1659,8 +1636,14 @@ public:
         return m_output;
     }
 
-    Value* addInput() noexcept {
-        return m_input->addOutput();
+    Value* addInput(std::string name) noexcept {
+        return m_input->addOutput(std::move(name));
+    }
+
+    Value* addInput(std::string name, DataType type, Dims dims) noexcept {
+        return m_input->addOutput(std::move(name))
+                      ->set_type(type)
+                      ->set_dims(std::move(dims));
     }
 
     void eraseInput(size_t i) noexcept {
@@ -1742,9 +1725,8 @@ private:
 // Implementation
 //==-------------------------------------------------------------------------
 
-inline Value::Value(Node* node, size_t offset)
-    : m_node(node), m_offset(offset),
-      m_unique(node->m_graph->next_unique++),
+inline Value::Value(Node* node, size_t offset, std::string name)
+    : m_node(node), m_offset(offset), m_name(std::move(name)),
       m_stage(node->m_graph->new_node_stage),
       m_type(DataType::UNDEFINED)
 {

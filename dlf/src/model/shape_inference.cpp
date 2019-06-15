@@ -10,7 +10,7 @@ static void copyShape(const Value* from, Value* to) {
     }
 }
 
-static void inferConvShape(Node* n, std::vector<size_t>& dims) {
+static void inferConvShape(Node* n, Dims& dims) {
     int axes = dims.size() - 2;
     for (int i = 0; i < axes; i++) {
         size_t width  = dims[i+2];

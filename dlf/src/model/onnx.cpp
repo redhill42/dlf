@@ -195,12 +195,12 @@ std::unique_ptr<Graph> graphProtoToGraph(const GraphProto& gp, bool nested) {
         // This is to handle that second case, which need a dummy node to
         // be representable in the graph IR.
         auto* n = g->createNode(kUndefined);
-        value_by_name[""] = n->addOutput()->set_name("");
+        value_by_name[""] = n->addOutput("");
     }
 
     // Adding all inputs with type definition.
     for (auto& vp : gp.input()) {
-        auto v = g->addInput()->set_name(vp.name());
+        auto v = g->addInput(vp.name());
         setValueType(v, vp.type().tensor_type());
         value_by_name[vp.name()] = v;
     }
@@ -208,13 +208,8 @@ std::unique_ptr<Graph> graphProtoToGraph(const GraphProto& gp, bool nested) {
     // Adding all initializers with type and data.
     for (auto& init : gp.initializer()) {
         auto t = tensorProtoToTensor(init);
-        if (!value_by_name.count(t.name())) {
-            auto v = g->addInput();
-            v->set_name(t.name());
-            v->set_type(t.type());
-            v->set_dims(t.dims());
-            value_by_name[t.name()] = v;
-        }
+        if (!value_by_name.count(t.name()))
+            value_by_name[t.name()] = g->addInput(t.name(), t.type(), t.dims());
         value_by_name[t.name()]->set_initializer(std::move(t));
     }
 
@@ -225,7 +220,7 @@ std::unique_ptr<Graph> graphProtoToGraph(const GraphProto& gp, bool nested) {
 
         for (auto& output : np.output()) {
             // we don't know the real type here, so that's done in a later pass
-            value_by_name[output] = n->addOutput()->set_name(output);
+            value_by_name[output] = n->addOutput(output);
         }
 
         for (auto& ap : np.attribute()) {
@@ -255,7 +250,7 @@ std::unique_ptr<Graph> graphProtoToGraph(const GraphProto& gp, bool nested) {
                     // Undefined reference to an input in a nested block. This may be
                     // a captured value. Create a dummy node that we ignore later.
                     auto* undef = g->createNode(kCaptured);
-                    value_by_name[input] = undef->addOutput()->set_name(input);
+                    value_by_name[input] = undef->addOutput(input);
                     g->appendNode(undef);
                 }
                 n->addInput(value_by_name[input]);
@@ -271,7 +266,7 @@ std::unique_ptr<Graph> graphProtoToGraph(const GraphProto& gp, bool nested) {
             // scoping rule are valid here, thus we need to add a dummy node
             // in the case of the undefined reference
             auto* undef = g->createNode(kCaptured);
-            value_by_name[vp.name()] = undef->addOutput()->set_name(vp.name());
+            value_by_name[vp.name()] = undef->addOutput(vp.name());
             g->appendNode(undef);
         }
 
