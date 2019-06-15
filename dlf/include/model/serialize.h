@@ -18,5 +18,6 @@ enum class ModelFormat {
 };
 
 template <ModelFormat> std::unique_ptr<Graph> importModel(std::istream& input);
+template <ModelFormat> void exportModel(std::ostream& output, const Graph& graph);
 
 }} // namespace dlf::model

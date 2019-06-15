@@ -1,7 +1,7 @@
 add_library(dlf "")
 
 find_package(Protobuf REQUIRED)
-protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS "src/onnx.proto")
+protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS "src/model/onnx.proto")
 
 file(GLOB_RECURSE DLF_SRCS "${CMAKE_CURRENT_LIST_DIR}/src/*.cpp")
 file(GLOB_RECURSE DLF_HDRS "${CMAKE_CURRENT_LIST_DIR}/include/*.h")
