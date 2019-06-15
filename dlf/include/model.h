@@ -667,8 +667,8 @@ public:
     const AT(kind)& get_##method(Symbol name) const { \
         return get<AT(kind)>(name); \
     } \
-    const AT(kind)& get_##method(Symbol name, const AT(kind)& default_value) const { \
-        return get_or_default<AT(kind)>(name, default_value); \
+    AT(kind) get_##method(Symbol name, AT(kind) default_value) const { \
+        return get_or_default<AT(kind)>(name, std::move(default_value)); \
     }
 
     CREATE_ACCESSOR(FLOAT, f)
@@ -721,10 +721,10 @@ private:
     }
 
     template <typename T>
-    const T& get_or_default(Symbol name, const T& default_value) const {
+    T get_or_default(Symbol name, T&& default_value) const {
         auto it = find(name, false);
         if (it == m_values.end()) {
-            return default_value;
+            return std::forward<T>(default_value);
         } else {
             return it->template value<T>(); // may throw bad_variant_access
         }
@@ -1060,6 +1060,7 @@ public:
   _(Add)                    \
   _(BatchNormalization)     \
   _(Conv)                   \
+  _(Dropout)                \
   _(Flatten)                \
   _(Gemm)                   \
   _(GlobalAveragePool)      \
@@ -1088,7 +1089,15 @@ public:
     virtual Node* createNode(Graph* graph, NodeKind kind) const = 0;
     virtual ~NodeFactory() = default;
 
-    static const NodeFactory& default_factory();
+    static const NodeFactory& Instance();
+};
+
+class ShapeInference {
+public:
+    virtual void infer(Node* n) = 0;
+    virtual ~ShapeInference() = default;
+
+    static ShapeInference& Instance();
 };
 
 //==-------------------------------------------------------------------------
@@ -1254,22 +1263,22 @@ public:
         return m_outputs.at(0);
     }
 
-    // Access a particular input.  This is a checked index.
+    // Access a particular input or output. Null is returned if no such value.
 
     Value* input(size_t i) {
-        return m_inputs.at(i);
+        return i < m_inputs.size() ? m_inputs[i] : nullptr;
     }
 
     const Value* input(size_t i) const {
-        return m_inputs.at(i);
+        return i < m_inputs.size() ? m_inputs[i] : nullptr;
     }
 
     Value* output(size_t i) {
-        return m_outputs.at(i);
+        return i < m_outputs.size() ? m_outputs[i] : nullptr;
     }
 
     const Value* output(size_t i) const {
-        return m_outputs.at(i);
+        return i < m_outputs.size() ? m_outputs[i] : nullptr;
     }
 
     // Graphs
@@ -1574,7 +1583,7 @@ class Graph {
     std::string m_doc_string;
 
 public:
-    Graph(const NodeFactory& factory = NodeFactory::default_factory()) :
+    Graph(const NodeFactory& factory = NodeFactory::Instance()) :
         m_factory(factory),
         next_unique(0),
         new_node_stage(0),
@@ -1689,6 +1698,13 @@ public:
         assert(n->owningGraph() == this && !n->inGraphList());
         n->insertAfter(m_output);
         return n;
+    }
+
+    void inferShapes() {
+        auto& inf = ShapeInference::Instance();
+        for (auto n : nodes()) {
+            inf.infer(n);
+        }
     }
 
     ~Graph() {

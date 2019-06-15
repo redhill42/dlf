@@ -16,9 +16,9 @@ public:
     }
 };
 
-const NodeFactory& NodeFactory::default_factory() {
-    static DefaultNodeFactory def;
-    return def;
+const NodeFactory& NodeFactory::Instance() {
+    static DefaultNodeFactory instance;
+    return instance;
 }
 
 }} // namespace dlf::model

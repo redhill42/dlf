@@ -284,6 +284,8 @@ std::unique_ptr<Graph> graphProtoToGraph(const GraphProto& gp, bool nested) {
         setValueType(value_by_name[vp.name()], vp.type().tensor_type());
     }
 
+    g->inferShapes();
+
     return g;
 }
 

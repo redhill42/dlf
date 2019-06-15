@@ -57,8 +57,21 @@ public:
 
     Value* X() { return input(0); }
     Value* W() { return input(1); }
-    Value* B() { return inputs().size() < 3 ? nullptr : input(2); }
+    Value* B() { return input(2); }
     Value* Y() { return output(); }
+};
+
+class Dropout : public Node {
+public:
+    static constexpr NodeKind Kind = kDropout;
+    Dropout(Graph* graph) : Node(graph, Kind) {}
+    void accept(Visitor& v) override { v.visit(this); }
+
+    DEFINE_ATTRIBUTE(ratio, FLOAT, f);
+
+    Value* X() { return input(); }
+    Value* Y() { return output(0); }
+    Value* mask() { return output(1); }
 };
 
 class Flatten : public Node {
@@ -115,7 +128,7 @@ public:
 
     Value* X() { return input(); }
     Value* Y() { return output(0); }
-    Value* Indices() { return outputs().size()==1 ? nullptr : output(1); }
+    Value* Indices() { return output(1); }
 };
 
 class Relu : public Node {

@@ -26,11 +26,11 @@ TEST_F(SerializeTest, Parse) {
     ASSERT_EQ(n->kind(), kConv);
     auto x = n->cast<Conv>();
 
-    EXPECT_EQ(x->get_is(kdilations), std::vector<int64_t>({1, 1}));
-    EXPECT_EQ(x->get_i(kgroup), 1);
-    EXPECT_EQ(x->get_is(kkernel_shape), std::vector<int64_t>({7, 7}));
-    EXPECT_EQ(x->get_is(kpads), std::vector<int64_t>({3, 3, 3, 3}));
-    EXPECT_EQ(x->get_is(kstrides), std::vector<int64_t>({2, 2}));
+    EXPECT_EQ(x->dilations(), std::vector<int64_t>({1, 1}));
+    EXPECT_EQ(x->group(), 1);
+    EXPECT_EQ(x->kernel_shape(), std::vector<int64_t>({7, 7}));
+    EXPECT_EQ(x->pads(), std::vector<int64_t>({3, 3, 3, 3}));
+    EXPECT_EQ(x->strides(), std::vector<int64_t>({2, 2}));
 
     ASSERT_EQ(x->inputs().size(), 2);
     EXPECT_EQ(x->X()->name(), "data");
@@ -41,7 +41,6 @@ TEST_F(SerializeTest, Parse) {
     EXPECT_TRUE(x->W()->has_initializer());
 
     EXPECT_EQ(x->outputs().size(), 1);
-    EXPECT_EQ(x->Y()->type(), DataType::UNDEFINED);
     EXPECT_EQ(x->Y()->node(), x);
 
     n = *it++;
