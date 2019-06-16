@@ -83,62 +83,63 @@ template <> constexpr DataType DataTypeTrait<std::complex<double>> = DataType::C
 
 namespace detail {
 #ifdef HAS_VARIANT
-// Tensor content must be organized in row-major order.
-//
-// Depending on the data_type field, exactly one of the fields below  is
-// used to store the elements of the tensor.
-struct TensorVariant : std::variant<
-    // For float and complex64 values:
-    // Complex64 tensors are encoded as a single array of floats,
-    // with the real components appearing in odd numbered positions,
-    // and corresponding imaginary component appearing in the
-    // subsequent event numbered position. (e.g., [1.0 + 2.0i, 3.0 + 4.0i]
-    // is encoded as [1.0, 2.0, 3.0, 4.0]
-    // When this field is present, the data_type field MUST be FLOAT or COMPLEX64.
-    std::vector<float>,
+struct TensorVariant {
+    // Tensor content must be organized in row-major order.
+    //
+    // Depending on the data_type field, exactly one of the fields below  is
+    // used to store the elements of the tensor.
+    std::variant<
+        // For float and complex64 values:
+        // Complex64 tensors are encoded as a single array of floats,
+        // with the real components appearing in odd numbered positions,
+        // and corresponding imaginary component appearing in the
+        // subsequent event numbered position. (e.g., [1.0 + 2.0i, 3.0 + 4.0i]
+        // is encoded as [1.0, 2.0, 3.0, 4.0]
+        // When this field is present, the data_type field MUST be FLOAT or COMPLEX64.
+        std::vector<float>,
 
-    // For double and complex128 values:
-    // Complex128 tensors are encoded as a single array of doubles,
-    // with the real components appearing in odd numbered positions,
-    // and the corresponding imaginary component appearing in the
-    // subsequent event numbered position. (e.g., [1.0 + 2.0i, 3.0 + 4.0i]
-    // is encoded as [1.0, 2.0, 3.0, 4.0]
-    // When this field is present, the data_type field MUST be DOUBLE or COMPLEX128.
-    std::vector<double>,
+        // For double and complex128 values:
+        // Complex128 tensors are encoded as a single array of doubles,
+        // with the real components appearing in odd numbered positions,
+        // and the corresponding imaginary component appearing in the
+        // subsequent event numbered position. (e.g., [1.0 + 2.0i, 3.0 + 4.0i]
+        // is encoded as [1.0, 2.0, 3.0, 4.0]
+        // When this field is present, the data_type field MUST be DOUBLE or COMPLEX128.
+        std::vector<double>,
 
-    // For int32, uint8, int8, uint16, int16, bool, and float16 values:
-    // float16 values must be bit-wise covered to an uint16_t prior
-    // to writing to the buffer.
-    // When this field is present, the data_type field must be
-    // INT32, INT16, INT8, UINT16, UINT8, BOOL, or FLOAT16.
-    std::vector<int32_t>,
+        // For int32, uint8, int8, uint16, int16, bool, and float16 values:
+        // float16 values must be bit-wise covered to an uint16_t prior
+        // to writing to the buffer.
+        // When this field is present, the data_type field must be
+        // INT32, INT16, INT8, UINT16, UINT8, BOOL, or FLOAT16.
+        std::vector<int32_t>,
 
-    // For int64 values.
-    // When this field is present, the data_type field MUST be INT64
-    std::vector<int64_t>,
+        // For int64 values.
+        // When this field is present, the data_type field MUST be INT64
+        std::vector<int64_t>,
 
-    // For uint64 and uint32 values.
-    // When this field is present, the data_type field MUST be
-    // UINT32 or UINT64.
-    std::vector<uint64_t>,
+        // For uint64 and uint32 values.
+        // When this field is present, the data_type field MUST be
+        // UINT32 or UINT64.
+        std::vector<uint64_t>,
 
-    // For strings.
-    // Each element of string_data is a UTF-8 encoded Unicode
-    // string. No trailing null, no leading BOM.
-    // When this field is present, the data_type field MUST be STRING
-    std::vector<std::string>
->
-{
+        // For strings.
+        // Each element of string_data is a UTF-8 encoded Unicode
+        // string. No trailing null, no leading BOM.
+        // When this field is present, the data_type field MUST be STRING
+        std::vector<std::string>
+    > var;
+
     void init(DataType type) {
         switch (type) {
         case DataType::FLOAT:
         case DataType::COMPLEX64:
-            emplace<std::vector<float>>();
+            var.emplace<std::vector<float>>();
             break;
 
         case DataType::DOUBLE:
         case DataType::COMPLEX128:
-            emplace<std::vector<double>>();
+            var.emplace<std::vector<double>>();
             break;
 
         case DataType::BOOL:
@@ -148,20 +149,20 @@ struct TensorVariant : std::variant<
         case DataType::UINT8:
         case DataType::UINT16:
         case DataType::FLOAT16:
-            emplace<std::vector<int32_t>>();
+            var.emplace<std::vector<int32_t>>();
             break;
 
         case DataType::INT64:
-            emplace<std::vector<int64_t>>();
+            var.emplace<std::vector<int64_t>>();
             break;
 
         case DataType::UINT32:
         case DataType::UINT64:
-            emplace<std::vector<uint64_t>>();
+            var.emplace<std::vector<uint64_t>>();
             break;
 
         case DataType::STRING:
-            emplace<std::vector<std::string>>();
+            var.emplace<std::vector<std::string>>();
             break;
 
         default:
@@ -174,17 +175,17 @@ struct TensorVariant : std::variant<
     }
 
     void clear() {
-        std::visit([](auto& v){v.clear();}, *this);
+        std::visit([](auto& v){v.clear();}, var);
     }
 
     template <typename T>
     std::vector<T>& get() {
-        return std::get<std::vector<T>>(*this);
+        return std::get<std::vector<T>>(var);
     }
 
     template <typename T>
     const std::vector<T>& get() const {
-        return std::get<std::vector<T>>(*this);
+        return std::get<std::vector<T>>(var);
     }
 };
 #else
@@ -469,19 +470,19 @@ public:
     }
 
     template <typename T>
-    Tensor<T> decode();
+    Tensor<T> decode() const;
 };
 
 template <typename T>
-Tensor<T> TensorData::decode() {
+Tensor<T> TensorData::decode() const {
     Shape shape(m_dims);
 
     switch (type()) {
     case DataType::FLOAT:
-        return Tensor<float>::wrap(shape, float_data().data()).cast<T>();
+        return Tensor<float>::wrap(shape, const_cast<float*>(float_data().data())).cast<T>();
 
     case DataType::DOUBLE:
-        return Tensor<double>::wrap(shape, double_data().data()).cast<T>();
+        return Tensor<double>::wrap(shape, const_cast<double*>(double_data().data())).cast<T>();
 
     case DataType::UINT8:
     case DataType::INT8:
@@ -489,14 +490,14 @@ Tensor<T> TensorData::decode() {
     case DataType::INT16:
     case DataType::INT32:
     case DataType::BOOL:
-        return Tensor<int32_t>::wrap(shape, int32_data().data()).cast<T>();
+        return Tensor<int32_t>::wrap(shape, const_cast<int32_t*>(int32_data().data())).cast<T>();
 
     case DataType::INT64:
-        return Tensor<int64_t>::wrap(shape, int64_data().data()).cast<T>();
+        return Tensor<int64_t>::wrap(shape, const_cast<int64_t*>(int64_data().data())).cast<T>();
 
     case DataType::UINT32:
     case DataType::UINT64:
-        return Tensor<uint64_t>::wrap(shape, uint64_data().data()).cast<T>();
+        return Tensor<uint64_t>::wrap(shape, const_cast<uint64_t*>(uint64_data().data())).cast<T>();
 
     default:
         throw std::logic_error("invalid tensor data type");
@@ -504,28 +505,28 @@ Tensor<T> TensorData::decode() {
 }
 
 template <>
-inline Tensor<std::string> TensorData::decode() {
+inline Tensor<std::string> TensorData::decode() const {
     if (type() != DataType::STRING)
         throw std::logic_error("invalid tensor data type");
     return {Shape(m_dims), string_data().begin(), string_data().end()};
 }
 
 template <>
-inline Tensor<std::complex<float>> TensorData::decode() {
+inline Tensor<std::complex<float>> TensorData::decode() const {
     if (type() != DataType::COMPLEX64)
         throw std::logic_error("invalid tensor data type");
 
-    auto data = reinterpret_cast<std::complex<float>*>(float_data().data());
+    auto data = reinterpret_cast<const std::complex<float>*>(float_data().data());
     size_t size = float_data().size() / 2;
     return {Shape(m_dims), data, data+size};
 }
 
 template <>
-inline Tensor<std::complex<double>> TensorData::decode() {
+inline Tensor<std::complex<double>> TensorData::decode() const {
     if (type() != DataType::COMPLEX128)
         throw std::logic_error("invalid tensor data type");
 
-    auto data = reinterpret_cast<std::complex<double>*>(float_data().data());
+    auto data = reinterpret_cast<const std::complex<double>*>(float_data().data());
     size_t size = float_data().size() / 2;
     return {Shape(m_dims), data, data+size};
 }
@@ -1030,27 +1031,6 @@ public:
 //==-------------------------------------------------------------------------
 
 // Forward declaration of all operators. These operators are defined in "model/operators.h"
-#define FORALL_OPERATORS(_) \
-  _(Add)                    \
-  _(AveragePool)            \
-  _(BatchNormalization)     \
-  _(Constant)               \
-  _(Conv)                   \
-  _(ConvInteger)            \
-  _(Dropout)                \
-  _(Flatten)                \
-  _(Gemm)                   \
-  _(GlobalAveragePool)      \
-  _(GlobalLpPool)           \
-  _(GlobalMaxPool)          \
-  _(InstanceNormalization)  \
-  _(LpNormalization)        \
-  _(LpPool)                 \
-  _(MaxPool)                \
-  _(Relu)                   \
-  _(Reshape)                \
-  _(Shrink)
-
 #define FORWARD_DECLARE(op) class op;
 FORALL_OPERATORS(FORWARD_DECLARE)
 #undef FORWARD_DECLARE
@@ -1252,11 +1232,15 @@ public:
     // Access a particular input or output. Null is returned if no such value.
 
     Value* input(size_t i) {
-        return i < m_inputs.size() ? m_inputs[i] : nullptr;
+        if (i < m_inputs.size() && m_inputs[i]->node()->kind() != kUndefined)
+            return m_inputs[i];
+        return nullptr;
     }
 
     const Value* input(size_t i) const {
-        return i < m_inputs.size() ? m_inputs[i] : nullptr;
+        if (i < m_inputs.size() && m_inputs[i]->node()->kind() != kUndefined)
+            return m_inputs[i];
+        return nullptr;
     }
 
     Value* output(size_t i) {
@@ -1563,6 +1547,7 @@ class Graph {
     // having corner cases where the list is empty.
     Node* const m_output;
     Node* const m_input;
+    Node* const m_undefined;
 
     std::string m_name;
     std::string m_doc_string;
@@ -1571,8 +1556,11 @@ public:
     Graph(const NodeFactory& factory = NodeFactory::Instance()) :
         m_factory(factory),
         m_output(initOutput(createNode(kReturn))),
-        m_input(createNode(kParam))
-    {}
+        m_input(createNode(kParam)),
+        m_undefined(createNode(kUndefined))
+    {
+        m_undefined->addOutput("");
+    }
 
     Graph(const Graph&) = delete;
     Graph& operator=(const Graph&) = delete;
@@ -1642,6 +1630,14 @@ public:
         return m_output;
     }
 
+    Value* undefinedValue() noexcept {
+        return m_undefined->output();
+    }
+
+    const Value* undefinedValue() const noexcept {
+        return m_undefined->output();
+    }
+
     Value* addInput(std::string name) noexcept {
         return m_input->addOutput(std::move(name));
     }
@@ -1675,6 +1671,11 @@ public:
     Node* createNode(NodeKind kind) noexcept {
         // Note: Node constructor adds node to all_nodes
         return m_factory.createNode(this, kind);
+    }
+
+    template <typename T>
+    std::enable_if_t<std::is_base_of<Node, T>::value, T*> create() noexcept {
+        return static_cast<T*>(m_factory.createNode(this, T::Kind));
     }
 
     Node* appendNode(Node* n) {

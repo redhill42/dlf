@@ -31,7 +31,7 @@ DLF is a C++ template library. You need docker to be installed on your system to
 Please refers to http://www.docker.com for more information.
 
 You can also install nvidia-docker to use CUDA and/or OpenCL to accelerate DNN computation.
-The installation instructions can be found [here](https://github.com/nvidia/nvidia-docker/wiki/Installation-(version-2.0).
+The installation instructions can be found [here](https://github.com/nvidia/nvidia-docker/wiki/Installation-%28version-2.0%29).
 
 That's all the prerequisites to building the project. After you have installed and configured
 docker properly, cd to the project root and run "make".

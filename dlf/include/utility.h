@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <string>
 #include <vector>
 #include <array>
@@ -48,12 +49,27 @@ template <typename Fn, typename... Args>
 using invoke_result_t = std::result_of_t<Fn(Args...)>;
 #endif
 
+#if __cplusplus >= 201703L
+using std::exchange;
+using std::clamp;
+#else
 template <typename T, typename U = T>
 T exchange(T& obj, U&& new_value) {
     T old_value = std::move(obj);
     obj = std::forward<U>(new_value);
     return old_value;
 }
+
+template <class T, class Compare>
+inline constexpr const T& clamp(const T& v, const T& lo, const T& hi, Compare comp) {
+    return comp(v, lo) ? lo : comp(hi, v) ? hi : v;
+}
+
+template <class T>
+inline constexpr const T& clamp(const T& v, const T& lo, const T& hi) {
+    return cxx::clamp(v, lo, hi, std::less<T>());
+}
+#endif
 
 } // namespace cxx
 

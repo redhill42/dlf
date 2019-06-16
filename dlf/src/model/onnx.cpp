@@ -6,12 +6,6 @@ namespace {
 
 using namespace onnx;
 
-template <typename Src, typename Dst>
-inline void copyTo(const Src& src, Dst& dst) {
-    dst.reserve(src.size());
-    std::copy(src.begin(), src.end(), std::back_inserter(dst));
-}
-
 // Part 1: convert ONNX Protobuf to IR
 
 std::unique_ptr<Graph> decodeGraph(const GraphProto& gp, bool nested);
@@ -19,13 +13,13 @@ std::unique_ptr<Graph> decodeGraph(const GraphProto& gp, bool nested);
 TensorData decodeTensor(const TensorProto& tp) {
     TensorData ret;
 
-    copyTo(tp.dims(), ret.dims());
     ret.set_type(static_cast<DataType>(tp.data_type()));
+    ret.set_dims({tp.dims().begin(), tp.dims().end()});
 
     switch (tp.data_type()) {
     case TensorProto::FLOAT:
     case TensorProto::COMPLEX64:
-        copyTo(tp.float_data(), ret.float_data());
+        ret.float_data().assign(tp.float_data().begin(), tp.float_data().end());
         break;
 
     case TensorProto::FLOAT16:
@@ -36,25 +30,25 @@ TensorData decodeTensor(const TensorProto& tp) {
     case TensorProto::INT32:
     case TensorProto::UINT8:
     case TensorProto::UINT16:
-        copyTo(tp.int32_data(), ret.int32_data());
+        ret.int32_data().assign(tp.int32_data().begin(), tp.int32_data().end());
         break;
 
     case TensorProto::INT64:
-        copyTo(tp.int64_data(), ret.int64_data());
+        ret.int64_data().assign(tp.int64_data().begin(), tp.int64_data().end());
         break;
 
     case TensorProto::UINT32:
     case TensorProto::UINT64:
-        copyTo(tp.uint64_data(), ret.uint64_data());
+        ret.uint64_data().assign(tp.uint64_data().begin(), tp.uint64_data().end());
         break;
 
     case TensorProto::DOUBLE:
     case TensorProto::COMPLEX128:
-        copyTo(tp.double_data(), ret.double_data());
+        ret.double_data().assign(tp.double_data().begin(), tp.double_data().end());
         break;
 
     case TensorProto::STRING:
-        copyTo(tp.string_data(), ret.string_data());
+        ret.string_data().assign(tp.string_data().begin(), tp.string_data().end());
         break;
 
     default:
@@ -94,26 +88,17 @@ void convertAttribute(const AttributeProto& ap, Node* n) {
         n->set_g(name, decodeGraph(ap.g(), true));
         break;
 
-    case AttributeProto::FLOATS: {
-        std::vector<float> fs;
-        copyTo(ap.floats(), fs);
-        n->set_fs(name, std::move(fs));
+    case AttributeProto::FLOATS:
+        n->set_fs(name, {ap.floats().begin(), ap.floats().end()});
         break;
-    }
 
-    case AttributeProto::INTS: {
-        std::vector<int64_t> is;
-        copyTo(ap.ints(), is);
-        n->set_is(name, std::move(is));
+    case AttributeProto::INTS:
+        n->set_is(name, {ap.ints().begin(), ap.ints().end()});
         break;
-    }
 
-    case AttributeProto::STRINGS: {
-        std::vector<std::string> ss;
-        copyTo(ap.strings(), ss);
-        n->set_ss(name, std::move(ss));
+    case AttributeProto::STRINGS:
+        n->set_ss(name, {ap.strings().begin(), ap.strings().end()});
         break;
-    }
 
     case AttributeProto::TENSORS: {
         std::vector<TensorData> ts;
@@ -188,15 +173,12 @@ std::unique_ptr<Graph> decodeGraph(const GraphProto& gp, bool nested) {
     // inputs.
     std::unordered_map<Node*, std::vector<std::string>> inputs_by_node;
 
-    {
-        // ONNX represents optional arguments in two ways
-        //  - they are simply not provided
-        //  - OR the empty string is passed as the input name
-        // This is to handle that second case, which need a dummy node to
-        // be representable in the graph IR.
-        auto* n = g->createNode(kUndefined);
-        value_by_name[""] = n->addOutput("");
-    }
+    // ONNX represents optional arguments in two ways
+    //  - they are simply not provided
+    //  - OR the empty string is passed as the input name
+    // This is to handle that second case, which need a dummy node to
+    // be representable in the graph IR.
+    value_by_name[""] = g->undefinedValue();
 
     // Adding all inputs with type definition.
     for (auto& vp : gp.input()) {
@@ -228,9 +210,7 @@ std::unique_ptr<Graph> decodeGraph(const GraphProto& gp, bool nested) {
 
         // we will connect inputs to other nodes' output later, we just
         // record input names now.
-        std::vector<std::string> inputs;
-        copyTo(np.input(), inputs);
-        inputs_by_node[n] = std::move(inputs);
+        inputs_by_node[n] = {np.input().begin(), np.input().end()};
 
         if (np.has_name())
             n->set_name(np.name());

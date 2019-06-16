@@ -21,4 +21,8 @@ const NodeFactory& NodeFactory::Instance() {
     return instance;
 }
 
+#define DEFINE_KIND(op) constexpr NodeKind op::Kind;
+FORALL_OPERATORS(DEFINE_KIND)
+#undef DEFINE_KIND
+
 }} // namespace dlf::model
