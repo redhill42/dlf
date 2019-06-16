@@ -985,6 +985,10 @@ public:
         return m_dims;
     }
 
+    size_t dim(size_t i) const noexcept {
+        return m_dims.at(i);
+    }
+
     Value* set_dims(Dims dims) noexcept {
         m_dims = std::move(dims);
         return this;
@@ -1007,19 +1011,9 @@ public:
         return m_uses;
     }
 
-    bool has_initializer() const noexcept {
-        return m_has_initializer;
-    }
-
-    const TensorData& initializer() const noexcept {
-        return m_initializer;
-    }
-
-    Value* set_initializer(TensorData initializer) noexcept {
-        m_has_initializer = true;
-        m_initializer = std::move(initializer);
-        return this;
-    }
+    bool has_initializer() const noexcept;
+    const TensorData& initializer() const noexcept;
+    Value* set_initializer(TensorData initializer) noexcept;
 
     // Replaces all uses of this node with 'newValue'.
     //
@@ -1038,14 +1032,24 @@ public:
 // Forward declaration of all operators. These operators are defined in "model/operators.h"
 #define FORALL_OPERATORS(_) \
   _(Add)                    \
+  _(AveragePool)            \
   _(BatchNormalization)     \
+  _(Constant)               \
   _(Conv)                   \
+  _(ConvInteger)            \
   _(Dropout)                \
   _(Flatten)                \
   _(Gemm)                   \
   _(GlobalAveragePool)      \
+  _(GlobalLpPool)           \
+  _(GlobalMaxPool)          \
+  _(InstanceNormalization)  \
+  _(LpNormalization)        \
+  _(LpPool)                 \
   _(MaxPool)                \
-  _(Relu)
+  _(Relu)                   \
+  _(Reshape)                \
+  _(Shrink)
 
 #define FORWARD_DECLARE(op) class op;
 FORALL_OPERATORS(FORWARD_DECLARE)
@@ -1078,6 +1082,12 @@ public:
     virtual ~ShapeInference() = default;
 
     static ShapeInference& Instance();
+};
+
+class ShapeInferenceError : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+    ShapeInferenceError(const std::string& message) : std::runtime_error(message) {}
 };
 
 //==-------------------------------------------------------------------------
@@ -1224,22 +1234,18 @@ public:
     // so we have a helper to make accessing it easier.
 
     Value* input() noexcept {
-        assert(m_inputs.size() == 1);
         return m_inputs.at(0);
     }
 
     Value* output() noexcept {
-        assert(m_outputs.size() == 1);
         return m_outputs.at(0);
     }
 
     const Value* input() const noexcept {
-        assert(m_inputs.size() == 1);
         return m_inputs.at(0);
     }
 
     const Value* output() const noexcept {
-        assert(m_outputs.size() == 1);
         return m_outputs.at(0);
     }
 
@@ -1739,6 +1745,22 @@ inline Graph* Value::owningGraph() noexcept {
 
 inline const Graph* Value::owningGraph() const noexcept {
     return node()->owningGraph();
+}
+
+inline bool Value::has_initializer() const noexcept {
+    return m_has_initializer || m_node->kind() == kConstant;
+}
+
+inline const TensorData& Value::initializer() const noexcept {
+    if (m_node->kind() == kConstant)
+        return m_node->get_t(kvalue);
+    return m_initializer;
+}
+
+inline Value* Value::set_initializer(TensorData initializer) noexcept {
+    m_has_initializer = true;
+    m_initializer = std::move(initializer);
+    return this;
 }
 
 inline void Value::replaceAllUsesWith(Value* newValue) {

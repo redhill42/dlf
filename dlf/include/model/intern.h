@@ -48,6 +48,7 @@
   _(Gemm)                         \
   _(GlobalAveragePool)            \
   _(GlobalLpPool)                 \
+  _(GlobalMaxPool)                \
   _(Greater)                      \
   _(HardSigmoid)                  \
   _(Hardmax)                      \
@@ -158,6 +159,7 @@
   _(axes)                         \
   _(axis)                         \
   _(beta)                         \
+  _(bias)                         \
   _(body)                         \
   _(broadcast)                    \
   _(cat)                          \
@@ -193,6 +195,7 @@
   _(kernel)                       \
   _(kernels)                      \
   _(kernel_shape)                 \
+  _(lambd)                        \
   _(le)                           \
   _(lerp)                         \
   _(lgamma)                       \

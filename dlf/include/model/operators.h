@@ -4,6 +4,14 @@
 
 namespace dlf { namespace model {
 
+#define BEGIN_OPERATOR(name) \
+class name : public Node { \
+public: \
+    static constexpr NodeKind Kind = k##name; \
+    name(Graph* graph) : Node(graph, Kind) {} \
+    void accept(Visitor& v) override { v.visit(this); }
+#define END_OPERATOR() };
+
 #define DEFINE_ATTRIBUTE(name, kind, method) \
     bool has_##name() const { \
         return hasAttribute(k##name); \
@@ -14,23 +22,22 @@ namespace dlf { namespace model {
 
 //==-------------------------------------------------------------------------
 
-class Add : public Node {
-public:
-    static constexpr NodeKind Kind = kAdd;
-    Add(Graph* graph) : Node(graph, Kind) {}
-    void accept(Visitor& v) override { v.visit(this); }
-
+BEGIN_OPERATOR(Add)
     Value* A() { return input(0); }
     Value* B() { return input(1); }
     Value* C() { return output(); }
-};
+END_OPERATOR()
 
-class BatchNormalization : public Node {
-public:
-    static constexpr NodeKind Kind = kBatchNormalization;
-    BatchNormalization(Graph* graph) : Node(graph, Kind) {}
-    void accept(Visitor& v) override { v.visit(this); }
+BEGIN_OPERATOR(AveragePool)
+    DEFINE_ATTRIBUTE(auto_pad, STRING, s);
+    DEFINE_ATTRIBUTE(ceil_mode, INT, i);
+    DEFINE_ATTRIBUTE(count_include_pad, INT, i);
+    DEFINE_ATTRIBUTE(kernel_shape, INTS, is);
+    DEFINE_ATTRIBUTE(pads, INTS, is);
+    DEFINE_ATTRIBUTE(strides, INTS, is);
+END_OPERATOR()
 
+BEGIN_OPERATOR(BatchNormalization)
     DEFINE_ATTRIBUTE(epsilon,  FLOAT, f);
     DEFINE_ATTRIBUTE(momentum, FLOAT, f);
 
@@ -40,14 +47,13 @@ public:
     Value* mean()  { return input(3); }
     Value* var()   { return input(4); }
     Value* Y()     { return output(); }
-};
+END_OPERATOR()
 
-class Conv : public Node {
-public:
-    static constexpr NodeKind Kind = kConv;
-    Conv(Graph* graph) : Node(graph, Kind) {}
-    void accept(Visitor& v) override { v.visit(this); }
+BEGIN_OPERATOR(Constant)
+    DEFINE_ATTRIBUTE(value, TENSOR, t);
+END_OPERATOR()
 
+BEGIN_OPERATOR(Conv)
     DEFINE_ATTRIBUTE(auto_pad, STRING, s);
     DEFINE_ATTRIBUTE(dilations, INTS, is);
     DEFINE_ATTRIBUTE(group, INT, i);
@@ -59,39 +65,33 @@ public:
     Value* W() { return input(1); }
     Value* B() { return input(2); }
     Value* Y() { return output(); }
-};
+END_OPERATOR()
 
-class Dropout : public Node {
-public:
-    static constexpr NodeKind Kind = kDropout;
-    Dropout(Graph* graph) : Node(graph, Kind) {}
-    void accept(Visitor& v) override { v.visit(this); }
+BEGIN_OPERATOR(ConvInteger)
+    DEFINE_ATTRIBUTE(auto_pad, STRING, s);
+    DEFINE_ATTRIBUTE(dilations, INTS, is);
+    DEFINE_ATTRIBUTE(group, INT, i);
+    DEFINE_ATTRIBUTE(kernel_shape, INTS, is);
+    DEFINE_ATTRIBUTE(pads, INTS, is);
+    DEFINE_ATTRIBUTE(strides, INTS, is);
 
-    DEFINE_ATTRIBUTE(ratio, FLOAT, f);
-
-    Value* X() { return input(); }
-    Value* Y() { return output(0); }
-    Value* mask() { return output(1); }
-};
-
-class Flatten : public Node {
-public:
-    static constexpr NodeKind Kind = kFlatten;
-    Flatten(Graph* graph) : Node(graph, Kind) {}
-    void accept(Visitor& v) override { v.visit(this); }
-
-    DEFINE_ATTRIBUTE(axis, INT, i);
-
-    Value* X() { return input(); }
+    Value* X() { return input(0); }
+    Value* W() { return input(1); }
+    Value* X_zero_point() { return input(2); }
+    Value* W_zero_point() { return input(3); }
     Value* Y() { return output(); }
-};
+END_OPERATOR()
 
-class Gemm : public Node {
-public:
-    static constexpr NodeKind Kind = kGemm;
-    Gemm(Graph* graph) : Node(graph, Kind) {}
-    void accept(Visitor& v) override { v.visit(this); }
+BEGIN_OPERATOR(Dropout)
+    DEFINE_ATTRIBUTE(ratio, FLOAT, f);
+    Value* mask() { return output(1); }
+END_OPERATOR()
 
+BEGIN_OPERATOR(Flatten)
+    DEFINE_ATTRIBUTE(axis, INT, i);
+END_OPERATOR()
+
+BEGIN_OPERATOR(Gemm)
     DEFINE_ATTRIBUTE(alpha,  FLOAT, f);
     DEFINE_ATTRIBUTE(beta,   FLOAT, f);
     DEFINE_ATTRIBUTE(transA, INT, i);
@@ -101,24 +101,38 @@ public:
     Value* B() { return input(1); }
     Value* C() { return input(2); }
     Value* Y() { return output(); }
-};
+END_OPERATOR()
 
-class GlobalAveragePool : public Node {
-public:
-    static constexpr NodeKind Kind = kGlobalAveragePool;
-    GlobalAveragePool(Graph* graph) : Node(graph, Kind) {}
-    void accept(Visitor& v) override { v.visit(this); }
+BEGIN_OPERATOR(GlobalAveragePool)
+END_OPERATOR()
 
-    Value* X() { return input(); }
-    Value* Y() { return output(); }
-};
+BEGIN_OPERATOR(GlobalLpPool)
+END_OPERATOR()
 
-class MaxPool : public Node {
-public:
-    static constexpr NodeKind Kind = kMaxPool;
-    MaxPool(Graph* graph) : Node(graph, Kind) {}
-    void accept(Visitor& v) override { v.visit(this); }
+BEGIN_OPERATOR(GlobalMaxPool)
+END_OPERATOR()
 
+BEGIN_OPERATOR(InstanceNormalization)
+    DEFINE_ATTRIBUTE(epsilon,  FLOAT, f);
+
+    Value* X()     { return input(0); }
+    Value* scale() { return input(1); }
+    Value* B()     { return input(2); }
+    Value* Y()     { return output(); }
+END_OPERATOR()
+
+BEGIN_OPERATOR(LpNormalization)
+    DEFINE_ATTRIBUTE(axis, INT, i);
+END_OPERATOR()
+
+BEGIN_OPERATOR(LpPool)
+    DEFINE_ATTRIBUTE(auto_pad, STRING, s);
+    DEFINE_ATTRIBUTE(kernel_shape, INTS, is);
+    DEFINE_ATTRIBUTE(pads, INTS, is);
+    DEFINE_ATTRIBUTE(strides, INTS, is);
+END_OPERATOR()
+
+BEGIN_OPERATOR(MaxPool)
     DEFINE_ATTRIBUTE(ceil_mode, INT, i);
     DEFINE_ATTRIBUTE(dilations, INTS, is);
     DEFINE_ATTRIBUTE(kernel_shape, INTS, is);
@@ -126,20 +140,22 @@ public:
     DEFINE_ATTRIBUTE(storage_order, INT, i);
     DEFINE_ATTRIBUTE(strides, INTS, is);
 
-    Value* X() { return input(); }
-    Value* Y() { return output(0); }
     Value* Indices() { return output(1); }
-};
+END_OPERATOR()
 
-class Relu : public Node {
-public:
-    static constexpr NodeKind Kind = kRelu;
-    Relu(Graph* graph) : Node(graph, Kind) {}
-    void accept(Visitor& v) override { v.visit(this); }
+BEGIN_OPERATOR(Relu)
+END_OPERATOR()
 
-    Value* X() { return input(); }
-    Value* Y() { return output(); }
-};
+BEGIN_OPERATOR(Reshape)
+    Value* data()     { return input(0); }
+    Value* shape()    { return input(1); }
+    Value* reshaped() { return output(0); }
+END_OPERATOR()
+
+BEGIN_OPERATOR(Shrink)
+    DEFINE_ATTRIBUTE(bias, FLOAT, f);
+    DEFINE_ATTRIBUTE(lambd, FLOAT, f);
+END_OPERATOR()
 
 //==-------------------------------------------------------------------------
 
