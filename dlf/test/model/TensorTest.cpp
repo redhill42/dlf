@@ -6,8 +6,9 @@ using namespace dlf::model;
 
 TEST(TensorData, SetData) {
     std::vector<int16_t> data(24);
-    std::generate(data.begin(), data.end(), [i=1]() mutable { return i++; });
-    TensorData dt({2, 3, 4}, data.begin(), data.end());
+    std::iota(data.begin(), data.end(), 1);
+    TensorData dt({2, 3, 4}, data);
+    EXPECT_EQ(dt.type(), DataType::INT16);
 
     auto& v = dt.int32_data();
     EXPECT_EQ(v.size(), 24);
@@ -16,29 +17,47 @@ TEST(TensorData, SetData) {
     }
 }
 
+TEST(TensorData, SetStringData) {
+    std::vector<std::string> data = {"venus", "jupiter", "mercury", "mars", "saturn"};
+    TensorData dt({data.size()}, data);
+    EXPECT_EQ(dt.type(), DataType::STRING);
+    EXPECT_EQ(dt.string_data(), data);
+}
+
+TEST(TensorData, SetComplexData) {
+    const std::complex<float> data[] {{1, 2}, {3, 4}};
+    TensorData dt({2}, data);
+    EXPECT_EQ(dt.type(), DataType::COMPLEX64);
+    EXPECT_EQ(dt.float_data(), std::vector<float>({1, 2, 3, 4}));
+}
+
 TEST(TensorData, SetIncompatibleData) {
-    std::vector<int16_t> data(24);
-    std::fill(data.begin(), data.end(), 1);
     TensorData dt({2, 3, 4}, DataType::INT32);
+    std::vector<int16_t> data(24);
     EXPECT_ANY_THROW(dt.set_data(data.begin(), data.end()));
 }
 
 TEST(TensorData, Encode) {
-    auto t = dlf::Tensor<int32_t>::range({2, 3, 4}, 1);
-    auto dt = TensorData(t);
-
-    EXPECT_EQ(dt.dims(), std::vector<size_t>({2, 3, 4}));
+    auto dt = TensorData(dlf::Tensor<int32_t>::range({2, 3, 4}, 1));
+    EXPECT_EQ(dt.dims(), Dims({2, 3, 4}));
     EXPECT_EQ(dt.int32_data().size(), 24);
 }
 
 TEST(TensorData, Decode) {
     std::vector<int32_t> data(24);
-    std::generate(data.begin(), data.end(), [i=1]() mutable { return i++; });
-    TensorData dt({2, 3, 4}, data.begin(), data.end());
+    std::iota(data.begin(), data.end(), 1);
+    TensorData dt({2, 3, 4}, data);
     EXPECT_EQ(dt.decode<int16_t>(), dlf::Tensor<int16_t>::range({2, 3, 4}, 1));
 }
 
-TEST(TensorData, Complex) {
+TEST(TensorData, DecodeString) {
+    TensorData dt({2}, DataType::STRING);
+    dt.string_data().push_back("alice");
+    dt.string_data().push_back("bob");
+    EXPECT_EQ(dt.decode<std::string>(), dlf::Tensor<std::string>({2}, {"alice", "bob"}));
+}
+
+TEST(TensorData, DecodeComplex) {
     TensorData dt({2}, DataType::COMPLEX64);
     dt.float_data().push_back(1);
     dt.float_data().push_back(2);

@@ -13,6 +13,7 @@ std::unique_ptr<Graph> decodeGraph(const GraphProto& gp, bool nested);
 TensorData decodeTensor(const TensorProto& tp) {
     TensorData ret;
 
+    ret.set_name(tp.name());
     ret.set_type(static_cast<DataType>(tp.data_type()));
     ret.set_dims({tp.dims().begin(), tp.dims().end()});
 
@@ -58,13 +59,10 @@ TensorData decodeTensor(const TensorProto& tp) {
     if (tp.has_raw_data())
         ret.set_raw_data(tp.raw_data());
 
-    if (tp.has_name())
-        ret.set_name(tp.name());
-
     return ret;
 }
 
-void convertAttribute(const AttributeProto& ap, Node* n) {
+void decodeAttribute(const AttributeProto& ap, Node* n) {
     auto name = Symbol(ap.name());
 
     switch (ap.type()) {
@@ -189,10 +187,17 @@ std::unique_ptr<Graph> decodeGraph(const GraphProto& gp, bool nested) {
 
     // Adding all initializers with type and data.
     for (auto& init : gp.initializer()) {
+        if (!init.has_name()) {
+            std::cerr << "The initializer must have a name\n";
+            continue;
+        }
         auto t = decodeTensor(init);
-        if (!value_by_name.count(t.name()))
-            value_by_name[t.name()] = g->addInput(t.name(), t.type(), t.dims());
-        value_by_name[t.name()]->set_initializer(std::move(t));
+        auto it = value_by_name.find(t.name());
+        if (it == value_by_name.end()) {
+            auto v = g->addInput(t.name(), t.type(), t.dims());
+            it = value_by_name.emplace(t.name(), v).first;
+        }
+        it->second->set_initializer(std::move(t));
     }
 
     // Adding all nodes, defer determine value types of inputs and outputs.
@@ -205,7 +210,7 @@ std::unique_ptr<Graph> decodeGraph(const GraphProto& gp, bool nested) {
         }
 
         for (auto& ap : np.attribute()) {
-            convertAttribute(ap, n);
+            decodeAttribute(ap, n);
         }
 
         // we will connect inputs to other nodes' output later, we just
@@ -255,8 +260,6 @@ std::unique_ptr<Graph> decodeGraph(const GraphProto& gp, bool nested) {
     for (auto& vp : gp.value_info()) {
         setValueType(value_by_name[vp.name()], vp.type().tensor_type());
     }
-
-    g->inferShapes();
 
     return g;
 }
@@ -454,6 +457,7 @@ void encodeGraph(GraphProto* gp, const Graph* g) {
                 np->add_input(input->name());
             }
         }
+
         for (auto output : node->outputs()) {
             np->add_output(output->name());
             // only save it if

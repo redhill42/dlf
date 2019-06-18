@@ -286,8 +286,13 @@ public:
         set_data(first, last);
     }
 
+    template <typename Container>
+    TensorData(Dims dims, Container& c)
+        : TensorData(std::move(dims), std::begin(c), std::end(c))
+    {}
+
     template <typename T>
-    /*implicit*/ TensorData(Tensor<T> tensor) {
+    explicit TensorData(const Tensor<T>& tensor) {
         m_dims.resize(tensor.rank());
         for (size_t i = 0; i < tensor.rank(); i++) {
             m_dims[i] = tensor.extent(i);
@@ -299,10 +304,6 @@ public:
     }
 
     const Dims& dims() const noexcept {
-        return m_dims;
-    }
-
-    Dims& dims() noexcept {
         return m_dims;
     }
 
@@ -397,18 +398,20 @@ public:
     }
 
     template <typename Iterator>
-    void set_data(Iterator first, Iterator last) {
-        size_t size = std::distance(first, last);
-        if (size != this->size())
+    std::enable_if_t<std::is_arithmetic<typename std::iterator_traits<Iterator>::value_type>::value>
+    set_data(Iterator first, Iterator last) {
+        if (size() != std::distance(first, last))
             throw std::invalid_argument("invalid tensor data size");
-
-        if (DataTypeTrait<typename std::iterator_traits<Iterator>::value_type> != type())
+        if (type() != DataTypeTrait<typename std::iterator_traits<Iterator>::value_type>)
             throw std::invalid_argument("invalid tensor data type");
 
         switch (type()) {
         case DataType::FLOAT:
-            float_data().resize(size);
-            std::copy(first, last, float_data().begin());
+            float_data().assign(first, last);
+            break;
+
+        case DataType::DOUBLE:
+            double_data().assign(first, last);
             break;
 
         case DataType::UINT8:
@@ -417,50 +420,53 @@ public:
         case DataType::INT16:
         case DataType::INT32:
         case DataType::BOOL:
-            int32_data().resize(size);
-            std::transform(first, last, int32_data().begin(),
-                [](auto x) { return static_cast<int32_t>(x); });
+            int32_data().assign(first, last);
             break;
 
         case DataType::INT64:
-            int64_data().resize(size);
-            std::copy(first, last, int64_data().begin());
-            break;
-
-        case DataType::STRING:
-            string_data().resize(size);
-            std::copy(first, last, string_data().begin());
-            break;
-
-        case DataType::DOUBLE:
-            double_data().resize(size);
-            std::copy(first, last, double_data().begin());
+            int64_data().assign(first, last);
             break;
 
         case DataType::UINT32:
-            uint64_data().resize(size);
-            std::transform(first, last, uint64_data().begin(),
-                [](auto x) { return static_cast<uint64_t>(x); });
-            break;
-
         case DataType::UINT64:
-            uint64_data().resize(size);
-            std::copy(first, last, uint64_data().begin());
-            break;
-
-        case DataType::COMPLEX64:
-            float_data().resize(size*2);
-            std::copy(first, last, reinterpret_cast<std::complex<float>*>(float_data().data()));
-            break;
-
-        case DataType::COMPLEX128:
-            double_data().resize(size*2);
-            std::copy(first, last, reinterpret_cast<std::complex<double>*>(double_data().data()));
+            uint64_data().assign(first, last);
             break;
 
         default:
             throw std::logic_error("unsupported tensor data type");
         }
+    }
+
+    template <typename Iterator>
+    std::enable_if_t<std::is_same<std::string, typename std::iterator_traits<Iterator>::value_type>::value>
+    set_data(Iterator first, Iterator last) {
+        if (size() != std::distance(first, last))
+            throw std::invalid_argument("invalid tensor data size");
+        if (type() != DataType::STRING)
+            throw std::invalid_argument("invalid tensor data type");
+        string_data().assign(first, last);
+    }
+
+    template <typename Iterator>
+    std::enable_if_t<std::is_same<std::complex<float>, typename std::iterator_traits<Iterator>::value_type>::value>
+    set_data(Iterator first, Iterator last) {
+        if (size() != std::distance(first, last))
+            throw std::invalid_argument("invalid tensor data size");
+        if (type() != DataType::COMPLEX64)
+            throw std::invalid_argument("invalid tensor data type");
+        float_data().resize(size()*2);
+        std::copy(first, last, reinterpret_cast<std::complex<float>*>(float_data().data()));
+    }
+
+    template <typename Iterator>
+    std::enable_if_t<std::is_same<std::complex<double>, typename std::iterator_traits<Iterator>::value_type>::value>
+    set_data(Iterator first, Iterator last) {
+        if (size() != std::distance(first, last))
+            throw std::invalid_argument("invalid tensor data size");
+        if (type() != DataType::COMPLEX128)
+            throw std::invalid_argument("invalid tensor data type");
+        double_data().resize(size()*2);
+        std::copy(first, last, reinterpret_cast<std::complex<double>*>(double_data().data()));
     }
 
     void clear() {
@@ -802,8 +808,7 @@ public:
 
     std::vector<Symbol> attributeNames() const noexcept {
         std::vector<Symbol> names(m_values.size());
-        std::transform(m_values.begin(), m_values.end(), names.begin(),
-            [](auto const& a) { return a->name(); });
+        std::transform(m_values.begin(), m_values.end(), names.begin(), std::mem_fn(&AttributeValue::name));
         return names;
     }
 
@@ -831,8 +836,8 @@ public:
     const AT(kind)& get_##method(Symbol name) const { \
         return get<kind##Attribute>(name, kind##Attribute::Kind); \
     } \
-    const AT(kind)& get_##method(Symbol name, const AT(kind)& d) const { \
-        return get_or_default<kind##Attribute>(name, kind##Attribute::Kind, d); \
+    AT(kind) get_##method(Symbol name, AT(kind) default_value) const { \
+        return get_or_default<kind##Attribute>(name, kind##Attribute::Kind, std::move(default_value)); \
     }
 
     CREATE_ACCESSOR(Float, f)
@@ -871,11 +876,10 @@ private:
     template <typename AT, typename V = typename AT::ValueType>
     Derived& set(Symbol name, V&& v) {
         auto it = find(name, false);
-        auto nv = std::make_unique<AT>(name, std::move(v));
         if (it == m_values.end()) {
-            m_values.push_back(std::move(nv));
+            m_values.emplace_back(new AT(name, std::move(v)));
         } else {
-            *it = std::move(nv);
+            *it = std::make_unique<AT>(name, std::move(v));
         }
         return *This();
     }
@@ -889,10 +893,10 @@ private:
     }
 
     template <typename AT, typename V = typename AT::ValueType>
-    const V& get_or_default(Symbol name, AttributeKind kind, const V& default_value) const {
+    V get_or_default(Symbol name, AttributeKind kind, V&& default_value) const {
         auto it = find(name, false);
         if (it == m_values.end()) {
-            return default_value;
+            return std::forward<V>(default_value);
         } else if ((*it)->kind() != kind) {
             throw bad_variant_access();
         } else {
@@ -943,7 +947,6 @@ class Value final {
     std::string     m_name;
     DataType        m_type;
     Dims            m_dims;
-    size_t          m_stage = 0; // 0-forward, 1-backward, 2-double-backward, ...
     UseList         m_uses;
     bool            m_has_initializer = false;
     TensorData      m_initializer;
@@ -982,7 +985,7 @@ public:
         return this;
     }
 
-    const Dims dims() const noexcept {
+    const Dims& dims() const noexcept {
         return m_dims;
     }
 
@@ -992,15 +995,6 @@ public:
 
     Value* set_dims(Dims dims) noexcept {
         m_dims = std::move(dims);
-        return this;
-    }
-
-    size_t stage() const noexcept {
-        return m_stage;
-    }
-
-    Value* set_stage(size_t stage) noexcept {
-        m_stage = stage;
         return this;
     }
 
@@ -1102,8 +1096,6 @@ class Node : public Attributes<Node> {
     ValueList m_inputs;
     ValueList m_outputs;
 
-    size_t m_stage;
-
     std::string m_name;
     std::string m_domain;
     std::string m_doc_string;
@@ -1124,14 +1116,6 @@ public:
 
     NodeKind kind() const noexcept {
         return m_kind;
-    }
-
-    size_t stage() {
-        return m_stage;
-    }
-
-    void set_stage(size_t stage) {
-        m_stage = stage;
     }
 
     bool has_name() const noexcept {
@@ -1540,8 +1524,6 @@ class Graph {
     std::unordered_set<const Node*> all_nodes;
     std::unordered_set<const Value*> all_values;
 
-    size_t new_node_stage = 0;
-
     // Holds outputs in a way that can be reflected as a Use object.
     // Also used as the beginning/end of the circular node list to avoid
     // having corner cases where the list is empty.
@@ -1652,20 +1634,12 @@ public:
         m_input->eraseOutput(i);
     }
 
-    void advanceStage() noexcept {
-        new_node_stage++;
-    }
-
-    void setStage(size_t new_stage) noexcept {
-        new_node_stage = new_stage;
-    }
-
-    size_t stage() const noexcept {
-        return new_node_stage;
-    }
-
     Value* addOutput(Value* n) noexcept {
         return m_output->addInput(n);
+    }
+
+    void eraseOutput(size_t i) noexcept {
+        m_output->eraseInput(i);
     }
 
     Node* createNode(NodeKind kind) noexcept {
@@ -1707,10 +1681,7 @@ public:
 private:
     // should only be called in the constructor
     static Node* initOutput(Node* p) {
-        p->next() = p;
-        p->prev() = p;
-        p->set_stage(std::numeric_limits<size_t>::max());
-        return p;
+        return p->next() = p->prev() =  p;
     }
 
     void freeNode(Node* n) {
@@ -1734,7 +1705,6 @@ private:
 
 inline Value::Value(Node* node, size_t offset, std::string name)
     : m_node(node), m_offset(offset), m_name(std::move(name)),
-      m_stage(node->m_graph->new_node_stage),
       m_type(DataType::UNDEFINED)
 {
     node->m_graph->all_values.emplace(this);
@@ -1774,8 +1744,7 @@ inline void Value::replaceAllUsesWith(Value* newValue) {
 }
 
 inline Node::Node(Graph* graph, NodeKind kind) :
-    m_graph(graph), m_kind(kind),
-    m_stage(graph->new_node_stage)
+    m_graph(graph), m_kind(kind)
 {
     graph->all_nodes.emplace(this);
 }

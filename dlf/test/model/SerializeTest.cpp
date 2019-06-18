@@ -85,19 +85,3 @@ TEST_F(SerializeTest, GraphHierachy) {
     EXPECT_EQ(n4->output()->uses()[0].user->kind(), kConv);
     EXPECT_EQ(n4->output()->uses()[1].user->kind(), kAdd);
 }
-
-TEST_F(SerializeTest, Visitor) {
-    class MyVisitor final : public DefaultVisitor {
-    public:
-        int conv_cnt = 0;
-        void visit(Conv*) override {
-            conv_cnt++;
-        }
-    };
-
-    MyVisitor vis;
-    for (Node* n : g->nodes()) {
-        n->accept(vis);
-    }
-    EXPECT_EQ(vis.conv_cnt, 20);
-}
