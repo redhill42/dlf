@@ -42,10 +42,32 @@ public:
     }
 
     /**
+     * Return shape dimensions.
+     */
+    std::vector<size_t> extents() const noexcept {
+        std::vector<size_t> ret;
+        ret.reserve(m_dims.size());
+        for (auto d : m_dims)
+            ret.push_back(d.extent);
+        return ret;
+    }
+
+    /**
      * Returns number of elements in a given dimension.
      */
     size_t extent(size_t dim) const noexcept {
         return m_dims[dim].extent;
+    }
+
+    /**
+     * Return shape strides.
+     */
+    std::vector<size_t> strides() const noexcept {
+        std::vector<size_t> ret;
+        ret.reserve(m_dims.size());
+        for (auto d : m_dims)
+            ret.push_back(d.stride);
+        return ret;
     }
 
     /**

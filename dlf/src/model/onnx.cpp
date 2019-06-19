@@ -1,4 +1,4 @@
-#include "model/serialize.h"
+#include "model.h"
 #include "onnx.pb.h"
 
 namespace dlf { namespace model {

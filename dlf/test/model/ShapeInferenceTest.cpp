@@ -150,11 +150,8 @@ TEST(ShapeInference, Gemm) {
 template <typename T>
 static Value* addInitializer(Node* n, const std::string& name, std::vector<T> data) {
     if (data.size() > 0) {
-        auto v = n->owningGraph()->addInput(name, DataTypeTrait<T>, {data.size()});
         auto t = dlf::Tensor<T>({data.size()}, data.begin(), data.end());
-        v->set_initializer(TensorData(t));
-        n->addInput(v);
-        return v;
+        return n->addInput(n->owningGraph()->addInitializer(TensorData(name, t)));
     } else {
         return n->addInput(n->owningGraph()->undefinedValue());
     }

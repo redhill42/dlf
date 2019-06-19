@@ -1,5 +1,4 @@
 #include "model.h"
-#include "model/operators.h"
 
 namespace dlf { namespace model {
 
@@ -66,13 +65,19 @@ public:
         n->accept(*this);
     }
 
+    void infer(Graph& g) override {
+        for (auto n : g.nodes()) {
+            infer(n);
+        }
+    }
+
     //-----------------------------------------------------------------------
 
     void visit(If* n) override {
         // there are no inputs so we just need to run the subgraph inferencing for
         // then/else subgraphs and apply those to the outputs.
-        n->then_branch()->inferShapes();
-        n->else_branch()->inferShapes();
+        infer(*n->then_branch());
+        infer(*n->else_branch());
 
         auto then_outputs = n->then_branch()->outputs();
         auto else_outputs = n->else_branch()->outputs();
