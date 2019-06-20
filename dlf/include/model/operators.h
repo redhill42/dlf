@@ -256,13 +256,33 @@ BEGIN_OPERATOR(Gemm)
 END_OPERATOR()
 
 DEFINE_BINARY_OPERATOR(MatMul)
-DEFINE_BINARY_OPERATOR(MatMulInteger)
+
+BEGIN_OPERATOR(MatMulInteger)
+    Value* A() { return input(0); }
+    Value* B() { return input(1); }
+    Value* A_zero_point() { return input(2); }
+    Value* B_zero_point() { return input(3); }
+    Value* Y() { return output(); }
+END_OPERATOR()
+
+BEGIN_OPERATOR(QLinearMatMul)
+    Value* A()            { return input(0); }
+    Value* A_scale()      { return input(1); }
+    Value* A_zero_point() { return input(2); }
+    Value* B()            { return input(3); }
+    Value* B_scale()      { return input(4); }
+    Value* B_zero_point() { return input(5); }
+    Value* Y_scale()      { return input(6); }
+    Value* Y_zero_point() { return input(7); }
+    Value* Y()            { return output(); }
+END_OPERATOR()
 
 BEGIN_OPERATOR(TopK)
+    DEFINE_ATTRIBUTE(axis, INT, i)
+
     Value* X() { return input(0); }
     Value* K() { return input(1); }
-    Value* Values() { return output(0); }
-    Value* Indices() { return output(1); }
+    Value* indices() { return output(1); }
 END_OPERATOR()
 
 //==-------------------------------------------------------------------------
@@ -287,7 +307,7 @@ BEGIN_OPERATOR(MaxPool)
     DEFINE_ATTRIBUTE(storage_order, INT, i)
     DEFINE_ATTRIBUTE(strides, INTS, is)
 
-    Value* Indices() { return output(1); }
+    Value* indices() { return output(1); }
 END_OPERATOR()
 
 BEGIN_OPERATOR(MaxUnpool)
@@ -432,6 +452,116 @@ BEGIN_OPERATOR(LRN)
     DEFINE_ATTRIBUTE(size, INT, i)
 END_OPERATOR()
 
+BEGIN_OPERATOR(TfIdfVectorizer)
+    DEFINE_ATTRIBUTE(max_gram_length, INT, i)
+    DEFINE_ATTRIBUTE(max_skip_count, INT, i)
+    DEFINE_ATTRIBUTE(min_gram_length, INT, i)
+    DEFINE_ATTRIBUTE(mode, STRING, s)
+    DEFINE_ATTRIBUTE(ngram_counts, INTS, is)
+    DEFINE_ATTRIBUTE(ngram_indexes, INTS, is)
+    DEFINE_ATTRIBUTE(pool_int64s, INTS, is)
+    DEFINE_ATTRIBUTE(pool_strings, STRINGS, ss)
+    DEFINE_ATTRIBUTE(weights, FLOATS, fs)
+END_OPERATOR()
+
+BEGIN_OPERATOR(StringNormalizer)
+    DEFINE_ATTRIBUTE(case_change_action, STRING, s)
+    DEFINE_ATTRIBUTE(is_case_sensitive, INT, i)
+    DEFINE_ATTRIBUTE(locale, STRING, s)
+    DEFINE_ATTRIBUTE(stopwords, STRINGS, ss)
+END_OPERATOR()
+
+//==-------------------------------------------------------------------------
+// RNN operators
+//==-------------------------------------------------------------------------
+
+BEGIN_OPERATOR(RNN)
+    DEFINE_ATTRIBUTE(activation_alpha, FLOATS, fs)
+    DEFINE_ATTRIBUTE(activation_beta, FLOATS, fs)
+    DEFINE_ATTRIBUTE(activations, STRINGS, ss)
+    DEFINE_ATTRIBUTE(clip, FLOAT, f)
+    DEFINE_ATTRIBUTE(direction, STRING, s)
+    DEFINE_ATTRIBUTE(hidden_size, INT, i)
+
+    Value* X() { return input(0); }
+    Value* W() { return input(1); }
+    Value* R() { return input(2); }
+    Value* B() { return input(3); }
+    Value* sequence_lens() { return input(4); }
+    Value* initial_h() { return input(5); }
+
+    Value* Y() { return output(0); }
+    Value* Y_h() { return output(1); }
+END_OPERATOR()
+
+BEGIN_OPERATOR(GRU)
+    DEFINE_ATTRIBUTE(activation_alpha, FLOATS, fs)
+    DEFINE_ATTRIBUTE(activation_beta, FLOATS, fs)
+    DEFINE_ATTRIBUTE(activations, STRINGS, ss)
+    DEFINE_ATTRIBUTE(clip, FLOAT, f)
+    DEFINE_ATTRIBUTE(direction, STRING, s)
+    DEFINE_ATTRIBUTE(hidden_size, INT, i)
+    DEFINE_ATTRIBUTE(linear_before_reset, INT, i)
+
+    Value* X() { return input(0); }
+    Value* W() { return input(1); }
+    Value* R() { return input(2); }
+    Value* B() { return input(3); }
+    Value* sequence_lens() { return input(4); }
+    Value* initial_h() { return input(5); }
+
+    Value* Y() { return output(0); }
+    Value* Y_h() { return output(1); }
+END_OPERATOR()
+
+BEGIN_OPERATOR(LSTM)
+    DEFINE_ATTRIBUTE(activation_alpha, FLOATS, fs)
+    DEFINE_ATTRIBUTE(activation_beta, FLOATS, fs)
+    DEFINE_ATTRIBUTE(activations, STRINGS, ss)
+    DEFINE_ATTRIBUTE(clip, FLOAT, f)
+    DEFINE_ATTRIBUTE(direction, STRING, s)
+    DEFINE_ATTRIBUTE(hidden_size, INT, i)
+    DEFINE_ATTRIBUTE(input_forget, INT, i)
+
+    Value* X() { return input(0); }
+    Value* W() { return input(1); }
+    Value* R() { return input(2); }
+    Value* B() { return input(3); }
+    Value* sequence_lens() { return input(4); }
+    Value* initial_h() { return input(5); }
+    Value* initial_c() { return input(6); }
+    Value* P() { return input(7); }
+
+    Value* Y()   { return output(0); }
+    Value* Y_h() { return output(1); }
+    Value* Y_c() { return output(2); }
+END_OPERATOR()
+
+//==-------------------------------------------------------------------------
+// Object detection operators
+//==-------------------------------------------------------------------------
+
+BEGIN_OPERATOR(RoiAlign)
+    DEFINE_ATTRIBUTE(mode, STRING, s)
+    DEFINE_ATTRIBUTE(output_height, INT, i)
+    DEFINE_ATTRIBUTE(output_width, INT, i)
+    DEFINE_ATTRIBUTE(sampling_ratio, INT, i)
+    DEFINE_ATTRIBUTE(spatial_scale, FLOAT, f)
+
+    Value* rois() { return input(1); }
+    Value* batch_indices() { return input(2); }
+END_OPERATOR()
+
+BEGIN_OPERATOR(NonMaxSuppression)
+    DEFINE_ATTRIBUTE(center_point_box, INT, i)
+
+    Value* boxes() { return input(0); }
+    Value* scores() { return input(1); }
+    Value* max_output_boxes_per_class() { return input(2); }
+    Value* iou_threshold() { return input(3); }
+    Value* score_threshold() { return input(4); }
+END_OPERATOR()
+
 //==-------------------------------------------------------------------------
 // Reduction operators
 //==-------------------------------------------------------------------------
@@ -532,9 +662,46 @@ BEGIN_OPERATOR(Pad)
     DEFINE_ATTRIBUTE(value, FLOAT, f)
 END_OPERATOR()
 
+BEGIN_OPERATOR(SpaceToDepth)
+    DEFINE_ATTRIBUTE(blocksize, INT, i)
+END_OPERATOR()
+
+BEGIN_OPERATOR(DepthToSpace)
+    DEFINE_ATTRIBUTE(blocksize, INT, i)
+END_OPERATOR()
+
+BEGIN_OPERATOR(Tile)
+    Value* repeats() { return input(1); }
+END_OPERATOR()
+
 BEGIN_OPERATOR(Resize)
     DEFINE_ATTRIBUTE(mode, STRING, s)
     Value* scales() { return input(1); }
+END_OPERATOR()
+
+BEGIN_OPERATOR(Expand)
+    Value* shape() { return input(1); }
+END_OPERATOR()
+
+BEGIN_OPERATOR(Compress)
+    DEFINE_ATTRIBUTE(axis, INT, i)
+    Value* condition() { return input(1); }
+END_OPERATOR()
+
+BEGIN_OPERATOR(OneHot)
+    DEFINE_ATTRIBUTE(axis, INT, i)
+    Value* indices() { return input(0); }
+    Value* depth()   { return input(1); }
+    Value* values()  { return input(2); }
+END_OPERATOR()
+
+BEGIN_OPERATOR(NonZero)
+END_OPERATOR()
+
+BEGIN_OPERATOR(ReverseSequence)
+    DEFINE_ATTRIBUTE(batch_axis, INT, i)
+    DEFINE_ATTRIBUTE(time_axis, INT, i)
+    Value* sequence_lens() { return input(1); }
 END_OPERATOR()
 
 DEFINE_OPERATOR(Identity)

@@ -5,9 +5,9 @@
 
 #define FORALL_OPERATORS(_) \
   _(Abs)                    \
-  _(Add)                    \
   _(Acos)                   \
   _(Acosh)                  \
+  _(Add)                    \
   _(And)                    \
   _(ArgMax)                 \
   _(ArgMin)                 \
@@ -21,6 +21,7 @@
   _(Cast)                   \
   _(Ceil)                   \
   _(Clip)                   \
+  _(Compress)               \
   _(Concat)                 \
   _(Constant)               \
   _(ConstantOfShape)        \
@@ -29,28 +30,33 @@
   _(ConvTranspose)          \
   _(Cos)                    \
   _(Cosh)                   \
+  _(DepthToSpace)           \
   _(Div)                    \
   _(Dropout)                \
   _(Elu)                    \
   _(Equal)                  \
   _(Erf)                    \
   _(Exp)                    \
+  _(Expand)                 \
   _(EyeLike)                \
   _(Flatten)                \
   _(Floor)                  \
+  _(GRU)                    \
   _(Gather)                 \
   _(Gemm)                   \
   _(GlobalAveragePool)      \
   _(GlobalLpPool)           \
   _(GlobalMaxPool)          \
   _(Greater)                \
-  _(Hardmax)                \
   _(HardSigmoid)            \
+  _(Hardmax)                \
   _(Identity)               \
   _(If)                     \
   _(InstanceNormalization)  \
   _(IsInf)                  \
   _(IsNaN)                  \
+  _(LRN)                    \
+  _(LSTM)                   \
   _(LeakyRelu)              \
   _(Less)                   \
   _(Log)                    \
@@ -58,7 +64,6 @@
   _(Loop)                   \
   _(LpNormalization)        \
   _(LpPool)                 \
-  _(LRN)                    \
   _(MatMul)                 \
   _(MatMulInteger)          \
   _(Max)                    \
@@ -71,12 +76,17 @@
   _(Mul)                    \
   _(Multinomial)            \
   _(Neg)                    \
+  _(NonMaxSuppression)      \
+  _(NonZero)                \
   _(Not)                    \
+  _(OneHot)                 \
   _(Or)                     \
+  _(PRelu)                  \
   _(Pad)                    \
   _(Pow)                    \
-  _(PRelu)                  \
   _(QLinearConv)            \
+  _(QLinearMatMul)          \
+  _(RNN)                    \
   _(RandomNormal)           \
   _(RandomNormalLike)       \
   _(RandomUniform)          \
@@ -84,8 +94,8 @@
   _(Reciprocal)             \
   _(ReduceL1)               \
   _(ReduceL2)               \
-  _(ReduceLogSum)          \
-  _(ReduceLogSumExp)       \
+  _(ReduceLogSum)           \
+  _(ReduceLogSumExp)        \
   _(ReduceMax)              \
   _(ReduceMean)             \
   _(ReduceMin)              \
@@ -95,6 +105,8 @@
   _(Relu)                   \
   _(Reshape)                \
   _(Resize)                 \
+  _(ReverseSequence)        \
+  _(RoiAlign)               \
   _(Round)                  \
   _(Scan)                   \
   _(Scatter)                \
@@ -110,14 +122,18 @@
   _(Softmax)                \
   _(Softplus)               \
   _(Softsign)               \
+  _(SpaceToDepth)           \
   _(Split)                  \
   _(Sqrt)                   \
   _(Squeeze)                \
+  _(StringNormalizer)       \
   _(Sub)                    \
   _(Sum)                    \
   _(Tan)                    \
   _(Tanh)                   \
+  _(TfIdfVectorizer)        \
   _(ThresholdedRelu)        \
+  _(Tile)                   \
   _(TopK)                   \
   _(Transpose)              \
   _(Unsqueeze)              \
@@ -127,6 +143,9 @@
 #define FORALL_ATTRIBUTES(_)    \
   _(abs)                        \
   _(acos)                       \
+  _(activation_alpha)           \
+  _(activation_beta)            \
+  _(activations)                \
   _(add)                        \
   _(alpha)                      \
   _(asin)                       \
@@ -135,15 +154,20 @@
   _(auto_pad)                   \
   _(axes)                       \
   _(axis)                       \
+  _(batch_axis)                 \
   _(beta)                       \
   _(bias)                       \
+  _(blocksize)                  \
   _(body)                       \
   _(broadcast)                  \
+  _(case_change_action)         \
   _(cat)                        \
   _(ceil)                       \
   _(ceil_mode)                  \
+  _(center_point_box)           \
   _(chunk)                      \
   _(clamp)                      \
+  _(clip)                       \
   _(consumed_inputs)            \
   _(cos)                        \
   _(cosh)                       \
@@ -171,8 +195,11 @@
   _(ge)                         \
   _(group)                      \
   _(gt)                         \
+  _(hidden_size)                \
   _(high)                       \
   _(inplace)                    \
+  _(input_forget)               \
+  _(is_case_sensitive)          \
   _(is_test)                    \
   _(keepdims)                   \
   _(kernel)                     \
@@ -181,27 +208,39 @@
   _(lambd)                      \
   _(le)                         \
   _(lerp)                       \
+  _(linear_before_reset)        \
   _(lgamma)                     \
+  _(locale)                     \
   _(log1p)                      \
   _(low)                        \
   _(lt)                         \
   _(max)                        \
+  _(max_gram_length)            \
+  _(max_skip_count)             \
   _(mean)                       \
   _(min)                        \
+  _(min_gram_length)            \
+  _(min_skip_count)             \
   _(mode)                       \
   _(momentum)                   \
   _(mul)                        \
   _(ne)                         \
   _(neg)                        \
+  _(ngram_counts)               \
+  _(ngram_indexes)              \
   _(num_scan_inputs)            \
   _(ones)                       \
   _(order)                      \
   _(other)                      \
+  _(output_height)              \
   _(output_padding)             \
   _(output_shape)               \
+  _(output_width)               \
   _(pad)                        \
   _(pads)                       \
   _(perm)                       \
+  _(pool_int64s)                \
+  _(pool_strings)               \
   _(pooled_shape)               \
   _(pow)                        \
   _(ratio)                      \
@@ -210,6 +249,7 @@
   _(round)                      \
   _(rsqrt)                      \
   _(sample_size)                \
+  _(sampling_ratio)             \
   _(scale)                      \
   _(scales)                     \
   _(scan_input_axes)            \
@@ -224,6 +264,7 @@
   _(size)                       \
   _(spatial_scale)              \
   _(split)                      \
+  _(stopwords)                  \
   _(storage_order)              \
   _(stride)                     \
   _(strides)                    \
@@ -231,11 +272,13 @@
   _(tan)                        \
   _(tanh)                       \
   _(then_branch)                \
+  _(time_axis)                  \
   _(to)                         \
   _(transA)                     \
   _(transB)                     \
   _(trunc)                      \
   _(value)                      \
+  _(weights)                    \
   _(zeros)
 
 #define FORALL_BUILTIN_SYMBOLS(_) \

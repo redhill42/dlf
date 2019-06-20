@@ -33,7 +33,7 @@ TEST(TensorData, SetComplexData) {
 
 TEST(TensorData, SetIncompatibleData) {
     TensorData dt("test", DataType::INT32, {2, 3, 4});
-    std::vector<int16_t> data(24);
+    std::vector<std::string> data(24);
     EXPECT_ANY_THROW(dt.set_data(data.begin(), data.end()));
 }
 

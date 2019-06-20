@@ -277,6 +277,13 @@ public:
         m_data.init(type);
     }
 
+    template <typename T>
+    TensorData(std::string name, DataType type, Dims dims, std::initializer_list<T> init)
+        : TensorData(name, type, dims)
+    {
+        set_data(init.begin(), init.end());
+    }
+
     template <typename Iterator>
     TensorData(std::string name, Dims dims, Iterator first, Iterator last)
         : TensorData(std::move(name),
@@ -393,10 +400,9 @@ public:
     template <typename Iterator>
     std::enable_if_t<std::is_arithmetic<typename std::iterator_traits<Iterator>::value_type>::value>
     set_data(Iterator first, Iterator last) {
-        if (size() != std::distance(first, last))
+        if (size() != std::distance(first, last)) {
             throw std::invalid_argument("invalid tensor data size");
-        if (type() != DataTypeTrait<typename std::iterator_traits<Iterator>::value_type>)
-            throw std::invalid_argument("invalid tensor data type");
+        }
 
         switch (type()) {
         case DataType::FLOAT:

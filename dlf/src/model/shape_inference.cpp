@@ -158,7 +158,7 @@ public:
             }
         }
 
-        if (n->hasAttribute(kvalue)) {
+        if (n->has_value()) {
             n->output()->set_type(n->value().type());
         } else {
             n->output()->set_type(DataType::FLOAT);
@@ -373,6 +373,87 @@ public:
 
         n->Y()->set_type(n->A()->type());
         n->Y()->set_dims({M, N});
+    }
+
+    static void matmulShapeInference(Node* n, Value* lhs, Value* rhs) {
+        if (!hasInput(lhs) || !hasInput(rhs))
+            return;
+
+        auto shapeL = lhs->dims();
+        auto shapeR = rhs->dims();
+
+        if (shapeL.size() == 0 || shapeR.size() == 0)
+            fail_shape_inference(n->kind().str(), ": Input tensors of wrong rank (0).");
+
+        // First promote each shape to at least rank-2. This logic is
+        // specific to matmul, not generic broadcasting.
+        if (shapeL.size() == 1)
+            shapeL.insert(shapeL.begin(), 1);
+        if (shapeR.size() == 1)
+            shapeR.push_back(1);
+
+        // Check for compatible matrix multiply dimensions
+        if (shapeL[shapeL.size() - 1] != shapeR[shapeR.size() - 2]) {
+            fail_shape_inference(n->kind().str(), ": Incompatible dimensions for matrix multiplication");
+        }
+
+        // Now call out to generic multidimensional broadcasting for
+        // the broadcastable prefixes.
+        Dims prefixShapeL, prefixShapeR;
+        for (int i = 0; i < shapeL.size() - 2; i++)
+            prefixShapeL.push_back(shapeL[i]);
+        for (int i = 0; i < shapeR.size() - 2; i++)
+            prefixShapeR.push_back(shapeR[i]);
+        Dims output_shape = broadcastShape(prefixShapeL, prefixShapeR);
+
+        // Back to matmul-specific. Add the trailing dimensions back in.
+        if (lhs->dims().size() != 1)
+            output_shape.push_back(shapeL[shapeL.size() - 2]);
+        if (rhs->dims().size() != 1)
+            output_shape.push_back(shapeR[shapeR.size() - 1]);
+
+        n->output()->set_type(lhs->type());
+        n->output()->set_dims(output_shape);
+    }
+
+    void visit(MatMul* n) override {
+        matmulShapeInference(n, n->A(), n->B());
+    }
+
+    void visit(QLinearMatMul* n) override {
+        matmulShapeInference(n, n->A(), n->B());
+    }
+
+    void visit(MatMulInteger* n) override {
+        matmulShapeInference(n, n->A(), n->B());
+    }
+
+    void visit(TopK* n) override {
+        if (!hasInput(n->input()) || !hasInput(n->K()))
+            return;
+        if (!n->K()->has_initializer())
+            return;
+        if (n->K()->type() != DataType::INT64 || n->K()->dims().size() != 1 || n->K()->dim(0) != 1)
+            fail_shape_inference("TopK: K input must be a one-dimensional tensor of size 1");
+
+        auto& input_shape = n->input()->dims();
+        auto rank = input_shape.size();
+        auto axis = n->get_i(kaxis, -1);
+        if (axis < 0) axis += rank;
+        if (axis < 0 || axis >= rank)
+            fail_shape_inference("TopK: Invalid value for attribute axis");
+
+        auto k = n->K()->initializer().int64_data().at(0);
+        if (k > input_shape[axis])
+            fail_shape_inference("TopK: Axis has less than the requested k elements");
+
+        auto output_shape = input_shape;
+        output_shape[axis] = k;
+
+        n->output()->set_type(n->input()->type());
+        n->indices()->set_type(DataType::INT64);
+        n->output()->set_dims(output_shape);
+        n->indices()->set_dims(output_shape);
     }
 
     //-----------------------------------------------------------------------
@@ -720,15 +801,106 @@ public:
             return;
 
         auto dims = n->input()->dims();
-        size_t rank = dims.size();
-        size_t axis = n->get_i(kaxis, 1);
-        if (axis > rank)
+        auto rank = dims.size();
+        auto axis = n->get_i(kaxis, 1);
+        if (axis < 0) axis += rank;
+        if (axis < 0 || axis >= rank)
             fail_shape_inference("Flatten: Invalid value (", axis, ") for attribute 'axis'");
         size_t a = std::accumulate(dims.begin(), dims.begin()+axis, 1, std::multiplies<>());
         size_t b = std::accumulate(dims.begin()+axis, dims.end(), 1, std::multiplies<>());
 
         n->output()->set_type(n->input()->type());
         n->output()->set_dims({a, b});
+    }
+
+    void visit(TfIdfVectorizer* n) override {
+        if (!hasInput(n->input()))
+            return;
+
+        if (!n->has_ngram_indexes())
+            fail_shape_inference("TfIdfVectorizer: Missing 'ngram_indexes' attribute");
+        const auto& ngram_indexes = n->ngram_indexes();
+        if (std::any_of(ngram_indexes.begin(), ngram_indexes.end(), [](auto i){return i<0;}))
+            fail_shape_inference("TfIdfVectorizer: ngram_indexes must have no negative values");
+        auto greatest_hit = *std::max_element(ngram_indexes.begin(), ngram_indexes.end()) + 1;
+
+        auto shape = n->input()->dims();
+        if (shape.size() == 1 || shape.size() == 2)
+            shape.back() = greatest_hit;
+        else
+            fail_shape_inference("TfIdfVectorizer: Input tensor must have rank 1 or 2");
+
+        n->output()->set_type(n->input()->type());
+        n->output()->set_dims(shape);
+    }
+
+    void visit(StringNormalizer* n) override {
+        // Cannot inference output shape
+    }
+
+    //-----------------------------------------------------------------------
+
+    static void RNNShapeInference(Node* n) {
+        if (!hasInput(n->input(0), n->input(1), n->input(2)))
+            return;
+
+        size_t seq_length, batch_size, input_size, num_directions, hidden_size;
+
+        auto& input_shape = n->input(0)->dims();
+        if (input_shape.size() != 3)
+            fail_shape_inference("RNN: The input tensor must have rank 3");
+        seq_length = input_shape[0];
+        batch_size = input_shape[1];
+        input_size = input_shape[2];
+
+        auto direction = n->get_s(kdirection, "forward");
+        if (direction == "forward" || direction == "reverse")
+            num_directions = 1;
+        else if (direction == "bidirectional")
+            num_directions = 2;
+        else
+            fail_shape_inference("RNN: Attribute 'direction' has incorrect value");
+
+        hidden_size = n->get_i(khidden_size, -1);
+        if (hidden_size <= 0)
+            fail_shape_inference("RNN: Attribute 'hidden_size' has incorrect value");
+
+        auto& weight_shape = n->input(1)->dims();
+        if (weight_shape.size() != 3)
+            fail_shape_inference("RNN: The weight tensor must have rank 3");
+        if (weight_shape[0] != num_directions || weight_shape[1] != hidden_size || weight_shape[2] != input_size)
+            fail_shape_inference("RNN: The weight tensor has incorrect shape");
+
+        auto& recur_shape = n->input(2)->dims();
+        if (recur_shape.size() != 3)
+            fail_shape_inference("RNN: The recurrence weight tensor must have rank 3");
+        if (recur_shape[0] != num_directions || recur_shape[1] != hidden_size || recur_shape[2] != hidden_size)
+            fail_shape_inference("RNN: The recurrence weight tensor has incorrect shape");
+
+        if (n->outputs().size() > 0) { // Y
+            n->output(0)->set_type(n->input()->type());
+            n->output(0)->set_dims({seq_length, num_directions, batch_size, hidden_size});
+        }
+        if (n->outputs().size() > 1) { // Y_h
+            n->output(1)->set_type(n->input()->type());
+            n->output(1)->set_dims({num_directions, batch_size, hidden_size});
+        }
+        if (n->outputs().size() > 2) { // Y_c
+            n->output(2)->set_type(n->input()->type());
+            n->output(2)->set_dims({num_directions, batch_size, hidden_size});
+        }
+    }
+
+    void visit(RNN* n) override {
+        RNNShapeInference(n);
+    }
+
+    void visit(GRU* n) override {
+        RNNShapeInference(n);
+    }
+
+    void visit(LSTM* n) override {
+        RNNShapeInference(n);
     }
 
     //-----------------------------------------------------------------------
@@ -744,6 +916,8 @@ public:
         auto axes = n->get_is(kaxes, {});
         for (auto& a : axes) {
             if (a < 0) a += rank;
+            if (a < 0 || a >= rank)
+                fail_shape_inference(n->kind().str(), ": The 'axes' attribute has incorrect value");
         }
 
         Dims output_shape;
@@ -751,7 +925,7 @@ public:
             // axes empty means reduce all dim
             if (!axes.empty() && std::find(axes.begin(), axes.end(), i) == axes.end()) {
                 output_shape.push_back(input_shape[i]);
-            } else if (keep_dims == 1) {
+            } else if (keep_dims) {
                 output_shape.push_back(1);
             }
         }
@@ -769,12 +943,14 @@ public:
         auto keep_dims = n->get_i(kkeepdims, 1);
         auto axis = n->get_i(kaxis, 0);
         if (axis < 0) axis += rank;
+        if (axis < 0 || axis >= rank)
+            fail_shape_inference(n->kind().str(), ": The 'axis' attribute has incorrect value");
 
         Dims output_shape;
         for (size_t i = 0; i < rank; i++) {
             if (i != axis) {
                 output_shape.push_back(input_shape[i]);
-            } else if (keep_dims == 1) {
+            } else if (keep_dims) {
                 output_shape.push_back(1);
             }
         }
@@ -903,9 +1079,9 @@ public:
 
         auto rank = n->input(0)->dims().size();
         auto axis = n->axis();
-        if (axis < 0 || axis >= rank) {
+        if (axis < 0) axis += rank;
+        if (axis < 0 || axis >= rank)
             fail_shape_inference("Concat: Invalid axis attribute");
-        }
 
         Dims output_shape(rank);
         for (size_t i = 0; i < n->inputs().size(); i++) {
@@ -1014,8 +1190,9 @@ public:
         std::unordered_set<int64_t> unique_axes;
 
         for (size_t i = 0; i < axes.size(); ++i) {
-            auto axis = axes(i) < 0 ? axes(i) + input_rank : axes(i);
-            if (axis < 0 || axis > input_rank)
+            auto axis = axes(i);
+            if (axis < 0) axis += input_rank;
+            if (axis < 0 || axis >= input_rank)
                 fail_shape_inference("Slice: Input axes has invalid data");
             if (unique_axes.find(axis) != unique_axes.end())
                 fail_shape_inference("Slice: 'axes' has duplicates");
@@ -1107,9 +1284,9 @@ public:
 
         if (r == 0)
             fail_shape_inference("Gather: data tensor must have rank >= 1");
-        if (axis < -r || axis >= r)
-            fail_shape_inference("Gather: axis must be in [-r, r-1]");
         if (axis < 0) axis += r;
+        if (axis < 0 || axis >= r)
+            fail_shape_inference("Gather: axis must be in [-r, r-1]");
 
         int output_rank = q + r - 1;
         Dims output_shape;
@@ -1220,6 +1397,79 @@ public:
         n->output()->set_dims(output_shape);
     }
 
+    void visit(SpaceToDepth* n) override {
+        if (!hasInput(n->input()))
+            return;
+        if (!n->has_blocksize())
+            fail_shape_inference("SpaceToDepth: Missing 'blocksize' attribute");
+
+        auto blocksize = n->blocksize();
+        if (blocksize <= 0)
+            fail_shape_inference("SpaceToDepth: Attribute 'blocksize' has incorrect value");
+
+        auto input_shape = n->input()->dims();
+        if (input_shape.size() != 4)
+            fail_shape_inference("SpaceToDepth: Input tensor must be 4-dimensional");
+
+        Dims output_shape = {
+            input_shape[0],
+            input_shape[1] * (blocksize * blocksize),
+            input_shape[2] / blocksize,
+            input_shape[3] / blocksize
+        };
+
+        n->output()->set_type(n->input()->type());
+        n->output()->set_dims(output_shape);
+    }
+
+    void visit(DepthToSpace* n) override {
+        if (!hasInput(n->input()))
+            return;
+        if (!n->has_blocksize())
+            fail_shape_inference("DepthToSpace: Missing 'blocksize' attribute");
+
+        auto blocksize = n->blocksize();
+        if (blocksize <= 0)
+            fail_shape_inference("DepthToSpace: Attribute 'blocksize' has incorrect value");
+
+        auto input_shape = n->input()->dims();
+        if (input_shape.size() != 4)
+            fail_shape_inference("DepthToSpace: Input tensor must be 4-dimensional");
+
+        Dims output_shape = {
+            input_shape[0],
+            input_shape[1] / (blocksize * blocksize),
+            input_shape[2] * blocksize,
+            input_shape[3] * blocksize
+        };
+
+        n->output()->set_type(n->input()->type());
+        n->output()->set_dims(output_shape);
+    }
+
+    void visit(Tile* n) override {
+        if (!hasInput(n->input(), n->repeats()))
+            return;
+        if (!n->repeats()->has_initializer())
+            return;
+        if (n->repeats()->type() != DataType::INT64 || n->repeats()->dims().size() != 1)
+            fail_shape_inference("Tile: The repeats tensor has incorrect value");
+
+        const auto& input_shape = n->input()->dims();
+        auto input_rank = input_shape.size();
+        auto& repeats = n->repeats()->initializer().int64_data();
+        if (repeats.size() != input_rank)
+            fail_shape_inference("Tile: 'Repeats' input has incorrect number of values");
+
+        Dims output_shape;
+        for (size_t i = 0; i < input_rank; i++) {
+            output_shape.push_back(static_cast<size_t>(input_shape[i] * repeats[i]));
+        }
+
+        n->output()->set_type(n->input()->type());
+        n->output()->set_dims(output_shape);
+    }
+
     void visit(Resize* n) override {
         if (!hasInput(n->input(), n->scales()))
             return;
@@ -1244,6 +1494,66 @@ public:
 
         n->output()->set_type(n->input()->type());
         n->output()->set_dims(output_shape);
+    }
+
+    void visit(Expand* n) override {
+        if (!hasInput(n->input()) || !hasInput(n->shape()))
+            return;
+        if (!n->shape()->has_initializer())
+            return;
+        if (n->shape()->dims().size() != 1 || n->shape()->type() != DataType::INT64)
+            fail_shape_inference("Expand: 'shape' input must be 1D tensor of type INT64");
+
+        auto& input_shape = n->input()->dims();
+        auto& shape_data = n->shape()->initializer().int64_data();
+        Dims shape(shape_data.begin(), shape_data.end());
+        auto output_shape = broadcastShape(input_shape, shape);
+
+        n->output()->set_type(n->input()->type());
+        n->output()->set_dims(output_shape);
+    }
+
+    void visit(Compress* n) override {
+        if (!hasInput(n->input(), n->condition()))
+            return;
+        if (!n->condition()->has_initializer())
+            return;
+        if (n->condition()->dims().size() != 1 || n->condition()->type() != DataType::BOOL)
+            fail_shape_inference("Compress: 'condition' input must be 1D tensor of type BOOL");
+
+        size_t num_selected = 0;
+        for (auto b : n->condition()->initializer().int32_data()) {
+            if (b) num_selected++;
+        }
+
+        auto& input_shape = n->input()->dims();
+        Dims output_shape;
+
+        if (n->has_axis()) {
+            int axis = static_cast<int>(n->axis());
+            if (axis < 0) axis += input_shape.size();
+            if (axis < 0 || axis >= input_shape.size())
+                fail_shape_inference("Compress: The 'axis' attribute has incorrect value");
+            output_shape = input_shape;
+            if (num_selected < output_shape[axis])
+                output_shape[axis] = num_selected;
+        } else {
+            auto total_size = std::accumulate(input_shape.begin(), input_shape.end(), 1, std::multiplies<>());
+            if (num_selected > total_size)
+                num_selected = total_size;
+            output_shape.push_back(num_selected);
+        }
+
+        n->output()->set_type(n->input()->type());
+        n->output()->set_dims(output_shape);
+    }
+
+    void visit(OneHot* n) override {
+        fail_shape_inference("OneHot: Unsupported operation"); // FIXME
+    }
+
+    void visit(NonZero* n) override {
+        // cannot inference output shape
     }
 
     //-----------------------------------------------------------------------

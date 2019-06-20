@@ -132,6 +132,42 @@ TEST(ShapeInference, MaxUnpool) {
     EXPECT_EQ(node->output()->dims(), Dims({1, 1, 4, 4}));
 }
 
+TEST(ShapeInference, TfIdfVectorizer_1D) {
+    Graph g;
+
+    auto n = g.create<TfIdfVectorizer>();
+    n->addInput(g.addInput("input", DataType::FLOAT, {12}));
+    n->set_min_gram_length(2);
+    n->set_max_gram_length(2);
+    n->set_max_skip_count(0);
+    n->set_ngram_counts({0, 4});
+    n->set_ngram_indexes({0, 1, 2, 3, 4, 5, 6});
+    n->set_pool_int64s({2, 3, 5, 4, 5, 6, 7, 8, 6, 7});
+    n->addOutput("output");
+
+    ShapeInference::Instance().infer(n);
+    EXPECT_EQ(n->output()->type(), DataType::FLOAT);
+    EXPECT_EQ(n->output()->dims(), Dims({7}));
+}
+
+TEST(ShapeInference, TfIdfVectorizer_2D) {
+    Graph g;
+
+    auto n = g.create<TfIdfVectorizer>();
+    n->addInput(g.addInput("input", DataType::FLOAT, {2, 6}));
+    n->set_min_gram_length(2);
+    n->set_max_gram_length(2);
+    n->set_max_skip_count(0);
+    n->set_ngram_counts({0, 4});
+    n->set_ngram_indexes({0, 1, 2, 3, 4, 5, 6});
+    n->set_pool_int64s({2, 3, 5, 4, 5, 6, 7, 8, 6, 7});
+    n->addOutput("output");
+
+    ShapeInference::Instance().infer(n);
+    EXPECT_EQ(n->output()->type(), DataType::FLOAT);
+    EXPECT_EQ(n->output()->dims(), Dims({2, 7}));
+}
+
 TEST(ShapeInference, Gemm) {
     Graph g;
 
@@ -145,6 +181,125 @@ TEST(ShapeInference, Gemm) {
 
     EXPECT_EQ(node->output()->type(), DataType::FLOAT);
     EXPECT_EQ(node->output()->dims(), Dims({3, 4}));
+}
+
+static void matmul_test(Dims A, Dims B, Dims C) {
+    Graph g;
+
+    auto node = g.create<MatMul>();
+    node->addInput(g.addInput("A", DataType::FLOAT, A));
+    node->addInput(g.addInput("B", DataType::FLOAT, B));
+    node->addOutput("C");
+
+    ShapeInference::Instance().infer(node);
+    EXPECT_EQ(node->output()->type(), DataType::FLOAT);
+    EXPECT_EQ(node->output()->dims(), C);
+}
+
+static void matmul_failed_test(Dims A, Dims B) {
+    Graph g;
+
+    auto node = g.create<MatMul>();
+    node->addInput(g.addInput("A", DataType::FLOAT, A));
+    node->addInput(g.addInput("B", DataType::FLOAT, B));
+    node->addOutput("C");
+
+    EXPECT_ANY_THROW(ShapeInference::Instance().infer(node));
+}
+
+TEST(ShapeInference, MatMul) {
+    matmul_test({3, 4}, {4, 3}, {3, 3});
+    matmul_test({3, 4}, {4}, {3});
+    matmul_test({4}, {4, 3}, {3});
+    matmul_test({2, 3, 4}, {2, 4, 3}, {2, 3, 3});
+    matmul_test({1, 3, 4}, {2, 4, 3}, {2, 3, 3});
+    matmul_test({2, 3, 4}, {1, 4, 3}, {2, 3, 3});
+    matmul_test({2, 3, 4}, {4, 3}, {2, 3, 3});
+    matmul_test({3, 4}, {2, 4, 3}, {2, 3, 3});
+    matmul_test({2, 3, 4}, {4}, {2, 3});
+    matmul_test({4}, {2, 4, 3}, {2, 3});
+
+    matmul_failed_test({3, 4}, {5, 4});
+    matmul_failed_test({3, 4}, {5});
+    matmul_failed_test({4}, {3, 4});
+    matmul_failed_test({2, 3, 4}, {3, 4, 3});
+    matmul_failed_test({2, 3, 4}, {2, 5, 4});
+    matmul_failed_test({2, 3, 4}, {5, 4});
+    matmul_failed_test({3, 5}, {2, 4, 3});
+    matmul_failed_test({2, 3, 4}, {5});
+    matmul_failed_test({3}, {2, 4, 3});
+}
+
+TEST(ShapeInference, TopK) {
+    Graph g;
+
+    auto n = g.create<TopK>();
+    n->addInput(g.addInput("input", DataType::FLOAT, {3, 4, 5}));
+    n->addInput(g.addInitializer({"K", DataType::INT64, {1}, {3}}));
+    n->set_axis(1);
+    n->addOutput("output");
+    n->addOutput("indices");
+
+    ShapeInference::Instance().infer(n);
+    EXPECT_EQ(n->output()->type(), DataType::FLOAT);
+    EXPECT_EQ(n->output()->dims(), Dims({3, 3, 5}));
+    EXPECT_EQ(n->indices()->type(), DataType::INT64);
+    EXPECT_EQ(n->indices()->dims(), Dims({3, 3, 5}));
+}
+
+static void expand_test(Dims input_shape, Dims shape, Dims expected) {
+    Graph g;
+
+    auto shape_data = TensorData("shape", DataType::INT64, {shape.size()});
+    for (auto d : shape) {
+        shape_data.int64_data().push_back(d);
+    }
+
+    auto n = g.create<Expand>();
+    n->addInput(g.addInput("input", DataType::FLOAT, input_shape));
+    n->addInput(g.addInitializer(shape_data));
+    n->addOutput("output");
+
+    ShapeInference::Instance().infer(n);
+    EXPECT_EQ(n->output()->type(), DataType::FLOAT);
+    EXPECT_EQ(n->output()->dims(), expected);
+}
+
+TEST(ShapeInference, Expand) {
+    expand_test({1}, {5, 4}, {5, 4});
+    expand_test({4}, {5, 4}, {5, 4});
+    expand_test({15, 1, 5}, {15, 3, 5}, {15, 3, 5});
+    expand_test({3, 5}, {15, 3, 5}, {15, 3, 5});
+    expand_test({3, 1}, {2, 1, 6}, {2, 3, 6});
+    expand_test({7, 1, 5}, {8, 1, 6, 1}, {8, 7, 6, 5});
+}
+
+static void compress_test(Dims input_shape, int axis, std::vector<bool> condition, Dims expected) {
+    Graph g;
+
+    auto cond_data = TensorData("condition", DataType::BOOL, {condition.size()});
+    for (auto b : condition) {
+        cond_data.int32_data().push_back(b ? 1 : 0);
+    }
+
+    auto n = g.create<Compress>();
+    if (axis >= 0)
+        n->set_axis(axis);
+    n->addInput(g.addInput("input", DataType::FLOAT, input_shape));
+    n->addInput(g.addInitializer(cond_data));
+    n->addOutput("output");
+
+    ShapeInference::Instance().infer(n);
+    EXPECT_EQ(n->output()->type(), DataType::FLOAT);
+    EXPECT_EQ(n->output()->dims(), expected);
+}
+
+TEST(ShapeInference, Compress) {
+    compress_test({2, 5}, 0, {false, true}, {1, 5});
+    compress_test({2, 5}, 0, {true, true}, {2, 5});
+    compress_test({2, 5}, 0, {true, true, true}, {2, 5});
+    compress_test({2, 5}, 1, {false, true, true}, {2, 2});
+    compress_test({2, 5}, -1, {false, true, true}, {2});
 }
 
 template <typename T>
@@ -443,4 +598,43 @@ TEST(ShapeInference, PadWithNegativeValue) {
     ShapeInference::Instance().infer(node);
     EXPECT_EQ(node->output()->type(), DataType::FLOAT);
     EXPECT_EQ(node->output()->dims(), Dims({1, 3, 4, 5}));
+}
+
+TEST(ShapeInference, Tile) {
+    Graph g;
+
+    auto n = g.create<Tile>();
+    n->addInput(g.addInput("input", DataType::FLOAT, {2, 3, 4}));
+    n->addInput(g.addInitializer({"repeats", DataType::INT64, {3}, {1, 2, 3}}));
+    n->addOutput("output");
+
+    ShapeInference::Instance().infer(n);
+    EXPECT_EQ(n->output()->type(), DataType::FLOAT);
+    EXPECT_EQ(n->output()->dims(), Dims({2, 6, 12}));
+}
+
+TEST(ShapeInference, SpaceToDepth) {
+    Graph g;
+
+    auto n = g.create<SpaceToDepth>();
+    n->addInput(g.addInput("input", DataType::FLOAT, {1, 3, 64, 64}));
+    n->set_blocksize(4);
+    n->addOutput("output");
+
+    ShapeInference::Instance().infer(n);
+    EXPECT_EQ(n->output()->type(), DataType::FLOAT);
+    EXPECT_EQ(n->output()->dims(), Dims({1, 48, 16, 16}));
+}
+
+TEST(ShapeInference, DepthToSpace) {
+    Graph g;
+
+    auto n = g.create<DepthToSpace>();
+    n->addInput(g.addInput("input", DataType::FLOAT, {1, 48, 16, 16}));
+    n->set_blocksize(4);
+    n->addOutput("output");
+
+    ShapeInference::Instance().infer(n);
+    EXPECT_EQ(n->output()->type(), DataType::FLOAT);
+    EXPECT_EQ(n->output()->dims(), Dims({1, 3, 64, 64}));
 }
