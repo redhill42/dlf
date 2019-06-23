@@ -117,7 +117,7 @@ enum class KernelMode { CrossCorrelation = 151, Convolution = 152 };
 enum class Precision  {
     Half = 16, Single = 32, Double = 64,
     ComplexSingle = 3232, ComplexDouble = 6464,
-    Int = 10032, Long = 10064,
+    Short = 10016, Int = 10032, Long = 10064,
     Any = -1
 };
 

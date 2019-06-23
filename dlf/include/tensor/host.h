@@ -3,6 +3,7 @@
 #include <vector>
 #include <complex>
 #include <random>
+#include <cmath>
 #include <iostream>
 
 #include "utility.h"
@@ -581,6 +582,111 @@ inline Tensor<U> Tensor<T>::cast() const {
 }
 
 //==-------------------------------------------------------------------------
+// Tensor concrete transformations
+//==-------------------------------------------------------------------------
+
+template <typename T>
+inline Tensor<T> abs(const Tensor<T>& x) {
+    return x.transform([](T a) { return std::abs(a); });
+}
+
+template <typename T>
+inline Tensor<T> abs(Tensor<T>&& x) {
+    return std::move(x.apply([](T a) { return std::abs(a); }));
+}
+
+template <typename T>
+inline void abs(const Tensor<T>& x, Tensor<T>& y) {
+    assert(x.shape() == y.shape());
+    x.transformTo(y, [](T a) { return std::abs(a);  });
+}
+
+template <typename T>
+inline Tensor<T> neg(const Tensor<T>& x) {
+    return x.transform([](T a) { return T(-a); });
+}
+
+template <typename T>
+inline Tensor<T> neg(Tensor<T>&& x) {
+    return std::move(x.apply([](T a) { return T(-a); }));
+}
+
+template <typename T>
+inline void neg(const Tensor<T>& x, Tensor<T>& y) {
+    assert(x.shape() == y.shape());
+    x.transformTo(y, [](T a) { return T(-a);  });
+}
+
+template <typename T>
+inline Tensor<T> sign(const Tensor<T>& x) {
+    return x.transform([](T a) { return T((T(0)<a) - (a<T(0))); });
+}
+
+template <typename T>
+inline Tensor<T> sign(Tensor<T>&& x) {
+    return std::move(x.apply([](T a) { return T((T(0)<a) - (a<T(0))); }));
+}
+
+template <typename T>
+inline void sign(const Tensor<T>& x, Tensor<T>& y) {
+    assert(x.shape() == y.shape());
+    x.transformTo(y, [](T a) { return T((T(0)<a) - (a<T(0))); });
+}
+
+template <typename T, typename = std::enable_if_t<std::is_floating_point<T>::value>>
+inline Tensor<T> reciprocal(const Tensor<T>& x) {
+    return x.transform([](T a) { return T(1)/a; });
+}
+
+template <typename T, typename = std::enable_if_t<std::is_floating_point<T>::value>>
+inline Tensor<T> reciprocal(Tensor<T>&& x) {
+    return std::move(x.apply([](T a) { return T(1)/a; }));
+}
+
+template <typename T, typename = std::enable_if_t<std::is_floating_point<T>::value>>
+inline void reciprocal(const Tensor<T>& x, Tensor<T>& y) {
+    assert(x.shape() == y.shape());
+    x.transformTo(y, [](T a) { return T(1)/a; });
+}
+
+#define DEFINE_TRANSFORM(name) \
+template <typename T, typename = std::enable_if_t<std::is_floating_point<T>::value>> \
+inline Tensor<T> name(const Tensor<T>& x) { \
+    return x.transform([](T a){ return std::name(a); }); \
+} \
+template <typename T, typename = std::enable_if_t<std::is_floating_point<T>::value>> \
+inline Tensor<T> name(Tensor<T>&& x) { \
+    return std::move(x.apply([](T a){ return std::name(a); })); \
+} \
+template <typename T, typename = std::enable_if_t<std::is_floating_point<T>::value>> \
+inline void name(const Tensor<T>& x, Tensor<T>& y) { \
+    assert(x.shape() == y.shape()); \
+    x.transformTo(y, [](T a){ return std::name(a);  }); \
+}
+
+DEFINE_TRANSFORM(floor)
+DEFINE_TRANSFORM(ceil)
+DEFINE_TRANSFORM(round)
+DEFINE_TRANSFORM(sqrt)
+DEFINE_TRANSFORM(exp)
+DEFINE_TRANSFORM(log)
+DEFINE_TRANSFORM(sin)
+DEFINE_TRANSFORM(cos)
+DEFINE_TRANSFORM(tan)
+DEFINE_TRANSFORM(asin)
+DEFINE_TRANSFORM(acos)
+DEFINE_TRANSFORM(atan)
+DEFINE_TRANSFORM(sinh)
+DEFINE_TRANSFORM(cosh)
+DEFINE_TRANSFORM(tanh)
+DEFINE_TRANSFORM(asinh)
+DEFINE_TRANSFORM(acosh)
+DEFINE_TRANSFORM(atanh)
+DEFINE_TRANSFORM(erf)
+
+#undef DEFINE_TRANSFORM
+
+//==-------------------------------------------------------------------------
 // Tensor operators
 //==-------------------------------------------------------------------------
 
@@ -682,12 +788,12 @@ DEFINE_BLAS_OPERATOR(-, std::complex<double>, 1.0, -1.0)
 
 template <typename T>
 inline Tensor<T> operator-(const Tensor<T>& x) {
-    return x.transform([](const T& a){return -a;});
+    return neg(x);
 }
 
 template <typename T>
 inline Tensor<T> operator-(Tensor<T>&& x) {
-    return std::move(x.apply([](const T& a){return -a;}));
+    return neg(std::move(x));
 }
 
 //==-------------------------------------------------------------------------

@@ -4,6 +4,7 @@
 #include "tensor/host.h"
 #include "gpgpu.h"
 #include "gblas.h"
+#include "gdnn.h"
 
 namespace dlf {
 
@@ -140,6 +141,114 @@ public:
     DevTensor<T>& operator*=(const T& rhs);
 };
 
+//==-------------------------------------------------------------------------
+// DevTensor transformations
+//==-------------------------------------------------------------------------
+
+template <typename T>
+inline DevTensor<T> abs(const DevTensor<T>& x, const gpgpu::Queue& queue = gpgpu::current::queue()) {
+    DevTensor<T> y(x.shape(), queue);
+    gpgpu::dnn::abs(x.size(), x.data(), y.data(), queue);
+    return y;
+}
+
+template <typename T>
+inline DevTensor<T> abs(DevTensor<T>&& x, const gpgpu::Queue& queue = gpgpu::current::queue()) {
+    gpgpu::dnn::abs(x.size(), x.data(), x.data(), queue);
+    return std::move(x);
+}
+
+template <typename T>
+inline void abs(const DevTensor<T>& x, DevTensor<T>& y, const gpgpu::Queue& queue = gpgpu::current::queue()) {
+    assert(x.shape() == y.shape());
+    gpgpu::dnn::abs(x.size(), x.data(), y.data(), queue);
+}
+
+template <typename T>
+inline DevTensor<T> neg(const DevTensor<T>& x, const gpgpu::Queue& queue = gpgpu::current::queue()) {
+    DevTensor<T> y(x.shape(), queue);
+    gpgpu::dnn::neg(x.size(), x.data(), y.data(), queue);
+    return y;
+}
+
+template <typename T>
+inline DevTensor<T> neg(DevTensor<T>&& x, const gpgpu::Queue& queue = gpgpu::current::queue()) {
+    gpgpu::dnn::neg(x.size(), x.data(), x.data(), queue);
+    return std::move(x);
+}
+
+template <typename T>
+inline void neg(const DevTensor<T>& x, DevTensor<T>& y, const gpgpu::Queue& queue = gpgpu::current::queue()) {
+    assert(x.shape() == y.shape());
+    gpgpu::dnn::neg(x.size(), x.data(), y.data(), queue);
+}
+
+template <typename T>
+inline DevTensor<T> sign(const DevTensor<T>& x, const gpgpu::Queue& queue = gpgpu::current::queue()) {
+    DevTensor<T> y(x.shape(), queue);
+    gpgpu::dnn::sign(x.size(), x.data(), y.data(), queue);
+    return y;
+}
+
+template <typename T>
+inline DevTensor<T> sign(DevTensor<T>&& x, const gpgpu::Queue& queue = gpgpu::current::queue()) {
+    gpgpu::dnn::sign(x.size(), x.data(), x.data(), queue);
+    return std::move(x);
+}
+
+
+template <typename T>
+inline void sign(const DevTensor<T>& x, DevTensor<T>& y, const gpgpu::Queue& queue = gpgpu::current::queue()) {
+    assert(x.shape() == y.shape());
+    gpgpu::dnn::sign(x.size(), x.data(), y.data(), queue);
+}
+
+#define DEFINE_TRANSFORM(name) \
+template <typename T, typename = std::enable_if_t<std::is_floating_point<T>::value>> \
+inline DevTensor<T> name(const DevTensor<T>& x, const gpgpu::Queue& queue = gpgpu::current::queue()) { \
+    DevTensor<T> y(x.shape(), queue); \
+    gpgpu::dnn::transform(#name, x.size(), x.data(), y.data(), queue); \
+    return y; \
+} \
+template <typename T, typename = std::enable_if_t<std::is_floating_point<T>::value>> \
+inline DevTensor<T> name(DevTensor<T>&& x, const gpgpu::Queue& queue = gpgpu::current::queue()) { \
+    gpgpu::dnn::transform(#name, x.size(), x.data(), x.data(), queue); \
+    return std::move(x); \
+} \
+template <typename T, typename = std::enable_if_t<std::is_floating_point<T>::value>> \
+inline void name(const DevTensor<T>& x, DevTensor<T>& y, const gpgpu::Queue& queue = gpgpu::current::queue()) { \
+    assert(x.shape() == y.shape()); \
+    gpgpu::dnn::transform(#name, x.size(), x.data(), y.data(), queue); \
+}
+
+
+DEFINE_TRANSFORM(reciprocal)
+DEFINE_TRANSFORM(floor)
+DEFINE_TRANSFORM(ceil)
+DEFINE_TRANSFORM(round)
+DEFINE_TRANSFORM(sqrt)
+DEFINE_TRANSFORM(exp)
+DEFINE_TRANSFORM(log)
+DEFINE_TRANSFORM(sin)
+DEFINE_TRANSFORM(cos)
+DEFINE_TRANSFORM(tan)
+DEFINE_TRANSFORM(asin)
+DEFINE_TRANSFORM(acos)
+DEFINE_TRANSFORM(atan)
+DEFINE_TRANSFORM(sinh)
+DEFINE_TRANSFORM(cosh)
+DEFINE_TRANSFORM(tanh)
+DEFINE_TRANSFORM(asinh)
+DEFINE_TRANSFORM(acosh)
+DEFINE_TRANSFORM(atanh)
+DEFINE_TRANSFORM(erf)
+
+#undef DEFINE_TRANSFORM
+
+//==-------------------------------------------------------------------------
+// DevTensor operators
+//==-------------------------------------------------------------------------
+
 template <typename T>
 inline DevTensor<T>& DevTensor<T>::operator+=(const DevTensor<T>& rhs) {
     assert(shape() == rhs.shape());
@@ -254,6 +363,20 @@ inline DevTensor<T> operator*(const T& lhs, DevTensor<T>&& rhs) {
     rhs *= lhs;
     return std::move(rhs);
 }
+
+template <typename T>
+inline DevTensor<T> operator-(const DevTensor<T>& x) {
+    return neg(x);
+}
+
+template <typename T>
+inline DevTensor<T> operator-(DevTensor<T>&& x) {
+    return neg(std::move(x));
+}
+
+//==-------------------------------------------------------------------------
+// DevTensor production
+//==-------------------------------------------------------------------------
 
 /**
  * Perform inner product on two tensors. The tensors must be vector

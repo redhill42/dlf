@@ -1,0 +1,18 @@
+// Enable loading of this file using the C++ pre-processor's #include (C++11 standard raw string
+// literal). Comment-out this line for syntax-highlighting when developing.
+R"(
+
+#if defined(CUDA) || INTEGER_PRECISION
+  #define sign(x) ((ZERO<(x)) - ((x)<ZERO))
+#endif
+
+__kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
+void Xsign(const int n, const __global real* restrict xgm, const int x_offset, const int x_inc,
+          __global real* ygm, const int y_offset, const int y_inc) {
+  for (int id = get_global_id(0); id < n; id += get_global_size(0)) {
+    real x_value = xgm[id*x_inc + x_offset];
+    ygm[id*y_inc + y_offset] = sign(x_value);
+  }
+}
+
+)" // End of the C++11 raw string literal

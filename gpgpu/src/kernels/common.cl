@@ -99,6 +99,17 @@ R"(
   #define ONE 1.0
   #define SMALLEST -1.0e37
 
+// 16 bit integer
+#elif PRECISION == 10016
+  typedef short real;
+  typedef short2 real2;
+  typedef short4 real4;
+  typedef short8 real8;
+  typedef short16 real16;
+  #define ZERO 0
+  #define ONE 1
+  #define SMALLEST 0x8000
+
 // 32 bit integer
 #elif PRECISION == 10032
   typedef int real;
@@ -121,6 +132,8 @@ R"(
   #define ONE 1L
   #define SMALLEST 0x8000000000000000L
 #endif
+
+#define INTEGER_PRECISION (PRECISION > 10000)
 
 // Single-element version of a complex number
 #if PRECISION == 3232
@@ -185,7 +198,7 @@ R"(
 // The absolute value (component-wise)
 #if PRECISION == 3232 || PRECISION == 6464
   #define AbsoluteValue(value) value.x = fabs(value.x); value.y = fabs(value.y)
-#elif PRECISION == 10032 || PRECISION == 10064
+#elif INTEGER_PRECISION
   #define AbsoluteValue(value) value = abs(value)
 #else
   #define AbsoluteValue(value) value = fabs(value)

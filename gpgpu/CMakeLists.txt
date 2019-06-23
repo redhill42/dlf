@@ -147,6 +147,7 @@ set(LEVEL2_ROUTINES xgemv xgbmv xhemv xhbmv xhpmv xsymv xsbmv xspmv xtrmv xtbmv 
                     xger xgeru xgerc xher xhpr xher2 xhpr2 xsyr xspr xsyr2 xspr2)
 set(LEVEL3_ROUTINES xgemm xsymm xhemm xsyrk xherk xsyr2k xher2k xtrmm xtrsm)
 set(LEVELX_ROUTINES xhad xomatcopy xim2col xcol2im xconvgemm xaxpybatched xgemmbatched xgemmstridedbatched)
+set(DNN_ROUTINES xtransform xabs xneg xsign)
 set(ROUTINES ${LEVEL1_ROUTINES} ${LEVEL2_ROUTINES} ${LEVEL3_ROUTINES} ${LEVELX_ROUTINES})
 set(PRECISIONS 32 64 3232 6464 16)
 
@@ -158,6 +159,7 @@ set(SOURCES
   src/gpgpu_cl.cpp
   src/gpgpu_cu.cpp
   src/gblas.cpp
+  src/gdnn.cpp
   src/database/database.cpp
   src/routines/common.cpp
   src/utilities/compile.cpp
@@ -173,6 +175,7 @@ set(PUBLIC_HEADERS
   include/gpgpu.h
   include/gblas_half.h
   include/gblas.h
+  include/gdnn.h
 )
 set(HEADERS  # such that they can be discovered by IDEs such as CLion and Visual Studio
   src/database/apple_cpu_fallback.hpp
@@ -208,6 +211,10 @@ endforeach()
 foreach(ROUTINE ${LEVELX_ROUTINES})
   set(SOURCES ${SOURCES} src/routines/levelx/${ROUTINE}.cpp)
   set(HEADERS ${HEADERS} src/routines/levelx/${ROUTINE}.hpp)
+endforeach()
+foreach(ROUTINE ${DNN_ROUTINES})
+  set(SOURCES ${SOURCES} src/routines/dnn/${ROUTINE}.cpp)
+  set(HEADERS ${HEADERS} src/routines/dnn/${ROUTINE}.hpp)
 endforeach()
 foreach(DATABASE ${DATABASES})
   set(SOURCES ${SOURCES} src/database/kernels/${DATABASE}/${DATABASE}.cpp)
