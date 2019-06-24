@@ -6,6 +6,35 @@
 
 using namespace dlf;
 
+template <typename T>
+void ExpectEQ(T a, T b) {
+    EXPECT_EQ(a, b);
+}
+
+void ExpectEQ(float a, float b) {
+    if (std::isnan(a))
+        EXPECT_TRUE(std::isnan(b));
+    else if (std::isinf(a))
+        EXPECT_TRUE(std::isinf(b));
+    else
+        EXPECT_FLOAT_EQ(a, b);
+}
+
+void ExpectEQ(double a, double b) {
+    if (std::isnan(a))
+        EXPECT_TRUE(std::isnan(b));
+    else if (std::isinf(a))
+        EXPECT_TRUE(std::isinf(b));
+    else
+        EXPECT_DOUBLE_EQ(a, b);
+}
+
+template <typename T>
+void ExpectEQ(std::complex<T> a, std::complex<T> b) {
+    ExpectEQ(a.real(), b.real());
+    ExpectEQ(a.imag(), b.imag());
+}
+
 template <typename T, size_t N, typename Unary>
 static void transform_test(const std::string& name, Unary op) {
     auto A = Tensor<T>::range({N}, N/2);
@@ -20,14 +49,7 @@ static void transform_test(const std::string& name, Unary op) {
     SCOPED_TRACE(name);
     for (size_t i = 0; i < N; i++) {
         T a = op(A(i)), b = B(i);
-        if (std::isnan(a))
-            EXPECT_TRUE(std::isnan(b));
-        else if (std::isinf(a))
-            EXPECT_TRUE(std::isinf(b));
-        else if (std::is_same<T,float>::value)
-            EXPECT_FLOAT_EQ(a, b);
-        else
-            EXPECT_DOUBLE_EQ(a, b);
+        ExpectEQ(a, b);
     }
 }
 
@@ -114,5 +136,110 @@ TYPED_TEST(TransformTest, Sign) {
     dev_B.read(B);
     for (size_t i = 0; i < N; i++) {
         EXPECT_EQ(B(i), A(i)<0 ? -1 : A(i)>0 ? 1 : 0);
+    }
+}
+
+template <typename T> struct BinaryTest : public testing::Test {};
+using BinaryTestTypes = testing::Types<int16_t, int32_t, int64_t, float, std::complex<float>>;
+TYPED_TEST_CASE(BinaryTest, BinaryTestTypes);
+
+TYPED_TEST(BinaryTest, Add) {
+    using T = TypeParam;
+    constexpr size_t N = 20;
+
+    auto A = Tensor<int>::random({N}, -int(N), int(N)).template cast<T>();
+    auto B = Tensor<int>::random({N}, -int(N), int(N)).template cast<T>();
+    auto C = Tensor<T>({N});
+
+    auto dev_A = DevTensor<T>(A);
+    auto dev_B = DevTensor<T>(B);
+    auto dev_C = DevTensor<T>(C);
+
+    gpgpu::dnn::add(N, dev_A.data(), dev_B.data(), dev_C.data());
+    dev_C.read(C);
+
+    for (size_t i = 0; i < N; i++) {
+        ExpectEQ(T(A(i) + B(i)), C(i));
+    }
+}
+
+TYPED_TEST(BinaryTest, Sub) {
+    using T = TypeParam;
+    constexpr size_t N = 20;
+
+    auto A = Tensor<int>::random({N}, -int(N), int(N)).template cast<T>();
+    auto B = Tensor<int>::random({N}, -int(N), int(N)).template cast<T>();
+    auto C = Tensor<T>({N});
+
+    auto dev_A = DevTensor<T>(A);
+    auto dev_B = DevTensor<T>(B);
+    auto dev_C = DevTensor<T>(C);
+
+    gpgpu::dnn::sub(N, dev_A.data(), dev_B.data(), dev_C.data());
+    dev_C.read(C);
+
+    for (size_t i = 0; i < N; i++) {
+        ExpectEQ(T(A(i) - B(i)), C(i));
+    }
+}
+
+TYPED_TEST(BinaryTest, Mul) {
+    using T = TypeParam;
+    constexpr size_t N = 20;
+
+    auto A = Tensor<int>::random({N}, -int(N), int(N)).template cast<T>();
+    auto B = Tensor<int>::random({N}, -int(N), int(N)).template cast<T>();
+    auto C = Tensor<T>({N});
+
+    auto dev_A = DevTensor<T>(A);
+    auto dev_B = DevTensor<T>(B);
+    auto dev_C = DevTensor<T>(C);
+
+    gpgpu::dnn::mul(N, dev_A.data(), dev_B.data(), dev_C.data());
+    dev_C.read(C);
+
+    for (size_t i = 0; i < N; i++) {
+        ExpectEQ(T(A(i) * B(i)), C(i));
+    }
+}
+
+TYPED_TEST(BinaryTest, Div) {
+    using T = TypeParam;
+    constexpr size_t N = 20;
+
+    auto A = Tensor<int>::random({N}, -int(N), int(N)).template cast<T>();
+    auto B = Tensor<int>::random({N}, -int(N), int(N)).template cast<T>();
+    auto C = Tensor<T>({N});
+
+    auto dev_A = DevTensor<T>(A);
+    auto dev_B = DevTensor<T>(B);
+    auto dev_C = DevTensor<T>(C);
+
+    gpgpu::dnn::div(N, dev_A.data(), dev_B.data(), dev_C.data());
+    dev_C.read(C);
+
+    for (size_t i = 0; i < N; i++) {
+        if (B(i) == T(0))
+            continue;
+        ExpectEQ(T(A(i) / B(i)), C(i));
+    }
+}
+
+TEST(BinaryTest, Pow) {
+    constexpr size_t N = 20;
+
+    auto A = Tensor<int>::random({N}, -int(N), int(N)).template cast<float>();
+    auto B = Tensor<int>::random({N}, -int(N), int(N)).template cast<float>();
+    auto C = Tensor<float>({N});
+
+    auto dev_A = DevTensor<float>(A);
+    auto dev_B = DevTensor<float>(B);
+    auto dev_C = DevTensor<float>(C);
+
+    gpgpu::dnn::pow(N, dev_A.data(), dev_B.data(), dev_C.data());
+    dev_C.read(C);
+
+    for (size_t i = 0; i < N; i++) {
+        ExpectEQ(std::pow(A(i), B(i)), C(i));
     }
 }

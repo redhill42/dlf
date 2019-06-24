@@ -283,7 +283,7 @@ R"(
 #ifdef USE_INLINE_KEYWORD
   #define INLINE_FUNC inline
 #else
-  #define INLINE_FUNC
+  #define INLINE_FUNC static
 #endif
 
 // =================================================================================================

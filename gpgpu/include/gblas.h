@@ -136,9 +136,9 @@ void rotg(Buffer<T>& sa_buffer, const size_t sa_offset,
 template <typename T>
 inline void rotg(Buffer<T>& sa_buffer, Buffer<T>& sb_buffer,
                  Buffer<T>& sc_buffer, Buffer<T>& ss_buffer,
-                 const Queue& queue = gpgpu::current::queue())
+                 const Queue& queue = gpgpu::current::queue(), Event* event = nullptr)
 {
-    rotg(sa_buffer, 0, sb_buffer, 0, sc_buffer, 0, ss_buffer, 0, queue);
+    rotg(sa_buffer, 0, sb_buffer, 0, sc_buffer, 0, ss_buffer, 0, queue, event);
 }
 
 // Generate modified givens plane rotation: SROTMG/DROTMG

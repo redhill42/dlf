@@ -139,10 +139,11 @@ public:
     DevTensor<T>& operator-=(const DevTensor<T>& rhs);
     DevTensor<T>& operator*=(const DevTensor<T>& rhs);
     DevTensor<T>& operator*=(const T& rhs);
+    DevTensor<T>& operator/=(const DevTensor<T>& rhs);
 };
 
 //==-------------------------------------------------------------------------
-// DevTensor transformations
+// DevTensor unary transformations
 //==-------------------------------------------------------------------------
 
 template <typename T>
@@ -246,91 +247,78 @@ DEFINE_TRANSFORM(erf)
 #undef DEFINE_TRANSFORM
 
 //==-------------------------------------------------------------------------
-// DevTensor operators
+// DevTensor binary transformations
 //==-------------------------------------------------------------------------
 
-template <typename T>
-inline DevTensor<T>& DevTensor<T>::operator+=(const DevTensor<T>& rhs) {
-    assert(shape() == rhs.shape());
-    gblas::axpy(size(), T(1), rhs.data(), 1, data(), 1);
-    return *this;
+#define DEFINE_BINARY(name) \
+template <typename T> \
+inline DevTensor<T> name(const DevTensor<T>& x, const DevTensor<T>& y, \
+                         const gpgpu::Queue& queue = gpgpu::current::queue()) { \
+    assert(x.shape() == y.shape()); \
+    DevTensor<T> z(x.shape(), queue); \
+    gpgpu::dnn::name(x.size(), x.data(), y.data(), z.data(), queue); \
+    return z; \
+} \
+template <typename T> \
+inline DevTensor<T> name(DevTensor<T>&& x, const DevTensor<T>& y, \
+                         const gpgpu::Queue& queue = gpgpu::current::queue()) { \
+    assert(x.shape() == y.shape()); \
+    gpgpu::dnn::name(x.size(), x.data(), y.data(), x.data(), queue); \
+    return std::move(x); \
+} \
+template <typename T> \
+inline DevTensor<T> name(const DevTensor<T>& x, DevTensor<T>&& y, \
+                         const gpgpu::Queue& queue = gpgpu::current::queue()) { \
+    assert(x.shape() == y.shape()); \
+    gpgpu::dnn::name(x.size(), x.data(), y.data(), y.data(), queue); \
+    return std::move(y); \
+} \
+template <typename T> \
+inline DevTensor<T> name(DevTensor<T>&& x, DevTensor<T>&& y, \
+                         const gpgpu::Queue& queue = gpgpu::current::queue()) { \
+    assert(x.shape() == y.shape()); \
+    gpgpu::dnn::name(x.size(), x.data(), y.data(), x.data(), queue); \
+    return std::move(x); \
+} \
+template <typename T> \
+inline void name##To(const DevTensor<T>& x, const DevTensor<T>& y, DevTensor<T>& z, \
+                     const gpgpu::Queue& queue = gpgpu::current::queue()) { \
+    assert(x.shape() == y.shape() && x.shape() == z.shape()); \
+    gpgpu::dnn::name(x.size(), x.data(), y.data(), z.data(), queue); \
 }
 
-template <typename T>
-inline DevTensor<T> operator+(const DevTensor<T>& lhs, const DevTensor<T>& rhs) {
-    auto R = lhs.copyAsync();
-    R += rhs;
-    return R;
+#define DEFINE_BINARY_OP(name, op) \
+DEFINE_BINARY(name) \
+template <typename T> \
+inline DevTensor<T>& DevTensor<T>::operator op##=(const DevTensor<T>& rhs) { \
+    name##To(*this, rhs, *this); \
+    return *this; \
+} \
+template <typename T> \
+inline DevTensor<T> operator op(const DevTensor<T>& lhs, const DevTensor<T>& rhs) { \
+    return name(lhs, rhs); \
+} \
+template <typename T> \
+inline DevTensor<T> operator op(DevTensor<T>&& lhs, const DevTensor<T>& rhs) { \
+    return name(std::move(lhs), rhs); \
+} \
+template <typename T> \
+inline DevTensor<T> operator op(const DevTensor<T>& lhs, DevTensor<T>&& rhs) { \
+    return name(lhs, std::move(rhs)); \
+} \
+template <typename T> \
+inline DevTensor<T> operator op(DevTensor<T>&& lhs, DevTensor<T>&& rhs) { \
+    return name(std::move(lhs), std::move(rhs)); \
 }
 
-template <typename T>
-inline DevTensor<T> operator+(DevTensor<T>&& lhs, const DevTensor<T>& rhs) {
-    lhs += rhs;
-    return std::move(lhs);
-}
+DEFINE_BINARY_OP(add, +)
+DEFINE_BINARY_OP(sub, -)
+DEFINE_BINARY_OP(mul, *)
+DEFINE_BINARY_OP(div, /)
+DEFINE_BINARY(pow)
 
-template <typename T>
-inline DevTensor<T> operator+(const DevTensor<T>& lhs, DevTensor<T>&& rhs) {
-    rhs += lhs;
-    return std::move(rhs);
-}
-
-template <typename T>
-inline DevTensor<T> operator+(DevTensor<T>&& lhs, DevTensor<T>&& rhs) {
-    lhs += rhs;
-    return std::move(lhs);
-}
-
-template <typename T>
-inline DevTensor<T>& DevTensor<T>::operator-=(const DevTensor<T>& rhs) {
-    assert(shape() == rhs.shape());
-    gblas::axpy(size(), T(-1), rhs.data(), 1, data(), 1);
-    return *this;
-}
-
-template <typename T>
-inline DevTensor<T> operator-(const DevTensor<T>& lhs, const DevTensor<T>& rhs) {
-    auto R = lhs.copyAsync();
-    R -= rhs;
-    return R;
-}
-
-template <typename T>
-inline DevTensor<T> operator-(DevTensor<T>&& lhs, const DevTensor<T>& rhs) {
-    lhs -= rhs;
-    return std::move(lhs);
-}
-
-template <typename T>
-inline DevTensor<T>& DevTensor<T>::operator*=(const DevTensor<T>& rhs) {
-    gblas::had(size(), T(1), data(), 1, rhs.data(), 1, T(0), data(), 1);
-    return *this;
-}
-
-template <typename T>
-inline DevTensor<T> operator*(const DevTensor<T>& lhs, const DevTensor<T>& rhs) {
-    auto R = lhs.copyAsync();
-    R *= rhs;
-    return R;
-}
-
-template <typename T>
-inline DevTensor<T> operator*(DevTensor<T>&& lhs, const DevTensor<T>& rhs) {
-    lhs *= rhs;
-    return std::move(lhs);
-}
-
-template <typename T>
-inline DevTensor<T> operator*(const DevTensor<T>& lhs, DevTensor<T>&& rhs) {
-    rhs *= lhs;
-    return std::move(rhs);
-}
-
-template <typename T>
-inline DevTensor<T> operator*(DevTensor<T>&& lhs, DevTensor<T>&& rhs) {
-    lhs *= rhs;
-    return std::move(lhs);
-}
+#undef DEFINE_BINARY_OP
+#undef DEFINE_BINARY
 
 template <typename T>
 inline DevTensor<T>& DevTensor<T>::operator*=(const T& rhs) {

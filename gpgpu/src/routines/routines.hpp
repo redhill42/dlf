@@ -81,5 +81,10 @@
 #include "routines/dnn/xabs.hpp"
 #include "routines/dnn/xneg.hpp"
 #include "routines/dnn/xsign.hpp"
+#include "routines/dnn/xadd.hpp"
+#include "routines/dnn/xsub.hpp"
+#include "routines/dnn/xmul.hpp"
+#include "routines/dnn/xdiv.hpp"
+#include "routines/dnn/xpow.hpp"
 
 #endif // GPGPU_BLAS_ROUTINES_ROUTINES_H_
