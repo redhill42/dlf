@@ -420,7 +420,7 @@ TEST_F(GPGPUTest, Xaxpy) {
 
         blas_level1_test<int32_t>(queue,
             [](auto N, auto& A, auto& B, auto alpha) {
-                A.transformTo(B, B, [=](auto a, auto b) { return alpha*a+b; });
+                transformTo(A, B, B, [=](auto a, auto b) { return alpha*a+b; });
             },
             [&](auto N, auto& A, auto& B, auto alpha) {
                 gblas::axpy(N, alpha, A.data(), 1, B.data(), 1, queue);
@@ -428,7 +428,7 @@ TEST_F(GPGPUTest, Xaxpy) {
 
         blas_level1_test<int64_t>(queue,
             [](auto N, auto& A, auto& B, auto alpha) {
-                A.transformTo(B, B, [=](auto a, auto b) { return alpha*a+b; });
+                transformTo(A, B, B, [=](auto a, auto b) { return alpha*a+b; });
             },
             [&](auto N, auto& A, auto& B, auto alpha) {
                 gblas::axpy(N, alpha, A.data(), 1, B.data(), 1, queue);

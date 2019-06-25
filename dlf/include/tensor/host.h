@@ -61,6 +61,22 @@ public: // Container View
     const_reverse_iterator crbegin() const noexcept { return rbegin(); }
     const_reverse_iterator crend() const noexcept { return rend(); }
 
+    shaped_iterator<T> begin(Shape shape) {
+        return shaped_iterator<T>(std::move(shape), data(), 0);
+    }
+
+    shaped_iterator<T> end(Shape shape) {
+        return shaped_iterator<T>(std::move(shape), data(), shape.size());
+    }
+
+    const_shaped_iterator<T> begin(Shape shape) const {
+        return const_shaped_iterator<T>(std::move(shape), data(), 0);
+    }
+
+    const_shaped_iterator<T> end(Shape shape) const {
+        return const_shaped_iterator<T>(std::move(shape), data(), shape.size());
+    }
+
 private: // Concepts
     template <typename InputIterator>
     using RequireInputIterator =
@@ -212,12 +228,6 @@ public: // Attributes
     template <typename... Args, typename = RequireIndexes<Args...>>
     T& operator()(Args... args) noexcept;
 
-    /**
-     * Equality test for two tensors.
-     */
-    bool operator==(const Tensor& other) const;
-    bool operator!=(const Tensor& other) const;
-
     friend std::ostream& operator<<(std::ostream& os, const Tensor& t) {
         if (!t.empty())
             printRec(os, t.shape(), 0, t.data());
@@ -257,56 +267,6 @@ public: // Transformations
     Tensor& apply(const Tensor<U>& y, F f);
 
     /**
-     * Transform a tensor to a new tensor by applying the given unary function
-     * on tensor's elements.
-     *
-     * @param f the unary function
-     * @return the transformed tensor
-     */
-    template <typename F, typename U = cxx::invoke_result_t<F,T>>
-    Tensor<U> transform(F f) const;
-
-    /**
-     * Transform tensor's elements to another tensor by applying the given function.
-     * The two tensor must have the same shape.
-     *
-     * @param target the target tensor to store transformed data
-     * @param f the function to apply the transformation
-     */
-    template <typename U, typename F>
-    void transformTo(Tensor<U>& target, F f) const;
-
-    /**
-     * Transform two tensor's elements to a new tensor by applying the given
-     * binary function. The element type may change during transformation.
-     *
-     * @param y another tensor involved in transformation
-     * @param f the function to be applied.
-     * @return the Tensor that contains transformed elements.
-     */
-    template <typename U, typename F, typename W = cxx::invoke_result_t<F,T,U>>
-    Tensor<W> transform(const Tensor<U>& y, F f) const;
-
-    /**
-     * Transform two tensor's elements to another tensor by applying the given
-     * binary function. The two tensors must have the same shape.
-     *
-     * @param target the target tensor to store transformed data.
-     * @param y another tensor involved in transformation.
-     * @param f the function to be applied.
-     */
-    template <typename U, typename W, typename F>
-    void transformTo(Tensor<W>& z, const Tensor<U>& y, F f) const;
-
-    // Rvalue optimization for transformations.
-    template <typename F, typename = std::enable_if_t<std::is_same<cxx::invoke_result_t<F,T>,T>::value>>
-    Tensor<T> transform(F f) &&;
-    template <typename F, typename = std::enable_if_t<std::is_same<cxx::invoke_result_t<F,T,T>,T>::value>>
-    Tensor<T> transform(const Tensor<T>& y, F f) &&;
-    template <typename F, typename = std::enable_if_t<std::is_same<cxx::invoke_result_t<F,T,T>,T>::value>>
-    Tensor<T> transform(Tensor<T>&& y, F f) const &;
-
-    /**
      * Casting element type.
      *
      * @tparam U the target element type
@@ -314,6 +274,11 @@ public: // Transformations
      */
     template <typename U>
     Tensor<U> cast() const;
+
+    /**
+     * Broadcast this tensor to the given shape.
+     */
+    Tensor broadcast(const Shape& shape);
 
 private: // Implementation
     static const T* printRec(std::ostream& out, const Shape& shape, size_t level, const T* data);
@@ -459,13 +424,20 @@ Tensor<T>& Tensor<T>::operator=(Tensor&& t) noexcept {
 //==-------------------------------------------------------------------------
 
 template <typename T>
-inline bool Tensor<T>::operator==(const Tensor& other) const {
-    return shape() == other.shape() && std::equal(begin(), end(), other.begin());
+inline bool operator==(const Tensor<T>& lhs, const Tensor<T>& rhs) {
+    if (lhs.shape() == rhs.shape()) {
+        return std::equal(lhs.begin(), lhs.end(), rhs.begin());
+    } else {
+        auto bs = Shape::broadcast(lhs, rhs);
+        auto ls = lhs.shape().broadcast(bs);
+        auto rs = rhs.shape().broadcast(bs);
+        return std::equal(lhs.begin(ls), lhs.end(ls), rhs.begin(rs));
+    }
 }
 
 template <typename T>
-inline bool Tensor<T>::operator!=(const Tensor& other) const {
-    return !(*this == other);
+inline bool operator!=(const Tensor<T>& lhs, const Tensor<T>& rhs) {
+    return !(lhs == rhs);
 }
 
 template<typename T>
@@ -509,76 +481,123 @@ const T* Tensor<T>::printRec(std::ostream& out, const Shape& shape, size_t level
 // Tensor transformations
 //==-------------------------------------------------------------------------
 
+/**
+ * Transform tensor A's elements to tensor B by applying the given function.
+ * The two tensor must have the same shape.
+ */
+template <typename T, typename U, typename F>
+inline Tensor<U>& transformTo(const Tensor<T>& A, Tensor<U>& B, F f) {
+    assert(A.shape() == B.shape());
+    parallel_transform(A.begin(), A.end(), B.begin(), f);
+    return B;
+}
+
+/**
+ * Transform a tensor to a new tensor by applying the given unary function
+ * on tensor's elements.
+ */
+template <typename T, typename F, typename U = cxx::invoke_result_t<F,T>>
+inline Tensor<U> transform(const Tensor<T>& A, F f) {
+    Tensor<U> B(A.shape());
+    transformTo(A, B, f);
+    return B;
+}
+
+template <typename T, typename F, typename = std::enable_if_t<std::is_same<cxx::invoke_result_t<F,T>,T>::value>>
+inline Tensor<T> transform(Tensor<T>&& A, F f) {
+    return std::move(transformTo(A, A, f));
+}
+
+/**
+ * Transform tensor A and B's elements to tensor C by applying the given binary
+ * function. The tensors must have the same shape.
+ */
+template <typename T, typename U, typename W, typename F>
+Tensor<W>& transformTo(const Tensor<T>& A, const Tensor<U>& B, Tensor<W>& C, F f) {
+    assert(C.shape().is_contiguous());
+
+    if (A.shape() == B.shape()) {
+        if (C.shape() != A.shape())
+            throw shape_error("incompatible shape");
+        parallel_transform(A.begin(), A.end(), B.begin(), C.begin(), f);
+        return C;
+    }
+
+    Shape result_shape = Shape::broadcast(A, B);
+    if (C.shape() != result_shape) {
+        throw shape_error("incompatible shape");
+    }
+
+    Shape sA = A.shape().broadcast(result_shape);
+    Shape sB = B.shape().broadcast(result_shape);
+
+    if (sA.is_contiguous()) {
+        parallel_transform(A.begin(), A.end(), B.begin(sB), C.begin(), f);
+    } else if (sB.is_contiguous()) {
+        parallel_transform(A.begin(sA), A.end(sA), B.begin(), C.begin(), f);
+    } else {
+        parallel_transform(A.begin(sA), A.end(sA), B.begin(sB), C.begin(), f);
+    }
+
+    return C;
+}
+
+/**
+ * Transform two tensors to a new tensor by applying the given binary function.
+ */
+template <typename T, typename U, typename F, typename W = cxx::invoke_result_t<F,T,U>>
+inline Tensor<W> transform(const Tensor<T>& A, const Tensor<U>& B, F f) {
+    Tensor<W> C(Shape::broadcast(A.shape(), B.shape()));
+    transformTo(A, B, C, f);
+    return C;
+}
+
+template <typename T, typename F, typename = std::enable_if_t<std::is_same<cxx::invoke_result_t<F,T,T>,T>::value>>
+inline Tensor<T> transform(Tensor<T>&& A, const Tensor<T>& B, F f) {
+    if (A.shape() == B.shape())
+        return std::move(transformTo(A, B, A, f));
+    else
+        return transform(A, B, f);
+}
+
+template <typename T, typename F, typename = std::enable_if_t<std::is_same<cxx::invoke_result_t<F,T,T>,T>::value>>
+inline Tensor<T> transform(const Tensor<T>& A, Tensor<T>&& B, F f) {
+    if (A.shape() == B.shape())
+        return std::move(transformTo(A, B, B, f));
+    else
+        return transform(A, B, f);
+}
+
+template <typename T, typename F, typename = std::enable_if_t<std::is_same<cxx::invoke_result_t<F,T,T>,T>::value>>
+inline Tensor<T> transform(Tensor<T>&& A, Tensor<T>&& B, F f) {
+    if (A.shape() == B.shape())
+        return std::move(transformTo(A, B, A, f));
+    else
+        return transform(A, B, f);
+}
+
 template <typename T>
 template <typename F>
 inline Tensor<T>& Tensor<T>::apply(F f) {
-    parallel_transform(begin(), end(), begin(), f);
-    return *this;
+    return transformTo(*this, *this, f);
 }
 
 template <typename T>
 template <typename U, typename F>
 inline Tensor<T>& Tensor<T>::apply(const Tensor<U>& y, F f) {
-    assert(shape() == y.shape());
-    parallel_transform(begin(), end(), y.begin(), begin(), f);
-    return *this;
-}
-
-template <typename T>
-template <typename F, typename U>
-inline Tensor<U> Tensor<T>::transform(F f) const {
-    Tensor<U> res(shape());
-    parallel_transform(begin(), end(), res.begin(), f);
-    return res;
-}
-
-template <typename T>
-template <typename U, typename F>
-inline void Tensor<T>::transformTo(Tensor<U>& target, F f) const {
-    assert(shape() == target.shape());
-    parallel_transform(begin(), end(), target.begin(), f);
-}
-
-template <typename T>
-template <typename U, typename F, typename W>
-inline Tensor<W> Tensor<T>::transform(const Tensor<U>& y, F f) const {
-    assert(shape() == y.shape());
-    Tensor<W> z(shape());
-    parallel_transform(begin(), end(), y.begin(), z.begin(), f);
-    return z;
-}
-
-template <typename T>
-template <typename U, typename W, typename F>
-inline void Tensor<T>::transformTo(Tensor<W>& z, const Tensor<U>& y, F f) const {
-    assert(shape() == y.shape() && shape() == z.shape());
-    parallel_transform(begin(), end(), y.begin(), z.begin(), f);
-}
-
-template <typename T>
-template <typename F, typename>
-inline Tensor<T> Tensor<T>::transform(F f) && {
-    return std::move(apply(f));
-}
-
-template <typename T>
-template <typename F, typename>
-inline Tensor<T> Tensor<T>::transform(const Tensor<T> &y, F f) && {
-    return std::move(apply(y, f));
-}
-
-template <typename T>
-template <typename F, typename>
-inline Tensor<T> Tensor<T>::transform(Tensor<T>&& y, F f) const & {
-    assert(shape() == y.shape());
-    parallel_transform(begin(), end(), y.begin(), y.begin(), f);
-    return std::move(y);
+    return transformTo(*this, y, *this, f);
 }
 
 template <typename T>
 template <typename U>
 inline Tensor<U> Tensor<T>::cast() const {
-    return transform([](const T& x) { return static_cast<U>(x); });
+    return transform(*this, [](const T& x) { return static_cast<U>(x); });
+}
+
+template <typename T>
+inline Tensor<T> Tensor<T>::broadcast(const Shape& shape) {
+    auto result_shape = this->shape().broadcast(shape);
+    return Tensor<T>(shape, begin(result_shape), end(result_shape));
 }
 
 //==-------------------------------------------------------------------------
@@ -587,81 +606,52 @@ inline Tensor<U> Tensor<T>::cast() const {
 
 template <typename T>
 inline Tensor<T> abs(const Tensor<T>& x) {
-    return x.transform([](T a) { return std::abs(a); });
+    return transform(x, [](T a) { return std::abs(a); });
 }
 
 template <typename T>
 inline Tensor<T> abs(Tensor<T>&& x) {
-    return std::move(x.apply([](T a) { return std::abs(a); }));
-}
-
-template <typename T>
-inline void abs(const Tensor<T>& x, Tensor<T>& y) {
-    assert(x.shape() == y.shape());
-    x.transformTo(y, [](T a) { return std::abs(a);  });
+    return transform(std::move(x), [](T a) { return std::abs(a); });
 }
 
 template <typename T>
 inline Tensor<T> neg(const Tensor<T>& x) {
-    return x.transform([](T a) { return T(-a); });
+    return transform(x, [](T a) { return T(-a); });
 }
 
 template <typename T>
 inline Tensor<T> neg(Tensor<T>&& x) {
-    return std::move(x.apply([](T a) { return T(-a); }));
-}
-
-template <typename T>
-inline void neg(const Tensor<T>& x, Tensor<T>& y) {
-    assert(x.shape() == y.shape());
-    x.transformTo(y, [](T a) { return T(-a);  });
+    return transform(std::move(x), [](T a) { return T(-a); });
 }
 
 template <typename T>
 inline Tensor<T> sign(const Tensor<T>& x) {
-    return x.transform([](T a) { return T((T(0)<a) - (a<T(0))); });
+    return transform(x, [](T a) { return T((T(0)<a) - (a<T(0))); });
 }
 
 template <typename T>
 inline Tensor<T> sign(Tensor<T>&& x) {
-    return std::move(x.apply([](T a) { return T((T(0)<a) - (a<T(0))); }));
-}
-
-template <typename T>
-inline void sign(const Tensor<T>& x, Tensor<T>& y) {
-    assert(x.shape() == y.shape());
-    x.transformTo(y, [](T a) { return T((T(0)<a) - (a<T(0))); });
+    return transform(std::move(x), [](T a) { return T((T(0)<a) - (a<T(0))); });
 }
 
 template <typename T, typename = std::enable_if_t<std::is_floating_point<T>::value>>
 inline Tensor<T> reciprocal(const Tensor<T>& x) {
-    return x.transform([](T a) { return T(1)/a; });
+    return transform(x, [](T a) { return T(1)/a; });
 }
 
 template <typename T, typename = std::enable_if_t<std::is_floating_point<T>::value>>
 inline Tensor<T> reciprocal(Tensor<T>&& x) {
-    return std::move(x.apply([](T a) { return T(1)/a; }));
-}
-
-template <typename T, typename = std::enable_if_t<std::is_floating_point<T>::value>>
-inline void reciprocal(const Tensor<T>& x, Tensor<T>& y) {
-    assert(x.shape() == y.shape());
-    x.transformTo(y, [](T a) { return T(1)/a; });
+    return transform(std::move(x), [](T a) { return T(1)/a; });
 }
 
 #define DEFINE_TRANSFORM(name) \
 template <typename T, typename = std::enable_if_t<std::is_floating_point<T>::value>> \
 inline Tensor<T> name(const Tensor<T>& x) { \
-    return x.transform([](T a){ return std::name(a); }); \
+    return transform(x, [](T a){ return std::name(a); }); \
 } \
 template <typename T, typename = std::enable_if_t<std::is_floating_point<T>::value>> \
 inline Tensor<T> name(Tensor<T>&& x) { \
-    return std::move(x.apply([](T a){ return std::name(a); })); \
-} \
-template <typename T, typename = std::enable_if_t<std::is_floating_point<T>::value>> \
-inline void name(const Tensor<T>& x, Tensor<T>& y) { \
-    assert(x.shape() == y.shape()); \
-    x.transformTo(y, [](T a){ return std::name(a);  }); \
+    return transform(std::move(x), [](T a){ return std::name(a); }); \
 }
 
 DEFINE_TRANSFORM(floor)
@@ -686,6 +676,16 @@ DEFINE_TRANSFORM(erf)
 
 #undef DEFINE_TRANSFORM
 
+template <typename T>
+inline Tensor<T> operator-(const Tensor<T>& x) {
+    return neg(x);
+}
+
+template <typename T>
+inline Tensor<T> operator-(Tensor<T>&& x) {
+    return neg(std::move(x));
+}
+
 //==-------------------------------------------------------------------------
 // Tensor operators
 //==-------------------------------------------------------------------------
@@ -702,36 +702,36 @@ DEFINE_TRANSFORM(erf)
     } \
     template <typename T, typename U, typename W = std::common_type_t<T,U>> \
     inline Tensor<W> operator op(const Tensor<T>& x, const Tensor<U>& y) { \
-        return x.transform(y, [](const T& a, const U& b) -> W {return a op b;}); \
+        return transform(x, y, [](const T& a, const U& b) -> W {return a op b;}); \
     } \
     template <typename T, typename U, typename W = std::common_type_t<T,U>> \
     inline Tensor<W> operator op(const Tensor<T>& x, const U& b) { \
-        return x.transform([&b](const T& a) -> W {return a op b;}); \
+        return transform(x, [&b](const T& a) -> W {return a op b;}); \
     } \
     template <typename T, typename U, typename W = std::common_type_t<T,U>> \
     inline Tensor<W> operator op(const T& a, const Tensor<U>& y) { \
-        return y.transform([&a](const U& b) -> W {return a op b;}); \
+        return transform(y, [&a](const U& b) -> W {return a op b;}); \
     } \
     /* rvalue optimization */ \
     template <typename T> \
     inline Tensor<T> operator op(Tensor<T>&& x, const Tensor<T>& y) { \
-        return std::move(x.apply(y, [](const T& a, const T& b) {return a op b;})); \
+        return transform(std::move(x), y, [](const T& a, const T& b) {return a op b;}); \
     } \
     template <typename T> \
     inline Tensor<T> operator op(const Tensor<T>& x, Tensor<T>&& y) { \
-        return std::move(y.apply(x, [](const T& b, const T& a) {return a op b;})); \
+        return transform(x, std::move(y), [](const T& a, const T& b) {return a op b;}); \
     } \
     template <typename T> \
     inline Tensor<T> operator op(Tensor<T>&& x, Tensor<T>&& y) { \
-        return std::move(x.apply(y, [](const T& a, const T& b) {return a op b;})); \
+        return transform(std::move(x), std::move(y), [](const T& a, const T& b) {return a op b;}); \
     } \
     template <typename T> \
     inline Tensor<T> operator op(Tensor<T>&& x, const T& b) { \
-        return std::move(x.apply([&b](const T& a) {return a op b;})); \
+        return transform(std::move(x), [&b](const T& a) {return a op b;}); \
     } \
     template <typename T> \
     inline Tensor<T> operator op(const T& a, Tensor<T>&& y) { \
-        return std::move(y.apply([&a](const T& b) {return a op b;})); \
+        return transform(std::move(y), [&a](const T& b) {return a op b;}); \
     }
 
 DEFINE_OPERATOR(+)
@@ -785,16 +785,6 @@ DEFINE_BLAS_OPERATOR(+, std::complex<double>, 1.0, 1.0)
 DEFINE_BLAS_OPERATOR(-, std::complex<double>, 1.0, -1.0)
 
 #undef DEFINE_BLAS_OPERATOR
-
-template <typename T>
-inline Tensor<T> operator-(const Tensor<T>& x) {
-    return neg(x);
-}
-
-template <typename T>
-inline Tensor<T> operator-(Tensor<T>&& x) {
-    return neg(std::move(x));
-}
 
 //==-------------------------------------------------------------------------
 // Tensor operations
@@ -1041,6 +1031,41 @@ Tensor<T> gemm(const T& alpha, const Tensor<T>& A, const Tensor<T>& B,
     Tensor<T> R = C;
     gemm(alpha, A, B, beta, &R, transA, transB);
     return R;
+}
+
+/**
+ * The outer product on tensors is typically referred to as the tensor product.
+ * Given a tensor a of order q with dimensions (i1, ..., iq), and a tensor b
+ * of order r with dimensions (j1, ..., jr), their outer product c is of order
+ * q + r with dimensions (k1, ..., kq+r) which are the i dimensions followed
+ * by the j dimensions.
+ */
+template <typename T, typename U, typename F, typename W = cxx::invoke_result_t<F,T,U>>
+Tensor<W> outer(const Tensor<T>& A, const Tensor<U>& B, F f) {
+    std::vector<size_t> dimA, dimB, dimC;
+    for (size_t i = 0; i < A.rank(); i++) {
+        dimA.push_back(A.extent(i));
+        dimB.push_back(1);
+        dimC.push_back(A.extent(i));
+    }
+    for (size_t i = 0; i < B.rank(); i++) {
+        dimA.push_back(1);
+        dimB.push_back(B.extent(i));
+        dimC.push_back(B.extent(i));
+    }
+
+    auto sC = Shape(dimC);
+    auto sA = Shape(dimA).broadcast(sC);
+    auto sB = Shape(dimB).broadcast(sC);
+
+    Tensor<W> C(sC);
+    parallel_transform(A.begin(sA), A.end(sA), B.begin(sB), C.begin(), f);
+    return C;
+}
+
+template <typename T, typename U, typename W = std::common_type_t<T,U>>
+inline Tensor<W> outer(const Tensor<T>& A, const Tensor<U>& B) {
+    return outer(A, B, [](const T& a, const U& b) -> W { return a * b; });
 }
 
 namespace impl {

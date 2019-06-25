@@ -44,9 +44,6 @@ else
   exit 1
 fi
 
-# Compute number physical CPU cores
-let "cores = $(lscpu | awk '/^CPU\(s\)/{print $2}') / $(lscpu | awk '/^Thread/{print $4}')"
-
 cd bundles
 cmake -DCMAKE_BUILD_TYPE=Release ..
-cmake --build . -- -j $cores
+cmake --build .

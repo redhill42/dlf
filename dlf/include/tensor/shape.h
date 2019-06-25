@@ -1,16 +1,23 @@
 #pragma once
 
 #include <vector>
+#include <iterator>
 #include <cassert>
 #include <cstdlib>
+#include <cstddef>
+#include "utility.h"
 
 namespace dlf {
+
+class shape_error : public std::logic_error {
+public:
+    using std::logic_error::logic_error;
+};
 
 /**
  * The Shape defines the dimensions of a Tensor.
  */
-class Shape
-{
+class Shape final {
     struct dim_t {
         size_t extent;
         size_t stride;
@@ -23,6 +30,8 @@ class Shape
     std::vector<dim_t> m_dims;
     size_t m_size = 0;
 
+    Shape(std::vector<dim_t>&& dims, size_t size)
+        : m_dims(std::move(dims)), m_size(size) {}
     void init(const std::vector<size_t>& extents) noexcept;
 
 public:
@@ -85,10 +94,21 @@ public:
     }
 
     /**
+     * Returns true if the shape represents a contiguous addressing,
+     * false otherwise.
+     */
+    bool is_contiguous() const noexcept;
+
+    /**
      * Change dimensions of this shape. The new shape must compatible to
      * this shape.
      */
     bool reshape(std::vector<size_t> newshape) noexcept;
+
+    /**
+     * Broadcast the shape to target shape.
+     */
+    Shape broadcast(const Shape& to) const;
 
     /**
      * Return the data offset for the given index.
@@ -103,6 +123,13 @@ public:
     bool next(std::vector<size_t>& index) const noexcept;
 
     /**
+     * Returns the previous index within this shape.
+     *
+     * @return true if previous index is available
+     */
+    bool previous(std::vector<size_t>& index) const noexcept;
+
+    /**
      * Compare two shapes for equality.
      */
     bool operator==(const Shape& other) const {
@@ -114,6 +141,38 @@ public:
      */
     bool operator!=(const Shape& other) const {
         return m_dims != other.m_dims;
+    }
+
+public:
+    template <typename... Shapes>
+    static Shape broadcast(const Shapes&... shapes) {
+        size_t result_rank = cxx::max({shapes.rank()...});
+        std::vector<size_t> result_shape(result_rank);
+        for (size_t i = 0; i < result_rank; i++)
+            result_shape[i] = do_broadcast(result_rank, i, 1, shapes...);
+        return Shape(result_shape);
+    }
+
+    static Shape broadcast(const std::vector<Shape>& shapes);
+
+private:
+    template <typename ShapeT>
+    static size_t do_broadcast(size_t rank, size_t i, size_t dim, const ShapeT& shape) {
+        if (i < rank - shape.rank())
+            return dim; // shape will be filled with 1 at dimension i
+        auto dim_i_j = shape.extent(i - rank + shape.rank());
+        if (dim_i_j == 1)
+            return dim;
+        if (dim != dim_i_j && dim != 1)
+            throw shape_error("incompatible dimensions");
+        return dim_i_j;
+    }
+
+    template <typename ShapeT, typename... Shapes>
+    static size_t do_broadcast(size_t rank, size_t i, size_t dim, const ShapeT& shape, const Shapes&... shapes) {
+        dim = do_broadcast(rank, i, dim, shape);
+        dim = do_broadcast(rank, i, dim, shapes...);
+        return dim;
     }
 };
 
@@ -208,4 +267,138 @@ public:
     }
 };
 
-} //namespace dlf
+//---------------------------------------------------------------------------
+// Shaped iterator
+
+namespace detail {
+class shape_indexer {
+private:
+    ptrdiff_t m_linear_idx;
+    ptrdiff_t m_last_idx;
+    size_t    m_offset;
+
+protected:
+    Shape m_shape;
+
+    shape_indexer(const Shape& shape, ptrdiff_t start)
+        : m_shape(shape) { reset(start); }
+    shape_indexer(Shape&& shape, ptrdiff_t start)
+        : m_shape(std::move(shape)) { reset(start);}
+
+    void reset(ptrdiff_t linear_idx) noexcept;
+    void increment() noexcept;
+    void decrement() noexcept;
+    void increment(ptrdiff_t n) noexcept { reset(m_linear_idx + n); }
+    void decrement(ptrdiff_t n) noexcept { reset(m_linear_idx - n); }
+
+public:
+    ptrdiff_t index() const noexcept { return m_linear_idx; }
+    size_t offset() const noexcept { return m_offset; }
+
+    bool operator==(const shape_indexer& rhs) const noexcept {
+        return m_linear_idx == rhs.m_linear_idx;
+    }
+    bool operator!=(const shape_indexer& rhs) const noexcept {
+        return m_linear_idx != rhs.m_linear_idx;
+    }
+    bool operator<(const shape_indexer& rhs) const noexcept {
+        return m_linear_idx < rhs.m_linear_idx;
+    }
+    bool operator>(const shape_indexer& rhs) const noexcept {
+        return m_linear_idx > rhs.m_linear_idx;
+    }
+    bool operator<=(const shape_indexer& rhs) const noexcept {
+        return m_linear_idx <= rhs.m_linear_idx;
+    }
+    bool operator>=(const shape_indexer& rhs) const noexcept {
+        return m_linear_idx >= rhs.m_linear_idx;
+    }
+
+private:
+    ptrdiff_t update(int i, ptrdiff_t& linear_idx) noexcept;
+};
+}
+
+template <typename T>
+class shaped_iterator : public detail::shape_indexer {
+    T* m_data;
+
+public:
+    using value_type = T;
+    using difference_type = ptrdiff_t;
+    using reference = value_type&;
+    using pointer = value_type*;
+    using iterator_category = std::random_access_iterator_tag;
+
+    shaped_iterator(const Shape& shape, T* data, difference_type start)
+        : shape_indexer(shape, start), m_data(data) {}
+    shaped_iterator(Shape&& shape, T* data, difference_type start)
+        : shape_indexer(std::move(shape), start), m_data(data) {}
+
+    shaped_iterator& operator++() noexcept { increment(); return *this; }
+    shaped_iterator& operator--() noexcept { decrement(); return *this; }
+    shaped_iterator  operator++(int) noexcept { auto t = *this; ++(*this); return t; }
+    shaped_iterator  operator--(int) noexcept { auto t = *this; --(*this); return t; }
+    shaped_iterator& operator+=(difference_type n) noexcept { increment(n); return *this; }
+    shaped_iterator& operator-=(difference_type n) noexcept { decrement(n); return *this; }
+
+    shaped_iterator operator+(difference_type n) const noexcept
+        { return shaped_iterator(m_shape, m_data, index() + n); }
+    shaped_iterator operator-(difference_type n) const noexcept
+        { return shaped_iterator(m_shape, m_data, index() - n); }
+    difference_type operator-(const shaped_iterator& rhs) const noexcept
+        { return index() - rhs.index(); }
+
+    reference operator*() const noexcept {
+        assert(index() >= 0 && index() < m_shape.size());
+        return m_data[offset()];
+    }
+
+    pointer operator->() const noexcept {
+        assert(index() >= 0 && index() < m_shape.size());
+        return &m_data[offset()];
+    }
+};
+
+template <typename T>
+class const_shaped_iterator : public detail::shape_indexer {
+    const T* m_data;
+
+public:
+    using value_type = T;
+    using difference_type = ptrdiff_t;
+    using reference = const value_type&;
+    using pointer = const value_type*;
+    using iterator_category = std::random_access_iterator_tag;
+
+    const_shaped_iterator(const Shape& shape, const T* data, difference_type start)
+        : shape_indexer(shape, start), m_data(data) {}
+    const_shaped_iterator(Shape&& shape, T* data, difference_type start)
+        : shape_indexer(std::move(shape), start), m_data(data) {}
+
+    const_shaped_iterator& operator++() noexcept { increment(); return *this; }
+    const_shaped_iterator& operator--() noexcept { decrement(); return *this; }
+    const_shaped_iterator  operator++(int) noexcept { auto t = *this; ++(*this); return t; }
+    const_shaped_iterator  operator--(int) noexcept { auto t = *this; --(*this); return t; }
+    const_shaped_iterator& operator+=(difference_type n) noexcept { increment(n); return *this; }
+    const_shaped_iterator& operator-=(difference_type n) noexcept { decrement(n); return *this; }
+
+    const_shaped_iterator operator+(difference_type n) const noexcept
+        { return const_shaped_iterator(m_shape, m_data, index() + n); }
+    const_shaped_iterator operator-(difference_type n) const noexcept
+        { return const_shaped_iterator(m_shape, m_data, index() - n); }
+    difference_type operator-(const const_shaped_iterator& rhs) const noexcept
+        { return index() - rhs.index(); }
+
+    reference operator*() const noexcept {
+        assert(index() >= 0 && index() < m_shape.size());
+        return m_data[offset()];
+    }
+
+    pointer operator->() const noexcept {
+        assert(index() >= 0 && index() < m_shape.size());
+        return &m_data[offset()];
+    }
+};
+
+} // namespace dlf

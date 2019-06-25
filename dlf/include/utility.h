@@ -71,6 +71,16 @@ inline constexpr const T& clamp(const T& v, const T& lo, const T& hi) {
 }
 #endif
 
+template <class T, class Compare>
+inline constexpr T max(std::initializer_list<T> t, Compare comp) {
+    return *std::max_element(t.begin(), t.end(), comp);
+}
+
+template <class T>
+inline constexpr T max(std::initializer_list<T> t) {
+    return *std::max_element(t.begin(), t.end(), std::less<T>());
+}
+
 } // namespace cxx
 
 namespace cxx {

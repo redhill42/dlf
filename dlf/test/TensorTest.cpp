@@ -323,6 +323,91 @@ TEST_F(TensorTest, Expression) {
     testBinaryOp((5+t1)*t2+t1*3, [](auto x, auto y) { return (5+x)*y+x*3; });
 }
 
+TEST_F(TensorTest, ShapeBroadcastArthimetic) {
+    {
+        auto A = Tensor<int>({2, 3}, {1, 2, 3, 4, 5, 6});
+        auto B = Tensor<int>({3}, {5, 8, 4});
+        auto C = Tensor<int>({2, 3}, {6, 10, 7, 9, 13, 10});
+        EXPECT_EQ(A + B, C);
+    }
+    {
+        auto A = Tensor<int>({3}, {5, 8, 4});
+        auto B = Tensor<int>({2, 3}, {1, 2, 3, 4, 5, 6});
+        auto C = Tensor<int>({2, 3}, {4, 6, 1, 1, 3, -2});
+        EXPECT_EQ(A - B, C);
+    }
+    {
+        auto A = Tensor<int>({4, 1}, {3, 7, 5, 2});
+        auto B = Tensor<int>({3}, {2, 6, 5});
+        auto C = Tensor<int>({4, 3}, {5, 9, 8, 9, 13, 12, 7, 11, 10, 4, 8, 7});
+        EXPECT_EQ(A + B, C);
+    }
+    {
+        auto A = Tensor<int>({4});
+        auto B = Tensor<int>({3});
+        EXPECT_ANY_THROW(A + B);
+    }
+
+    {
+        auto A = Tensor<int>::range({3, 1, 2, 1}, 1);
+        auto B = Tensor<int>::range(   {4, 1, 5}, 1);
+
+        // Computed by numpy
+        auto C = Tensor<int>({3, 4, 2, 5}, {
+              1,   2,   3,   4,   5,
+              2,   4,   6,   8,  10,
+              6,   7,   8,   9,  10,
+             12,  14,  16,  18,  20,
+             11,  12,  13,  14,  15,
+             22,  24,  26,  28,  30,
+             16,  17,  18,  19,  20,
+             32,  34,  36,  38,  40,
+              3,   6,   9,  12,  15,
+              4,   8,  12,  16,  20,
+             18,  21,  24,  27,  30,
+             24,  28,  32,  36,  40,
+             33,  36,  39,  42,  45,
+             44,  48,  52,  56,  60,
+             48,  51,  54,  57,  60,
+             64,  68,  72,  76,  80,
+              5,  10,  15,  20,  25,
+              6,  12,  18,  24,  30,
+             30,  35,  40,  45,  50,
+             36,  42,  48,  54,  60,
+             55,  60,  65,  70,  75,
+             66,  72,  78,  84,  90,
+             80,  85,  90,  95, 100,
+             96, 102, 108, 114, 120
+        });
+
+        EXPECT_EQ(A * B, C);
+    }
+}
+
+TEST_F(TensorTest, ShapeBroadcastEqual) {
+    auto A = Tensor<int>({3, 1}, {1, 2, 3});
+    auto B = Tensor<int>({2, 3, 4}, {
+        1, 1, 1, 1,
+        2, 2, 2, 2,
+        3, 3, 3, 3,
+        1, 1, 1, 1,
+        2, 2, 2, 2,
+        3, 3, 3, 3
+    });
+
+    EXPECT_EQ(A, B);
+    EXPECT_EQ(B, A);
+}
+
+TEST_F(TensorTest, ShapeBroadcastCopy) {
+    auto A = Tensor<int>({3, 1}, {1, 2, 3});
+    auto B = Tensor<int>({2, 3, 4}, {
+        1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3,
+        1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3
+    });
+    EXPECT_EQ(A.broadcast({2, 3, 4}), B);
+}
+
 template <typename T>
 static void inner_test() {
     // Vector . Vector
@@ -397,6 +482,29 @@ TEST_F(TensorTest, Inner) {
     inner_test<double>();
     inner_test<std::complex<float>>();
     inner_test<std::complex<double>>();
+}
+
+TEST_F(TensorTest, VectorOuter) {
+    auto A = Tensor<int>({3}, {1, 2, 3});
+    auto B = Tensor<int>({4}, {1, 2, 3, 4});
+    auto C = Tensor<int>({3, 4}, {
+        1, 2, 3, 4,
+        2, 4, 6, 8,
+        3, 6, 9, 12
+    });
+    EXPECT_EQ(outer(A, B), C);
+}
+
+TEST_F(TensorTest, MatrixOuter) {
+    auto A = Tensor<int>({2, 2}, {1, 2, 3, 4});
+    auto B = Tensor<int>({2, 3}, {5, 6, 7, 8, 9, 10});
+    auto C = Tensor<int>({2, 2, 2, 3}, {
+         5,  6,  7,  8,  9, 10,
+        10, 12, 14, 16, 18, 20,
+        15, 18, 21, 24, 27, 30,
+        20, 24, 28, 32, 36, 40
+    });
+    EXPECT_EQ(outer(A, B), C);
 }
 
 template <typename T = int>
@@ -540,7 +648,7 @@ TEST_F(TensorTest, Transform) {
     {
         SCOPED_TRACE("");
         auto f = static_cast<double(*)(double)>(sin);
-        auto t = t1.transform(f);
+        auto t = transform(t1, f);
         static_assert(std::is_same<decltype(t), Tensor<double>>::value, "");
         checkDataTransform(t, f);
     }
@@ -548,7 +656,7 @@ TEST_F(TensorTest, Transform) {
     {
         SCOPED_TRACE("");
         auto f = [](auto x) { return std::complex<int>(x, x * 2); };
-        auto t = t1.transform(f);
+        auto t = transform(t1, f);
         static_assert(std::is_same<decltype(t), Tensor<std::complex<int>>>::value, "");
         checkDataTransform(t, f);
     }
@@ -557,7 +665,7 @@ TEST_F(TensorTest, Transform) {
 TEST_F(TensorTest, TransformTo) {
     auto f = static_cast<double(*)(double)>(sin);
     Tensor<double> t({2,3,4});
-    t1.transformTo(t, f);
+    transformTo(t1, t, f);
     checkDataTransform(t, f);
 }
 
@@ -571,10 +679,10 @@ TEST_F(TensorTest, Cast) {
 TEST_F(TensorTest, Transform2) {
     auto f = [](auto x, auto y) { return (x+y)/2; };
 
-    auto a = t1.transform(t2, f);
+    auto a = transform(t1, t2, f);
 
     Tensor<int32_t> b({2,3,4});
-    t1.transformTo(b, t2, f);
+    transformTo(t1, t2, b, f);
 
     for (int i = 0; i < a.size(); i++) {
         auto v = f(data1[i], data2[i]);
@@ -586,7 +694,7 @@ TEST_F(TensorTest, Transform2) {
 TEST_F(TensorTest, TransformRValueOptimization) {
     {
         Tensor<int> a({2, 2}, {1, 2, 3, 4});
-        Tensor<int> b = std::move(a).transform([](auto x) { return x*2; });
+        Tensor<int> b = transform(std::move(a), [](auto x) { return x*2; });
         EXPECT_TRUE(a.empty());
         EXPECT_THAT(b, T::ElementsAre(2, 4, 6, 8));
     }
@@ -594,7 +702,7 @@ TEST_F(TensorTest, TransformRValueOptimization) {
     {
         Tensor<int> a({2, 2}, {1, 2, 3, 4});
         Tensor<int> b({2, 2}, {5, 6, 7, 8});
-        Tensor<int> c = std::move(a).transform(b, std::plus<>());
+        Tensor<int> c = transform(std::move(a), b, std::plus<>());
         EXPECT_TRUE(a.empty());
         EXPECT_THAT(b, T::ElementsAre(5, 6, 7, 8));
         EXPECT_THAT(c, T::ElementsAre(6, 8, 10, 12));
@@ -603,7 +711,7 @@ TEST_F(TensorTest, TransformRValueOptimization) {
     {
         Tensor<int> a({2, 2}, {1, 2, 3, 4});
         Tensor<int> b({2, 2}, {5, 6, 7, 8});
-        Tensor<int> c = a.transform(std::move(b), std::plus<>());
+        Tensor<int> c = transform(a, std::move(b), std::plus<>());
         EXPECT_THAT(a, T::ElementsAre(1, 2, 3, 4));
         EXPECT_TRUE(b.empty());
         EXPECT_THAT(c, T::ElementsAre(6, 8, 10, 12));
@@ -642,7 +750,7 @@ TEST_F(TensorTest, Relu) {
     auto in = Tensor<int32_t>::random({100, 100}, -500, 500);
 
     // relu with 100 as max value
-    auto out = in.transform(Relu<double>(100.0));
+    auto out = transform(in, Relu<double>(100.0));
     static_assert(std::is_same<decltype(out), Tensor<double>>::value, "");
 
     EXPECT_THAT(in, T::Contains(T::Lt(0)));
