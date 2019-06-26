@@ -61,21 +61,14 @@ public: // Container View
     const_reverse_iterator crbegin() const noexcept { return rbegin(); }
     const_reverse_iterator crend() const noexcept { return rend(); }
 
-    shaped_iterator<T> begin(Shape shape) {
-        return shaped_iterator<T>(std::move(shape), data(), 0);
-    }
-
-    shaped_iterator<T> end(Shape shape) {
-        return shaped_iterator<T>(std::move(shape), data(), shape.size());
-    }
-
-    const_shaped_iterator<T> begin(Shape shape) const {
-        return const_shaped_iterator<T>(std::move(shape), data(), 0);
-    }
-
-    const_shaped_iterator<T> end(Shape shape) const {
-        return const_shaped_iterator<T>(std::move(shape), data(), shape.size());
-    }
+    shaped_iterator<T> begin(Shape shape)
+        { return shaped_iterator<T>(std::move(shape), data(), 0); }
+    shaped_iterator<T> end(Shape shape)
+        { return shaped_iterator<T>(std::move(shape), data(), shape.size()); }
+    const_shaped_iterator<T> begin(Shape shape) const
+        { return const_shaped_iterator<T>(std::move(shape), data(), 0); }
+    const_shaped_iterator<T> end(Shape shape) const
+        { return const_shaped_iterator<T>(std::move(shape), data(), shape.size()); }
 
 private: // Concepts
     template <typename InputIterator>
@@ -425,14 +418,7 @@ Tensor<T>& Tensor<T>::operator=(Tensor&& t) noexcept {
 
 template <typename T>
 inline bool operator==(const Tensor<T>& lhs, const Tensor<T>& rhs) {
-    if (lhs.shape() == rhs.shape()) {
-        return std::equal(lhs.begin(), lhs.end(), rhs.begin());
-    } else {
-        auto bs = Shape::broadcast(lhs, rhs);
-        auto ls = lhs.shape().broadcast(bs);
-        auto rs = rhs.shape().broadcast(bs);
-        return std::equal(lhs.begin(ls), lhs.end(ls), rhs.begin(rs));
-    }
+    return lhs.shape() == rhs.shape() && std::equal(lhs.begin(), lhs.end(), rhs.begin());
 }
 
 template <typename T>
@@ -459,17 +445,19 @@ const T* Tensor<T>::printRec(std::ostream& out, const Shape& shape, size_t level
     out << '[';
     if (level == shape.rank()-1) {
         // last level, printing data
-        for (int i = 0; i < d; i++) {
+        for (int i = 0; ; i++) {
             out << *data++;
-            if (i < d-1)
-                out << ',';
+            if (i == d-1)
+                break;
+            out << ',';
         }
     } else {
         // intermediate levels, recursive
-        for (int i = 0; i < d; i++) {
+        for (int i = 0; ; i++) {
             data = printRec(out, shape, level+1, data);
-            if (i < d-1)
-                out << ',';
+            if (i == d-1)
+                break;
+            out << ',';
         }
     }
     out << ']';
@@ -481,6 +469,25 @@ const T* Tensor<T>::printRec(std::ostream& out, const Shape& shape, size_t level
 // Tensor transformations
 //==-------------------------------------------------------------------------
 
+template < typename R = void, typename TA, typename TB, typename Op>
+static R broadcast_do(TA&& A, TB&& B, Op&& op) {
+    if (A.shape() == B.shape()) {
+        return op(A.shape(), A.begin(), A.end(), B.begin());
+    }
+
+    Shape final_shape = Shape::broadcast(A, B);
+    Shape sA = A.shape().broadcast(final_shape);
+    Shape sB = B.shape().broadcast(final_shape);
+
+    if (sA.is_contiguous()) {
+        return op(final_shape, A.begin(), A.end(), B.begin(sB));
+    } else if (sB.is_contiguous()) {
+        return op(final_shape, A.begin(sA), A.end(sA), B.begin());
+    } else {
+        return op(final_shape, A.begin(sA), A.end(sA), B.begin(sB));
+    }
+}
+
 /**
  * Transform tensor A's elements to tensor B by applying the given function.
  * The two tensor must have the same shape.
@@ -488,7 +495,7 @@ const T* Tensor<T>::printRec(std::ostream& out, const Shape& shape, size_t level
 template <typename T, typename U, typename F>
 inline Tensor<U>& transformTo(const Tensor<T>& A, Tensor<U>& B, F f) {
     assert(A.shape() == B.shape());
-    parallel_transform(A.begin(), A.end(), B.begin(), f);
+    par::transform(A.begin(), A.end(), B.begin(), f);
     return B;
 }
 
@@ -510,35 +517,15 @@ inline Tensor<T> transform(Tensor<T>&& A, F f) {
 
 /**
  * Transform tensor A and B's elements to tensor C by applying the given binary
- * function. The tensors must have the same shape.
+ * function.
  */
 template <typename T, typename U, typename W, typename F>
 Tensor<W>& transformTo(const Tensor<T>& A, const Tensor<U>& B, Tensor<W>& C, F f) {
-    assert(C.shape().is_contiguous());
-
-    if (A.shape() == B.shape()) {
-        if (C.shape() != A.shape())
+    broadcast_do(A, B, [&](auto& s, auto b1, auto e1, auto b2) {
+        if (C.shape() != s)
             throw shape_error("incompatible shape");
-        parallel_transform(A.begin(), A.end(), B.begin(), C.begin(), f);
-        return C;
-    }
-
-    Shape result_shape = Shape::broadcast(A, B);
-    if (C.shape() != result_shape) {
-        throw shape_error("incompatible shape");
-    }
-
-    Shape sA = A.shape().broadcast(result_shape);
-    Shape sB = B.shape().broadcast(result_shape);
-
-    if (sA.is_contiguous()) {
-        parallel_transform(A.begin(), A.end(), B.begin(sB), C.begin(), f);
-    } else if (sB.is_contiguous()) {
-        parallel_transform(A.begin(sA), A.end(sA), B.begin(), C.begin(), f);
-    } else {
-        parallel_transform(A.begin(sA), A.end(sA), B.begin(sB), C.begin(), f);
-    }
-
+        par::transform(b1, e1, b2, C.begin(), f);
+    });
     return C;
 }
 
@@ -741,51 +728,6 @@ DEFINE_OPERATOR(/)
 
 #undef DEFINE_OPERATOR
 
-#define DEFINE_BLAS_OPERATOR(op, T, alpha, beta) \
-    template <> template <> \
-    inline Tensor<T>& Tensor<T>::operator op##=(const Tensor<T>& rhs) { \
-        assert(shape() == rhs.shape()); \
-        cblas::axpby(size(), T(beta), rhs.data(), 1, T(alpha), data(), 1); \
-        return *this; \
-    } \
-    template <> \
-    inline Tensor<T> operator op(const Tensor<T>& lhs, const Tensor<T>& rhs) { \
-        assert(lhs.shape() == rhs.shape()); \
-        Tensor<T> res(lhs.shape()); \
-        std::copy(rhs.begin(), rhs.end(), res.begin()); \
-        cblas::axpby(res.size(), T(alpha), lhs.data(), 1, T(beta), res.data(), 1); \
-        return res; \
-    } \
-    template <> \
-    inline Tensor<T> operator op(Tensor<T>&& lhs, const Tensor<T>& rhs) { \
-        assert(lhs.shape() == rhs.shape()); \
-        cblas::axpby(lhs.size(), T(beta), rhs.data(), 1, T(alpha), lhs.data(), 1); \
-        return std::move(lhs); \
-    } \
-    template <> \
-    inline Tensor<T> operator op(const Tensor<T>& lhs, Tensor<T>&& rhs) { \
-        assert(lhs.shape() == rhs.shape()); \
-        cblas::axpby(rhs.size(), T(alpha), lhs.data(), 1, T(beta), rhs.data(), 1); \
-        return std::move(rhs); \
-    } \
-    template <> \
-    inline Tensor<T> operator op(Tensor<T>&& lhs, Tensor<T>&& rhs) { \
-        assert(lhs.shape() == rhs.shape()); \
-        cblas::axpby(lhs.size(), T(alpha), lhs.data(), 1, T(beta), rhs.data(), 1); \
-        return std::move(rhs); \
-    }
-
-DEFINE_BLAS_OPERATOR(+, float, 1.0, 1.0)
-DEFINE_BLAS_OPERATOR(-, float, 1.0, -1.0)
-DEFINE_BLAS_OPERATOR(+, double, 1.0, 1.0)
-DEFINE_BLAS_OPERATOR(-, double, 1.0, -1.0)
-DEFINE_BLAS_OPERATOR(+, std::complex<float>, 1.0, 1.0)
-DEFINE_BLAS_OPERATOR(-, std::complex<float>, 1.0, -1.0)
-DEFINE_BLAS_OPERATOR(+, std::complex<double>, 1.0, 1.0)
-DEFINE_BLAS_OPERATOR(-, std::complex<double>, 1.0, -1.0)
-
-#undef DEFINE_BLAS_OPERATOR
-
 //==-------------------------------------------------------------------------
 // Tensor operations
 //==-------------------------------------------------------------------------
@@ -861,11 +803,11 @@ gemm(size_t m, size_t n, size_t k, const T* A, const T* B, T* C, size_t lda, siz
 } // namespace impl
 
 /**
- * Perform inner product on two tensors. The tensors must be vector
+ * Perform dot product on two tensors. The tensors must be vector
  * or matrix and have compatible dimensions.
  */
 template <typename T>
-Tensor<T>& inner(const Tensor<T>& A, const Tensor<T>& B, Tensor<T>* C) {
+Tensor<T>& dot(const Tensor<T>& A, const Tensor<T>& B, Tensor<T>* C) {
     assert(C != &A && C != &B);
 
     if (A.is_vector() && B.is_vector()) {
@@ -907,32 +849,32 @@ Tensor<T>& inner(const Tensor<T>& A, const Tensor<T>& B, Tensor<T>* C) {
 }
 
 template <typename T>
-Tensor<T> inner(const Tensor<T>& A, const Tensor<T>& B) {
+Tensor<T> dot(const Tensor<T>& A, const Tensor<T>& B) {
     if (A.is_vector() && B.is_vector()) {
         assert(A.shape() == B.shape());
         Tensor<T> C({1});
-        inner(A, B, &C);
+        dot(A, B, &C);
         return C;
     } else if (A.is_matrix() && B.is_vector()) {
         assert(A.extent(1) == B.extent(0));
         Tensor<T> C({A.extent(0)});
-        return inner(A, B, &C);
+        dot(A, B, &C);
         return C;
     } else if (A.is_vector() && B.is_matrix()) {
         assert(A.extent(0) == B.extent(0));
         Tensor<T> C({B.extent(1)});
-        inner(A, B, &C);
+        dot(A, B, &C);
         return C;
     } else if (A.is_matrix() && B.is_matrix()) {
         auto m = A.extent(0), k = A.extent(1);
         auto p = B.extent(0), n = B.extent(1);
         assert(k == p);
         Tensor<T> C({m, n});
-        inner(A, B, &C);
+        dot(A, B, &C);
         return C;
     } else {
         assert(false);
-        return Tensor<T>();
+        return {};
     }
 }
 
@@ -946,8 +888,8 @@ Tensor<T> pow(const Tensor<T>& x, long n) {
     auto A = x, B = x, t = x;
     while (n > 0) {
         if (n & 1)
-            std::swap(B, inner(A, B, &t));
-        std::swap(A, inner(A, A, &t));
+            std::swap(B, dot(A, B, &t));
+        std::swap(A, dot(A, A, &t));
         n >>= 1;
     }
     return B;
@@ -1059,121 +1001,13 @@ Tensor<W> outer(const Tensor<T>& A, const Tensor<U>& B, F f) {
     auto sB = Shape(dimB).broadcast(sC);
 
     Tensor<W> C(sC);
-    parallel_transform(A.begin(sA), A.end(sA), B.begin(sB), C.begin(), f);
+    par::transform(A.begin(sA), A.end(sA), B.begin(sB), C.begin(), f);
     return C;
 }
 
 template <typename T, typename U, typename W = std::common_type_t<T,U>>
 inline Tensor<W> outer(const Tensor<T>& A, const Tensor<U>& B) {
     return outer(A, B, [](const T& a, const U& b) -> W { return a * b; });
-}
-
-namespace impl {
-
-#if HAS_MKL
-template <typename T>
-constexpr bool RequireMKL = cblas::RequireBlasType<T>;
-#else
-template <typename T>
-constexpr bool RequireMKL = false;
-#endif
-
-// Simple case: transpose with copy
-template <typename T>
-std::enable_if_t<!RequireMKL<T>>
-copy_transpose(size_t r, size_t c, const T* src, T* dst) {
-    tbb::parallel_for(tbb::blocked_range<size_t>(0, c, GRAINSIZE), [=](auto&& rr) {
-        T* py = dst + rr.begin()*r;
-        for (size_t i = rr.begin(); i != rr.end(); i++) {
-            auto px = src + i;
-            for (size_t j = 0; j < r; j++, px += c)
-                *py++ = *px;
-        }
-    });
-}
-
-// Easy case: in-place transpose a square matrix
-template <typename T>
-std::enable_if_t<!RequireMKL<T>>
-square_transpose(size_t n, T* A) {
-    tbb::parallel_for(tbb::blocked_range<size_t>(0, n, GRAINSIZE), [=](auto&& r) {
-        T* px = A;
-        for (size_t i = r.begin(); i != r.end(); i++) {
-            for (size_t j = i+1; j < n; j++) {
-                std::swap(px[i*n+j], px[j*n+i]);
-            }
-        }
-    });
-}
-
-// Hard case: in-place transpose a non-square matrix
-// https://en.wikipedia.org/wiki/In-place_matrix_transposition
-template <typename T>
-std::enable_if_t<!RequireMKL<T>>
-inplace_transpose(size_t r, size_t c, T* A) {
-    // naive implementation
-    Tensor<T> t({r, c}, A, A+r*c);
-    copy_transpose(r, c, t.data(), A);
-}
-
-#if HAS_MKL
-template <typename T>
-std::enable_if_t<RequireMKL<T>>
-copy_transpose(size_t r, size_t c, const T* src, T* dst) {
-    mkl::omatcopy('R', 'T', r, c, T(1), src, c, dst, r);
-}
-
-template <typename T>
-std::enable_if_t<RequireMKL<T>>
-square_transpose(size_t n, T* A) {
-    mkl::imatcopy('R', 'T', n, n, T(1), A, n, n);
-}
-
-template <typename T>
-std::enable_if_t<RequireMKL<T>>
-inplace_transpose(size_t r, size_t c, T* A) {
-    mkl::imatcopy('R', 'T', r, c, T(1), A, c, r);
-}
-#endif
-
-} // namespace impl
-
-/**
- * Transpose a matrix to target matrix.
- *
- * @param from the matrix to be transposed
- * @param to the transposed matrix
- */
-template <typename T>
-void transpose(const Tensor<T>& from, Tensor<T>* to) {
-    assert(from.is_matrix() && to->is_matrix());
-    auto r = from.extent(0), c = from.extent(1);
-    if (&from == to) {
-        if (r == c) {
-            impl::square_transpose(r, to->data());
-        } else {
-            to->reshape({c, r});
-            impl::inplace_transpose(r, c, to->data());
-        }
-    } else {
-        assert(to->shape() == Shape({c, r}));
-        impl::copy_transpose(r, c, from.data(), to->data());
-    }
-}
-
-/**
- * Transpose a matrix.
- *
- * @param A the matrix to be transposed
- * @return the transposed matrix
- */
-template <typename T>
-Tensor<T> transpose(const Tensor<T>& A) {
-    assert(A.is_matrix());
-    auto r = A.extent(0), c = A.extent(1);
-    Tensor<T> B = Tensor<T>({c, r});
-    impl::copy_transpose(r, c, A.data(), B.data());
-    return B;
 }
 
 } // namespace dlf

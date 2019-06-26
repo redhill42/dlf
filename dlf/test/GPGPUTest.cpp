@@ -128,10 +128,10 @@ static void vector_dot_vector_test(const gpgpu::Queue& queue) {
     auto dev_B = DevTensor<T>(B, queue);
     auto dev_C = DevTensor<T>({1}, queue);
 
-    inner(dev_A, dev_B, &dev_C, queue);
+    dot(dev_A, dev_B, &dev_C, queue);
     EXPECT_EQ(dev_C.read(queue), R);
 
-    auto dev_T = inner(dev_A, dev_B, queue);
+    auto dev_T = dot(dev_A, dev_B, queue);
     EXPECT_EQ(dev_T.read(queue), R);
 
 }
@@ -153,10 +153,10 @@ static void matrix_dot_vector_test(const gpgpu::Queue& queue) {
     auto dev_B = DevTensor<T>(B, queue);
     auto dev_C = DevTensor<T>({2}, queue);
 
-    inner(dev_A, dev_B, &dev_C, queue);
+    dot(dev_A, dev_B, &dev_C, queue);
     EXPECT_EQ(dev_C.read(queue), R);
 
-    auto dev_T = inner(dev_A, dev_B, queue);
+    auto dev_T = dot(dev_A, dev_B, queue);
     EXPECT_EQ(dev_T.read(queue), R);
 }
 
@@ -178,10 +178,10 @@ static void vector_dot_matrix_test(const gpgpu::Queue& queue) {
     auto dev_B = DevTensor<T>(B, queue);
     auto dev_C = DevTensor<T>({2}, queue);
 
-    inner(dev_A, dev_B, &dev_C, queue);
+    dot(dev_A, dev_B, &dev_C, queue);
     EXPECT_EQ(dev_C.read(queue), R);
 
-    auto dev_T = inner(dev_A, dev_B, queue);
+    auto dev_T = dot(dev_A, dev_B, queue);
     EXPECT_EQ(dev_T.read(queue), R);
 }
 
@@ -203,10 +203,10 @@ static void matrix_dot_matrix_test(const gpgpu::Queue& queue) {
     auto dev_B = DevTensor<T>(B, queue);
     auto dev_C = DevTensor<T>({2, 2}, queue);
 
-    inner(dev_A, dev_B, &dev_C, queue);
+    dot(dev_A, dev_B, &dev_C, queue);
     EXPECT_EQ(dev_C.read(queue), R);
 
-    auto dev_T = inner(dev_A, dev_B, queue);
+    auto dev_T = dot(dev_A, dev_B, queue);
     EXPECT_EQ(dev_T.read(queue), R);
 }
 
@@ -450,7 +450,7 @@ TEST_F(GPGPUTest, Xdot) {
         blas_level1_r_test<int32_t>(queue,
             [](auto N, auto& A, auto& B) {
                 Tensor<int32_t> C({1});
-                inner(A, B, &C);
+                dot(A, B, &C);
                 return C(0);
             },
             [&](auto N, auto& A, auto& B, auto& R) {
@@ -460,7 +460,7 @@ TEST_F(GPGPUTest, Xdot) {
         blas_level1_r_test<int64_t>(queue,
             [](auto N, auto& A, auto& B) {
                 Tensor<int64_t> C({1});
-                inner(A, B, &C);
+                dot(A, B, &C);
                 return C(0);
             },
             [&](auto N, auto& A, auto& B, auto& R) {
@@ -572,7 +572,7 @@ TEST(GPGPU, MultipleThreadContextActivation) {
         auto dev_A = DevTensor<float>(A);
         auto dev_B = DevTensor<float>(B);
 
-        inner(dev_A, dev_B, &dev_R);
+        dot(dev_A, dev_B, &dev_R);
         return dev_R.read()(0);
     };
 

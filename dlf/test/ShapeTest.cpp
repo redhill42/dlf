@@ -124,20 +124,24 @@ TEST(Shape, BroadcastPerformance) {
     auto B1 = Tensor<int>::range({1024, 1024}, 1);
     auto B2 = Tensor<int>::range({1024}, 1);
 
-    timing("No broadcast", 100, [&]() {
-        A1 + B1;
-    });
+    for (int i = 0; i < 3; i++) {
+        timing("No broadcast", 100, [&]() {
+            A1 + B1;
+        });
 
-    timing("Broadcast Right", 100, [&]() {
-        A1 + B2;
-    });
+        timing("Broadcast Right", 100, [&]() {
+            A1 + B2;
+        });
 
-    timing("Broadcast Left", 100, [&]() {
-        A2 + B1;
-    });
+        timing("Broadcast Left", 100, [&]() {
+            A2 + B1;
+        });
 
-    timing("Broadcast Both", 100, [&]() {
-        A2 + B2;
-    });
+        timing("Broadcast Both", 100, [&]() {
+            A2 + B2;
+        });
+
+        std::cout << std::endl;
+    }
 }
 #endif

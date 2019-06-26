@@ -15,7 +15,9 @@
 #endif
 
 using namespace dlf;
-namespace T = ::testing;
+using ::testing::ElementsAre;
+using ::testing::ElementsAreArray;
+using ::testing::Each;
 
 class TensorTest : public ::testing::Test {
 protected:
@@ -68,13 +70,13 @@ protected:
 TEST_F(TensorTest, Init) {
     EXPECT_EQ(t1.shape(), Shape({2,3,4}));
     EXPECT_EQ(t1.size(), 2*3*4);
-    EXPECT_THAT(t1, T::ElementsAreArray(data1));
+    EXPECT_THAT(t1, ElementsAreArray(data1));
 }
 
 TEST_F(TensorTest, InitializedToZero) {
     Tensor<int32_t> t({2,2,2});
     ASSERT_EQ(t.size(), 8);
-    EXPECT_THAT(t, T::Each(0));
+    EXPECT_THAT(t, Each(0));
 }
 
 TEST_F(TensorTest, Wrap) {
@@ -83,8 +85,8 @@ TEST_F(TensorTest, Wrap) {
     t += 5;
 
     EXPECT_EQ(data, t.data());
-    EXPECT_THAT(t, T::Each(5));
-    EXPECT_THAT(data, T::Each(5));
+    EXPECT_THAT(t, Each(5));
+    EXPECT_THAT(data, Each(5));
 }
 
 TEST_F(TensorTest, Reshape) {
@@ -230,29 +232,29 @@ TEST_F(TensorTest, BinaryOpWithDifferentElementType) {
     Tensor<double> y({2, 3}, {3.1, 3.2, 3.3, 5.5, 5.6, 5.7});
 
     auto a = x; a += y;
-    EXPECT_THAT(a, T::ElementsAre(4, 5, 6, 9, 10, 11));
+    EXPECT_THAT(a, ElementsAre(4, 5, 6, 9, 10, 11));
 
     auto b = y; b += x;
-    EXPECT_THAT(b, T::ElementsAre(3.1+1, 3.2+2, 3.3+3, 5.5+4, 5.6+5, 5.7+6));
+    EXPECT_THAT(b, ElementsAre(3.1+1, 3.2+2, 3.3+3, 5.5+4, 5.6+5, 5.7+6));
 
     static_assert(std::is_same<decltype(x+y), Tensor<double>>::value, "");
-    EXPECT_THAT(x+y, T::ElementsAre(1+3.1, 2+3.2, 3+3.3, 4+5.5, 5+5.6, 6+5.7));
+    EXPECT_THAT(x+y, ElementsAre(1+3.1, 2+3.2, 3+3.3, 4+5.5, 5+5.6, 6+5.7));
 
     static_assert(std::is_same<decltype(y-x), Tensor<double>>::value, "");
-    EXPECT_THAT(y-x, T::ElementsAre(3.1-1, 3.2-2, 3.3-3, 5.5-4, 5.6-5, 5.7-6));
+    EXPECT_THAT(y-x, ElementsAre(3.1-1, 3.2-2, 3.3-3, 5.5-4, 5.6-5, 5.7-6));
 
     static_assert(std::is_same<decltype(x+5.5), Tensor<double>>::value, "");
-    EXPECT_THAT(x+5.5, T::ElementsAre(1+5.5, 2+5.5, 3+5.5, 4+5.5, 5+5.5, 6+5.5));
+    EXPECT_THAT(x+5.5, ElementsAre(1+5.5, 2+5.5, 3+5.5, 4+5.5, 5+5.5, 6+5.5));
 
     static_assert(std::is_same<decltype(5.5-x), Tensor<double>>::value, "");
-    EXPECT_THAT(5.5-x, T::ElementsAre(5.5-1, 5.5-2, 5.5-3, 5.5-4, 5.5-5, 5.5-6));
+    EXPECT_THAT(5.5-x, ElementsAre(5.5-1, 5.5-2, 5.5-3, 5.5-4, 5.5-5, 5.5-6));
 
-    EXPECT_THAT(-x, T::ElementsAre(-1, -2, -3, -4, -5, -6));
-    EXPECT_THAT(-y, T::ElementsAre(-3.1, -3.2, -3.3, -5.5, -5.6, -5.7));
+    EXPECT_THAT(-x, ElementsAre(-1, -2, -3, -4, -5, -6));
+    EXPECT_THAT(-y, ElementsAre(-3.1, -3.2, -3.3, -5.5, -5.6, -5.7));
 
     Tensor<std::string> greetings({4}, {"Hello", "Bonjour", "Ciao", "Aloha"});
     greetings += " world";
-    EXPECT_THAT(greetings, T::ElementsAre("Hello world", "Bonjour world", "Ciao world", "Aloha world"));
+    EXPECT_THAT(greetings, ElementsAre("Hello world", "Bonjour world", "Ciao world", "Aloha world"));
 }
 
 TEST_F(TensorTest, FloatingOp) {
@@ -384,21 +386,6 @@ TEST_F(TensorTest, ShapeBroadcastArthimetic) {
     }
 }
 
-TEST_F(TensorTest, ShapeBroadcastEqual) {
-    auto A = Tensor<int>({3, 1}, {1, 2, 3});
-    auto B = Tensor<int>({2, 3, 4}, {
-        1, 1, 1, 1,
-        2, 2, 2, 2,
-        3, 3, 3, 3,
-        1, 1, 1, 1,
-        2, 2, 2, 2,
-        3, 3, 3, 3
-    });
-
-    EXPECT_EQ(A, B);
-    EXPECT_EQ(B, A);
-}
-
 TEST_F(TensorTest, ShapeBroadcastCopy) {
     auto A = Tensor<int>({3, 1}, {1, 2, 3});
     auto B = Tensor<int>({2, 3, 4}, {
@@ -415,8 +402,8 @@ static void inner_test() {
         Tensor<T> a({3}, {1, 2, 3});
         Tensor<T> b({3}, {4, 5, 6});
         Tensor<T> c({1}, {42});
-        EXPECT_EQ(inner(a, b), Tensor<T>({1}, {32})); // computed by WolframAlpha
-        inner(a, b, &c);
+        EXPECT_EQ(dot(a, b), Tensor<T>({1}, {32})); // computed by WolframAlpha
+        dot(a, b, &c);
         EXPECT_EQ(c, Tensor<T>({1}, {32}));
     }
 
@@ -425,8 +412,8 @@ static void inner_test() {
         Tensor<T> a({3}, {1, 2, 3});
         Tensor<T> b({{3, 2}, {4, 5, 6, 7, 8, 9}});
         Tensor<T> c({2}, {17, 53});
-        EXPECT_EQ(inner(a, b), Tensor<T>({2}, {40, 46})); // computed by WolframAlpha
-        inner(a, b, &c);
+        EXPECT_EQ(dot(a, b), Tensor<T>({2}, {40, 46})); // computed by WolframAlpha
+        dot(a, b, &c);
         EXPECT_EQ(c, Tensor<T>({2}, {40, 46}));
     }
 
@@ -435,8 +422,8 @@ static void inner_test() {
         Tensor<T> a({2, 3}, {1, 2, 3, 4, 5, 6});
         Tensor<T> b({3}, {7, 8, 9});
         Tensor<T> c({2}, {17, 53});
-        EXPECT_EQ(inner(a, b), Tensor<T>({2}, {50, 122})); // computed by WolframAlpha
-        inner(a, b, &c);
+        EXPECT_EQ(dot(a, b), Tensor<T>({2}, {50, 122})); // computed by WolframAlpha
+        dot(a, b, &c);
         EXPECT_EQ(c, Tensor<T>({2}, {50, 122}));
     }
 
@@ -470,8 +457,8 @@ static void inner_test() {
             173, 148, 155, 167
         });
 
-        EXPECT_EQ(inner(a, b), d);
-        inner(a, b, &c);
+        EXPECT_EQ(dot(a, b), d);
+        dot(a, b, &c);
         EXPECT_EQ(c, d);
     }
 }
@@ -530,6 +517,15 @@ static void gemm_test() {
         6,  2, 6, 10, 9, 3
     });
 
+    Tensor<T> t_a({6, 3}, {
+         5,  7,  6,
+        10,  6,  2,
+         9,  6,  6,
+         1,  6, 10,
+        10,  1,  9,
+         3,  1,  3
+    });
+
     Tensor<T> b({6, 4}, {
         7,  1, 8,  7,
         9,  5, 2,  6,
@@ -537,6 +533,13 @@ static void gemm_test() {
         6,  9, 1,  1,
         4, 10, 1, 10,
         3,  8, 8,  5
+    });
+
+    Tensor<T> t_b({4, 6}, {
+        7, 9, 7, 6,  4, 3,
+        1, 5, 8, 9, 10, 8,
+        8, 2, 5, 1,  1, 8,
+        7, 6, 7, 1, 10, 5
     });
 
     Tensor<T> c({3, 4}, {
@@ -552,9 +555,9 @@ static void gemm_test() {
     });
 
     EXPECT_EQ(gemm(T(2), a, b, T(3), c, false, false), r);
-    EXPECT_EQ(gemm(T(2), transpose(a), b, T(3), c, true, false), r);
-    EXPECT_EQ(gemm(T(2), a, transpose(b), T(3), c, false, true), r);
-    EXPECT_EQ(gemm(T(2), transpose(a), transpose(b), T(3), c, true, true), r);
+    EXPECT_EQ(gemm(T(2), t_a, b, T(3), c, true, false), r);
+    EXPECT_EQ(gemm(T(2), a, t_b, T(3), c, false, true), r);
+    EXPECT_EQ(gemm(T(2), t_a, t_b, T(3), c, true, true), r);
 
     gemm(T(2), a, b, T(3), &c);
     EXPECT_EQ(c, r);
@@ -566,52 +569,6 @@ TEST_F(TensorTest, Gemm) {
     gemm_test<double>();
     gemm_test<std::complex<float>>();
     gemm_test<std::complex<double>>();
-}
-
-template <typename T>
-static void transpose_test() {
-    Tensor<T> a({3, 4}, {
-        230, 254, 116, 199,
-        219, 236, 201, 252,
-        173, 148, 155, 167
-    });
-
-    Tensor<T> b({4, 3}, {
-        230, 219, 173,
-        254, 236, 148,
-        116, 201, 155,
-        199, 252, 167
-    });
-
-    EXPECT_EQ(transpose(a), b);
-    transpose(a, &a);
-    EXPECT_EQ(a, b);
-}
-
-TEST_F(TensorTest, Transpose) {
-    transpose_test<int>();
-    transpose_test<float>();
-    transpose_test<double>();
-    transpose_test<std::complex<float>>();
-    transpose_test<std::complex<double>>();
-}
-
-template <typename T>
-static void test_transpose_in_place() {
-    for (size_t i = 1; i <= 5; i++) {
-        for (size_t j = 1; j <= 5; j++) {
-            auto a = Tensor<T>::range({i, j}, 1);
-            auto b = transpose(a); // assume out-of-place transposition is correct
-            transpose(a, &a); // in-place transpose
-            EXPECT_EQ(a, b);
-        }
-    }
-}
-
-TEST_F(TensorTest, TransposeInPlace) {
-    test_transpose_in_place<int>();
-    test_transpose_in_place<float>();
-    test_transpose_in_place<double>();
 }
 
 template <typename T, typename F>
@@ -696,7 +653,7 @@ TEST_F(TensorTest, TransformRValueOptimization) {
         Tensor<int> a({2, 2}, {1, 2, 3, 4});
         Tensor<int> b = transform(std::move(a), [](auto x) { return x*2; });
         EXPECT_TRUE(a.empty());
-        EXPECT_THAT(b, T::ElementsAre(2, 4, 6, 8));
+        EXPECT_THAT(b, ElementsAre(2, 4, 6, 8));
     }
 
     {
@@ -704,17 +661,17 @@ TEST_F(TensorTest, TransformRValueOptimization) {
         Tensor<int> b({2, 2}, {5, 6, 7, 8});
         Tensor<int> c = transform(std::move(a), b, std::plus<>());
         EXPECT_TRUE(a.empty());
-        EXPECT_THAT(b, T::ElementsAre(5, 6, 7, 8));
-        EXPECT_THAT(c, T::ElementsAre(6, 8, 10, 12));
+        EXPECT_THAT(b, ElementsAre(5, 6, 7, 8));
+        EXPECT_THAT(c, ElementsAre(6, 8, 10, 12));
     }
 
     {
         Tensor<int> a({2, 2}, {1, 2, 3, 4});
         Tensor<int> b({2, 2}, {5, 6, 7, 8});
         Tensor<int> c = transform(a, std::move(b), std::plus<>());
-        EXPECT_THAT(a, T::ElementsAre(1, 2, 3, 4));
+        EXPECT_THAT(a, ElementsAre(1, 2, 3, 4));
         EXPECT_TRUE(b.empty());
-        EXPECT_THAT(c, T::ElementsAre(6, 8, 10, 12));
+        EXPECT_THAT(c, ElementsAre(6, 8, 10, 12));
     }
 }
 
@@ -722,7 +679,7 @@ TEST_F(TensorTest, Complex) {
     using namespace std::complex_literals;
     Tensor<std::complex<double>> t({2,2}, {1.+2i, 3.+4i, -1.+1i, 2.-5i});
     t += 1.+1i;
-    EXPECT_THAT(t, T::ElementsAre(2.+3i, 4.+5i, 0.+2i, 3.-4i));
+    EXPECT_THAT(t, ElementsAre(2.+3i, 4.+5i, 0.+2i, 3.-4i));
 }
 
 /**
@@ -746,6 +703,13 @@ struct Relu {
 };
 
 TEST_F(TensorTest, Relu) {
+    using testing::Contains;
+    using testing::AllOf;
+    using testing::Lt;
+    using testing::Gt;
+    using testing::Le;
+    using testing::Ge;
+
     // fill a tensor with random numbers in [-500,500]
     auto in = Tensor<int32_t>::random({100, 100}, -500, 500);
 
@@ -753,9 +717,9 @@ TEST_F(TensorTest, Relu) {
     auto out = transform(in, Relu<double>(100.0));
     static_assert(std::is_same<decltype(out), Tensor<double>>::value, "");
 
-    EXPECT_THAT(in, T::Contains(T::Lt(0)));
-    EXPECT_THAT(in, T::Contains(T::Gt(100)));
-    EXPECT_THAT(out, T::Each(T::AllOf(T::Ge(0.0), T::Le(100.0))));
+    EXPECT_THAT(in, Contains(Lt(0)));
+    EXPECT_THAT(in, Contains(Gt(100)));
+    EXPECT_THAT(out, Each(AllOf(Ge(0.0), Le(100.0))));
 }
 
 TEST_F(TensorTest, Format) {

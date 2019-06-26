@@ -54,6 +54,16 @@ size_t Shape::offset(std::initializer_list<size_t> index) const noexcept {
     return offset;
 }
 
+size_t Shape::offset(const std::vector<size_t>& index) const noexcept {
+    assert(index.size() == m_dims.size());
+    size_t offset = 0, i = 0;
+    for (auto a : index) {
+        offset += a * m_dims[i].stride;
+        ++i;
+    }
+    return offset;
+}
+
 bool Shape::next(std::vector<size_t>& index) const noexcept {
     for (auto i = m_dims.size(); i--; ) {
         if (++index[i] < m_dims[i].extent)
@@ -155,6 +165,20 @@ Shape Shape::broadcast(const std::vector<Shape>& shapes) {
 
     return Shape(result_shape);
 }
+
+std::ostream& operator<<(std::ostream& os, const Shape& shape) {
+    os << '(';
+    for (auto i = 0; ; i++) {
+        os << shape.extent(i);
+        if (i == shape.rank()-1)
+            break;
+        os << ',' << ' ';
+    }
+    os << ')';
+    return os;
+}
+
+//---------------------------------------------------------------------------
 
 namespace detail {
 

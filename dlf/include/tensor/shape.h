@@ -23,7 +23,7 @@ class Shape final {
         size_t stride;
 
         bool operator==(const dim_t& rhs) const noexcept {
-            return extent == rhs.extent && stride == rhs.stride;
+            return extent == rhs.extent;
         }
     };
 
@@ -116,6 +116,11 @@ public:
     size_t offset(std::initializer_list<size_t> index) const noexcept;
 
     /**
+     * Returns the data offset for the given index.
+     */
+    size_t offset(const std::vector<size_t>& index) const noexcept;
+
+    /**
      * Returns the next index within this shape.
      *
      * @return true if next index is available
@@ -142,6 +147,8 @@ public:
     bool operator!=(const Shape& other) const {
         return m_dims != other.m_dims;
     }
+
+    friend std::ostream& operator<<(std::ostream& os, const Shape& shape);
 
 public:
     template <typename... Shapes>

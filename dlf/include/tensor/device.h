@@ -367,13 +367,13 @@ inline DevTensor<T> operator-(DevTensor<T>&& x) {
 //==-------------------------------------------------------------------------
 
 /**
- * Perform inner product on two tensors. The tensors must be vector
+ * Perform dot product on two tensors. The tensors must be vector
  * or matrix and have compatible dimensions.
  */
 template <typename T>
-DevTensor<T>& inner(const DevTensor<T>& A, const DevTensor<T>& B, DevTensor<T>* C,
-                    const gpgpu::Queue& queue = gpgpu::current::queue(),
-                    gpgpu::Event* event = nullptr)
+DevTensor<T>& dot(const DevTensor<T>& A, const DevTensor<T>& B, DevTensor<T>* C,
+                  const gpgpu::Queue& queue = gpgpu::current::queue(),
+                  gpgpu::Event* event = nullptr)
 {
     if (A.is_vector() && B.is_vector()) {
         auto n = A.extent(0);
@@ -427,35 +427,35 @@ DevTensor<T>& inner(const DevTensor<T>& A, const DevTensor<T>& B, DevTensor<T>* 
 }
 
 template <typename T>
-DevTensor<T> inner(const DevTensor<T>& A, const DevTensor<T>& B,
-                   const gpgpu::Queue& queue = gpgpu::current::queue(),
-                   gpgpu::Event* event = nullptr)
+DevTensor<T> dot(const DevTensor<T>& A, const DevTensor<T>& B,
+                 const gpgpu::Queue& queue = gpgpu::current::queue(),
+                 gpgpu::Event* event = nullptr)
 {
     if (A.is_vector() && B.is_vector()) {
         assert(A.shape() == B.shape());
         DevTensor<T> C({1}, queue);
-        inner(A, B, &C, queue, event);
+        dot(A, B, &C, queue, event);
         return C;
     } else if (A.is_matrix() && B.is_vector()) {
         assert(A.extent(1) == B.extent(0));
         DevTensor<T> C({A.extent(0)}, queue);
-        inner(A, B, &C, queue, event);
+        dot(A, B, &C, queue, event);
         return C;
     } else if (A.is_vector() && B.is_matrix()) {
         assert(A.extent(0) == B.extent(0));
         DevTensor<T> C({B.extent(1)}, queue);
-        inner(A, B, &C, queue, event);
+        dot(A, B, &C, queue, event);
         return C;
     } else if (A.is_matrix() && B.is_matrix()) {
         auto m = A.extent(0), k = A.extent(1);
         auto p = B.extent(0), n = B.extent(1);
         assert(k == p);
         DevTensor<T> C({m, n}, queue);
-        inner(A, B, &C, queue, event);
+        dot(A, B, &C, queue, event);
         return C;
     } else {
         assert(false);
-        return DevTensor<T>();
+        return {};
     }
 }
 
