@@ -100,6 +100,11 @@ public:
     bool is_contiguous() const noexcept;
 
     /**
+     * Returns true if the shape is the tail of another shape.
+     */
+    bool is_tail(const Shape& shape) const noexcept;
+
+    /**
      * Change dimensions of this shape. The new shape must compatible to
      * this shape.
      */

@@ -152,4 +152,52 @@ TEST(Shape, BroadcastPerformance) {
         std::cout << std::endl;
     }
 }
+
+TEST(Shape, GPUBroadcastPerformance) {
+    auto A1 = dev(Tensor<float>::range({1024, 1024}, 1));
+    auto A2 = dev(Tensor<float>::range({1024, 1}, 1));
+    auto B1 = dev(Tensor<float>::range({1024, 1024}, 1));
+    auto B2 = dev(Tensor<float>::range({1024}, 1));
+
+    for (int i = 0; i < 3; i++) {
+        timing("GPU no broadcast", 1, [&]() {
+            auto C = DevTensor<float>({1024, 1024});
+            for (int i = 0; i < 100; i++)
+                addTo(A1, B1, C);
+            C.read();
+        });
+
+        timing("GPU broadcast right", 1, [&]() {
+            auto C = DevTensor<float>({1024, 1024});
+            for (int i = 0; i < 100; i++)
+                addTo(A1, B2, C);
+            C.read();
+        });
+
+        timing("GPU broadcast left", 1, [&]() {
+            auto C = DevTensor<float>({1024, 1024});
+            for (int i = 0; i < 100; i++)
+                addTo(A2, B1, C);
+            C.read();
+        });
+
+        timing("GPU broadcast scalar right", 1, [&]() {
+            auto C = DevTensor<float>({1024, 1024});
+            auto S = dev(5.f);
+            for (int i = 0; i < 100; i++)
+                addTo(A1, S, C);
+            C.read();
+        });
+
+        timing("GPU broadcast scalar left", 1, [&]() {
+            auto C = DevTensor<float>({1024, 1024});
+            auto S = dev(5.f);
+            for (int i = 0; i < 100; i++)
+                addTo(S, A1, C);
+            C.read();
+        });
+
+        std::cout << std::endl;
+    }
+}
 #endif

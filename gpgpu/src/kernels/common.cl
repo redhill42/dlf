@@ -25,7 +25,7 @@ R"(
 // =================================================================================================
 
 #ifndef CUDA
-  // Enable support for double-precision
+  // Enable support for half-precision
   #if PRECISION == 16
     #pragma OPENCL EXTENSION cl_khr_fp16: enable
   #endif
@@ -206,7 +206,7 @@ R"(
 
 // Negation (component-wise)
 #if PRECISION == 3232 || PRECISION == 6464
-  #define Negate(value) value.x = -(value.x); value.y = -(value.y)
+  #define Negate(value) value.x = -(value).x; value.y = -(value).y
 #else
   #define Negate(value) value = -(value)
 #endif

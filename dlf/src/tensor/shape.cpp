@@ -34,6 +34,26 @@ bool Shape::is_contiguous() const noexcept {
     return true;
 }
 
+bool Shape::is_tail(const dlf::Shape& shape) const noexcept {
+    // scalar is always the tail of another shape
+    if (size() == 1)
+        return rank() <= shape.rank();
+
+    int idim, ndim = static_cast<int>(shape.rank());
+    int idim_start = ndim - static_cast<int>(rank());
+
+    // Can't be tail of fewer dimensions
+    if (idim_start < 0) {
+        return false;
+    }
+
+    for (idim = ndim - 1; idim >= idim_start; --idim) {
+        if (extent(idim - idim_start) != shape.extent(idim))
+            return false;
+    }
+    return true;
+}
+
 Shape::Shape(Shape&& rhs)
     : m_dims(std::move(rhs.m_dims)),
       m_size(cxx::exchange(rhs.m_size, 0))

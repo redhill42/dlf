@@ -556,7 +556,7 @@ Tensor<W>& transformTo(const Tensor<T>& A, const Tensor<U>& B, Tensor<W>& C, F f
  */
 template <typename T, typename U, typename F, typename W = cxx::invoke_result_t<F,T,U>>
 inline Tensor<W> transform(const Tensor<T>& A, const Tensor<U>& B, F f) {
-    Tensor<W> C(Shape::broadcast(A.shape(), B.shape()));
+    Tensor<W> C(Shape::broadcast(A, B));
     transformTo(A, B, C, f);
     return C;
 }
@@ -618,12 +618,12 @@ inline Tensor<T> Tensor<T>::broadcast(const Shape& shape) {
 
 template <typename T>
 inline Tensor<T> abs(const Tensor<T>& x) {
-    return transform(x, [](T a) { return std::abs(a); });
+    return transform(x, [](T a) { return T(std::abs(a)); });
 }
 
 template <typename T>
 inline Tensor<T> abs(Tensor<T>&& x) {
-    return transform(std::move(x), [](T a) { return std::abs(a); });
+    return transform(std::move(x), [](T a) { return T(std::abs(a)); });
 }
 
 template <typename T>

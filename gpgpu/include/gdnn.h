@@ -56,78 +56,78 @@ inline void sign(const size_t n, const Buffer<T>& x_buffer, Buffer<T>& y_buffer,
 }
 
 template <typename T>
-void add(const size_t n,
-         const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
-         const Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
+void add(const size_t x_size, const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
+         const size_t y_size, const Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
          Buffer<T>& z_buffer, const size_t z_offset, const size_t z_inc,
          const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 template <typename T>
-inline void add(const size_t n,
-                const Buffer<T>& x_buffer, const Buffer<T>& y_buffer, Buffer<T>& z_buffer,
+inline void add(const size_t x_size, const Buffer<T>& x_buffer,
+                const size_t y_size, const Buffer<T>& y_buffer,
+                Buffer<T>& z_buffer,
                 const Queue& queue = gpgpu::current::queue(), Event* event = nullptr)
 {
-    add(n, x_buffer, 0, 1, y_buffer, 0, 1, z_buffer, 0, 1, queue, event);
+    add(x_size, x_buffer, 0, 1, y_size, y_buffer, 0, 1, z_buffer, 0, 1, queue, event);
 }
 
 template <typename T>
-void sub(const size_t n,
-         const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
-         const Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
+void sub(const size_t x_size, const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
+         const size_t y_size, const Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
          Buffer<T>& z_buffer, const size_t z_offset, const size_t z_inc,
          const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 template <typename T>
-inline void sub(const size_t n,
-                const Buffer<T>& x_buffer, const Buffer<T>& y_buffer, Buffer<T>& z_buffer,
+inline void sub(const size_t x_size, const Buffer<T>& x_buffer,
+                const size_t y_size, const Buffer<T>& y_buffer,
+                Buffer<T>& z_buffer,
                 const Queue& queue = gpgpu::current::queue(), Event* event = nullptr)
 {
-    sub(n, x_buffer, 0, 1, y_buffer, 0, 1, z_buffer, 0, 1, queue, event);
+    sub(x_size, x_buffer, 0, 1, y_size, y_buffer, 0, 1, z_buffer, 0, 1, queue, event);
 }
 
 template <typename T>
-void mul(const size_t n,
-         const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
-         const Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
+void mul(const size_t x_size, const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
+         const size_t y_size, const Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
          Buffer<T>& z_buffer, const size_t z_offset, const size_t z_inc,
          const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 template <typename T>
-inline void mul(const size_t n,
-                const Buffer<T>& x_buffer, const Buffer<T>& y_buffer, Buffer<T>& z_buffer,
+inline void mul(const size_t x_size, const Buffer<T>& x_buffer,
+                const size_t y_size, const Buffer<T>& y_buffer,
+                Buffer<T>& z_buffer,
                 const Queue& queue = gpgpu::current::queue(), Event* event = nullptr)
 {
-    mul(n, x_buffer, 0, 1, y_buffer, 0, 1, z_buffer, 0, 1, queue, event);
+    mul(x_size, x_buffer, 0, 1, y_size, y_buffer, 0, 1, z_buffer, 0, 1, queue, event);
 }
 
 template <typename T>
-void div(const size_t n,
-         const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
-         const Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
+void div(const size_t x_size, const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
+         const size_t y_size, const Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
          Buffer<T>& z_buffer, const size_t z_offset, const size_t z_inc,
          const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 template <typename T>
-inline void div(const size_t n,
-                const Buffer<T>& x_buffer, const Buffer<T>& y_buffer, Buffer<T>& z_buffer,
+inline void div(const size_t x_size, const Buffer<T>& x_buffer,
+                const size_t y_size, const Buffer<T>& y_buffer,
+                Buffer<T>& z_buffer,
                 const Queue& queue = gpgpu::current::queue(), Event* event = nullptr)
 {
-    div(n, x_buffer, 0, 1, y_buffer, 0, 1, z_buffer, 0, 1, queue, event);
+    div(x_size, x_buffer, 0, 1, y_size, y_buffer, 0, 1, z_buffer, 0, 1, queue, event);
 }
 
 template <typename T>
-void pow(const size_t n,
-         const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
-         const Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
+void pow(const size_t x_size, const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
+         const size_t y_size, const Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
          Buffer<T>& z_buffer, const size_t z_offset, const size_t z_inc,
          const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 template <typename T>
-inline void pow(const size_t n,
-                const Buffer<T>& x_buffer, const Buffer<T>& y_buffer, Buffer<T>& z_buffer,
+inline void pow(const size_t x_size, const Buffer<T>& x_buffer,
+                const size_t y_size, const Buffer<T>& y_buffer,
+                Buffer<T>& z_buffer,
                 const Queue& queue = gpgpu::current::queue(), Event* event = nullptr)
 {
-    pow(n, x_buffer, 0, 1, y_buffer, 0, 1, z_buffer, 0, 1, queue, event);
+    pow(x_size, x_buffer, 0, 1, y_size, y_buffer, 0, 1, z_buffer, 0, 1, queue, event);
 }
 
 }} // namespace gpgpu::dnn

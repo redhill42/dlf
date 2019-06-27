@@ -138,9 +138,20 @@ public:
     DevTensor<T>& operator+=(const DevTensor<T>& rhs);
     DevTensor<T>& operator-=(const DevTensor<T>& rhs);
     DevTensor<T>& operator*=(const DevTensor<T>& rhs);
-    DevTensor<T>& operator*=(const T& rhs);
     DevTensor<T>& operator/=(const DevTensor<T>& rhs);
 };
+
+template <typename T>
+inline DevTensor<T> dev(const Tensor<T>& host, const gpgpu::Queue& queue = gpgpu::current::queue()) {
+    return DevTensor<T>(host, queue);
+}
+
+template <typename T>
+inline DevTensor<T> dev(T value, const gpgpu::Queue& queue = gpgpu::current::queue()) {
+    DevTensor<T> res({1}, queue);
+    res.data().write(queue, &value, 1);
+    return res;
+}
 
 //==-------------------------------------------------------------------------
 // DevTensor unary transformations
@@ -160,12 +171,6 @@ inline DevTensor<T> abs(DevTensor<T>&& x, const gpgpu::Queue& queue = gpgpu::cur
 }
 
 template <typename T>
-inline void abs(const DevTensor<T>& x, DevTensor<T>& y, const gpgpu::Queue& queue = gpgpu::current::queue()) {
-    assert(x.shape() == y.shape());
-    gpgpu::dnn::abs(x.size(), x.data(), y.data(), queue);
-}
-
-template <typename T>
 inline DevTensor<T> neg(const DevTensor<T>& x, const gpgpu::Queue& queue = gpgpu::current::queue()) {
     DevTensor<T> y(x.shape(), queue);
     gpgpu::dnn::neg(x.size(), x.data(), y.data(), queue);
@@ -176,12 +181,6 @@ template <typename T>
 inline DevTensor<T> neg(DevTensor<T>&& x, const gpgpu::Queue& queue = gpgpu::current::queue()) {
     gpgpu::dnn::neg(x.size(), x.data(), x.data(), queue);
     return std::move(x);
-}
-
-template <typename T>
-inline void neg(const DevTensor<T>& x, DevTensor<T>& y, const gpgpu::Queue& queue = gpgpu::current::queue()) {
-    assert(x.shape() == y.shape());
-    gpgpu::dnn::neg(x.size(), x.data(), y.data(), queue);
 }
 
 template <typename T>
@@ -197,13 +196,6 @@ inline DevTensor<T> sign(DevTensor<T>&& x, const gpgpu::Queue& queue = gpgpu::cu
     return std::move(x);
 }
 
-
-template <typename T>
-inline void sign(const DevTensor<T>& x, DevTensor<T>& y, const gpgpu::Queue& queue = gpgpu::current::queue()) {
-    assert(x.shape() == y.shape());
-    gpgpu::dnn::sign(x.size(), x.data(), y.data(), queue);
-}
-
 #define DEFINE_TRANSFORM(name) \
 template <typename T, typename = std::enable_if_t<std::is_floating_point<T>::value>> \
 inline DevTensor<T> name(const DevTensor<T>& x, const gpgpu::Queue& queue = gpgpu::current::queue()) { \
@@ -215,13 +207,7 @@ template <typename T, typename = std::enable_if_t<std::is_floating_point<T>::val
 inline DevTensor<T> name(DevTensor<T>&& x, const gpgpu::Queue& queue = gpgpu::current::queue()) { \
     gpgpu::dnn::transform(#name, x.size(), x.data(), x.data(), queue); \
     return std::move(x); \
-} \
-template <typename T, typename = std::enable_if_t<std::is_floating_point<T>::value>> \
-inline void name(const DevTensor<T>& x, DevTensor<T>& y, const gpgpu::Queue& queue = gpgpu::current::queue()) { \
-    assert(x.shape() == y.shape()); \
-    gpgpu::dnn::transform(#name, x.size(), x.data(), y.data(), queue); \
 }
-
 
 DEFINE_TRANSFORM(reciprocal)
 DEFINE_TRANSFORM(floor)
@@ -246,53 +232,72 @@ DEFINE_TRANSFORM(erf)
 
 #undef DEFINE_TRANSFORM
 
+template <typename T>
+inline DevTensor<T> operator-(const DevTensor<T>& x) {
+    return neg(x);
+}
+
+template <typename T>
+inline DevTensor<T> operator-(DevTensor<T>&& x) {
+    return neg(std::move(x));
+}
+
 //==-------------------------------------------------------------------------
 // DevTensor binary transformations
 //==-------------------------------------------------------------------------
 
 #define DEFINE_BINARY(name) \
 template <typename T> \
+inline DevTensor<T>& name##To(const DevTensor<T>& x, const DevTensor<T>& y, DevTensor<T>& z, \
+                              const gpgpu::Queue& queue = gpgpu::current::queue()) { \
+    assert(x.shape().is_tail(y.shape()) || y.shape().is_tail(x.shape())); \
+    assert(z.shape() == Shape::broadcast(x, y)); \
+    gpgpu::dnn::name(x.size(), x.data(), y.size(), y.data(), z.data(), queue); \
+    return z; \
+} \
+template <typename T> \
 inline DevTensor<T> name(const DevTensor<T>& x, const DevTensor<T>& y, \
                          const gpgpu::Queue& queue = gpgpu::current::queue()) { \
-    assert(x.shape() == y.shape()); \
-    DevTensor<T> z(x.shape(), queue); \
-    gpgpu::dnn::name(x.size(), x.data(), y.data(), z.data(), queue); \
+    DevTensor<T> z(Shape::broadcast(x, y), queue); \
+    name##To(x, y, z, queue); \
     return z; \
 } \
 template <typename T> \
 inline DevTensor<T> name(DevTensor<T>&& x, const DevTensor<T>& y, \
                          const gpgpu::Queue& queue = gpgpu::current::queue()) { \
-    assert(x.shape() == y.shape()); \
-    gpgpu::dnn::name(x.size(), x.data(), y.data(), x.data(), queue); \
-    return std::move(x); \
+    if (x.shape() == Shape::broadcast(x, y)) { \
+        return std::move(name##To(x, y, x, queue)); \
+    } else { \
+        return name(x, y, queue); \
+    } \
 } \
 template <typename T> \
 inline DevTensor<T> name(const DevTensor<T>& x, DevTensor<T>&& y, \
                          const gpgpu::Queue& queue = gpgpu::current::queue()) { \
-    assert(x.shape() == y.shape()); \
-    gpgpu::dnn::name(x.size(), x.data(), y.data(), y.data(), queue); \
-    return std::move(y); \
+    if (y.shape() == Shape::broadcast(x, y)) { \
+        return std::move(name##To(x, y, y, queue)); \
+    } else { \
+        return name(x, y, queue); \
+    } \
 } \
 template <typename T> \
 inline DevTensor<T> name(DevTensor<T>&& x, DevTensor<T>&& y, \
                          const gpgpu::Queue& queue = gpgpu::current::queue()) { \
-    assert(x.shape() == y.shape()); \
-    gpgpu::dnn::name(x.size(), x.data(), y.data(), x.data(), queue); \
-    return std::move(x); \
-} \
-template <typename T> \
-inline void name##To(const DevTensor<T>& x, const DevTensor<T>& y, DevTensor<T>& z, \
-                     const gpgpu::Queue& queue = gpgpu::current::queue()) { \
-    assert(x.shape() == y.shape() && x.shape() == z.shape()); \
-    gpgpu::dnn::name(x.size(), x.data(), y.data(), z.data(), queue); \
+    Shape final_shape = Shape::broadcast(x, y); \
+    if (x.shape() == final_shape) { \
+        return std::move(name##To(x, y, x, queue)); \
+    } else if (y.shape() == final_shape) { \
+        return std::move(name##To(x, y, y, queue)); \
+    } else { \
+        return name(x, y, queue); \
+    } \
 }
 
 #define DEFINE_BINARY_OP(name, op) \
 DEFINE_BINARY(name) \
 template <typename T> \
 inline DevTensor<T>& DevTensor<T>::operator op##=(const DevTensor<T>& rhs) { \
-    name##To(*this, rhs, *this); \
-    return *this; \
+    return name##To(*this, rhs, *this); \
 } \
 template <typename T> \
 inline DevTensor<T> operator op(const DevTensor<T>& lhs, const DevTensor<T>& rhs) { \
@@ -320,48 +325,6 @@ DEFINE_BINARY(pow)
 #undef DEFINE_BINARY_OP
 #undef DEFINE_BINARY
 
-template <typename T>
-inline DevTensor<T>& DevTensor<T>::operator*=(const T& rhs) {
-    gblas::scal(size(), rhs, data(), 1);
-    return *this;
-}
-
-template <typename T>
-inline DevTensor<T> operator*(const DevTensor<T>& lhs, const T& rhs) {
-    auto R = lhs.copyAsync();
-    R *= rhs;
-    return R;
-}
-
-template <typename T>
-inline DevTensor<T> operator*(DevTensor<T>&& lhs, const T& rhs) {
-    lhs *= rhs;
-    return std::move(lhs);
-}
-
-template <typename T>
-inline DevTensor<T> operator*(const T& lhs, const DevTensor<T>& rhs) {
-    auto R = rhs.copyAsync();
-    R *= lhs;
-    return R;
-}
-
-template <typename T>
-inline DevTensor<T> operator*(const T& lhs, DevTensor<T>&& rhs) {
-    rhs *= lhs;
-    return std::move(rhs);
-}
-
-template <typename T>
-inline DevTensor<T> operator-(const DevTensor<T>& x) {
-    return neg(x);
-}
-
-template <typename T>
-inline DevTensor<T> operator-(DevTensor<T>&& x) {
-    return neg(std::move(x));
-}
-
 //==-------------------------------------------------------------------------
 // DevTensor production
 //==-------------------------------------------------------------------------
@@ -378,9 +341,12 @@ DevTensor<T>& dot(const DevTensor<T>& A, const DevTensor<T>& B, DevTensor<T>* C,
     if (A.is_vector() && B.is_vector()) {
         auto n = A.extent(0);
         assert(n == B.extent(0));
-        assert(C->is_vector() && 1 == C->extent(0));
+        assert(C->is_scalar());
         gblas::dot(n, A.data(), 1, B.data(), 1, C->data(), queue, event);
-    } else if (A.is_matrix() && B.is_vector()) {
+        return *C;
+    }
+
+    if (A.is_matrix() && B.is_vector()) {
         auto m = A.extent(0), n = A.extent(1);
         assert(n == B.extent(0));
         assert(C->is_vector() && m == C->extent(0));
@@ -391,7 +357,10 @@ DevTensor<T>& dot(const DevTensor<T>& A, const DevTensor<T>& B, DevTensor<T>* C,
                     B.data(), 1, T(0),
                     C->data(), 1,
                     queue, event);
-    } else if ((A.is_vector() || A.is_matrix()) && B.is_matrix()) {
+        return *C;
+    }
+
+    if ((A.is_vector() || A.is_matrix()) && B.is_matrix()) {
         Shape A_shape, B_shape, C_shape;
 
         if (A.is_vector()) {
@@ -420,9 +389,10 @@ DevTensor<T>& dot(const DevTensor<T>& A, const DevTensor<T>& B, DevTensor<T>* C,
                     T(0),
                     C->data(), C_shape.stride(0),
                     queue, event);
-    } else {
-        assert(false);
+        return *C;
     }
+
+    assert(false);
     return *C;
 }
 
