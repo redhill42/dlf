@@ -70,6 +70,11 @@ public: // Container View
     const_shaped_iterator<T> end(Shape shape) const
         { return const_shaped_iterator<T>(std::move(shape), data(), shape.size()); }
 
+    ::dlf::scalar_iterator<T> scalar_iterator(size_t offset)
+        { return ::dlf::scalar_iterator<T>(data(), offset); }
+    ::dlf::const_scalar_iterator<T> scalar_iterator(size_t offset) const
+        { return ::dlf::const_scalar_iterator<T>(data(), offset); }
+
 private: // Concepts
     template <typename InputIterator>
     using RequireInputIterator =
@@ -221,23 +226,18 @@ public: // Attributes
     template <typename... Args, typename = RequireIndexes<Args...>>
     T& operator()(Args... args) noexcept;
 
-    friend std::ostream& operator<<(std::ostream& os, const Tensor& t) {
-        if (!t.empty())
-            printRec(os, t.shape(), 0, t.data());
-        return os;
-    }
-
 public: // Operators
-#define DECLARE_OPERATOR(op) \
-    template <typename U, typename = std::enable_if_t<std::is_convertible<U,T>::value>> \
-    Tensor& operator op(const Tensor<U>& y); \
-    Tensor& operator op(const T& b);
+    template <typename U, typename = std::enable_if_t<std::is_convertible<U,T>::value>>
+    Tensor& operator+=(const Tensor<U>& y);
 
-    DECLARE_OPERATOR(+=)
-    DECLARE_OPERATOR(-=)
-    DECLARE_OPERATOR(*=)
-    DECLARE_OPERATOR(/=)
-#undef DECLARE_OPERATOR
+    template <typename U, typename = std::enable_if_t<std::is_convertible<U,T>::value>>
+    Tensor& operator-=(const Tensor<U>& y);
+
+    template <typename U, typename = std::enable_if_t<std::is_convertible<U,T>::value>>
+    Tensor& operator*=(const Tensor<U>& y);
+
+    template <typename U, typename = std::enable_if_t<std::is_convertible<U,T>::value>>
+    Tensor& operator/=(const Tensor<U>& y);
 
 public: // Transformations
     /**
@@ -273,7 +273,13 @@ public: // Transformations
      */
     Tensor broadcast(const Shape& shape);
 
-private: // Implementation
+private: // Formatting
+    friend std::ostream& operator<<(std::ostream& os, const Tensor& t) {
+        if (!t.empty())
+            printRec(os, t.shape(), 0, t.data());
+        return os;
+    }
+
     static const T* printRec(std::ostream& out, const Shape& shape, size_t level, const T* data);
 };
 
@@ -306,19 +312,19 @@ Tensor<T>::Tensor(Shape shape, It begin, RequireInputIterator<It> end)
 }
 
 template <typename T>
-Tensor<T>::Tensor(Shape shape, std::unique_ptr<T[]> data)
-    : Shaped(std::move(shape)), m_alloc_data(std::move(data))
-{
-    m_data = m_alloc_data.get();
-}
-
-template <typename T>
 Tensor<T>::Tensor(Shape shape, std::initializer_list<T> il)
     : Shaped(std::move(shape))
 {
     init();
     assert(size() == il.size());
     std::copy(il.begin(), il.end(), m_data);
+}
+
+template <typename T>
+Tensor<T>::Tensor(Shape shape, std::unique_ptr<T[]> data)
+    : Shaped(std::move(shape)), m_alloc_data(std::move(data))
+{
+    m_data = m_alloc_data.get();
 }
 
 template <typename T>
@@ -412,6 +418,18 @@ Tensor<T>& Tensor<T>::operator=(Tensor&& t) noexcept {
     return *this;
 }
 
+/**
+ * Construct a scalar.
+ *
+ * @param value the scalar value
+ */
+template <typename T>
+inline Tensor<std::decay_t<T>> scalar(T&& value) {
+    Tensor<std::decay_t<T>> ret({1});
+    ret.data()[0] = std::forward<T>(value);
+    return ret;
+}
+
 //==-------------------------------------------------------------------------
 // Tensor attributes
 //==-------------------------------------------------------------------------
@@ -469,8 +487,8 @@ const T* Tensor<T>::printRec(std::ostream& out, const Shape& shape, size_t level
 // Tensor transformations
 //==-------------------------------------------------------------------------
 
-template < typename R = void, typename TA, typename TB, typename Op>
-static R broadcast_do(TA&& A, TB&& B, Op&& op) {
+template <typename TA, typename TB, typename Op>
+static auto broadcast_do(TA&& A, TB&& B, Op&& op) {
     if (A.shape() == B.shape()) {
         return op(A.shape(), A.begin(), A.end(), B.begin());
     }
@@ -479,12 +497,16 @@ static R broadcast_do(TA&& A, TB&& B, Op&& op) {
     Shape sA = A.shape().broadcast(final_shape);
     Shape sB = B.shape().broadcast(final_shape);
 
-    if (sA.is_contiguous()) {
+    if (A.size() == 1) {
+        return op(final_shape, A.scalar_iterator(0), A.scalar_iterator(sA.size()), B.begin());
+    } else if (B.size() == 1) {
+        return op(final_shape, A.begin(), A.end(), B.scalar_iterator(0));
+    } else if (sA.is_contiguous()) {
         return op(final_shape, A.begin(), A.end(), B.begin(sB));
     } else if (sB.is_contiguous()) {
-        return op(final_shape, A.begin(sA), A.end(sA), B.begin());
+        return op(final_shape, A.begin(sA), A.end(sB), B.begin());
     } else {
-        return op(final_shape, A.begin(sA), A.end(sA), B.begin(sB));
+        return op(final_shape, A.begin(sA), A.end(sB), B.begin(sB));
     }
 }
 
@@ -541,7 +563,7 @@ inline Tensor<W> transform(const Tensor<T>& A, const Tensor<U>& B, F f) {
 
 template <typename T, typename F, typename = std::enable_if_t<std::is_same<cxx::invoke_result_t<F,T,T>,T>::value>>
 inline Tensor<T> transform(Tensor<T>&& A, const Tensor<T>& B, F f) {
-    if (A.shape() == B.shape())
+    if (A.shape() == Shape::broadcast(A, B))
         return std::move(transformTo(A, B, A, f));
     else
         return transform(A, B, f);
@@ -549,7 +571,7 @@ inline Tensor<T> transform(Tensor<T>&& A, const Tensor<T>& B, F f) {
 
 template <typename T, typename F, typename = std::enable_if_t<std::is_same<cxx::invoke_result_t<F,T,T>,T>::value>>
 inline Tensor<T> transform(const Tensor<T>& A, Tensor<T>&& B, F f) {
-    if (A.shape() == B.shape())
+    if (B.shape() == Shape::broadcast(A, B))
         return std::move(transformTo(A, B, B, f));
     else
         return transform(A, B, f);
@@ -557,8 +579,11 @@ inline Tensor<T> transform(const Tensor<T>& A, Tensor<T>&& B, F f) {
 
 template <typename T, typename F, typename = std::enable_if_t<std::is_same<cxx::invoke_result_t<F,T,T>,T>::value>>
 inline Tensor<T> transform(Tensor<T>&& A, Tensor<T>&& B, F f) {
-    if (A.shape() == B.shape())
+    Shape final_shape = Shape::broadcast(A, B);
+    if (final_shape == A.shape())
         return std::move(transformTo(A, B, A, f));
+    else if (final_shape == B.shape())
+        return std::move(transformTo(A, B, B, f));
     else
         return transform(A, B, f);
 }
@@ -674,7 +699,7 @@ inline Tensor<T> operator-(Tensor<T>&& x) {
 }
 
 //==-------------------------------------------------------------------------
-// Tensor operators
+// Tensor arithmetic operators
 //==-------------------------------------------------------------------------
 
 #define DEFINE_OPERATOR(op) \
@@ -683,23 +708,10 @@ inline Tensor<T> operator-(Tensor<T>&& x) {
     inline Tensor<T>& Tensor<T>::operator op##=(const Tensor<U>& y) { \
         return apply(y, [](const T& a, const U& b) {return a op b;}); \
     } \
-    template <typename T> \
-    inline Tensor<T>& Tensor<T>::operator op##=(const T& b) { \
-        return apply([&b](const T& a) {return a op b;}); \
-    } \
     template <typename T, typename U, typename W = std::common_type_t<T,U>> \
     inline Tensor<W> operator op(const Tensor<T>& x, const Tensor<U>& y) { \
         return transform(x, y, [](const T& a, const U& b) -> W {return a op b;}); \
     } \
-    template <typename T, typename U, typename W = std::common_type_t<T,U>> \
-    inline Tensor<W> operator op(const Tensor<T>& x, const U& b) { \
-        return transform(x, [&b](const T& a) -> W {return a op b;}); \
-    } \
-    template <typename T, typename U, typename W = std::common_type_t<T,U>> \
-    inline Tensor<W> operator op(const T& a, const Tensor<U>& y) { \
-        return transform(y, [&a](const U& b) -> W {return a op b;}); \
-    } \
-    /* rvalue optimization */ \
     template <typename T> \
     inline Tensor<T> operator op(Tensor<T>&& x, const Tensor<T>& y) { \
         return transform(std::move(x), y, [](const T& a, const T& b) {return a op b;}); \
@@ -711,14 +723,6 @@ inline Tensor<T> operator-(Tensor<T>&& x) {
     template <typename T> \
     inline Tensor<T> operator op(Tensor<T>&& x, Tensor<T>&& y) { \
         return transform(std::move(x), std::move(y), [](const T& a, const T& b) {return a op b;}); \
-    } \
-    template <typename T> \
-    inline Tensor<T> operator op(Tensor<T>&& x, const T& b) { \
-        return transform(std::move(x), [&b](const T& a) {return a op b;}); \
-    } \
-    template <typename T> \
-    inline Tensor<T> operator op(const T& a, Tensor<T>&& y) { \
-        return transform(std::move(y), [&a](const T& b) {return a op b;}); \
     }
 
 DEFINE_OPERATOR(+)
@@ -727,6 +731,156 @@ DEFINE_OPERATOR(*)
 DEFINE_OPERATOR(/)
 
 #undef DEFINE_OPERATOR
+
+//==-------------------------------------------------------------------------
+// Tensor logical operators
+//==-------------------------------------------------------------------------
+
+template <typename T>
+inline Tensor<bool> equal(const Tensor<T>& lhs, const Tensor<T>& rhs) {
+    return transform(lhs, rhs, std::equal_to<T>());
+}
+
+template <typename T>
+inline Tensor<bool> not_equal(const Tensor<T>& lhs, const Tensor<T>& rhs) {
+    return transform(lhs, rhs, std::not_equal_to<T>());
+}
+
+template <typename T>
+inline Tensor<bool> greater(const Tensor<T>& lhs, const Tensor<T>& rhs) {
+    return transform(lhs, rhs, std::greater<T>());
+}
+
+template <typename T>
+inline Tensor<bool> greater_equal(const Tensor<T>& lhs, const Tensor<T>& rhs) {
+    return transform(lhs, rhs, std::greater_equal<T>());
+}
+
+template <typename T>
+inline Tensor<bool> less(const Tensor<T>& lhs, const Tensor<T>& rhs) {
+    return transform(lhs, rhs, std::less<T>());
+}
+
+template <typename T>
+inline Tensor<bool> less_equal(const Tensor<T>& lhs, const Tensor<T>& rhs) {
+    return transform(lhs, rhs, std::less_equal<T>());
+}
+
+template <typename T>
+inline Tensor<bool> operator&&(const Tensor<T>& lhs, const Tensor<T>& rhs) {
+    static_assert(!std::is_floating_point<T>::value, "operation not allowed for floating point tensor");
+    return transform(lhs, rhs, std::logical_and<T>());
+}
+
+template <typename T>
+inline Tensor<bool> operator||(const Tensor<T>& lhs, const Tensor<T>& rhs) {
+    static_assert(!std::is_floating_point<T>::value, "operation not allowed for floating point tensor");
+    return transform(lhs, rhs, std::logical_or<T>());
+}
+
+template <typename T>
+inline Tensor<bool> operator!(const Tensor<T>& x) {
+    static_assert(!std::is_floating_point<T>::value, "operation not allowed for floating point tensor");
+    return transform(x, std::logical_not<T>());
+}
+
+template <typename T>
+inline Tensor<T> operator&(const Tensor<T>& lhs, const Tensor<T>& rhs) {
+    static_assert(!std::is_floating_point<T>::value, "operation not allowed for floating point tensor");
+    return transform(lhs, rhs, std::bit_and<T>());
+}
+
+template <typename T>
+inline Tensor<T>& operator&=(Tensor<T>& lhs, const Tensor<T>& rhs) {
+    static_assert(!std::is_floating_point<T>::value, "operation not allowed for floating point tensor");
+    return transformTo(lhs, rhs, lhs, std::bit_and<T>());
+}
+
+template <typename T>
+inline Tensor<T> operator|(const Tensor<T>& lhs, const Tensor<T>& rhs) {
+    static_assert(!std::is_floating_point<T>::value, "operation not allowed for floating point tensor");
+    return transform(lhs, rhs, std::bit_or<T>());
+}
+
+template <typename T>
+inline Tensor<T>& operator|=(Tensor<T>& lhs, const Tensor<T>& rhs) {
+    static_assert(!std::is_floating_point<T>::value, "operation not allowed for floating point tensor");
+    return transformTo(lhs, rhs, lhs, std::bit_or<T>());
+}
+
+template <typename T>
+inline Tensor<T> operator^(const Tensor<T>& lhs, const Tensor<T>& rhs) {
+    static_assert(!std::is_floating_point<T>::value, "operation not allowed for floating point tensor");
+    return transform(lhs, rhs, std::bit_xor<T>());
+}
+
+template <typename T>
+inline Tensor<T>& operator^=(Tensor<T>& lhs, const Tensor<T>& rhs) {
+    static_assert(!std::is_floating_point<T>::value, "operation not allowed for floating point tensor");
+    return transformTo(lhs, rhs, lhs, std::bit_xor<T>());
+}
+
+template <typename T>
+inline Tensor<T> operator~(const Tensor<T>& x) {
+    static_assert(!std::is_floating_point<T>::value, "operation not allowed for floating point tensor");
+    return transform(x, std::bit_not<T>());
+}
+
+template <typename T, typename U>
+inline Tensor<T> operator<<(const Tensor<T>& lhs, const Tensor<U>& rhs) {
+    static_assert(!std::is_floating_point<T>::value, "operation not allowed for floating point tensor");
+    static_assert(!std::is_floating_point<U>::value, "operation not allowed for floating point tensor");
+    return transform(lhs, rhs, [](const T& a, const U& b) { return a << b; });
+}
+
+template <typename T, typename U>
+inline Tensor<T>& operator<<=(Tensor<T>& lhs, const Tensor<U>& rhs) {
+    static_assert(!std::is_floating_point<T>::value, "operation not allowed for floating point tensor");
+    static_assert(!std::is_floating_point<U>::value, "operation not allowed for floating point tensor");
+    return transformTo(lhs, rhs, lhs, [](const T& a, const U& b) { return a << b; });
+}
+
+template <typename T, typename U>
+inline Tensor<T> operator<<(const Tensor<T>& lhs, const U& rhs) {
+    static_assert(!std::is_floating_point<T>::value, "operation not allowed for floating point tensor");
+    static_assert(!std::is_floating_point<U>::value, "operation not allowed for floating point tensor");
+    return transform(lhs, [&](const T& a) { return a << rhs; });
+}
+
+template <typename T, typename U>
+inline Tensor<T>& operator<<=(Tensor<T>& lhs, const U& rhs) {
+    static_assert(!std::is_floating_point<T>::value, "operation not allowed for floating point tensor");
+    static_assert(!std::is_floating_point<U>::value, "operation not allowed for floating point tensor");
+    return transformTo(lhs, lhs, [&](const T& a) { return a << rhs; });
+}
+
+template <typename T, typename U>
+inline Tensor<T> operator>>(const Tensor<T>& lhs, const Tensor<U>& rhs) {
+    static_assert(!std::is_floating_point<T>::value, "operation not allowed for floating point tensor");
+    static_assert(!std::is_floating_point<U>::value, "operation not allowed for floating point tensor");
+    return transform(lhs, rhs, [](const T& a, const U& b) { return a >> b; });
+}
+
+template <typename T, typename U>
+inline Tensor<T>& operator>>=(Tensor<T>& lhs, const Tensor<U>& rhs) {
+    static_assert(!std::is_floating_point<T>::value, "operation not allowed for floating point tensor");
+    static_assert(!std::is_floating_point<U>::value, "operation not allowed for floating point tensor");
+    return transformTo(lhs, rhs, lhs, [](const T& a, const U& b) { return a >> b; });
+}
+
+template <typename T, typename U>
+inline Tensor<T> operator>>(const Tensor<T>& lhs, const U& rhs) {
+    static_assert(!std::is_floating_point<T>::value, "operation not allowed for floating point tensor");
+    static_assert(!std::is_floating_point<U>::value, "operation not allowed for floating point tensor");
+    return transform(lhs, [&](const T& a) { return a >> rhs; });
+}
+
+template <typename T, typename U>
+inline Tensor<T>& operator>>=(Tensor<T>& lhs, const U& rhs) {
+    static_assert(!std::is_floating_point<T>::value, "operation not allowed for floating point tensor");
+    static_assert(!std::is_floating_point<U>::value, "operation not allowed for floating point tensor");
+    return transformTo(lhs, lhs, [&](const T& a) { return a >> rhs; });
+}
 
 //==-------------------------------------------------------------------------
 // Tensor operations
@@ -917,7 +1071,7 @@ gemm(const T& alpha, const Tensor<T>& A, const Tensor<T>& B,
     assert(C->shape() == Shape({m, n}));
 
     if (alpha == T(0)) {
-        *C *= beta;
+        *C *= scalar(beta);
         return;
     }
 

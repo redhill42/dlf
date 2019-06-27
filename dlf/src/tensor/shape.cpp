@@ -24,6 +24,8 @@ bool Shape::is_contiguous() const noexcept {
     if (m_dims.size() != 0) {
         size_t size = 1;
         for (size_t i = m_dims.size(); i-- != 0;) {
+            if (m_dims[i].stride == 0 && m_dims[i].extent == 1)
+                continue;
             if (m_dims[i].stride != size)
                 return false;
             size *= m_dims[i].extent;

@@ -129,16 +129,24 @@ TEST(Shape, BroadcastPerformance) {
             A1 + B1;
         });
 
-        timing("Broadcast Right", 100, [&]() {
+        timing("Broadcast right", 100, [&]() {
             A1 + B2;
         });
 
-        timing("Broadcast Left", 100, [&]() {
+        timing("Broadcast left", 100, [&]() {
             A2 + B1;
         });
 
-        timing("Broadcast Both", 100, [&]() {
+        timing("Broadcast both", 100, [&]() {
             A2 + B2;
+        });
+
+        timing("Broadcast scalar right", 100, [&]() {
+            A1 + scalar(5);
+        });
+
+        timing("Broadcast scalar left", 100, [&]() {
+            scalar(5) + A1;
         });
 
         std::cout << std::endl;
