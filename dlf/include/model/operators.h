@@ -717,6 +717,14 @@ END_OPERATOR()
 
 DEFINE_OPERATOR(Identity)
 
+#undef BEGIN_OPERATOR
+#undef END_OPERATOR
+#undef DEFINE_OPERATOR
+#undef DEFINE_BINARY_OPERATOR
+#undef DEFINE_ATTRIBUTE
+#undef DEFINE_SHAPE_ATTRIBUTE
+#undef DEFINE_DTYPE_ATTRIBUTE
+
 //==-------------------------------------------------------------------------
 
 class DefaultVisitor : public Visitor {

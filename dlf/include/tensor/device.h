@@ -16,6 +16,8 @@ class DevTensor : public Shaped {
     gpgpu::Buffer<T> m_data;
 
 public:
+    using value_type = T;
+
     DevTensor() = default;
 
     DevTensor(Shape shape, const gpgpu::Queue& queue = gpgpu::current::queue())
@@ -158,6 +160,11 @@ inline DevTensor<T> dev(T value, const gpgpu::Queue& queue = gpgpu::current::que
 //==-------------------------------------------------------------------------
 
 template <typename T>
+inline void abs(const DevTensor<T>& x, DevTensor<T>& y, const gpgpu::Queue& queue = gpgpu::current::queue()) {
+    gpgpu::dnn::abs(x.size(), x.data(), y.data(), queue);
+}
+
+template <typename T>
 inline DevTensor<T> abs(const DevTensor<T>& x, const gpgpu::Queue& queue = gpgpu::current::queue()) {
     DevTensor<T> y(x.shape(), queue);
     gpgpu::dnn::abs(x.size(), x.data(), y.data(), queue);
@@ -168,6 +175,11 @@ template <typename T>
 inline DevTensor<T> abs(DevTensor<T>&& x, const gpgpu::Queue& queue = gpgpu::current::queue()) {
     gpgpu::dnn::abs(x.size(), x.data(), x.data(), queue);
     return std::move(x);
+}
+
+template <typename T>
+inline void neg(const DevTensor<T>& x, DevTensor<T>& y, const gpgpu::Queue& queue = gpgpu::current::queue()) {
+    gpgpu::dnn::neg(x.size(), x.data(), y.data(), queue);
 }
 
 template <typename T>
@@ -184,6 +196,11 @@ inline DevTensor<T> neg(DevTensor<T>&& x, const gpgpu::Queue& queue = gpgpu::cur
 }
 
 template <typename T>
+inline void sign(const DevTensor<T>& x, DevTensor<T>& y, const gpgpu::Queue& queue = gpgpu::current::queue()) {
+    gpgpu::dnn::sign(x.size(), x.data(), y.data(), queue);
+}
+
+template <typename T>
 inline DevTensor<T> sign(const DevTensor<T>& x, const gpgpu::Queue& queue = gpgpu::current::queue()) {
     DevTensor<T> y(x.shape(), queue);
     gpgpu::dnn::sign(x.size(), x.data(), y.data(), queue);
@@ -197,6 +214,10 @@ inline DevTensor<T> sign(DevTensor<T>&& x, const gpgpu::Queue& queue = gpgpu::cu
 }
 
 #define DEFINE_TRANSFORM(name) \
+template <typename T, typename = std::enable_if_t<std::is_floating_point<T>::value>> \
+inline void name(const DevTensor<T>& x, DevTensor<T>& y, const gpgpu::Queue& queue = gpgpu::current::queue()) { \
+    gpgpu::dnn::transform(#name, x.size(), x.data(), y.data(), queue); \
+} \
 template <typename T, typename = std::enable_if_t<std::is_floating_point<T>::value>> \
 inline DevTensor<T> name(const DevTensor<T>& x, const gpgpu::Queue& queue = gpgpu::current::queue()) { \
     DevTensor<T> y(x.shape(), queue); \
@@ -463,14 +484,27 @@ void gemm(const T& alpha, const DevTensor<T>& A, const DevTensor<T>& B,
 }
 
 template <typename T>
-DevTensor<T> gemm(const T& alpha, const DevTensor<T>& A, const DevTensor<T>& B,
-                  const T& beta, DevTensor<T>& C,
-                  bool transA = false, bool transB = false,
-                  const gpgpu::Queue& queue = gpgpu::current::queue(),
-                  gpgpu::Event* event = nullptr) {
-    DevTensor<T> R = C.copy(queue);
-    gemm(alpha, A, B, beta, &R, transA, transB, queue, event);
-    return R;
+void gemm(const T& alpha, const DevTensor<T>& A, const DevTensor<T>& B,
+          const T& beta, const DevTensor<T>& C, DevTensor<T>& Y,
+          bool transA = false, bool transB = false,
+          const gpgpu::Queue& queue = gpgpu::current::queue(),
+          gpgpu::Event* event = nullptr)
+{
+    if (&C != &Y)
+        gpgpu::blas::copy(C.size(), C.data(), 1, Y.data(), 1, queue);
+    gemm(alpha, A, B, beta, &Y, transA, transB, queue, event);
+}
+
+template <typename T>
+inline DevTensor<T> gemm(const T& alpha, const DevTensor<T>& A, const DevTensor<T>& B,
+                         const T& beta, const DevTensor<T>& C,
+                         bool transA = false, bool transB = false,
+                         const gpgpu::Queue& queue = gpgpu::current::queue(),
+                         gpgpu::Event* event = nullptr)
+{
+    DevTensor<T> Y(C.shape(), queue);
+    gemm(alpha, A, B, beta, C, Y, transA, transB, queue, event);
+    return Y;
 }
 
 } // namespace dlf
