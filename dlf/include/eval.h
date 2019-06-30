@@ -139,6 +139,7 @@ private:
     DEFINE_UNARY_OPERATOR(Acosh, acosh)
     DEFINE_UNARY_OPERATOR(Atanh, atanh)
     DEFINE_UNARY_OPERATOR(Erf, erf)
+    DEFINE_UNARY_OPERATOR(Sigmoid, sigmoid)
     #undef DEFINE_UNARY_OPERATOR
     
     #define DEFINE_BINARY_OPERATOR(Name, op) \

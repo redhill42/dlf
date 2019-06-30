@@ -28,9 +28,6 @@ void X##name(const int n, \
 
 #define TRANSFORM_X(name) TRANSFORM(name, XOP(name))
 
-#define reciprocal(x) (ONE/(x))
-TRANSFORM(reciprocal, reciprocal)
-
 TRANSFORM_X(floor)
 TRANSFORM_X(ceil)
 TRANSFORM_X(round)
@@ -50,5 +47,11 @@ TRANSFORM_X(asinh)
 TRANSFORM_X(acosh)
 TRANSFORM_X(atanh)
 TRANSFORM_X(erf)
+
+#define reciprocal(x) (ONE/(x))
+#define sigmoid(x) (ONE/(ONE+exp(-x)))
+
+TRANSFORM(reciprocal, reciprocal)
+TRANSFORM(sigmoid, sigmoid)
 
 )" // End of the C++11 raw string literal

@@ -709,8 +709,22 @@ DEFINE_TRANSFORM(asinh)
 DEFINE_TRANSFORM(acosh)
 DEFINE_TRANSFORM(atanh)
 DEFINE_TRANSFORM(erf)
-
 #undef DEFINE_TRANSFORM
+
+template <typename T, typename = std::enable_if_t<std::is_floating_point<T>::value>>
+inline void sigmoid(const Tensor<T>& x, Tensor<T>& y) {
+    transformTo(x, y, [](T a) { return T(1)/(T(1)+std::exp(-a)); });
+}
+
+template <typename T, typename = std::enable_if_t<std::is_floating_point<T>::value>>
+inline Tensor<T> sigmoid(const Tensor<T>& x) {
+    return transform(x, [](T a) { return T(1)/(T(1)+std::exp(-a)); });
+}
+
+template <typename T, typename = std::enable_if_t<std::is_floating_point<T>::value>>
+inline Tensor<T> sigmoid(Tensor<T>&& x) {
+    return transform(std::move(x), [](T a) { return T(1)/(T(1)+std::exp(-a)); });
+}
 
 template <typename T>
 inline Tensor<T> operator-(const Tensor<T>& x) {
