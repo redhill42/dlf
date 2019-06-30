@@ -108,7 +108,7 @@ private:
 
     #define DEFINE_UNARY_OPERATOR(Name, op) \
     void visit(model::Name* n) override { \
-        struct Name##Op : public Operator<TensorT> { \
+        struct Name##Op : Operator<TensorT> { \
             void evaluate() override { \
                 dlf::op(this->input(0), this->output(0)); \
             } \
@@ -141,10 +141,108 @@ private:
     DEFINE_UNARY_OPERATOR(Erf, erf)
     DEFINE_UNARY_OPERATOR(Sigmoid, sigmoid)
     #undef DEFINE_UNARY_OPERATOR
-    
+
+    void visit(model::Relu* n) override {
+        struct ReluOp : Operator<TensorT> {
+            void evaluate() override {
+                dlf::relu(this->input(0), this->output(0));
+            }
+        };
+        result = std::make_unique<ReluOp>();
+    }
+
+    void visit(model::PRelu* n) override {
+        struct PReluOp : Operator<TensorT> {
+            void evaluate() override {
+                dlf::prelu(this->input(0), this->input(1), this->output(0));
+            }
+        };
+        result = std::make_unique<PReluOp>();
+    }
+
+    void visit(model::LeakyRelu* n) override {
+        struct LeakyReluOp : Operator<TensorT> {
+            Element alpha;
+            LeakyReluOp(Element alpha) : alpha(alpha) {}
+            void evaluate() override {
+                dlf::leaky_relu(alpha, this->input(0), this->output(0));
+            }
+        };
+        auto alpha = Element(n->get_f(model::kalpha, 0.01f));
+        result = std::make_unique<LeakyReluOp>(alpha);
+    }
+
+    void visit(model::ThresholdedRelu* n) override {
+        struct ThresholdedReluOp : Operator<TensorT> {
+            Element alpha;
+            ThresholdedReluOp(Element alpha) : alpha(alpha) {}
+            void evaluate() override {
+                dlf::thresholded_relu(alpha, this->input(0), this->output(0));
+            }
+        };
+        auto alpha = Element(n->get_f(model::kalpha, 1.f));
+        result = std::make_unique<ThresholdedReluOp>(alpha);
+    }
+
+    void visit(model::Selu* n) override {
+        struct SeluOp : Operator<TensorT> {
+            Element alpha, gamma;
+            SeluOp(Element alpha, Element gamma) : alpha(alpha), gamma(gamma) {}
+            void evaluate() override {
+                dlf::selu(alpha, gamma, this->input(0), this->output(0));
+            }
+        };
+        auto alpha = Element(n->get_f(model::kalpha, 1.67326319217681884765625f));
+        auto gamma = Element(n->get_f(model::kgamma, 1.05070102214813232421875f));
+        result = std::make_unique<SeluOp>(alpha, gamma);
+    }
+
+    void visit(model::Elu* n) override {
+        struct EluOp : Operator<TensorT> {
+            Element alpha;
+            EluOp(Element alpha) : alpha(alpha) {}
+            void evaluate() override {
+                dlf::elu(alpha, this->input(0), this->output(0));
+            }
+        };
+        auto alpha = Element(n->get_f(model::kalpha, 1.f));
+        result = std::make_unique<EluOp>(alpha);
+    }
+
+    void visit(model::HardSigmoid* n) override {
+        struct HardSigmoidOp : Operator<TensorT> {
+            Element alpha, beta;
+            HardSigmoidOp(Element alpha, Element beta) : alpha(alpha), beta(beta) {}
+            void evaluate() override {
+                dlf::hard_sigmoid(alpha, beta, this->input(0), this->output(0));
+            }
+        };
+        auto alpha = Element(n->get_f(model::kalpha, 0.2f));
+        auto beta = Element(n->get_f(model::kbeta, 0.5f));
+        result = std::make_unique<HardSigmoidOp>(alpha, beta);
+    }
+
+    void visit(model::Softsign* n) override {
+        struct SoftsignOp : Operator<TensorT> {
+            void evaluate() override {
+                dlf::softsign(this->input(0), this->output(0));
+            }
+        };
+        result = std::make_unique<SoftsignOp>();
+    }
+
+    void visit(model::Softplus* n) override {
+        struct SoftplusOp : Operator<TensorT> {
+            void evaluate() override {
+                dlf::softplus(this->input(0), this->output(0));
+            }
+        };
+        result = std::make_unique<SoftplusOp>();
+    }
+
     #define DEFINE_BINARY_OPERATOR(Name, op) \
     void visit(model::Name* n) override { \
-        struct Name##Op : public Operator<TensorT> { \
+        struct Name##Op : Operator<TensorT> { \
             void evaluate() override { \
                 dlf::op(this->input(0), this->input(1), this->output(0)); \
             } \
@@ -158,25 +256,26 @@ private:
     DEFINE_BINARY_OPERATOR(Div, divTo)
     #undef DEFINE_BINARY_OPERATOR
 
-    struct Gemm : public Operator<TensorT> {
-        Element alpha, beta;
-        bool transA, transB;
-
-        Gemm(model::Gemm* n) {
-            alpha  = Element(n->get_f(model::kalpha, 1.f));
-            beta   = Element(n->get_f(model::kbeta, 1.f));
-            transA = !!n->get_i(model::ktransA, 0);
-            transB = !!n->get_i(model::ktransB, 0);
-        }
-
-        void evaluate() override {
-            gemm(alpha, this->input(0), this->input(1), beta, this->input(2),
-                 this->output(0), transA, transB);
-        }
-    };
-
     void visit(model::Gemm* n) override {
-        result = std::make_unique<Gemm>(n);
+        struct GemmOp : Operator<TensorT> {
+            Element alpha, beta;
+            bool transA, transB;
+
+            GemmOp(model::Gemm* n) {
+                alpha  = Element(n->get_f(model::kalpha, 1.f));
+                beta   = Element(n->get_f(model::kbeta, 1.f));
+                transA = !!n->get_i(model::ktransA, 0);
+                transB = !!n->get_i(model::ktransB, 0);
+            }
+
+            void evaluate() override {
+                gemm(alpha, this->input(0), this->input(1),
+                     beta, this->input(2),
+                     this->output(0), transA, transB);
+            }
+        };
+
+        result = std::make_unique<GemmOp>(n);
     }
 };
 

@@ -29,6 +29,59 @@ template void PUBLIC_API transform<double>(const std::string&, const size_t,
                                            const Queue&, Event*);
 
 template <typename T>
+void activation(const std::string& name, const size_t n, const T alpha, const T beta,
+                const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
+                Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
+                const Queue& queue, Event* event)
+{
+    auto routine = Xactivation<T>(queue, event);
+    routine.DoActivation(name, n, alpha, beta, x_buffer, x_offset, x_inc, y_buffer, y_offset, y_inc);
+}
+
+template void PUBLIC_API activation<half>  (const std::string&, const size_t, const half, const half,
+                                            const Buffer<half>&, const size_t, const size_t,
+                                            Buffer<half>&, const size_t, const size_t,
+                                            const Queue&, Event*);
+template void PUBLIC_API activation<float> (const std::string&, const size_t, const float, const float,
+                                            const Buffer<float>&, const size_t, const size_t,
+                                            Buffer<float>&, const size_t, const size_t,
+                                            const Queue&, Event*);
+template void PUBLIC_API activation<double>(const std::string&, const size_t, const double, const double,
+                                            const Buffer<double>&, const size_t, const size_t,
+                                            Buffer<double>&, const size_t, const size_t,
+                                            const Queue&, Event*);
+
+template <typename T>
+void activation(const std::string& name,
+                const size_t x_size, const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
+                const size_t y_size, const Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
+                Buffer<T>& z_buffer, const size_t z_offset, const size_t z_inc,
+                const Queue& queue, Event* event)
+{
+    auto routine = Xactivation<T>(queue, event);
+    routine.DoActivation(name,
+                         x_size, x_buffer, x_offset, x_inc,
+                         y_size, y_buffer, y_offset, y_inc,
+                         z_buffer, z_offset, z_inc);
+}
+
+template void PUBLIC_API activation<half>  (const std::string&,
+                                            const size_t, const Buffer<half>&, const size_t, const size_t,
+                                            const size_t, const Buffer<half>&, const size_t, const size_t,
+                                            Buffer<half>&, const size_t, const size_t,
+                                            const Queue&, Event*);
+template void PUBLIC_API activation<float> (const std::string&,
+                                            const size_t, const Buffer<float>&, const size_t, const size_t,
+                                            const size_t, const Buffer<float>&, const size_t, const size_t,
+                                            Buffer<float>&, const size_t, const size_t,
+                                            const Queue&, Event*);
+template void PUBLIC_API activation<double>(const std::string&,
+                                            const size_t, const Buffer<double>&, const size_t, const size_t,
+                                            const size_t, const Buffer<double>&, const size_t, const size_t,
+                                            Buffer<double>&, const size_t, const size_t,
+                                            const Queue&, Event*);
+
+template <typename T>
 void abs(const size_t n, const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
          Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
          const Queue& queue, Event* event)

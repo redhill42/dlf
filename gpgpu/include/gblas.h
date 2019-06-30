@@ -228,18 +228,16 @@ inline void scal(const size_t n, const T alpha,
 
 // Vector copy: SCOPY/DCOPY/CCOPY/ZCOPY/HCOPY
 template <typename T>
-void copy(const size_t n,
-          const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
-          Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
+void copy(const size_t x_size, const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
+          const size_t y_size, Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
           const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 template <typename T>
-inline void copy(const size_t n,
-                 const Buffer<T>& x_buffer, const size_t x_inc,
-                 Buffer<T>& y_buffer, const size_t y_inc,
+inline void copy(const size_t x_size, const Buffer<T>& x_buffer, const size_t x_inc,
+                 const size_t y_size, Buffer<T>& y_buffer, const size_t y_inc,
                  const Queue& queue = gpgpu::current::queue(), Event* event = nullptr)
 {
-    copy(n, x_buffer, 0, x_inc, y_buffer, 0, y_inc, queue, event);
+    copy(x_size, x_buffer, 0, x_inc, y_size, y_buffer, 0, y_inc, queue, event);
 }
 
 // Vector-times-constant plus vector: SAXPY/DAXPY/CAXPY/ZAXPY/HAXPY

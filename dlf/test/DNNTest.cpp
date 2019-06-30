@@ -243,3 +243,31 @@ TEST(BinaryTest, Pow) {
         ExpectEQ(std::pow(A(i), B(i)), C(i));
     }
 }
+
+TEST(ActivationTest, Relu) {
+    constexpr size_t N = 20;
+
+    auto A = Tensor<int>::random({N}, -int(N), int(N)).template cast<float>();
+    auto B = Tensor<float>({N});
+
+    auto dev_A = DevTensor<float>(A);
+    auto dev_B = DevTensor<float>({N});
+
+    relu(A, B);
+    relu(dev_A, dev_B);
+    ExpectEQ(B, dev_B.read());
+}
+
+TEST(ActivationTest, PRelu) {
+    constexpr size_t N = 20;
+
+    auto A = Tensor<int>::random({N}, -int(N), int(N)).template cast<float>();
+    auto B = Tensor<float>({N});
+
+    auto dev_A = DevTensor<float>(A);
+    auto dev_B = DevTensor<float>({N});
+
+    prelu(A, scalar(0.01f), B);
+    prelu(dev_A, dev(0.01f), dev_B);
+    ExpectEQ(B, dev_B.read());
+}

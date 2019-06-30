@@ -136,6 +136,12 @@ public:
         return m_data;
     }
 
+    /**
+     * Broadcast this tensor to the given shape.
+     */
+    DevTensor<T> broadcast(const Shape& shape, const gpgpu::Queue& queue = gpgpu::current::queue()) const &;
+    DevTensor<T> broadcast(const Shape& shape, const gpgpu::Queue& queue = gpgpu::current::queue()) &&;
+
 public:
     DevTensor<T>& operator+=(const DevTensor<T>& rhs);
     DevTensor<T>& operator-=(const DevTensor<T>& rhs);
@@ -158,6 +164,39 @@ inline DevTensor<T> dev(T value, const gpgpu::Queue& queue = gpgpu::current::que
 //==-------------------------------------------------------------------------
 // DevTensor unary transformations
 //==-------------------------------------------------------------------------
+
+template <typename T>
+inline void copy(const DevTensor<T>& src, DevTensor<T>& dst,
+                 const gpgpu::Queue& queue = gpgpu::current::queue(),
+                 gpgpu::Event* event = nullptr)
+{
+    if (&src != &dst) {
+        if (src.shape() == dst.shape()) {
+            src.copyToAsync(dst, queue);
+        } else {
+            assert(src.shape().is_tail(dst.shape())); // FIXME: full broadcast
+            gpgpu::blas::copy(src.size(), src.data(), 1, dst.size(), dst.data(), 1, queue, event);
+        }
+    }
+}
+
+template <typename T>
+inline DevTensor<T> DevTensor<T>::broadcast(const Shape& shape, const gpgpu::Queue& queue) const & {
+    DevTensor<T> dst(shape, queue);
+    dlf::copy(*this, dst, queue);
+    return dst;
+}
+
+template <typename T>
+inline DevTensor<T> DevTensor<T>::broadcast(const Shape& shape, const gpgpu::Queue& queue) && {
+    if (shape == this->shape()) {
+        return std::move(*this);
+    } else {
+        DevTensor<T> dst(shape, queue);
+        dlf::copy(*this, dst, queue);
+        return dst;
+    }
+}
 
 template <typename T>
 inline void abs(const DevTensor<T>& x, DevTensor<T>& y, const gpgpu::Queue& queue = gpgpu::current::queue()) {
@@ -469,8 +508,8 @@ void gemm(const T& alpha, const DevTensor<T>& A, const DevTensor<T>& B,
         std::swap(m, k);
     if (transB)
         std::swap(p, n);
-    assert(k == p);
-    assert(C->shape() == Shape({m, n}));
+    if (k != p || m != C->extent(0) || n != C->extent(1))
+        throw shape_error("gemm: incompatible shape");
 
     gblas::gemm(gblas::Layout::RowMajor,
                 transA ? gblas::Transpose::Trans : gblas::Transpose::NoTrans,
@@ -491,8 +530,7 @@ void gemm(const T& alpha, const DevTensor<T>& A, const DevTensor<T>& B,
           const gpgpu::Queue& queue = gpgpu::current::queue(),
           gpgpu::Event* event = nullptr)
 {
-    if (&C != &Y)
-        gpgpu::blas::copy(C.size(), C.data(), 1, Y.data(), 1, queue);
+    copy(C, Y, queue);
     gemm(alpha, A, B, beta, &Y, transA, transB, queue, event);
 }
 
@@ -503,9 +541,86 @@ inline DevTensor<T> gemm(const T& alpha, const DevTensor<T>& A, const DevTensor<
                          const gpgpu::Queue& queue = gpgpu::current::queue(),
                          gpgpu::Event* event = nullptr)
 {
-    DevTensor<T> Y(C.shape(), queue);
-    gemm(alpha, A, B, beta, C, Y, transA, transB, queue, event);
+    assert(A.is_matrix() && B.is_matrix());
+    auto m = A.extent(0), k = A.extent(1);
+    auto p = B.extent(0), n = B.extent(1);
+
+    if (transA)
+        std::swap(m, k);
+    if (transB)
+        std::swap(p, n);
+
+    auto Y = C.broadcast({m, n}, queue);
+    gemm(alpha, A, B, beta, &Y, transA, transB, queue, event);
     return Y;
+}
+
+//==-------------------------------------------------------------------------
+// DevTensor activation functions
+//==-------------------------------------------------------------------------
+
+template <typename T>
+inline void relu(const DevTensor<T>& X, DevTensor<T>& Y,
+                 const gpgpu::Queue& queue = gpgpu::current::queue())
+{
+    gpgpu::dnn::activation("relu", X.size(), T(0), T(0), X.data(), Y.data(), queue);
+}
+
+template <typename T>
+inline void prelu(const DevTensor<T>& X, const DevTensor<T>& slope, DevTensor<T>& Y,
+                  const gpgpu::Queue& queue = gpgpu::current::queue())
+{
+    assert(slope.shape().is_tail(X.shape()));
+    gpgpu::dnn::activation("prelu", X.size(), X.data(), slope.size(), slope.data(), Y.data(), queue);
+}
+
+template <typename T>
+inline void leaky_relu(T alpha, const DevTensor<T>& X, DevTensor<T>& Y,
+                       const gpgpu::Queue& queue = gpgpu::current::queue())
+{
+    gpgpu::dnn::activation("leaky_relu", X.size(), alpha, T(0), X.data(), Y.data(), queue);
+}
+
+template <typename T>
+inline void thresholded_relu(T alpha, const DevTensor<T>& X, DevTensor<T>& Y,
+                             const gpgpu::Queue& queue = gpgpu::current::queue())
+{
+    gpgpu::dnn::activation("thresholded_relu", X.size(), alpha, T(0), X.data(), Y.data(), queue);
+}
+
+template <typename T>
+inline void selu(T alpha, T gamma, const DevTensor<T>& X,  DevTensor<T>& Y,
+                 const gpgpu::Queue& queue = gpgpu::current::queue())
+{
+    gpgpu::dnn::activation("selu", X.size(), alpha, gamma, X.data(), Y.data(), queue);
+}
+
+template <typename T>
+inline void elu(T alpha, const DevTensor<T>& X, DevTensor<T>& Y,
+                const gpgpu::Queue& queue = gpgpu::current::queue())
+{
+    gpgpu::dnn::activation("elu", X.size(), alpha, T(0), X.data(), Y.data(), queue);
+}
+
+template <typename T>
+inline void hard_sigmoid(T alpha, T beta, const DevTensor<T>& X, DevTensor<T>& Y,
+                         const gpgpu::Queue& queue = gpgpu::current::queue())
+{
+    gpgpu::dnn::activation("hard_sigmoid", X.size(), alpha, beta, X.data(), Y.data(), queue);
+}
+
+template <typename T>
+inline void softsign(const DevTensor<T>& X, DevTensor<T>& Y,
+                     const gpgpu::Queue& queue = gpgpu::current::queue())
+{
+    gpgpu::dnn::activation("softsign", X.size(), T(0), T(0), X.data(), Y.data(), queue);
+}
+
+template <typename T>
+inline void softplus(const DevTensor<T>& X, DevTensor<T>& Y,
+                     const gpgpu::Queue& queue = gpgpu::current::queue())
+{
+    gpgpu::dnn::activation("softplus", X.size(), T(0), T(0), X.data(), Y.data(), queue);
 }
 
 } // namespace dlf

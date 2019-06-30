@@ -271,7 +271,8 @@ public: // Transformations
     /**
      * Broadcast this tensor to the given shape.
      */
-    Tensor broadcast(const Shape& shape);
+    Tensor broadcast(const Shape& shape) const &;
+    Tensor broadcast(const Shape& shape) &&;
 
 private: // Formatting
     friend std::ostream& operator<<(std::ostream& os, const Tensor& t) {
@@ -488,7 +489,7 @@ const T* Tensor<T>::printRec(std::ostream& out, const Shape& shape, size_t level
 //==-------------------------------------------------------------------------
 
 template <typename TA, typename TB, typename Op>
-static auto broadcast_do(TA&& A, TB&& B, Op&& op) {
+auto broadcast_do(TA&& A, TB&& B, Op&& op) {
     if (A.shape() == B.shape()) {
         return op(A.shape(), A.begin(), A.end(), B.begin());
     }
@@ -607,9 +608,33 @@ inline Tensor<U> Tensor<T>::cast() const {
 }
 
 template <typename T>
-inline Tensor<T> Tensor<T>::broadcast(const Shape& shape) {
-    auto result_shape = this->shape().broadcast(shape);
-    return Tensor<T>(shape, begin(result_shape), end(result_shape));
+void copy(const Tensor<T>& src, Tensor<T>& dst) {
+    if (src.data() != dst.data()) {
+        if (src.shape() == dst.shape()) {
+            std::copy(src.begin(), src.end(), dst.begin());
+        } else {
+            Shape s = src.shape().broadcast(dst.shape());
+            std::copy(src.begin(s), src.end(s), dst.begin());
+        }
+    }
+}
+
+template <typename T>
+inline Tensor<T> Tensor<T>::broadcast(const Shape& shape) const & {
+    Tensor<T> dst(shape);
+    copy(*this, dst);
+    return dst;
+}
+
+template <typename T>
+inline Tensor<T> Tensor<T>::broadcast(const Shape& shape) && {
+    if (shape == this->shape()) {
+        return std::move(*this);
+    } else {
+        Tensor<T> dst(shape);
+        copy(*this, dst);
+        return dst;
+    }
 }
 
 //==-------------------------------------------------------------------------
@@ -1182,14 +1207,7 @@ void gemm(const T& alpha, const Tensor<T>& A, const Tensor<T>& B,
           const T& beta, const Tensor<T>& C, Tensor<T>& Y,
           bool transA = false, bool transB = false)
 {
-    if (&C != &Y) {
-        if (C.shape() == Y.shape()) {
-            std::copy(C.begin(), C.end(), Y.begin());
-        } else {
-            Shape shapeC = C.shape().broadcast(Y.shape());
-            std::copy(C.begin(shapeC), C.end(shapeC), Y.begin());
-        }
-    }
+    copy(C, Y);
     gemm(alpha, A, B, beta, &Y, transA, transB);
 }
 
@@ -1198,8 +1216,17 @@ Tensor<T> gemm(const T& alpha, const Tensor<T>& A, const Tensor<T>& B,
                const T& beta, const Tensor<T>& C,
                bool transA = false, bool transB = false)
 {
-    Tensor<T> Y(C.shape());
-    gemm(alpha, A, B, beta, C, Y, transA, transB);
+    assert(A.is_matrix() && B.is_matrix());
+    auto m = A.extent(0), k = A.extent(1);
+    auto p = B.extent(0), n = B.extent(1);
+    if (transA)
+        std::swap(m, k);
+    if (transB)
+        std::swap(p, n);
+    assert(k == p);
+
+    auto Y = C.broadcast({m, n});
+    gemm(alpha, A, B, beta, &Y, transA, transB);
     return Y;
 }
 
@@ -1236,6 +1263,64 @@ Tensor<W> outer(const Tensor<T>& A, const Tensor<U>& B, F f) {
 template <typename T, typename U, typename W = std::common_type_t<T,U>>
 inline Tensor<W> outer(const Tensor<T>& A, const Tensor<U>& B) {
     return outer(A, B, [](const T& a, const U& b) -> W { return a * b; });
+}
+
+//==-------------------------------------------------------------------------
+// Tensor activation functions
+//==-------------------------------------------------------------------------
+
+template <typename T>
+inline void relu(const Tensor<T>& X, Tensor<T>& Y) {
+    transformTo(X, Y, [](T x) { return std::max(T(0), x); });
+}
+
+template <typename T>
+inline void prelu(const Tensor<T>& X, const Tensor<T>& slope, Tensor<T>& Y) {
+    assert(slope.shape().broadcast(X.shape()) == X.shape());
+    transformTo(X, slope, Y, [](T x, T a) {
+        return x < T(0) ? x * a : x;
+    });
+}
+
+template <typename T>
+inline void leaky_relu(T alpha, const Tensor<T>& X, Tensor<T>& Y) {
+    transformTo(X, Y, [=](T x) { return x < T(0) ? x * alpha : x; });
+}
+
+template <typename T>
+inline void thresholded_relu(T alpha, const Tensor<T>& X, Tensor<T>& Y) {
+    transformTo(X, Y, [=](const T& x) { return x > alpha ? x : T(0); });
+}
+
+template <typename T>
+inline void selu(T alpha, T gamma, const Tensor<T>& X, Tensor<T>& Y) {
+    transformTo(X, Y, [=](T x) {
+        return T(gamma * (x < T(0) ? alpha * (std::exp(x) - T(1)) : x));
+    });
+}
+
+template <typename T>
+inline void elu(T alpha, const Tensor<T>& X, Tensor<T>& Y) {
+    transformTo(X, Y, [=](T x) {
+        return x < T(0) ? alpha * (std::exp(x) - T(1)) : x;
+    });
+}
+
+template <typename T>
+inline void hard_sigmoid(T alpha, T beta, const Tensor<T>& X, Tensor<T>& Y) {
+    transformTo(X, Y, [=](T x) {
+        return std::max(T(0), std::min(T(1), alpha * x + beta));
+    });
+}
+
+template <typename T>
+inline void softsign(const Tensor<T>& X, Tensor<T>& Y) {
+    transformTo(X, Y, [](T x) { return T(x / (T(1) + std::abs(x))); });
+}
+
+template <typename T>
+inline void softplus(const Tensor<T>& X, Tensor<T>& Y) {
+    transformTo(X, Y, [](T x) { return T(std::log(std::exp(x) + T(1))); });
 }
 
 } // namespace dlf

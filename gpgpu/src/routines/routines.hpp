@@ -78,6 +78,7 @@
 
 // DNN includes
 #include "routines/dnn/xtransform.hpp"
+#include "routines/dnn/xactivation.hpp"
 #include "routines/dnn/xabs.hpp"
 #include "routines/dnn/xneg.hpp"
 #include "routines/dnn/xsign.hpp"
