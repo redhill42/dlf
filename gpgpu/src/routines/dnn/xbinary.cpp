@@ -1,21 +1,22 @@
-#include "routines/dnn/xdiv.hpp"
+#include "xbinary.hpp"
 
 namespace gpgpu { namespace dnn {
 using namespace gpgpu::blas;
 
 template <typename T>
-Xdiv<T>::Xdiv(const Queue& queue, Event* event, const std::string& name)
+Xbinary<T>::Xbinary(const Queue& queue, Event* event, const std::string& name)
     : Routine(queue, event, name, {"Xaxpy"}, PrecisionValue<T>(), {}, {
     #include "../../kernels/level1/level1.cl"
-    #include "../../kernels/dnn/xdiv.cl"
-    #include "../../kernels/dnn/xtransform2.cl"
-    }) {
+    #include "kernels/dnn/xbinary.cl"
+}) {
 }
 
 template <typename T>
-void Xdiv<T>::DoDiv(const size_t x_size, const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
-                    const size_t y_size, const Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
-                    Buffer<T>& z_buffer, const size_t z_offset, const size_t z_inc)
+void Xbinary<T>::DoBinary(
+    const std::string& name,
+    const size_t x_size, const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
+    const size_t y_size, const Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
+    Buffer<T>& z_buffer, const size_t z_offset, const size_t z_inc)
 {
     const size_t n = std::max(x_size, y_size);
 
@@ -38,8 +39,9 @@ void Xdiv<T>::DoDiv(const size_t x_size, const Buffer<T>& x_buffer, const size_t
                                     IsMultiple(n, db_["WGS"]*db_["WPT"]*db_["VW"]);
 
     // If possible, run the fast-version of the kernel
-    const auto kernel_name = (use_fastest_kernel) ? "XdivFastest" :
-                             (use_faster_kernel)  ? "XdivFaster" : "Xdiv";
+    auto kernel_name = "X" + name;
+    kernel_name = use_fastest_kernel ? kernel_name + "Fastest" :
+                  use_faster_kernel  ? kernel_name + "Faster" : kernel_name;
 
     // Retrieves the kernel from the compiled binary
     auto kernel = program_.getKernel(kernel_name);
@@ -81,13 +83,13 @@ void Xdiv<T>::DoDiv(const size_t x_size, const Buffer<T>& x_buffer, const size_t
     }
 }
 
-template class Xdiv<int16_t>;
-template class Xdiv<int32_t>;
-template class Xdiv<int64_t>;
-template class Xdiv<half>;
-template class Xdiv<float>;
-template class Xdiv<double>;
-template class Xdiv<float2>;
-template class Xdiv<double2>;
+template class Xbinary<int16_t>;
+template class Xbinary<int32_t>;
+template class Xbinary<int64_t>;
+template class Xbinary<half>;
+template class Xbinary<float>;
+template class Xbinary<double>;
+template class Xbinary<float2>;
+template class Xbinary<double2>;
 
-}} // namespace gpgpu::dnn
+}}

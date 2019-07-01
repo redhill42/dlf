@@ -313,7 +313,7 @@ inline DevTensor<T>& name##To(const DevTensor<T>& x, const DevTensor<T>& y, DevT
                               const gpgpu::Queue& queue = gpgpu::current::queue()) { \
     assert(x.shape().is_tail(y.shape()) || y.shape().is_tail(x.shape())); \
     assert(z.shape() == Shape::broadcast(x, y)); \
-    gpgpu::dnn::name(x.size(), x.data(), y.size(), y.data(), z.data(), queue); \
+    gpgpu::dnn::transform2(#name, x.size(), x.data(), y.size(), y.data(), z.data(), queue); \
     return z; \
 } \
 template <typename T> \
@@ -381,7 +381,6 @@ DEFINE_BINARY_OP(add, +)
 DEFINE_BINARY_OP(sub, -)
 DEFINE_BINARY_OP(mul, *)
 DEFINE_BINARY_OP(div, /)
-DEFINE_BINARY(pow)
 
 #undef DEFINE_BINARY_OP
 #undef DEFINE_BINARY
