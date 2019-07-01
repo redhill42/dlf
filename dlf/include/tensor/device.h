@@ -173,9 +173,12 @@ inline void copy(const DevTensor<T>& src, DevTensor<T>& dst,
     if (&src != &dst) {
         if (src.shape() == dst.shape()) {
             src.copyToAsync(dst, queue);
+        } else if (src.shape().is_tail(dst.shape())) {
+            gpgpu::dnn::copy(src.size(), src.data(), dst.size(), dst.data(), queue, event);
         } else {
-            assert(src.shape().is_tail(dst.shape())); // FIXME: full broadcast
-            gpgpu::blas::copy(src.size(), src.data(), 1, dst.size(), dst.data(), 1, queue, event);
+            gpgpu::dnn::copy(dst.size(), src.data(), dst.data(),
+                             src.shape().broadcast(dst.shape()).strides(),
+                             dst.shape().extents(), queue, event);
         }
     }
 }
@@ -307,51 +310,91 @@ inline DevTensor<T> operator-(DevTensor<T>&& x) {
 // DevTensor binary transformations
 //==-------------------------------------------------------------------------
 
+template <typename T>
+DevTensor<T>& transformTo(const DevTensor<T>& x, const DevTensor<T>& y, DevTensor<T>& z,
+                          const std::string& name,
+                          const gpgpu::Queue& queue = gpgpu::current::queue())
+{
+    if (x.shape().is_tail(y.shape()) || y.shape().is_tail(x.shape())) {
+        assert(z.shape() == Shape::broadcast(x, y));
+        gpgpu::dnn::transform2(name, x.size(), x.data(), y.size(), y.data(), z.data(), queue);
+    } else {
+        Shape final_shape = Shape::broadcast(x, y);
+        gpgpu::dnn::transform2(name, final_shape.size(), x.data(), y.data(), z.data(),
+                               x.shape().broadcast(final_shape).strides(),
+                               y.shape().broadcast(final_shape).strides(),
+                               final_shape.extents());
+    }
+    return z;
+}
+
+template <typename T>
+inline DevTensor<T> transform(const DevTensor<T>& x, const DevTensor<T>& y, const std::string& name,
+                              const gpgpu::Queue& queue = gpgpu::current::queue())
+{
+    DevTensor<T> z(Shape::broadcast(x, y));
+    transformTo(x, y, z, name, queue);
+    return z;
+}
+
+template <typename T>
+inline DevTensor<T> transform(DevTensor<T>&& x, const DevTensor<T>& y, const std::string& name,
+                              const gpgpu::Queue& queue = gpgpu::current::queue())
+{
+    if (x.shape() == Shape::broadcast(x, y))
+        return std::move(transformTo(x, y, x, name, queue));
+    else
+        return transform(x, y, name, queue);
+}
+
+template <typename T>
+inline DevTensor<T> transform(const DevTensor<T>& x, DevTensor<T>&& y, const std::string& name,
+                              const gpgpu::Queue& queue = gpgpu::current::queue())
+{
+    if (y.shape() == Shape::broadcast(x, y))
+        return std::move(transformTo(x, y, y, name, queue));
+    else
+        return transform(x, y, name, queue);
+}
+
+template <typename T>
+inline DevTensor<T> transform(DevTensor<T>&& x, DevTensor<T>&& y, const std::string& name,
+                              const gpgpu::Queue& queue = gpgpu::current::queue())
+{
+    Shape final_shape = Shape::broadcast(x, y);
+    if (x.shape() == final_shape)
+        return std::move(transformTo(x, y, x, name, queue));
+    else if (y.shape() == final_shape)
+        return std::move(transformTo(x, y, y, name, queue));
+    else
+        return transform(x, y, name, queue);
+}
+
 #define DEFINE_BINARY(name) \
 template <typename T> \
 inline DevTensor<T>& name##To(const DevTensor<T>& x, const DevTensor<T>& y, DevTensor<T>& z, \
                               const gpgpu::Queue& queue = gpgpu::current::queue()) { \
-    assert(x.shape().is_tail(y.shape()) || y.shape().is_tail(x.shape())); \
-    assert(z.shape() == Shape::broadcast(x, y)); \
-    gpgpu::dnn::transform2(#name, x.size(), x.data(), y.size(), y.data(), z.data(), queue); \
-    return z; \
+    return transformTo(x, y, z, #name, queue); \
 } \
 template <typename T> \
 inline DevTensor<T> name(const DevTensor<T>& x, const DevTensor<T>& y, \
                          const gpgpu::Queue& queue = gpgpu::current::queue()) { \
-    DevTensor<T> z(Shape::broadcast(x, y), queue); \
-    name##To(x, y, z, queue); \
-    return z; \
+    return transform(x, y, #name, queue); \
 } \
 template <typename T> \
 inline DevTensor<T> name(DevTensor<T>&& x, const DevTensor<T>& y, \
                          const gpgpu::Queue& queue = gpgpu::current::queue()) { \
-    if (x.shape() == Shape::broadcast(x, y)) { \
-        return std::move(name##To(x, y, x, queue)); \
-    } else { \
-        return name(x, y, queue); \
-    } \
+    return transform(std::move(x), y, #name, queue); \
 } \
 template <typename T> \
 inline DevTensor<T> name(const DevTensor<T>& x, DevTensor<T>&& y, \
                          const gpgpu::Queue& queue = gpgpu::current::queue()) { \
-    if (y.shape() == Shape::broadcast(x, y)) { \
-        return std::move(name##To(x, y, y, queue)); \
-    } else { \
-        return name(x, y, queue); \
-    } \
+    return transform(x, std::move(y), #name, queue); \
 } \
 template <typename T> \
 inline DevTensor<T> name(DevTensor<T>&& x, DevTensor<T>&& y, \
                          const gpgpu::Queue& queue = gpgpu::current::queue()) { \
-    Shape final_shape = Shape::broadcast(x, y); \
-    if (x.shape() == final_shape) { \
-        return std::move(name##To(x, y, x, queue)); \
-    } else if (y.shape() == final_shape) { \
-        return std::move(name##To(x, y, y, queue)); \
-    } else { \
-        return name(x, y, queue); \
-    } \
+    return transform(std::move(x), std::move(y), #name, queue); \
 }
 
 #define DEFINE_BINARY_OP(name, op) \

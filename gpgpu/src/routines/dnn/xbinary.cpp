@@ -1,4 +1,5 @@
 #include "xbinary.hpp"
+#include <cassert>
 
 namespace gpgpu { namespace dnn {
 using namespace gpgpu::blas;
@@ -81,6 +82,44 @@ void Xbinary<T>::DoBinary(
         auto local = std::vector<size_t>{db_["WGS"]};
         RunKernel(kernel, queue_, device_, global, local, event_);
     }
+}
+
+template <typename T>
+void Xbinary<T>::DoBinaryStrided(const std::string& name, const size_t n,
+    const Buffer<T>& x_buffer, const Buffer<T>& y_buffer, Buffer<T>& z_buffer,
+    const std::vector<size_t>& lstride, const std::vector<size_t>& rstride,
+    const std::vector<size_t>& oshape)
+{
+    // Make sure all dimensions are larger than zero
+    if (n == 0)
+        throw BLASError(StatusCode::kInvalidDimension);
+
+    // Create compact buffer to hold strides and shapes
+    auto rank = oshape.size();
+    assert(lstride.size() == rank && rstride.size() == rank);
+    std::vector<int> shape_data(rank * 3);
+    std::copy(oshape.begin(), oshape.end(), shape_data.begin());
+    std::copy(lstride.begin(), lstride.end(), shape_data.begin() + rank);
+    std::copy(rstride.begin(), rstride.end(), shape_data.begin() + rank*2);
+    Buffer<int> shape_buffer = context_.createBuffer<int>(rank*3, BufferAccess::WriteOnly);
+    shape_buffer.write(queue_, shape_data.data(), shape_data.size());
+
+    // Retrieves the kernel from the compiled binary
+    auto kernel = program_.getKernel("X" + name + "Strided");
+
+    // Sets the kernel arguments
+    kernel.setArgument(0, static_cast<int>(n));
+    kernel.setArgument(1, static_cast<int>(rank));
+    kernel.setArgument(2, shape_buffer);
+    kernel.setArgument(3, x_buffer);
+    kernel.setArgument(4, y_buffer);
+    kernel.setArgument(5, z_buffer);
+
+    // Launches the kernel
+    const auto n_ceiled = Ceil(n, db_["WGS"]*db_["WPT"]);
+    auto global = std::vector<size_t>{n_ceiled/db_["WPT"]};
+    auto local = std::vector<size_t>{db_["WGS"]};
+    RunKernel(kernel, queue_, device_, global, local, event_);
 }
 
 template class Xbinary<int16_t>;

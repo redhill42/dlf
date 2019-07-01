@@ -314,6 +314,19 @@ R"(
 
 // =================================================================================================
 
+INLINE_FUNC int unravel(int id, const int rank, __constant int* stride, __constant int* shape) {
+  int id_x = 0;
+  for (int i = rank; --i >= 0; ) {
+    int tmp = id / shape[i];
+    int coord = id - tmp * shape[i];
+    id_x += coord * stride[i];
+    id = tmp;
+  }
+  return id_x;
+}
+
+// =================================================================================================
+
 // End of the C++11 raw string literal
 )"
 

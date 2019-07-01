@@ -112,7 +112,7 @@ void name##Faster(const int n,                                              \
       realV xvec = xgm[id];                                                 \
       realV yvec = ygm[id];                                                 \
       realV zvec;                                                           \
-      OPV(op, zvec, xvec, yvec);                                        \
+      OPV(op, zvec, xvec, yvec);                                            \
       zgm[id] = zvec;                                                       \
     }                                                                       \
   }                                                                         \
@@ -129,8 +129,23 @@ void name##Fastest(const int n,                                             \
     realV xvec = xgm[id];                                                   \
     realV yvec = ygm[id];                                                   \
     realV zvec;                                                             \
-    OPV(op, zvec, xvec, yvec);                                          \
+    OPV(op, zvec, xvec, yvec);                                              \
     zgm[id] = zvec;                                                         \
+  }                                                                         \
+}                                                                           \
+                                                                            \
+__kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))                   \
+void name##Strided(const int n, const int rank, __constant int* shape,      \
+                   const __global real* restrict xgm,                       \
+                   const __global real* restrict ygm,                       \
+                   __global real* zgm)                                      \
+{                                                                           \
+  for (int id = get_global_id(0); id < n; id += get_global_size(0)) {       \
+    real x_value = xgm[unravel(id, rank, &shape[rank], shape)];             \
+    real y_value = ygm[unravel(id, rank, &shape[rank*2], shape)];           \
+    real z_value;                                                           \
+    op(z_value, x_value, y_value);                                          \
+    zgm[id] = z_value;                                                      \
   }                                                                         \
 }
 

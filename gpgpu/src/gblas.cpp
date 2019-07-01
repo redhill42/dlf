@@ -294,34 +294,43 @@ inline void cublasCopyEx(cublasHandle_t handle, int n, const double2* x, int inc
 }
 
 template <typename T>
-void copy(const size_t x_size, const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
-          const size_t y_size, Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
+void copy(const size_t n,
+          const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
+          Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
           const Queue& queue, Event* event) {
-    auto routine = Xcopy<T>(queue, event);
-    routine.DoCopy(x_size, x_buffer, x_offset, x_inc,
-                   y_size, y_buffer, y_offset, y_inc);
+    dispatch<T>(queue,
+        [&]() {
+            auto routine = Xcopy<T>(queue, event);
+            routine.DoCopy(n,
+                           x_buffer, x_offset, x_inc,
+                           y_buffer, y_offset, y_inc);
+        },
+        [&](auto h, auto) {
+            auto x = reinterpret_cast<T*>(*cuBuffer::unwrap(x_buffer)) + x_offset;
+            auto y = reinterpret_cast<T*>(*cuBuffer::unwrap(y_buffer)) + y_offset;
+            cublasCopyEx(h, n, x, x_inc, y, y_inc);
+        });
 }
 
-template void PUBLIC_API copy<float>  (const size_t, const Buffer<float>&, const size_t, const size_t,
-                                       const size_t, Buffer<float>&, const size_t, const size_t,
+template void PUBLIC_API copy<float>  (const size_t,
+                                       const Buffer<float>&, const size_t, const size_t,
+                                       Buffer<float>&, const size_t, const size_t,
                                        const Queue&, Event*);
-template void PUBLIC_API copy<double> (const size_t, const Buffer<double>&, const size_t, const size_t,
-                                       const size_t, Buffer<double>&, const size_t, const size_t,
+template void PUBLIC_API copy<double> (const size_t,
+                                       const Buffer<double>&, const size_t, const size_t,
+                                       Buffer<double>&, const size_t, const size_t,
                                        const Queue&, Event*);
-template void PUBLIC_API copy<float2> (const size_t, const Buffer<float2>&, const size_t, const size_t,
-                                       const size_t, Buffer<float2>&, const size_t, const size_t,
+template void PUBLIC_API copy<float2> (const size_t,
+                                       const Buffer<float2>&, const size_t, const size_t,
+                                       Buffer<float2>&, const size_t, const size_t,
                                        const Queue&, Event*);
-template void PUBLIC_API copy<double2>(const size_t, const Buffer<double2>&, const size_t, const size_t,
-                                       const size_t, Buffer<double2>&, const size_t, const size_t,
+template void PUBLIC_API copy<double2>(const size_t,
+                                       const Buffer<double2>&, const size_t, const size_t,
+                                       Buffer<double2>&, const size_t, const size_t,
                                        const Queue&, Event*);
-template void PUBLIC_API copy<half>   (const size_t, const Buffer<half>&, const size_t, const size_t,
-                                       const size_t, Buffer<half>&, const size_t, const size_t,
-                                       const Queue&, Event*);
-template void PUBLIC_API copy<int32_t>(const size_t, const Buffer<int32_t>&, const size_t, const size_t,
-                                       const size_t, Buffer<int32_t>&, const size_t, const size_t,
-                                       const Queue&, Event*);
-template void PUBLIC_API copy<int64_t>(const size_t, const Buffer<int64_t>&, const size_t, const size_t,
-                                       const size_t, Buffer<int64_t>&, const size_t, const size_t,
+template void PUBLIC_API copy<half>   (const size_t,
+                                       const Buffer<half>&, const size_t, const size_t,
+                                       Buffer<half>&, const size_t, const size_t,
                                        const Queue&, Event*);
 
 //---------------------------------------------------------------------------

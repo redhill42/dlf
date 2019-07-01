@@ -225,6 +225,78 @@ TYPED_TEST(BinaryTest, Div) {
     }
 }
 
+TEST(BinaryTest, ShapeBroadcastArthimetic) {
+    {
+        auto A = Tensor<int>({2, 3}, {1, 2, 3, 4, 5, 6});
+        auto B = Tensor<int>({3}, {5, 8, 4});
+        auto C = Tensor<int>({2, 3}, {6, 10, 7, 9, 13, 10});
+        EXPECT_EQ((dev(A) + dev(B)).read(), C);
+    }
+    {
+        auto A = Tensor<int>({3}, {5, 8, 4});
+        auto B = Tensor<int>({2, 3}, {1, 2, 3, 4, 5, 6});
+        auto C = Tensor<int>({2, 3}, {4, 6, 1, 1, 3, -2});
+        EXPECT_EQ((dev(A) - dev(B)).read(), C);
+    }
+    {
+        auto A = Tensor<int>({4, 1}, {3, 7, 5, 2});
+        auto B = Tensor<int>({3}, {2, 6, 5});
+        auto C = Tensor<int>({4, 3}, {5, 9, 8, 9, 13, 12, 7, 11, 10, 4, 8, 7});
+        EXPECT_EQ((dev(A) + dev(B)).read(), C);
+    }
+    {
+        auto A = Tensor<int>({4});
+        auto B = Tensor<int>({3});
+        EXPECT_ANY_THROW(dev(A) + dev(B));
+    }
+
+    {
+        auto A = Tensor<int>::range({3, 1, 2, 1}, 1);
+        auto B = Tensor<int>::range(   {4, 1, 5}, 1);
+
+        // Computed by numpy
+        auto C = Tensor<int>({3, 4, 2, 5}, {
+              1,   2,   3,   4,   5,
+              2,   4,   6,   8,  10,
+              6,   7,   8,   9,  10,
+             12,  14,  16,  18,  20,
+             11,  12,  13,  14,  15,
+             22,  24,  26,  28,  30,
+             16,  17,  18,  19,  20,
+             32,  34,  36,  38,  40,
+              3,   6,   9,  12,  15,
+              4,   8,  12,  16,  20,
+             18,  21,  24,  27,  30,
+             24,  28,  32,  36,  40,
+             33,  36,  39,  42,  45,
+             44,  48,  52,  56,  60,
+             48,  51,  54,  57,  60,
+             64,  68,  72,  76,  80,
+              5,  10,  15,  20,  25,
+              6,  12,  18,  24,  30,
+             30,  35,  40,  45,  50,
+             36,  42,  48,  54,  60,
+             55,  60,  65,  70,  75,
+             66,  72,  78,  84,  90,
+             80,  85,  90,  95, 100,
+             96, 102, 108, 114, 120
+        });
+
+        EXPECT_EQ((dev(A) * dev(B)).read(), C);
+    }
+}
+
+TEST(DNNTest, ShapeBroadcastCopy) {
+    auto A = Tensor<int>({3, 1}, {1, 2, 3});
+    auto B = Tensor<int>({2, 3, 4}, {
+        1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3,
+        1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3
+    });
+
+    auto dev_A = dev(A).broadcast({2, 3, 4});
+    EXPECT_EQ(dev_A.read(), B);
+}
+
 TEST(ActivationTest, Relu) {
     constexpr size_t N = 20;
 

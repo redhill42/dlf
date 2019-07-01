@@ -77,6 +77,7 @@
 #include "routines/levelx/xgemmstridedbatched.hpp"
 
 // DNN includes
+#include "routines/dnn/xcopy.hpp"
 #include "routines/dnn/xtransform.hpp"
 #include "routines/dnn/xbinary.hpp"
 #include "routines/dnn/xactivation.hpp"

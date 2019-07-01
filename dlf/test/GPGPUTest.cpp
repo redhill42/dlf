@@ -376,23 +376,7 @@ TEST_F(GPGPUTest, Xcopy) {
                 cblas::copy(N, A.data(), 1, B.data(), 1);
             },
             [&](auto N, auto& A, auto& B, auto) {
-                gblas::copy(N, A.data(), 1, N, B.data(), 1, queue);
-            });
-
-        blas_level1_test<int32_t>(queue,
-            [](auto N, auto& A, auto& B, auto) {
-                std::copy(A.begin(), A.end(), B.begin());
-            },
-            [&](auto N, auto& A, auto& B, auto) {
-                gblas::copy(N, A.data(), 1, N, B.data(), 1, queue);
-            });
-
-        blas_level1_test<int64_t>(queue,
-            [](auto N, auto& A, auto& B, auto) {
-                std::copy(A.begin(), A.end(), B.begin());
-            },
-            [&](auto N, auto& A, auto& B, auto) {
-                gblas::copy(N, A.data(), 1, N, B.data(), 1, queue);
+                gblas::copy(N, A.data(), 1, B.data(), 1, queue);
             });
     });
 }

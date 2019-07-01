@@ -28,8 +28,9 @@ class Xcopy: public Routine {
   Xcopy(const Queue &queue, Event* event, const std::string &name = "COPY");
 
   // Templated-precision implementation of the routine
-  void DoCopy(const size_t x_size, const Buffer<T> &x_buffer, const size_t x_offset, const size_t x_inc,
-              const size_t y_size, Buffer<T> &y_buffer, const size_t y_offset, const size_t y_inc);
+  void DoCopy(const size_t n,
+              const Buffer<T> &x_buffer, const size_t x_offset, const size_t x_inc,
+              Buffer<T> &y_buffer, const size_t y_offset, const size_t y_inc);
 };
 
 // =================================================================================================
