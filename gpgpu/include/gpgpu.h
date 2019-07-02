@@ -633,13 +633,14 @@ class Buffer {
     size_t m_size;
 
     friend class Context;
-    explicit Buffer(std::shared_ptr<raw::Buffer> buffer, size_t size)
-        : m_raw(std::move(buffer)), m_size(size) {}
 
 public:
     Buffer() = default;
+    explicit Buffer(std::shared_ptr<raw::Buffer> buffer, size_t size)
+        : m_raw(std::move(buffer)), m_size(size) {}
 
     raw::Buffer& raw() const noexcept { return *m_raw; }
+    std::shared_ptr<raw::Buffer> handle() const noexcept { return m_raw; }
 
     size_t size() const noexcept { return m_size; }
     size_t data_size() const noexcept { return m_size * sizeof(T); }

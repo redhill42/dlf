@@ -4,100 +4,148 @@
 
 namespace dlf { namespace eval {
 
-template <typename TensorT>
-struct TensorAllocator {
-    using element_type = typename TensorT::value_type;
-    std::shared_ptr<TensorT> alloc(const Shape& shape);
-    std::shared_ptr<TensorT> alloc(const Tensor<element_type>& tensor);
+struct CPU {
+    template <typename T>
+    using TensorT = Tensor<T>;
 };
 
-template <typename T>
-struct TensorAllocator<Tensor<T>> {
-    std::shared_ptr<Tensor<T>> alloc(const Shape& shape) {
-        return std::make_shared<Tensor<T>>(shape);
-    }
-
-    std::shared_ptr<Tensor<T>> alloc(const Tensor<T>& tensor) {
-        return std::make_shared<Tensor<T>>(tensor);
-    }
+struct GPU {
+    template <typename T>
+    using TensorT = DevTensor<T>;
 };
 
-template <typename T>
-struct TensorAllocator<DevTensor<T>> {
-    TensorAllocator(const gpgpu::Queue& queue = gpgpu::current::queue())
-        : queue(queue) {}
+template <class Context> struct Datum {};
 
-    std::shared_ptr<DevTensor<T>> alloc(const Shape& shape) {
-        return std::make_shared<DevTensor<T>>(shape, queue);
+template <> struct Datum<CPU> {
+    const model::DataType dtype;
+    const Shape shape;
+
+    Datum(model::DataType dtype, Shape shape)
+        : dtype(dtype), shape(std::move(shape))
+    {}
+
+    template <typename T>
+    Tensor<T> get() {
+        assert(dtype == model::DataTypeTrait<T>);
+        if (data.empty())
+            data.resize(shape.size() * sizeof(T));
+        return Tensor<T>::wrap(shape, reinterpret_cast<T*>(&data[0]));
     }
 
-    std::shared_ptr<DevTensor<T>> alloc(const Tensor<T>& tensor) {
-        return std::make_shared<DevTensor<T>>(tensor, queue);
+    template <typename T>
+    Tensor<T> read() {
+        return get<T>();
+    }
+
+    template <typename T>
+    void set(const Tensor<T>& val) {
+        auto dst = get<T>();
+        dlf::copy(val, dst);
     }
 
 private:
-    const gpgpu::Queue& queue;
+    std::vector<char> data;
 };
 
-template <typename TensorT>
-class Operator {
-    std::vector<std::shared_ptr<TensorT>> m_inputs;
-    std::vector<std::shared_ptr<TensorT>> m_outputs;
+template <> struct Datum<GPU> {
+    const model::DataType dtype;
+    const Shape shape;
 
+    Datum(model::DataType dtype, Shape shape)
+        : dtype(dtype), shape(std::move(shape))
+    {}
+
+    template <typename T>
+    DevTensor<T> get() {
+        assert(dtype == model::DataTypeTrait<T>);
+        if (handle == nullptr)
+            handle = gpgpu::current::context().createBuffer<T>(shape.size()).handle();
+        return DevTensor<T>(shape, gpgpu::Buffer<T>(handle, shape.size()));
+    }
+
+    template <typename T>
+    Tensor<T> read() {
+        return get<T>().read();
+    }
+
+    template <typename T>
+    void set(const Tensor<T>& val) {
+        get<T>().write(val);
+    }
+
+private:
+    std::shared_ptr<gpgpu::raw::Buffer> handle;
+};
+
+class Operator {
 public:
     virtual ~Operator() = default;
-
-    void addInput(std::shared_ptr<TensorT> input) {
-        m_inputs.push_back(input);
-    }
-
-    void addOutput(std::shared_ptr<TensorT> output) {
-        m_outputs.push_back(output);
-    }
-
-    const TensorT& input(size_t i) const {
-        return *m_inputs.at(i);
-    }
-
-    TensorT& output(size_t i) {
-        return *m_outputs.at(i);
-    }
-
     virtual void evaluate() = 0;
 };
 
-template <typename TensorT>
-class OperatorFactory : model::DefaultVisitor {
-private:
-    TensorAllocator<TensorT> m_alloc;
-    std::unordered_map<model::Value*, std::shared_ptr<TensorT>> m_tensors;
-    std::unique_ptr<Operator<TensorT>> result;
-
-    using Element = typename TensorT::value_type;
-
+template <typename Context, typename T>
+class Evaluator {
 public:
-    OperatorFactory(TensorAllocator<TensorT> alloc) : m_alloc(alloc) {}
+    void load(model::Graph& graph);
 
-    std::shared_ptr<TensorT> alloc(model::Value* value) {
-        auto it = m_tensors.find(value);
-        if (it == m_tensors.end()) {
-            std::shared_ptr<TensorT> tensor;
-            if (value->has_initializer()) {
-                tensor = m_alloc.alloc(value->initializer().decode<Element>());
-            } else {
-                tensor = m_alloc.alloc(Shape(value->dims()));
-            }
-            it = m_tensors.emplace(value, std::move(tensor)).first;
-        }
-        return it->second;
+    void evaluate() {
+        std::for_each(m_operators.begin(), m_operators.end(), [](auto& op){ op->evaluate(); });
     }
 
-    std::unique_ptr<Operator<TensorT>> createOperator(model::Node* node) {
+    void set(size_t i, Tensor<T> data) {
+        m_inputs.at(i)->template set<T>(data);
+    }
+
+    Tensor<T> get(size_t i) {
+        return m_outputs.at(i)->template read<T>();
+    }
+
+private:
+    std::vector<std::shared_ptr<Datum<Context>>> m_dataset;
+    std::vector<std::shared_ptr<Datum<Context>>> m_inputs;
+    std::vector<std::shared_ptr<Datum<Context>>> m_outputs;
+    std::vector<std::unique_ptr<Operator>> m_operators;
+};
+
+template <typename Context, typename T>
+class OperatorFactory : model::DefaultVisitor {
+private:
+    using DatumPtr = std::shared_ptr<Datum<Context>>;
+
+    std::vector<DatumPtr>& m_dataset;
+    std::unordered_map<const model::Value*, DatumPtr> m_datamap;
+    std::unique_ptr<Operator> result;
+
+    template <typename U>
+    using TensorT = typename Context::template TensorT<U>;
+
+public:
+    OperatorFactory(std::vector<DatumPtr>& dataset)
+        : m_dataset(dataset) {}
+
+    template <typename U = T>
+    DatumPtr allocDatum(const model::Value* value) {
+        auto it = m_datamap.find(value);
+        if (it != m_datamap.end()) {
+            return it->second;
+        }
+
+        auto datum = std::make_shared<Datum<Context>>(
+            model::DataTypeTrait<U>, Shape(value->dims()));
+        m_dataset.push_back(datum);
+        m_datamap.emplace(value, datum);
+        if (value->has_initializer())
+            datum->template set<U>(value->initializer().decode<U>());
+        return datum;
+    }
+
+    template <typename U = T>
+    TensorT<U> alloc(const model::Value* value) {
+        return allocDatum<U>(value)->template get<U>();
+    }
+
+    std::unique_ptr<Operator> createOperator(model::Node* node) {
         node->accept(*this);
-        for (auto v : node->inputs())
-            result->addInput(alloc(v));
-        for (auto v : node->outputs())
-            result->addOutput(alloc(v));
         return std::move(result);
     }
 
@@ -108,12 +156,15 @@ private:
 
     #define DEFINE_UNARY_OPERATOR(Name, op) \
     void visit(model::Name* n) override { \
-        struct Name##Op : Operator<TensorT> { \
+        struct Name##Op : Operator { \
+            TensorT<T> X, Y; \
+            Name##Op(TensorT<T>&& X, TensorT<T>&& Y) \
+                : X(std::move(X)), Y(std::move(Y)) {} \
             void evaluate() override { \
-                dlf::op(this->input(0), this->output(0)); \
+                dlf::op(X, Y); \
             } \
         }; \
-        result = std::make_unique<Name##Op>(); \
+        result = std::make_unique<Name##Op>(alloc(n->input()), alloc(n->output())); \
     }
     
     DEFINE_UNARY_OPERATOR(Abs, abs)
@@ -143,111 +194,154 @@ private:
     #undef DEFINE_UNARY_OPERATOR
 
     void visit(model::Relu* n) override {
-        struct ReluOp : Operator<TensorT> {
+        struct ReluOp : Operator {
+            TensorT<T> X, Y;
+            ReluOp(TensorT<T>&& X, TensorT<T>&& Y)
+                : X(std::move(X)), Y(std::move(Y)) {}
             void evaluate() override {
-                dlf::relu(this->input(0), this->output(0));
+                dlf::relu(X, Y);
             }
         };
-        result = std::make_unique<ReluOp>();
+
+        result = std::make_unique<ReluOp>(
+            alloc(n->input()), alloc(n->output()));
     }
 
     void visit(model::PRelu* n) override {
-        struct PReluOp : Operator<TensorT> {
+        struct PReluOp : Operator {
+            TensorT<T> X, slope, Y;
+            PReluOp(TensorT<T>&& X, TensorT<T>&& slope, TensorT<T>&& Y)
+                : X(std::move(X)), slope(std::move(slope)), Y(std::move(Y)) {}
             void evaluate() override {
-                dlf::prelu(this->input(0), this->input(1), this->output(0));
+                dlf::prelu(X, slope, Y);
             }
         };
-        result = std::make_unique<PReluOp>();
+
+        result = std::make_unique<PReluOp>(
+            alloc(n->input()), alloc(n->slope()), alloc(n->output()));
     }
 
     void visit(model::LeakyRelu* n) override {
-        struct LeakyReluOp : Operator<TensorT> {
-            Element alpha;
-            LeakyReluOp(Element alpha) : alpha(alpha) {}
+        struct LeakyReluOp : Operator {
+            T alpha;
+            TensorT<T> X, Y;
+            LeakyReluOp(T alpha, TensorT<T>&& X, TensorT<T>&& Y)
+                : alpha(alpha), X(std::move(X)), Y(std::move(Y)) {}
             void evaluate() override {
-                dlf::leaky_relu(alpha, this->input(0), this->output(0));
+                dlf::leaky_relu(alpha, X, Y);
             }
         };
-        auto alpha = Element(n->get_f(model::kalpha, 0.01f));
-        result = std::make_unique<LeakyReluOp>(alpha);
+
+        result = std::make_unique<LeakyReluOp>(
+            T(n->get_f(model::kalpha, 0.01f)),
+            alloc(n->input()), alloc(n->output()));
     }
 
     void visit(model::ThresholdedRelu* n) override {
-        struct ThresholdedReluOp : Operator<TensorT> {
-            Element alpha;
-            ThresholdedReluOp(Element alpha) : alpha(alpha) {}
+        struct ThresholdedReluOp : Operator {
+            T alpha;
+            TensorT<T> X, Y;
+            ThresholdedReluOp(T alpha, TensorT<T>&& X, TensorT<T>&& Y)
+                : alpha(alpha), X(std::move(X)), Y(std::move(Y)) {}
             void evaluate() override {
-                dlf::thresholded_relu(alpha, this->input(0), this->output(0));
+                dlf::thresholded_relu(alpha, X, Y);
             }
         };
-        auto alpha = Element(n->get_f(model::kalpha, 1.f));
-        result = std::make_unique<ThresholdedReluOp>(alpha);
+
+        result = std::make_unique<ThresholdedReluOp>(
+            T(n->get_f(model::kalpha, 1.f)),
+            alloc(n->input()), alloc(n->output()));
     }
 
     void visit(model::Selu* n) override {
-        struct SeluOp : Operator<TensorT> {
-            Element alpha, gamma;
-            SeluOp(Element alpha, Element gamma) : alpha(alpha), gamma(gamma) {}
+        struct SeluOp : Operator {
+            T alpha, gamma;
+            TensorT<T> X, Y;
+            SeluOp(T alpha, T gamma, TensorT<T>&& X, TensorT<T>&& Y)
+                : alpha(alpha), gamma(gamma), X(std::move(X)), Y(std::move(Y)) {}
             void evaluate() override {
-                dlf::selu(alpha, gamma, this->input(0), this->output(0));
+                dlf::selu(alpha, gamma, X, Y);
             }
         };
-        auto alpha = Element(n->get_f(model::kalpha, 1.67326319217681884765625f));
-        auto gamma = Element(n->get_f(model::kgamma, 1.05070102214813232421875f));
-        result = std::make_unique<SeluOp>(alpha, gamma);
+
+        result = std::make_unique<SeluOp>(
+            T(n->get_f(model::kalpha, 1.67326319217681884765625f)),
+            T(n->get_f(model::kgamma, 1.05070102214813232421875f)),
+            alloc(n->input()), alloc(n->output()));
     }
 
     void visit(model::Elu* n) override {
-        struct EluOp : Operator<TensorT> {
-            Element alpha;
-            EluOp(Element alpha) : alpha(alpha) {}
+        struct EluOp : Operator {
+            T alpha;
+            TensorT<T> X, Y;
+            EluOp(T alpha, TensorT<T>&& X, TensorT<T>&& Y)
+                : alpha(alpha), X(std::move(X)), Y(std::move(Y)) {}
             void evaluate() override {
-                dlf::elu(alpha, this->input(0), this->output(0));
+                dlf::elu(alpha, X, Y);
             }
         };
-        auto alpha = Element(n->get_f(model::kalpha, 1.f));
-        result = std::make_unique<EluOp>(alpha);
+
+        result = std::make_unique<EluOp>(
+            T(n->get_f(model::kalpha, 1.f)),
+            alloc(n->input()), alloc(n->output()));
     }
 
     void visit(model::HardSigmoid* n) override {
-        struct HardSigmoidOp : Operator<TensorT> {
-            Element alpha, beta;
-            HardSigmoidOp(Element alpha, Element beta) : alpha(alpha), beta(beta) {}
+        struct HardSigmoidOp : Operator {
+            T alpha, beta;
+            TensorT<T> X, Y;
+            HardSigmoidOp(T alpha, T beta, TensorT<T>&& X, TensorT<T>&& Y)
+                : alpha(alpha), beta(beta), X(std::move(X)), Y(std::move(Y)) {}
             void evaluate() override {
-                dlf::hard_sigmoid(alpha, beta, this->input(0), this->output(0));
+                dlf::hard_sigmoid(alpha, beta, X, Y);
             }
         };
-        auto alpha = Element(n->get_f(model::kalpha, 0.2f));
-        auto beta = Element(n->get_f(model::kbeta, 0.5f));
-        result = std::make_unique<HardSigmoidOp>(alpha, beta);
+
+        result = std::make_unique<HardSigmoidOp>(
+            T(n->get_f(model::kalpha, 0.2f)),
+            T(n->get_f(model::kbeta, 0.5f)),
+            alloc(n->input()), alloc(n->output()));
     }
 
     void visit(model::Softsign* n) override {
-        struct SoftsignOp : Operator<TensorT> {
+        struct SoftsignOp : Operator {
+            TensorT<T> X, Y;
+            SoftsignOp(TensorT<T>&& X, TensorT<T>&& Y)
+                : X(std::move(X)), Y(std::move(Y)) {}
             void evaluate() override {
-                dlf::softsign(this->input(0), this->output(0));
+                dlf::softsign(X, Y);
             }
         };
-        result = std::make_unique<SoftsignOp>();
+
+        result = std::make_unique<SoftsignOp>(
+            alloc(n->input()), alloc(n->output()));
     }
 
     void visit(model::Softplus* n) override {
-        struct SoftplusOp : Operator<TensorT> {
+        struct SoftplusOp : Operator {
+            TensorT<T> X, Y;
+            SoftplusOp(TensorT<T>&& X, TensorT<T>&& Y)
+                : X(std::move(X)), Y(std::move(Y)) {}
             void evaluate() override {
-                dlf::softplus(this->input(0), this->output(0));
+                dlf::softplus(X, Y);
             }
         };
-        result = std::make_unique<SoftplusOp>();
+
+        result = std::make_unique<SoftplusOp>(
+            alloc(n->input()), alloc(n->output()));
     }
 
     #define DEFINE_BINARY_OPERATOR(Name, op) \
     void visit(model::Name* n) override { \
-        struct Name##Op : Operator<TensorT> { \
+        struct Name##Op : Operator { \
+            TensorT<T> A, B, C; \
+            Name##Op(TensorT<T>&& A, TensorT<T>&& B, TensorT<T>&& C) \
+                : A(std::move(A)), B(std::move(B)), C(std::move(C)) {} \
             void evaluate() override { \
-                dlf::op(this->input(0), this->input(1), this->output(0)); \
+                dlf::op(A, B, C); \
             } \
         }; \
-        result = std::make_unique<Name##Op>(); \
+        result = std::make_unique<Name##Op>(alloc(n->A()), alloc(n->B()), alloc(n->C())); \
     }
 
     DEFINE_BINARY_OPERATOR(Add, addTo)
@@ -257,72 +351,50 @@ private:
     #undef DEFINE_BINARY_OPERATOR
 
     void visit(model::Gemm* n) override {
-        struct GemmOp : Operator<TensorT> {
-            Element alpha, beta;
+        struct GemmOp : Operator {
+            T alpha, beta;
             bool transA, transB;
+            TensorT<T> A, B, C, Y;
 
-            GemmOp(model::Gemm* n) {
-                alpha  = Element(n->get_f(model::kalpha, 1.f));
-                beta   = Element(n->get_f(model::kbeta, 1.f));
-                transA = !!n->get_i(model::ktransA, 0);
-                transB = !!n->get_i(model::ktransB, 0);
-            }
+            GemmOp(T alpha, T beta, bool transA, bool transB,
+                   TensorT<T>&& A, TensorT<T>&& B, TensorT<T>&& C, TensorT<T>&& Y)
+                : alpha(alpha), beta(beta), transA(transA), transB(transB),
+                  A(std::move(A)), B(std::move(B)), C(std::move(C)),
+                  Y(std::move(Y)) {}
 
             void evaluate() override {
-                gemm(alpha, this->input(0), this->input(1),
-                     beta, this->input(2),
-                     this->output(0), transA, transB);
+                gemm(alpha, A, B, beta, C, Y, transA, transB);
             }
         };
 
-        result = std::make_unique<GemmOp>(n);
+        result = std::make_unique<GemmOp>(
+            T(n->get_f(model::kalpha, 1.f)),
+            T(n->get_f(model::kbeta, 1.f)),
+            !!n->get_i(model::ktransA, 0),
+            !!n->get_i(model::ktransB, 0),
+            alloc(n->A()), alloc(n->B()), alloc(n->C()), alloc(n->Y()));
     }
 };
 
-template <typename TensorT>
-class Evaluator {
-    TensorAllocator<TensorT> m_alloc;
-    std::vector<std::shared_ptr<TensorT>> m_inputs;
-    std::vector<std::shared_ptr<TensorT>> m_outputs;
-    std::vector<std::unique_ptr<Operator<TensorT>>> m_operators;
-
-public:
-    Evaluator() = default;
-    Evaluator(TensorAllocator<TensorT> alloc) : m_alloc(alloc) {}
-
-    void load(model::Graph& graph);
-
-    TensorT& input(size_t i) { return *m_inputs.at(i); }
-    TensorT& output(size_t i) { return *m_outputs.at(i); }
-
-    void evaluate();
-};
-
-template <typename TensorT>
-void Evaluator<TensorT>::load(model::Graph& graph) {
+template <typename Context, typename T>
+void Evaluator<Context, T>::load(model::Graph& graph) {
+    m_dataset.clear();
     m_inputs.clear();
     m_outputs.clear();
     m_operators.clear();
 
-    OperatorFactory<TensorT> factory(m_alloc);
+    OperatorFactory<Context, T> factory(m_dataset);
     model::ShapeInference::Instance().infer(graph);
 
     for (auto v : graph.inputs()) {
         if (!v->has_initializer())
-            m_inputs.push_back(factory.alloc(v));
+            m_inputs.push_back(factory.allocDatum(v));
     }
     for (auto v : graph.outputs()) {
-        m_outputs.push_back(factory.alloc(v));
+        m_outputs.push_back(factory.allocDatum(v));
     }
     for (auto n : graph.nodes()) {
         m_operators.push_back(factory.createOperator(n));
-    }
-}
-
-template <typename TensorT>
-void Evaluator<TensorT>::evaluate() {
-    for (auto& op : m_operators) {
-        op->evaluate();
     }
 }
 
