@@ -301,13 +301,9 @@ TEST(ActivationTest, Relu) {
     constexpr size_t N = 20;
 
     auto A = Tensor<int>::random({N}, -int(N), int(N)).template cast<float>();
-    auto B = Tensor<float>({N});
-
     auto dev_A = DevTensor<float>(A);
-    auto dev_B = DevTensor<float>({N});
-
-    relu(A, B);
-    relu(dev_A, dev_B);
+    auto B = transform(A, xfn::relu<float>());
+    auto dev_B = transform(dev_A, xfn::relu<float>());
     ExpectEQ(B, dev_B.read());
 }
 
@@ -315,12 +311,8 @@ TEST(ActivationTest, PRelu) {
     constexpr size_t N = 20;
 
     auto A = Tensor<int>::random({N}, -int(N), int(N)).template cast<float>();
-    auto B = Tensor<float>({N});
-
     auto dev_A = DevTensor<float>(A);
-    auto dev_B = DevTensor<float>({N});
-
-    prelu(A, scalar(0.01f), B);
-    prelu(dev_A, dev(0.01f), dev_B);
+    auto B = transform(A, scalar(0.01f), xfn::prelu<float>());
+    auto dev_B = transform(dev_A, dev(0.01f), xfn::prelu<float>());
     ExpectEQ(B, dev_B.read());
 }

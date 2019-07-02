@@ -163,21 +163,28 @@ TEST(Shape, GPUBroadcastPerformance) {
         timing("GPU no broadcast", 1, [&]() {
             auto C = DevTensor<float>({1024, 1024});
             for (int i = 0; i < 100; i++)
-                addTo(A1, B1, C);
+                transformTo(A1, B1, C, xfn::plus<>());
             C.read();
         });
 
         timing("GPU broadcast right", 1, [&]() {
             auto C = DevTensor<float>({1024, 1024});
             for (int i = 0; i < 100; i++)
-                addTo(A1, B2, C);
+                transformTo(A1, B2, C, xfn::plus<>());
             C.read();
         });
 
         timing("GPU broadcast left", 1, [&]() {
             auto C = DevTensor<float>({1024, 1024});
             for (int i = 0; i < 100; i++)
-                addTo(A2, B1, C);
+                transformTo(A2, B1, C, xfn::plus<>());
+            C.read();
+        });
+
+        timing("GPU broadcast both", 1, [&]() {
+            auto C = DevTensor<float>({1024, 1024});
+            for (int i = 0; i < 100; i++)
+                transformTo(A2, B2, C, xfn::plus<>());
             C.read();
         });
 
@@ -185,7 +192,7 @@ TEST(Shape, GPUBroadcastPerformance) {
             auto C = DevTensor<float>({1024, 1024});
             auto S = dev(5.f);
             for (int i = 0; i < 100; i++)
-                addTo(A1, S, C);
+                transformTo(A1, S, C, xfn::plus<>());
             C.read();
         });
 
@@ -193,7 +200,7 @@ TEST(Shape, GPUBroadcastPerformance) {
             auto C = DevTensor<float>({1024, 1024});
             auto S = dev(5.f);
             for (int i = 0; i < 100; i++)
-                addTo(S, A1, C);
+                transformTo(S, A1, C, xfn::plus<>());
             C.read();
         });
 

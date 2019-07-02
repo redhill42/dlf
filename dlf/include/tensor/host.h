@@ -485,31 +485,8 @@ const T* Tensor<T>::printRec(std::ostream& out, const Shape& shape, size_t level
 }
 
 //==-------------------------------------------------------------------------
-// Tensor transformations
+// Tensor unary transformations
 //==-------------------------------------------------------------------------
-
-template <typename TA, typename TB, typename Op>
-auto broadcast_do(TA&& A, TB&& B, Op&& op) {
-    if (A.shape() == B.shape()) {
-        return op(A.shape(), A.begin(), A.end(), B.begin());
-    }
-
-    Shape final_shape = Shape::broadcast(A, B);
-    Shape sA = A.shape().broadcast(final_shape);
-    Shape sB = B.shape().broadcast(final_shape);
-
-    if (A.size() == 1) {
-        return op(final_shape, A.scalar_iterator(0), A.scalar_iterator(sA.size()), B.begin());
-    } else if (B.size() == 1) {
-        return op(final_shape, A.begin(), A.end(), B.scalar_iterator(0));
-    } else if (sA.is_contiguous()) {
-        return op(final_shape, A.begin(), A.end(), B.begin(sB));
-    } else if (sB.is_contiguous()) {
-        return op(final_shape, A.begin(sA), A.end(sB), B.begin());
-    } else {
-        return op(final_shape, A.begin(sA), A.end(sB), B.begin(sB));
-    }
-}
 
 /**
  * Transform tensor A's elements to tensor B by applying the given function.
@@ -536,6 +513,33 @@ inline Tensor<U> transform(const Tensor<T>& A, F f) {
 template <typename T, typename F, typename = std::enable_if_t<std::is_same<cxx::invoke_result_t<F,T>,T>::value>>
 inline Tensor<T> transform(Tensor<T>&& A, F f) {
     return std::move(transformTo(A, A, f));
+}
+
+//==-------------------------------------------------------------------------
+// Tensor binary transformations
+//==-------------------------------------------------------------------------
+
+template <typename TA, typename TB, typename Op>
+auto broadcast_do(TA&& A, TB&& B, Op&& op) {
+    if (A.shape() == B.shape()) {
+        return op(A.shape(), A.begin(), A.end(), B.begin());
+    }
+
+    Shape final_shape = Shape::broadcast(A, B);
+    Shape sA = A.shape().broadcast(final_shape);
+    Shape sB = B.shape().broadcast(final_shape);
+
+    if (A.size() == 1) {
+        return op(final_shape, A.scalar_iterator(0), A.scalar_iterator(sA.size()), B.begin());
+    } else if (B.size() == 1) {
+        return op(final_shape, A.begin(), A.end(), B.scalar_iterator(0));
+    } else if (sA.is_contiguous()) {
+        return op(final_shape, A.begin(), A.end(), B.begin(sB));
+    } else if (sB.is_contiguous()) {
+        return op(final_shape, A.begin(sA), A.end(sB), B.begin());
+    } else {
+        return op(final_shape, A.begin(sA), A.end(sB), B.begin(sB));
+    }
 }
 
 /**
@@ -637,183 +641,58 @@ inline Tensor<T> Tensor<T>::broadcast(const Shape& shape) && {
     }
 }
 
-//==-------------------------------------------------------------------------
-// Tensor concrete transformations
-//==-------------------------------------------------------------------------
-
-template <typename T>
-inline void abs(const Tensor<T>& x, Tensor<T>& y) {
-    transformTo(x, y, [](T a) { return T(std::abs(a)); });
-}
-
 template <typename T>
 inline Tensor<T> abs(const Tensor<T>& x) {
-    return transform(x, [](T a) { return T(std::abs(a)); });
+    return transform(x, xfn::abs<T>());
 }
 
 template <typename T>
 inline Tensor<T> abs(Tensor<T>&& x) {
-    return transform(std::move(x), [](T a) { return T(std::abs(a)); });
-}
-
-template <typename T>
-inline void neg(const Tensor<T>& x, Tensor<T>& y) {
-    transformTo(x, y, [](T a) { return T(-a); });
-}
-
-template <typename T>
-inline Tensor<T> neg(const Tensor<T>& x) {
-    return transform(x, [](T a) { return T(-a); });
-}
-
-template <typename T>
-inline Tensor<T> neg(Tensor<T>&& x) {
-    return transform(std::move(x), [](T a) { return T(-a); });
-}
-
-template <typename T>
-inline void sign(const Tensor<T>& x, Tensor<T>& y) {
-    transformTo(x, y, [](T a) { return T((T()<a) - (a<T(0))); });
-}
-
-template <typename T>
-inline Tensor<T> sign(const Tensor<T>& x) {
-    return transform(x, [](T a) { return T((T(0)<a) - (a<T(0))); });
-}
-
-template <typename T>
-inline Tensor<T> sign(Tensor<T>&& x) {
-    return transform(std::move(x), [](T a) { return T((T(0)<a) - (a<T(0))); });
-}
-
-template <typename T, typename = std::enable_if_t<std::is_floating_point<T>::value>>
-inline void reciprocal(const Tensor<T>& x, Tensor<T>& y) {
-    transformTo(x, y, [](T a) { return T(1)/a; });
-}
-
-template <typename T, typename = std::enable_if_t<std::is_floating_point<T>::value>>
-inline Tensor<T> reciprocal(const Tensor<T>& x) {
-    return transform(x, [](T a) { return T(1)/a; });
-}
-
-template <typename T, typename = std::enable_if_t<std::is_floating_point<T>::value>>
-inline Tensor<T> reciprocal(Tensor<T>&& x) {
-    return transform(std::move(x), [](T a) { return T(1)/a; });
-}
-
-#define DEFINE_TRANSFORM(name) \
-template <typename T, typename = std::enable_if_t<std::is_floating_point<T>::value>> \
-inline void name(const Tensor<T>& x, Tensor<T>& y) { \
-    transformTo(x, y, [](T a){ return std::name(a); }); \
-} \
-template <typename T, typename = std::enable_if_t<std::is_floating_point<T>::value>> \
-inline Tensor<T> name(const Tensor<T>& x) { \
-    return transform(x, [](T a){ return std::name(a); }); \
-} \
-template <typename T, typename = std::enable_if_t<std::is_floating_point<T>::value>> \
-inline Tensor<T> name(Tensor<T>&& x) { \
-    return transform(std::move(x), [](T a){ return std::name(a); }); \
-}
-
-DEFINE_TRANSFORM(floor)
-DEFINE_TRANSFORM(ceil)
-DEFINE_TRANSFORM(round)
-DEFINE_TRANSFORM(sqrt)
-DEFINE_TRANSFORM(exp)
-DEFINE_TRANSFORM(log)
-DEFINE_TRANSFORM(sin)
-DEFINE_TRANSFORM(cos)
-DEFINE_TRANSFORM(tan)
-DEFINE_TRANSFORM(asin)
-DEFINE_TRANSFORM(acos)
-DEFINE_TRANSFORM(atan)
-DEFINE_TRANSFORM(sinh)
-DEFINE_TRANSFORM(cosh)
-DEFINE_TRANSFORM(tanh)
-DEFINE_TRANSFORM(asinh)
-DEFINE_TRANSFORM(acosh)
-DEFINE_TRANSFORM(atanh)
-DEFINE_TRANSFORM(erf)
-#undef DEFINE_TRANSFORM
-
-template <typename T, typename = std::enable_if_t<std::is_floating_point<T>::value>>
-inline void sigmoid(const Tensor<T>& x, Tensor<T>& y) {
-    transformTo(x, y, [](T a) { return T(1)/(T(1)+std::exp(-a)); });
-}
-
-template <typename T, typename = std::enable_if_t<std::is_floating_point<T>::value>>
-inline Tensor<T> sigmoid(const Tensor<T>& x) {
-    return transform(x, [](T a) { return T(1)/(T(1)+std::exp(-a)); });
-}
-
-template <typename T, typename = std::enable_if_t<std::is_floating_point<T>::value>>
-inline Tensor<T> sigmoid(Tensor<T>&& x) {
-    return transform(std::move(x), [](T a) { return T(1)/(T(1)+std::exp(-a)); });
+    return transform(std::move(x), xfn::abs<T>());
 }
 
 template <typename T>
 inline Tensor<T> operator-(const Tensor<T>& x) {
-    return neg(x);
+    return transform(x, xfn::neg<T>());
 }
 
 template <typename T>
 inline Tensor<T> operator-(Tensor<T>&& x) {
-    return neg(std::move(x));
+    return transform(std::move(x), xfn::neg<T>());
 }
 
 //==-------------------------------------------------------------------------
 // Tensor arithmetic operators
 //==-------------------------------------------------------------------------
 
-#define DEFINE_OPERATOR(name, op) \
-    template <typename T, typename U, typename W> \
-    inline Tensor<W>& name##To(const Tensor<T>& x, const Tensor<U>& y, Tensor<W>& z) { \
-        return transformTo(x, y, z, [](const T& a, const U& b) -> W { return a op b; }); \
-    } \
-    template <typename T, typename U, typename W = std::common_type_t<T,U>> \
-    inline Tensor<W> name(const Tensor<T>& x, const Tensor<U>& y) { \
-        return transform(x, y, [](const T& a, const U& b) -> W { return a op b; }); \
-    } \
-    template <typename T> \
-    inline Tensor<T> name(Tensor<T>&& x, const Tensor<T>& y) { \
-        return transform(std::move(x), y, [](const T& a, const T& b) { return a op b; }); \
-    } \
-    template <typename T> \
-    inline Tensor<T> name(const Tensor<T>& x, Tensor<T>&& y) { \
-        return transform(x, std::move(y), [](const T& a, const T& b) { return a op b; }); \
-    } \
-    template <typename T> \
-    inline Tensor<T> name(Tensor<T>&& x, Tensor<T>&& y) { \
-        return transform(std::move(x), std::move(y), [](const T& a, const T& b) { return a op b; }); \
-    } \
+#define DEFINE_BINARY_OPERATOR(op, fn) \
     template <typename T> \
     template <typename U, typename> \
     inline Tensor<T>& Tensor<T>::operator op##=(const Tensor<U>& y) { \
-        return name##To(*this, y, *this); \
+        return transformTo(*this, y, *this, dlf::xfn::fn<>()); \
     } \
     template <typename T, typename U, typename W = std::common_type_t<T,U>> \
     inline Tensor<W> operator op(const Tensor<T>& x, const Tensor<U>& y) { \
-        return name(x, y); \
+        return transform(x, y, dlf::xfn::fn<>()); \
     } \
     template <typename T> \
     inline Tensor<T> operator op(Tensor<T>&& x, const Tensor<T>& y) { \
-        return name(std::move(x), y); \
+        return transform(std::move(x), y, dlf::xfn::fn<>()); \
     } \
     template <typename T> \
     inline Tensor<T> operator op(const Tensor<T>& x, Tensor<T>&& y) { \
-        return name(x, std::move(y)); \
+        return transform(x, std::move(y), dlf::xfn::fn<>()); \
     } \
     template <typename T> \
     inline Tensor<T> operator op(Tensor<T>&& x, Tensor<T>&& y) { \
-        return name(std::move(x), std::move(y)); \
+        return transform(std::move(x), std::move(y), dlf::xfn::fn<>()); \
     }
 
-DEFINE_OPERATOR(add, +)
-DEFINE_OPERATOR(sub, -)
-DEFINE_OPERATOR(mul, *)
-DEFINE_OPERATOR(div, /)
-
-#undef DEFINE_OPERATOR
+DEFINE_BINARY_OPERATOR(+, plus)
+DEFINE_BINARY_OPERATOR(-, minus)
+DEFINE_BINARY_OPERATOR(*, multiplies)
+DEFINE_BINARY_OPERATOR(/, divides)
+#undef DEFINE_BINARY_OPERATOR
 
 //==-------------------------------------------------------------------------
 // Tensor logical operators
@@ -1263,64 +1142,6 @@ Tensor<W> outer(const Tensor<T>& A, const Tensor<U>& B, F f) {
 template <typename T, typename U, typename W = std::common_type_t<T,U>>
 inline Tensor<W> outer(const Tensor<T>& A, const Tensor<U>& B) {
     return outer(A, B, [](const T& a, const U& b) -> W { return a * b; });
-}
-
-//==-------------------------------------------------------------------------
-// Tensor activation functions
-//==-------------------------------------------------------------------------
-
-template <typename T>
-inline void relu(const Tensor<T>& X, Tensor<T>& Y) {
-    transformTo(X, Y, [](T x) { return std::max(T(0), x); });
-}
-
-template <typename T>
-inline void prelu(const Tensor<T>& X, const Tensor<T>& slope, Tensor<T>& Y) {
-    assert(slope.shape().broadcast(X.shape()) == X.shape());
-    transformTo(X, slope, Y, [](T x, T a) {
-        return x < T(0) ? x * a : x;
-    });
-}
-
-template <typename T>
-inline void leaky_relu(T alpha, const Tensor<T>& X, Tensor<T>& Y) {
-    transformTo(X, Y, [=](T x) { return x < T(0) ? x * alpha : x; });
-}
-
-template <typename T>
-inline void thresholded_relu(T alpha, const Tensor<T>& X, Tensor<T>& Y) {
-    transformTo(X, Y, [=](const T& x) { return x > alpha ? x : T(0); });
-}
-
-template <typename T>
-inline void selu(T alpha, T gamma, const Tensor<T>& X, Tensor<T>& Y) {
-    transformTo(X, Y, [=](T x) {
-        return T(gamma * (x < T(0) ? alpha * (std::exp(x) - T(1)) : x));
-    });
-}
-
-template <typename T>
-inline void elu(T alpha, const Tensor<T>& X, Tensor<T>& Y) {
-    transformTo(X, Y, [=](T x) {
-        return x < T(0) ? alpha * (std::exp(x) - T(1)) : x;
-    });
-}
-
-template <typename T>
-inline void hard_sigmoid(T alpha, T beta, const Tensor<T>& X, Tensor<T>& Y) {
-    transformTo(X, Y, [=](T x) {
-        return std::max(T(0), std::min(T(1), alpha * x + beta));
-    });
-}
-
-template <typename T>
-inline void softsign(const Tensor<T>& X, Tensor<T>& Y) {
-    transformTo(X, Y, [](T x) { return T(x / (T(1) + std::abs(x))); });
-}
-
-template <typename T>
-inline void softplus(const Tensor<T>& X, Tensor<T>& Y) {
-    transformTo(X, Y, [](T x) { return T(std::log(std::exp(x) + T(1))); });
 }
 
 } // namespace dlf
