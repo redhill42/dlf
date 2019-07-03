@@ -233,8 +233,7 @@ private:
         };
 
         result = std::make_unique<LeakyReluOp>(
-            n->get_f(model::kalpha, 0.01f),
-            alloc(n->input()), alloc(n->output()));
+            n->alpha(), alloc(n->input()), alloc(n->output()));
     }
 
     void visit(model::ThresholdedRelu* n) override {
@@ -249,8 +248,7 @@ private:
         };
 
         result = std::make_unique<ThresholdedReluOp>(
-            n->get_f(model::kalpha, 1.f),
-            alloc(n->input()), alloc(n->output()));
+            n->alpha(), alloc(n->input()), alloc(n->output()));
     }
 
     void visit(model::Selu* n) override {
@@ -265,9 +263,7 @@ private:
         };
 
         result = std::make_unique<SeluOp>(
-            n->get_f(model::kalpha, 1.67326319217681884765625f),
-            n->get_f(model::kgamma, 1.05070102214813232421875f),
-            alloc(n->input()), alloc(n->output()));
+            n->alpha(), n->gamma(), alloc(n->input()), alloc(n->output()));
     }
 
     void visit(model::Elu* n) override {
@@ -282,8 +278,7 @@ private:
         };
 
         result = std::make_unique<EluOp>(
-            n->get_f(model::kalpha, 1.f),
-            alloc(n->input()), alloc(n->output()));
+            n->alpha(), alloc(n->input()), alloc(n->output()));
     }
 
     void visit(model::HardSigmoid* n) override {
@@ -298,9 +293,7 @@ private:
         };
 
         result = std::make_unique<HardSigmoidOp>(
-            n->get_f(model::kalpha, 0.2f),
-            n->get_f(model::kbeta, 0.5f),
-            alloc(n->input()), alloc(n->output()));
+            n->alpha(), n->beta(), alloc(n->input()), alloc(n->output()));
     }
 
     void visit(model::Softsign* n) override {
@@ -368,10 +361,7 @@ private:
         };
 
         result = std::make_unique<GemmOp>(
-            T(n->get_f(model::kalpha, 1.f)),
-            T(n->get_f(model::kbeta, 1.f)),
-            !!n->get_i(model::ktransA, 0),
-            !!n->get_i(model::ktransB, 0),
+            T(n->alpha()), T(n->beta()), n->transA(), n->transB(),
             alloc(n->A()), alloc(n->B()), alloc(n->C()), alloc(n->Y()));
     }
 };

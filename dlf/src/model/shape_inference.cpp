@@ -364,9 +364,9 @@ public:
         size_t P = n->B()->dim(0);
         size_t N = n->B()->dim(1);
 
-        if (n->get_i(ktransA, 0))
+        if (n->transA())
             std::swap(M, K);
-        if (n->get_i(ktransB, 0))
+        if (n->transB())
             std::swap(P, N);
         if (K != P)
             fail_shape_inference("GEMM: Invalid input shape");
@@ -438,7 +438,7 @@ public:
 
         auto& input_shape = n->input()->dims();
         auto rank = input_shape.size();
-        auto axis = n->get_i(kaxis, -1);
+        auto axis = n->axis();
         if (axis < 0) axis += rank;
         if (axis < 0 || axis >= rank)
             fail_shape_inference("TopK: Invalid value for attribute axis");
@@ -802,7 +802,7 @@ public:
 
         auto dims = n->input()->dims();
         auto rank = dims.size();
-        auto axis = n->get_i(kaxis, 1);
+        auto axis = n->axis();
         if (axis < 0) axis += rank;
         if (axis < 0 || axis >= rank)
             fail_shape_inference("Flatten: Invalid value (", axis, ") for attribute 'axis'");
@@ -1111,7 +1111,7 @@ public:
 
         const auto& input_shape = n->input()->dims();
         auto rank = input_shape.size();
-        auto axis = n->get_i(kaxis, 0);
+        auto axis = n->axis();
         if (axis < 0) axis += rank;
         if (axis < 0 || axis >= rank)
             fail_shape_inference("Split: Invalid axis attribute value");
@@ -1280,7 +1280,7 @@ public:
         const auto& indices_shape = n->indices()->dims();
         int r = static_cast<int>(data_shape.size());
         int q = static_cast<int>(indices_shape.size());
-        int axis = static_cast<int>(n->get_i(kaxis, 0));
+        int axis = static_cast<int>(n->axis());
 
         if (r == 0)
             fail_shape_inference("Gather: data tensor must have rank >= 1");

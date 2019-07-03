@@ -21,25 +21,85 @@ BEGIN_OPERATOR(name) \
     Value* C() { return output(); } \
 END_OPERATOR()
 
-#define DEFINE_ATTRIBUTE(name, kind, method) \
-    bool has_##name() const noexcept { \
-        return hasAttribute(k##name); \
-    } \
-    const AttributeType<AttributeKind::kind>& name() const { \
-        return get_##method(k##name); \
-    } \
-    void set_##name(AttributeType<AttributeKind::kind> value) { \
-        set_##method(k##name, std::move(value)); \
-    }
+#define DEFINE_FLOAT_ATTRIBUTE(name, def) \
+    bool has_##name() const noexcept \
+        { return hasAttribute(k##name); } \
+    const float name() const \
+        { return get_f(k##name, def); } \
+    void set_##name(float value) \
+        { set_f(k##name, value); }
+
+#define DEFINE_INT_ATTRIBUTE(name, def) \
+    bool has_##name() const noexcept \
+        { return hasAttribute(k##name); } \
+    const int64_t name() const \
+        { return get_i(k##name, def); } \
+    void set_##name(int64_t value) \
+        { set_i(k##name, value); }
+
+#define DEFINE_BOOL_ATTRIBUTE(name, def) \
+    bool has_##name() const noexcept \
+        { return hasAttribute(k##name); } \
+    bool name() const \
+        { return !!get_i(k##name, static_cast<int64_t>(def)); } \
+    void set_##name(bool value) \
+        { set_i(k##name, static_cast<int64_t>(value)); }
+
+#define DEFINE_STRING_ATTRIBUTE(name, def) \
+    bool has_##name() const noexcept \
+        { return hasAttribute(k##name); } \
+    std::string name() const \
+        { return get_s(k##name, def); } \
+    void set_##name(std::string value) \
+         { set_s(k##name, std::move(value)); }
+
+#define DEFINE_GRAPH_ATTRIBUTE(name) \
+    bool has_##name() const noexcept \
+        { return hasAttribute(k##name); } \
+    std::shared_ptr<Graph> name() const \
+        { return get_g(k##name); } \
+    void set_##name(std::shared_ptr<Graph> value) \
+        { set_g(k##name, value); }
+
+#define DEFINE_TENSOR_ATTRIBUTE(name) \
+    bool has_##name() const noexcept \
+        { return hasAttribute(k##name); } \
+    const TensorData& name() const \
+        { return get_t(k##name); } \
+    void set_##name(TensorData value) \
+        { set_t(k##name, std::move(value)); }
+
+#define DEFINE_INTS_ATTRIBUTE(name) \
+    bool has_##name() const noexcept \
+        { return hasAttribute(k##name); } \
+    const std::vector<int64_t>& name() const \
+        { return get_is(k##name); } \
+    void set_##name(std::vector<int64_t> value) \
+        { set_is(k##name, std::move(value)); }
+
+#define DEFINE_FLOATS_ATTRIBUTE(name) \
+    bool has_##name() const noexcept \
+        { return hasAttribute(k##name); } \
+    const std::vector<float>& name() const \
+        { return get_fs(k##name); } \
+    void set_##name(std::vector<float> value) \
+        { set_fs(k##name, std::move(value)); }
+
+#define DEFINE_STRINGS_ATTRIBUTE(name) \
+    bool has_##name() const noexcept \
+        { return hasAttribute(k##name); } \
+    const std::vector<std::string>& name() const \
+        { return get_ss(k##name); } \
+    void set_##name(std::vector<std::string> value) \
+        { set_ss(k##name, std::move(value)); }
 
 #define DEFINE_DTYPE_ATTRIBUTE(name) \
-    bool has_##name() const noexcept { return hasAttribute(k##name); } \
-    DataType name() const { \
-        return has_##name() ? static_cast<DataType>(get_i(k##name)) : DataType::FLOAT; \
-    } \
-    void set_##name(DataType dt) { \
-        set_i(k##name, static_cast<int64_t>(dt)); \
-    }
+    bool has_##name() const noexcept \
+        { return hasAttribute(k##name); } \
+    DataType name() const  \
+        { return has_##name() ? static_cast<DataType>(get_i(k##name)) : DataType::FLOAT; } \
+    void set_##name(DataType dt) \
+        { set_i(k##name, static_cast<int64_t>(dt)); }
 
 #define DEFINE_SHAPE_ATTRIBUTE(name) \
     bool has_##name() const noexcept { return hasAttribute(k##name); } \
@@ -56,24 +116,24 @@ END_OPERATOR()
 //==-------------------------------------------------------------------------
 
 BEGIN_OPERATOR(If)
-    DEFINE_ATTRIBUTE(then_branch, GRAPH, g)
-    DEFINE_ATTRIBUTE(else_branch, GRAPH, g)
+    DEFINE_GRAPH_ATTRIBUTE(then_branch)
+    DEFINE_GRAPH_ATTRIBUTE(else_branch)
 END_OPERATOR()
 
 BEGIN_OPERATOR(Loop)
-    DEFINE_ATTRIBUTE(body, GRAPH, g)
+    DEFINE_GRAPH_ATTRIBUTE(body)
 
     Value* M()    { return input(0); }
     Value* cond() { return input(1); }
 END_OPERATOR()
 
 BEGIN_OPERATOR(Scan)
-    DEFINE_ATTRIBUTE(body, GRAPH, g)
-    DEFINE_ATTRIBUTE(num_scan_inputs, INT, i)
-    DEFINE_ATTRIBUTE(scan_input_axes, INTS, is)
-    DEFINE_ATTRIBUTE(scan_input_directions, INTS, is)
-    DEFINE_ATTRIBUTE(scan_output_axes, INTS, is)
-    DEFINE_ATTRIBUTE(scan_output_directions, INTS, is)
+    DEFINE_GRAPH_ATTRIBUTE(body)
+    DEFINE_INT_ATTRIBUTE(num_scan_inputs, 0)
+    DEFINE_INTS_ATTRIBUTE(scan_input_axes)
+    DEFINE_INTS_ATTRIBUTE(scan_input_directions)
+    DEFINE_INTS_ATTRIBUTE(scan_output_axes)
+    DEFINE_INTS_ATTRIBUTE(scan_output_directions)
 END_OPERATOR()
 
 BEGIN_OPERATOR(Where)
@@ -87,11 +147,11 @@ END_OPERATOR()
 //==-------------------------------------------------------------------------
 
 BEGIN_OPERATOR(Constant)
-    DEFINE_ATTRIBUTE(value, TENSOR, t)
+    DEFINE_TENSOR_ATTRIBUTE(value)
 END_OPERATOR()
 
 BEGIN_OPERATOR(ConstantOfShape)
-    DEFINE_ATTRIBUTE(value, TENSOR, t)
+    DEFINE_TENSOR_ATTRIBUTE(value)
 END_OPERATOR()
 
 BEGIN_OPERATOR(EyeLike)
@@ -99,39 +159,39 @@ BEGIN_OPERATOR(EyeLike)
 END_OPERATOR()
 
 BEGIN_OPERATOR(RandomNormal)
-    DEFINE_ATTRIBUTE(mean, FLOAT, f)
-    DEFINE_ATTRIBUTE(scale, FLOAT, f)
-    DEFINE_ATTRIBUTE(seed, FLOAT, f)
+    DEFINE_FLOAT_ATTRIBUTE(mean, 0.f)
+    DEFINE_FLOAT_ATTRIBUTE(scale, 1.f)
+    DEFINE_FLOAT_ATTRIBUTE(seed, 0.f)
     DEFINE_DTYPE_ATTRIBUTE(dtype)
     DEFINE_SHAPE_ATTRIBUTE(shape)
 END_OPERATOR()
 
 BEGIN_OPERATOR(RandomNormalLike)
-    DEFINE_ATTRIBUTE(mean, FLOAT, f)
-    DEFINE_ATTRIBUTE(scale, FLOAT, f)
-    DEFINE_ATTRIBUTE(seed, FLOAT, f)
+    DEFINE_FLOAT_ATTRIBUTE(mean, 0.f)
+    DEFINE_FLOAT_ATTRIBUTE(scale, 1.f)
+    DEFINE_FLOAT_ATTRIBUTE(seed, 0.f)
     DEFINE_DTYPE_ATTRIBUTE(dtype)
 END_OPERATOR()
 
 BEGIN_OPERATOR(RandomUniform)
-    DEFINE_ATTRIBUTE(high, FLOAT, f)
-    DEFINE_ATTRIBUTE(low, FLOAT, f)
-    DEFINE_ATTRIBUTE(seed, FLOAT, f)
+    DEFINE_FLOAT_ATTRIBUTE(high, 1.f)
+    DEFINE_FLOAT_ATTRIBUTE(low,  0.f)
+    DEFINE_FLOAT_ATTRIBUTE(seed, 0.f)
     DEFINE_DTYPE_ATTRIBUTE(dtype)
     DEFINE_SHAPE_ATTRIBUTE(shape)
 END_OPERATOR()
 
 BEGIN_OPERATOR(RandomUniformLike)
-    DEFINE_ATTRIBUTE(high, FLOAT, f)
-    DEFINE_ATTRIBUTE(low, FLOAT, f)
-    DEFINE_ATTRIBUTE(seed, FLOAT, f)
+    DEFINE_FLOAT_ATTRIBUTE(high, 1.f)
+    DEFINE_FLOAT_ATTRIBUTE(low, 0.f)
+    DEFINE_FLOAT_ATTRIBUTE(seed, 0.f)
     DEFINE_DTYPE_ATTRIBUTE(dtype)
 END_OPERATOR()
 
 BEGIN_OPERATOR(Multinomial)
     DEFINE_DTYPE_ATTRIBUTE(dtype)
-    DEFINE_ATTRIBUTE(sample_size, INT, i)
-    DEFINE_ATTRIBUTE(seed, FLOAT, f)
+    DEFINE_INT_ATTRIBUTE(sample_size, 1)
+    DEFINE_FLOAT_ATTRIBUTE(seed, 0.f)
 END_OPERATOR()
 
 //==-------------------------------------------------------------------------
@@ -147,7 +207,7 @@ DEFINE_BINARY_OPERATOR(Equal)
 DEFINE_OPERATOR(Not)
 
 BEGIN_OPERATOR(BitShift)
-    DEFINE_ATTRIBUTE(direction, STRING, s)
+    DEFINE_STRING_ATTRIBUTE(direction, "")
 END_OPERATOR()
 
 //==-------------------------------------------------------------------------
@@ -161,7 +221,7 @@ DEFINE_BINARY_OPERATOR(Div)
 DEFINE_BINARY_OPERATOR(Pow)
 
 BEGIN_OPERATOR(Mod)
-    DEFINE_ATTRIBUTE(fmod, INT, i);
+    DEFINE_BOOL_ATTRIBUTE(fmod, false)
 
     Value* A() { return input(0); }
     Value* B() { return input(1); }
@@ -195,8 +255,8 @@ DEFINE_OPERATOR(Erf)
 DEFINE_OPERATOR(IsNaN)
 
 BEGIN_OPERATOR(IsInf)
-    DEFINE_ATTRIBUTE(detect_positive, INT, i)
-    DEFINE_ATTRIBUTE(detect_negative, INT, i)
+    DEFINE_BOOL_ATTRIBUTE(detect_positive, true)
+    DEFINE_BOOL_ATTRIBUTE(detect_negative, true)
 END_OPERATOR()
 
 DEFINE_OPERATOR(Max)
@@ -205,8 +265,8 @@ DEFINE_OPERATOR(Sum)
 DEFINE_OPERATOR(Mean)
 
 BEGIN_OPERATOR(Clip)
-    DEFINE_ATTRIBUTE(min, FLOAT, f)
-    DEFINE_ATTRIBUTE(max, FLOAT, f)
+    DEFINE_FLOAT_ATTRIBUTE(min, -3.4028234663852886e+38f)
+    DEFINE_FLOAT_ATTRIBUTE(max, 3.4028234663852886e+38f)
 END_OPERATOR()
 
 DEFINE_OPERATOR(Sigmoid)
@@ -218,47 +278,47 @@ BEGIN_OPERATOR(PRelu)
 END_OPERATOR()
 
 BEGIN_OPERATOR(LeakyRelu)
-    DEFINE_ATTRIBUTE(alpha, FLOAT, f)
+    DEFINE_FLOAT_ATTRIBUTE(alpha, 0.01f)
 END_OPERATOR()
 
 BEGIN_OPERATOR(ThresholdedRelu)
-    DEFINE_ATTRIBUTE(alpha, FLOAT, f)
+    DEFINE_FLOAT_ATTRIBUTE(alpha, 1.0f)
 END_OPERATOR()
 
 BEGIN_OPERATOR(Selu)
-    DEFINE_ATTRIBUTE(alpha, FLOAT, f)
-    DEFINE_ATTRIBUTE(gamma, FLOAT, f)
+    DEFINE_FLOAT_ATTRIBUTE(alpha, 1.67326319217681884765625f)
+    DEFINE_FLOAT_ATTRIBUTE(gamma, 1.05070102214813232421875f)
 END_OPERATOR()
 
 BEGIN_OPERATOR(Elu)
-    DEFINE_ATTRIBUTE(alpha, FLOAT, f)
+    DEFINE_FLOAT_ATTRIBUTE(alpha, 1.0f)
 END_OPERATOR()
 
 BEGIN_OPERATOR(HardSigmoid)
-    DEFINE_ATTRIBUTE(alpha, FLOAT, f)
-    DEFINE_ATTRIBUTE(beta, FLOAT, f)
+    DEFINE_FLOAT_ATTRIBUTE(alpha, 0.2f)
+    DEFINE_FLOAT_ATTRIBUTE(beta, 0.5f)
 END_OPERATOR()
 
 BEGIN_OPERATOR(Softmax)
-    DEFINE_ATTRIBUTE(axis, INT, i)
+    DEFINE_FLOAT_ATTRIBUTE(axis, 1)
 END_OPERATOR()
 
 BEGIN_OPERATOR(LogSoftmax)
-    DEFINE_ATTRIBUTE(axis, INT, i)
+    DEFINE_FLOAT_ATTRIBUTE(axis, 1)
 END_OPERATOR()
 
 BEGIN_OPERATOR(Hardmax)
-    DEFINE_ATTRIBUTE(axis, INT, i)
+    DEFINE_FLOAT_ATTRIBUTE(axis, 1)
 END_OPERATOR()
 
 DEFINE_OPERATOR(Softsign)
 DEFINE_OPERATOR(Softplus)
 
 BEGIN_OPERATOR(Gemm)
-    DEFINE_ATTRIBUTE(alpha,  FLOAT, f)
-    DEFINE_ATTRIBUTE(beta,   FLOAT, f)
-    DEFINE_ATTRIBUTE(transA, INT, i)
-    DEFINE_ATTRIBUTE(transB, INT, i)
+    DEFINE_FLOAT_ATTRIBUTE(alpha, 1.f)
+    DEFINE_FLOAT_ATTRIBUTE(beta, 1.f)
+    DEFINE_BOOL_ATTRIBUTE(transA, false)
+    DEFINE_BOOL_ATTRIBUTE(transB, false)
 
     Value* A() { return input(0); }
     Value* B() { return input(1); }
@@ -289,7 +349,7 @@ BEGIN_OPERATOR(QLinearMatMul)
 END_OPERATOR()
 
 BEGIN_OPERATOR(TopK)
-    DEFINE_ATTRIBUTE(axis, INT, i)
+    DEFINE_INT_ATTRIBUTE(axis, -1)
 
     Value* X() { return input(0); }
     Value* K() { return input(1); }
@@ -301,30 +361,30 @@ END_OPERATOR()
 //==-------------------------------------------------------------------------
 
 BEGIN_OPERATOR(AveragePool)
-    DEFINE_ATTRIBUTE(auto_pad, STRING, s)
-    DEFINE_ATTRIBUTE(ceil_mode, INT, i)
-    DEFINE_ATTRIBUTE(count_include_pad, INT, i)
-    DEFINE_ATTRIBUTE(kernel_shape, INTS, is)
-    DEFINE_ATTRIBUTE(pads, INTS, is)
-    DEFINE_ATTRIBUTE(strides, INTS, is)
+    DEFINE_STRING_ATTRIBUTE(auto_pad, "NOTSET")
+    DEFINE_BOOL_ATTRIBUTE(ceil_mode, false)
+    DEFINE_BOOL_ATTRIBUTE(count_include_pad, false)
+    DEFINE_INTS_ATTRIBUTE(kernel_shape)
+    DEFINE_INTS_ATTRIBUTE(pads)
+    DEFINE_INTS_ATTRIBUTE(strides)
 END_OPERATOR()
 
 BEGIN_OPERATOR(MaxPool)
-    DEFINE_ATTRIBUTE(auto_pad, STRING, s)
-    DEFINE_ATTRIBUTE(ceil_mode, INT, i)
-    DEFINE_ATTRIBUTE(dilations, INTS, is)
-    DEFINE_ATTRIBUTE(kernel_shape, INTS, is)
-    DEFINE_ATTRIBUTE(pads, INTS, is)
-    DEFINE_ATTRIBUTE(storage_order, INT, i)
-    DEFINE_ATTRIBUTE(strides, INTS, is)
+    DEFINE_STRING_ATTRIBUTE(auto_pad, "NOTSET")
+    DEFINE_BOOL_ATTRIBUTE(ceil_mode, false)
+    DEFINE_INTS_ATTRIBUTE(dilations)
+    DEFINE_INTS_ATTRIBUTE(kernel_shape)
+    DEFINE_INTS_ATTRIBUTE(pads)
+    DEFINE_INT_ATTRIBUTE(storage_order, 0)
+    DEFINE_INTS_ATTRIBUTE(strides)
 
     Value* indices() { return output(1); }
 END_OPERATOR()
 
 BEGIN_OPERATOR(MaxUnpool)
-    DEFINE_ATTRIBUTE(kernel_shape, INTS, is)
-    DEFINE_ATTRIBUTE(pads, INTS, is)
-    DEFINE_ATTRIBUTE(strides, INTS, is)
+    DEFINE_INTS_ATTRIBUTE(kernel_shape)
+    DEFINE_INTS_ATTRIBUTE(pads)
+    DEFINE_INTS_ATTRIBUTE(strides)
 
     Value* X() { return input(0); }
     Value* I() { return input(1); }
@@ -333,8 +393,8 @@ BEGIN_OPERATOR(MaxUnpool)
 END_OPERATOR()
 
 BEGIN_OPERATOR(MaxRoiPool)
-    DEFINE_ATTRIBUTE(pooled_shape, INTS, is)
-    DEFINE_ATTRIBUTE(spatial_scale, FLOAT, f)
+    DEFINE_INTS_ATTRIBUTE(pooled_shape)
+    DEFINE_FLOAT_ATTRIBUTE(spatial_scale, 1.f)
 
     Value* X()    { return input(0); }
     Value* rois() { return input(1); }
@@ -342,19 +402,19 @@ BEGIN_OPERATOR(MaxRoiPool)
 END_OPERATOR()
 
 BEGIN_OPERATOR(LpPool)
-    DEFINE_ATTRIBUTE(auto_pad, STRING, s)
-    DEFINE_ATTRIBUTE(kernel_shape, INTS, is)
-    DEFINE_ATTRIBUTE(pads, INTS, is)
-    DEFINE_ATTRIBUTE(strides, INTS, is)
+    DEFINE_STRING_ATTRIBUTE(auto_pad, "NOTSET")
+    DEFINE_INTS_ATTRIBUTE(kernel_shape)
+    DEFINE_INTS_ATTRIBUTE(pads)
+    DEFINE_INTS_ATTRIBUTE(strides)
 END_OPERATOR()
 
 BEGIN_OPERATOR(Conv)
-    DEFINE_ATTRIBUTE(auto_pad, STRING, s)
-    DEFINE_ATTRIBUTE(dilations, INTS, is)
-    DEFINE_ATTRIBUTE(group, INT, i)
-    DEFINE_ATTRIBUTE(kernel_shape, INTS, is)
-    DEFINE_ATTRIBUTE(pads, INTS, is)
-    DEFINE_ATTRIBUTE(strides, INTS, is)
+    DEFINE_STRING_ATTRIBUTE(auto_pad, "NOTSET")
+    DEFINE_INTS_ATTRIBUTE(dilations)
+    DEFINE_INT_ATTRIBUTE(group, 1)
+    DEFINE_INTS_ATTRIBUTE(kernel_shape)
+    DEFINE_INTS_ATTRIBUTE(pads)
+    DEFINE_INTS_ATTRIBUTE(strides)
 
     Value* X() { return input(0); }
     Value* W() { return input(1); }
@@ -363,12 +423,12 @@ BEGIN_OPERATOR(Conv)
 END_OPERATOR()
 
 BEGIN_OPERATOR(ConvInteger)
-    DEFINE_ATTRIBUTE(auto_pad, STRING, s)
-    DEFINE_ATTRIBUTE(dilations, INTS, is)
-    DEFINE_ATTRIBUTE(group, INT, i)
-    DEFINE_ATTRIBUTE(kernel_shape, INTS, is)
-    DEFINE_ATTRIBUTE(pads, INTS, is)
-    DEFINE_ATTRIBUTE(strides, INTS, is)
+    DEFINE_STRING_ATTRIBUTE(auto_pad, "NOTSET")
+    DEFINE_INTS_ATTRIBUTE(dilations)
+    DEFINE_INT_ATTRIBUTE(group, 1)
+    DEFINE_INTS_ATTRIBUTE(kernel_shape)
+    DEFINE_INTS_ATTRIBUTE(pads)
+    DEFINE_INTS_ATTRIBUTE(strides)
 
     Value* X() { return input(0); }
     Value* W() { return input(1); }
@@ -378,12 +438,12 @@ BEGIN_OPERATOR(ConvInteger)
 END_OPERATOR()
 
 BEGIN_OPERATOR(QLinearConv)
-    DEFINE_ATTRIBUTE(auto_pad, STRING, s)
-    DEFINE_ATTRIBUTE(dilations, INTS, is)
-    DEFINE_ATTRIBUTE(group, INT, i)
-    DEFINE_ATTRIBUTE(kernel_shape, INTS, is)
-    DEFINE_ATTRIBUTE(pads, INTS, is)
-    DEFINE_ATTRIBUTE(strides, INTS, is)
+    DEFINE_STRING_ATTRIBUTE(auto_pad, "NOTSET")
+    DEFINE_INTS_ATTRIBUTE(dilations)
+    DEFINE_INT_ATTRIBUTE(group, 1)
+    DEFINE_INTS_ATTRIBUTE(kernel_shape)
+    DEFINE_INTS_ATTRIBUTE(pads)
+    DEFINE_INTS_ATTRIBUTE(strides)
 
     Value* X()            { return input(0); }
     Value* X_scale()      { return input(1); }
@@ -398,14 +458,14 @@ BEGIN_OPERATOR(QLinearConv)
 END_OPERATOR()
 
 BEGIN_OPERATOR(ConvTranspose)
-    DEFINE_ATTRIBUTE(auto_pad, STRING, s)
-    DEFINE_ATTRIBUTE(dilations, INTS, is)
-    DEFINE_ATTRIBUTE(group, INT, i)
-    DEFINE_ATTRIBUTE(kernel_shape, INTS, is)
-    DEFINE_ATTRIBUTE(output_padding, INTS, is)
-    DEFINE_ATTRIBUTE(output_shape, INTS, is)
-    DEFINE_ATTRIBUTE(pads, INTS, is)
-    DEFINE_ATTRIBUTE(strides, INTS, is)
+    DEFINE_STRING_ATTRIBUTE(auto_pad, "NOTSET")
+    DEFINE_INTS_ATTRIBUTE(dilations)
+    DEFINE_INT_ATTRIBUTE(group, 1)
+    DEFINE_INTS_ATTRIBUTE(kernel_shape)
+    DEFINE_INTS_ATTRIBUTE(output_padding)
+    DEFINE_INTS_ATTRIBUTE(output_shape)
+    DEFINE_INTS_ATTRIBUTE(pads)
+    DEFINE_INTS_ATTRIBUTE(strides)
 
     Value* X() { return input(0); }
     Value* W() { return input(1); }
@@ -418,8 +478,8 @@ DEFINE_OPERATOR(GlobalMaxPool)
 DEFINE_OPERATOR(GlobalLpPool)
 
 BEGIN_OPERATOR(BatchNormalization)
-    DEFINE_ATTRIBUTE(epsilon,  FLOAT, f)
-    DEFINE_ATTRIBUTE(momentum, FLOAT, f)
+    DEFINE_FLOAT_ATTRIBUTE(epsilon, 1e-5f)
+    DEFINE_FLOAT_ATTRIBUTE(momentum, 0.9f)
 
     Value* X()     { return input(0); }
     Value* scale() { return input(1); }
@@ -430,7 +490,7 @@ BEGIN_OPERATOR(BatchNormalization)
 END_OPERATOR()
 
 BEGIN_OPERATOR(InstanceNormalization)
-    DEFINE_ATTRIBUTE(epsilon,  FLOAT, f)
+    DEFINE_FLOAT_ATTRIBUTE(epsilon, 1e-5f)
 
     Value* X()     { return input(0); }
     Value* scale() { return input(1); }
@@ -439,47 +499,47 @@ BEGIN_OPERATOR(InstanceNormalization)
 END_OPERATOR()
 
 BEGIN_OPERATOR(LpNormalization)
-    DEFINE_ATTRIBUTE(axis, INT, i)
+    DEFINE_INT_ATTRIBUTE(axis, -1)
 END_OPERATOR()
 
 BEGIN_OPERATOR(Dropout)
-    DEFINE_ATTRIBUTE(ratio, FLOAT, f)
+    DEFINE_FLOAT_ATTRIBUTE(ratio, 0.5f)
     Value* mask() { return output(1); }
 END_OPERATOR()
 
 BEGIN_OPERATOR(Shrink)
-    DEFINE_ATTRIBUTE(bias, FLOAT, f)
-    DEFINE_ATTRIBUTE(lambd, FLOAT, f)
+    DEFINE_FLOAT_ATTRIBUTE(bias, 0.f)
+    DEFINE_FLOAT_ATTRIBUTE(lambd, 0.5f)
 END_OPERATOR()
 
 BEGIN_OPERATOR(Flatten)
-    DEFINE_ATTRIBUTE(axis, INT, i)
+    DEFINE_INT_ATTRIBUTE(axis, 1)
 END_OPERATOR()
 
 BEGIN_OPERATOR(LRN)
-    DEFINE_ATTRIBUTE(alpha, FLOAT, f)
-    DEFINE_ATTRIBUTE(beta, FLOAT, f)
-    DEFINE_ATTRIBUTE(bias, FLOAT, f)
-    DEFINE_ATTRIBUTE(size, INT, i)
+    DEFINE_FLOAT_ATTRIBUTE(alpha, 0.0001f)
+    DEFINE_FLOAT_ATTRIBUTE(beta, 0.75f)
+    DEFINE_FLOAT_ATTRIBUTE(bias, 1.0f)
+    DEFINE_INT_ATTRIBUTE(size, 0)
 END_OPERATOR()
 
 BEGIN_OPERATOR(TfIdfVectorizer)
-    DEFINE_ATTRIBUTE(max_gram_length, INT, i)
-    DEFINE_ATTRIBUTE(max_skip_count, INT, i)
-    DEFINE_ATTRIBUTE(min_gram_length, INT, i)
-    DEFINE_ATTRIBUTE(mode, STRING, s)
-    DEFINE_ATTRIBUTE(ngram_counts, INTS, is)
-    DEFINE_ATTRIBUTE(ngram_indexes, INTS, is)
-    DEFINE_ATTRIBUTE(pool_int64s, INTS, is)
-    DEFINE_ATTRIBUTE(pool_strings, STRINGS, ss)
-    DEFINE_ATTRIBUTE(weights, FLOATS, fs)
+    DEFINE_INT_ATTRIBUTE(max_gram_length, 0)
+    DEFINE_INT_ATTRIBUTE(max_skip_count, 0)
+    DEFINE_INT_ATTRIBUTE(min_gram_length, 0)
+    DEFINE_STRING_ATTRIBUTE(mode, "")
+    DEFINE_INTS_ATTRIBUTE(ngram_counts)
+    DEFINE_INTS_ATTRIBUTE(ngram_indexes)
+    DEFINE_INTS_ATTRIBUTE(pool_int64s)
+    DEFINE_STRINGS_ATTRIBUTE(pool_strings)
+    DEFINE_FLOATS_ATTRIBUTE(weights)
 END_OPERATOR()
 
 BEGIN_OPERATOR(StringNormalizer)
-    DEFINE_ATTRIBUTE(case_change_action, STRING, s)
-    DEFINE_ATTRIBUTE(is_case_sensitive, INT, i)
-    DEFINE_ATTRIBUTE(locale, STRING, s)
-    DEFINE_ATTRIBUTE(stopwords, STRINGS, ss)
+    DEFINE_STRING_ATTRIBUTE(case_change_action, "NONE")
+    DEFINE_BOOL_ATTRIBUTE(is_case_sensitive, false)
+    DEFINE_STRING_ATTRIBUTE(locale, "")
+    DEFINE_STRINGS_ATTRIBUTE(stopwords)
 END_OPERATOR()
 
 //==-------------------------------------------------------------------------
@@ -487,12 +547,12 @@ END_OPERATOR()
 //==-------------------------------------------------------------------------
 
 BEGIN_OPERATOR(RNN)
-    DEFINE_ATTRIBUTE(activation_alpha, FLOATS, fs)
-    DEFINE_ATTRIBUTE(activation_beta, FLOATS, fs)
-    DEFINE_ATTRIBUTE(activations, STRINGS, ss)
-    DEFINE_ATTRIBUTE(clip, FLOAT, f)
-    DEFINE_ATTRIBUTE(direction, STRING, s)
-    DEFINE_ATTRIBUTE(hidden_size, INT, i)
+    DEFINE_FLOATS_ATTRIBUTE(activation_alpha)
+    DEFINE_FLOATS_ATTRIBUTE(activation_beta)
+    DEFINE_STRINGS_ATTRIBUTE(activations)
+    DEFINE_FLOAT_ATTRIBUTE(clip, 0.0f)
+    DEFINE_STRING_ATTRIBUTE(direction, "forward")
+    DEFINE_INT_ATTRIBUTE(hidden_size, 0)
 
     Value* X() { return input(0); }
     Value* W() { return input(1); }
@@ -506,13 +566,13 @@ BEGIN_OPERATOR(RNN)
 END_OPERATOR()
 
 BEGIN_OPERATOR(GRU)
-    DEFINE_ATTRIBUTE(activation_alpha, FLOATS, fs)
-    DEFINE_ATTRIBUTE(activation_beta, FLOATS, fs)
-    DEFINE_ATTRIBUTE(activations, STRINGS, ss)
-    DEFINE_ATTRIBUTE(clip, FLOAT, f)
-    DEFINE_ATTRIBUTE(direction, STRING, s)
-    DEFINE_ATTRIBUTE(hidden_size, INT, i)
-    DEFINE_ATTRIBUTE(linear_before_reset, INT, i)
+    DEFINE_FLOATS_ATTRIBUTE(activation_alpha)
+    DEFINE_FLOATS_ATTRIBUTE(activation_beta)
+    DEFINE_STRINGS_ATTRIBUTE(activations)
+    DEFINE_FLOAT_ATTRIBUTE(clip, 0.0f)
+    DEFINE_STRING_ATTRIBUTE(direction, "forward")
+    DEFINE_INT_ATTRIBUTE(hidden_size, 0)
+    DEFINE_INT_ATTRIBUTE(linear_before_reset, 0)
 
     Value* X() { return input(0); }
     Value* W() { return input(1); }
@@ -526,13 +586,13 @@ BEGIN_OPERATOR(GRU)
 END_OPERATOR()
 
 BEGIN_OPERATOR(LSTM)
-    DEFINE_ATTRIBUTE(activation_alpha, FLOATS, fs)
-    DEFINE_ATTRIBUTE(activation_beta, FLOATS, fs)
-    DEFINE_ATTRIBUTE(activations, STRINGS, ss)
-    DEFINE_ATTRIBUTE(clip, FLOAT, f)
-    DEFINE_ATTRIBUTE(direction, STRING, s)
-    DEFINE_ATTRIBUTE(hidden_size, INT, i)
-    DEFINE_ATTRIBUTE(input_forget, INT, i)
+    DEFINE_FLOATS_ATTRIBUTE(activation_alpha)
+    DEFINE_FLOATS_ATTRIBUTE(activation_beta)
+    DEFINE_STRINGS_ATTRIBUTE(activations)
+    DEFINE_FLOAT_ATTRIBUTE(clip, 0.0f)
+    DEFINE_STRING_ATTRIBUTE(direction, "forward")
+    DEFINE_INT_ATTRIBUTE(hidden_size, 0)
+    DEFINE_INT_ATTRIBUTE(input_forget, 0)
 
     Value* X() { return input(0); }
     Value* W() { return input(1); }
@@ -553,18 +613,18 @@ END_OPERATOR()
 //==-------------------------------------------------------------------------
 
 BEGIN_OPERATOR(RoiAlign)
-    DEFINE_ATTRIBUTE(mode, STRING, s)
-    DEFINE_ATTRIBUTE(output_height, INT, i)
-    DEFINE_ATTRIBUTE(output_width, INT, i)
-    DEFINE_ATTRIBUTE(sampling_ratio, INT, i)
-    DEFINE_ATTRIBUTE(spatial_scale, FLOAT, f)
+    DEFINE_STRING_ATTRIBUTE(mode, "avg")
+    DEFINE_INT_ATTRIBUTE(output_height, 1)
+    DEFINE_INT_ATTRIBUTE(output_width, 1)
+    DEFINE_INT_ATTRIBUTE(sampling_ratio, 0)
+    DEFINE_FLOAT_ATTRIBUTE(spatial_scale, 1.0f)
 
     Value* rois() { return input(1); }
     Value* batch_indices() { return input(2); }
 END_OPERATOR()
 
 BEGIN_OPERATOR(NonMaxSuppression)
-    DEFINE_ATTRIBUTE(center_point_box, INT, i)
+    DEFINE_INT_ATTRIBUTE(center_point_box, 0)
 
     Value* boxes() { return input(0); }
     Value* scores() { return input(1); }
@@ -579,8 +639,8 @@ END_OPERATOR()
 
 #define DEFINE_REDUCTION_OPERATOR(name) \
 BEGIN_OPERATOR(name) \
-    DEFINE_ATTRIBUTE(axes, INTS, is) \
-    DEFINE_ATTRIBUTE(keepdims, INT, i) \
+    DEFINE_INTS_ATTRIBUTE(axes) \
+    DEFINE_INT_ATTRIBUTE(keepdims, 1) \
 END_OPERATOR()
 
 DEFINE_REDUCTION_OPERATOR(ReduceMax)
@@ -595,13 +655,13 @@ DEFINE_REDUCTION_OPERATOR(ReduceL1)
 DEFINE_REDUCTION_OPERATOR(ReduceL2)
 
 BEGIN_OPERATOR(ArgMax)
-    DEFINE_ATTRIBUTE(axis, INT, i)
-    DEFINE_ATTRIBUTE(keepdims, INT, i)
+    DEFINE_INT_ATTRIBUTE(axis, 0)
+    DEFINE_BOOL_ATTRIBUTE(keepdims, true)
 END_OPERATOR()
 
 BEGIN_OPERATOR(ArgMin)
-    DEFINE_ATTRIBUTE(axis, INT, i)
-    DEFINE_ATTRIBUTE(keepdims, INT, i)
+    DEFINE_INT_ATTRIBUTE(axis, 0)
+    DEFINE_BOOL_ATTRIBUTE(keepdims, true)
 END_OPERATOR()
 
 #undef DEFINE_REDUCTION_OPERATOR
@@ -624,12 +684,12 @@ DEFINE_OPERATOR(Shape)
 DEFINE_OPERATOR(Size)
 
 BEGIN_OPERATOR(Concat)
-    DEFINE_ATTRIBUTE(axis, INT, i)
+    DEFINE_INT_ATTRIBUTE(axis, 0)
 END_OPERATOR()
 
 BEGIN_OPERATOR(Split)
-    DEFINE_ATTRIBUTE(axis, INT, i)
-    DEFINE_ATTRIBUTE(split, INTS, is)
+    DEFINE_INT_ATTRIBUTE(axis, 0)
+    DEFINE_INTS_ATTRIBUTE(split)
 END_OPERATOR()
 
 BEGIN_OPERATOR(Slice)
@@ -641,11 +701,11 @@ BEGIN_OPERATOR(Slice)
 END_OPERATOR()
 
 BEGIN_OPERATOR(Transpose)
-    DEFINE_ATTRIBUTE(perm, INTS, is)
+    DEFINE_INTS_ATTRIBUTE(perm)
 END_OPERATOR()
 
 BEGIN_OPERATOR(Scatter)
-    DEFINE_ATTRIBUTE(axis, INT, i)
+    DEFINE_INT_ATTRIBUTE(axis, 0)
 
     Value* data()    { return input(0); }
     Value* indices() { return input(1); }
@@ -653,32 +713,32 @@ BEGIN_OPERATOR(Scatter)
 END_OPERATOR()
 
 BEGIN_OPERATOR(Gather)
-    DEFINE_ATTRIBUTE(axis, INT, i)
+    DEFINE_INT_ATTRIBUTE(axis, 0)
 
     Value* data()    { return input(0); }
     Value* indices() { return input(1); }
 END_OPERATOR()
 
 BEGIN_OPERATOR(Squeeze)
-    DEFINE_ATTRIBUTE(axes, INTS, is)
+    DEFINE_INTS_ATTRIBUTE(axes)
 END_OPERATOR()
 
 BEGIN_OPERATOR(Unsqueeze)
-    DEFINE_ATTRIBUTE(axes, INTS, is)
+    DEFINE_INTS_ATTRIBUTE(axes)
 END_OPERATOR()
 
 BEGIN_OPERATOR(Pad)
-    DEFINE_ATTRIBUTE(pads, INTS, is)
-    DEFINE_ATTRIBUTE(mode, STRING, s)
-    DEFINE_ATTRIBUTE(value, FLOAT, f)
+    DEFINE_INTS_ATTRIBUTE(pads)
+    DEFINE_STRING_ATTRIBUTE(mode, "constant")
+    DEFINE_FLOAT_ATTRIBUTE(value, 0.0f)
 END_OPERATOR()
 
 BEGIN_OPERATOR(SpaceToDepth)
-    DEFINE_ATTRIBUTE(blocksize, INT, i)
+    DEFINE_INT_ATTRIBUTE(blocksize, 0)
 END_OPERATOR()
 
 BEGIN_OPERATOR(DepthToSpace)
-    DEFINE_ATTRIBUTE(blocksize, INT, i)
+    DEFINE_INT_ATTRIBUTE(blocksize, 0)
 END_OPERATOR()
 
 BEGIN_OPERATOR(Tile)
@@ -686,7 +746,7 @@ BEGIN_OPERATOR(Tile)
 END_OPERATOR()
 
 BEGIN_OPERATOR(Resize)
-    DEFINE_ATTRIBUTE(mode, STRING, s)
+    DEFINE_STRING_ATTRIBUTE(mode, "nearest")
     Value* scales() { return input(1); }
 END_OPERATOR()
 
@@ -695,12 +755,12 @@ BEGIN_OPERATOR(Expand)
 END_OPERATOR()
 
 BEGIN_OPERATOR(Compress)
-    DEFINE_ATTRIBUTE(axis, INT, i)
+    DEFINE_INT_ATTRIBUTE(axis, 0)
     Value* condition() { return input(1); }
 END_OPERATOR()
 
 BEGIN_OPERATOR(OneHot)
-    DEFINE_ATTRIBUTE(axis, INT, i)
+    DEFINE_INT_ATTRIBUTE(axis, -1)
     Value* indices() { return input(0); }
     Value* depth()   { return input(1); }
     Value* values()  { return input(2); }
@@ -710,8 +770,8 @@ BEGIN_OPERATOR(NonZero)
 END_OPERATOR()
 
 BEGIN_OPERATOR(ReverseSequence)
-    DEFINE_ATTRIBUTE(batch_axis, INT, i)
-    DEFINE_ATTRIBUTE(time_axis, INT, i)
+    DEFINE_INT_ATTRIBUTE(batch_axis, 1)
+    DEFINE_INT_ATTRIBUTE(time_axis, 0)
     Value* sequence_lens() { return input(1); }
 END_OPERATOR()
 
@@ -721,7 +781,15 @@ DEFINE_OPERATOR(Identity)
 #undef END_OPERATOR
 #undef DEFINE_OPERATOR
 #undef DEFINE_BINARY_OPERATOR
-#undef DEFINE_ATTRIBUTE
+#undef DEFINE_FLOAT_ATTRIBUTE
+#undef DEFINE_INT_ATTRIBUTE
+#undef DEFINE_BOOL_ATTRIBUTE
+#undef DEFINE_STRING_ATTRIBUTE
+#undef DEFINE_GRAPH_ATTRIBUTE
+#undef DEFINE_TENSOR_ATTRIBUTE
+#undef DEFINE_INTS_ATTRIBUTE
+#undef DEFINE_FLOATS_ATTRIBUTE
+#undef DEFINE_STRING_ATTRIBUTE
 #undef DEFINE_SHAPE_ATTRIBUTE
 #undef DEFINE_DTYPE_ATTRIBUTE
 
