@@ -298,6 +298,16 @@ TEST(DNNTest, ShapeBroadcastCopy) {
     EXPECT_EQ(dev_A.read(), B);
 }
 
+TEST(ActivationTest, Clip) {
+    auto A = Tensor<float>({10}, {-4, -3, -2, -1, 0, 1, 2, 3, 4, 5});
+    auto B = transform(A, xfn::clip<float>(-2, 2));
+    auto C = Tensor<float>({10}, {-2, -2, -2, -1, 0, 1, 2, 2, 2, 2});
+    EXPECT_EQ(B, C);
+
+    auto D = transform(dev(A), xfn::clip<float>(-2, 2)).read();
+    EXPECT_EQ(D, C);
+}
+
 TEST(ActivationTest, Relu) {
     constexpr size_t N = 20;
 

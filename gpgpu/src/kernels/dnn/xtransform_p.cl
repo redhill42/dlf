@@ -1,9 +1,26 @@
 // Enable loading of this file using the C++ pre-processor's #include (C++11 standard raw string
 // literal). Comment-out this line for syntax-highlighting when developing.
 R"(
+#line 4
 
-#line 5
-__kernel __attribute__((reqd_work_group_size(WGS, 1, 1))) \
+#ifdef CUDA
+#define clamp(x,minval,maxval) (x<minval ? minval : x>maxval ? maxval : x)
+#endif
+
+__kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
+void Xclip(const int n, const real_arg low_arg, const real_arg high_arg,
+    const __global real* restrict xgm, const int x_offset, const int x_inc,
+    __global real* ygm, const int y_offset, const int y_inc)
+{
+  const real low = GetRealArg(low_arg);
+  const real high = GetRealArg(high_arg);
+  for (int id = get_global_id(0); id < n; id += get_global_size(0)) {
+    real x = xgm[id*x_inc + x_offset];
+    ygm[id*y_inc + y_offset] = clamp(x, low, high);
+  }
+}
+
+__kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
 void Xrelu(const int n, const real_arg alpha_arg, const real_arg beta_arg,
     const __global real* restrict xgm, const int x_offset, const int x_inc,
     __global real* ygm, const int y_offset, const int y_inc)
@@ -14,7 +31,7 @@ void Xrelu(const int n, const real_arg alpha_arg, const real_arg beta_arg,
   }
 }
 
-__kernel __attribute__((reqd_work_group_size(WGS, 1, 1))) \
+__kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
 void Xleaky_relu(const int n, const real_arg alpha_arg, const real_arg beta_arg,
     const __global real* restrict xgm, const int x_offset, const int x_inc,
     __global real* ygm, const int y_offset, const int y_inc)
@@ -28,7 +45,7 @@ void Xleaky_relu(const int n, const real_arg alpha_arg, const real_arg beta_arg,
   }
 }
 
-__kernel __attribute__((reqd_work_group_size(WGS, 1, 1))) \
+__kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
 void Xthresholded_relu(const int n, const real_arg alpha_arg, const real_arg beta_arg,
     const __global real* restrict xgm, const int x_offset, const int x_inc,
     __global real* ygm, const int y_offset, const int y_inc)
@@ -42,7 +59,7 @@ void Xthresholded_relu(const int n, const real_arg alpha_arg, const real_arg bet
   }
 }
 
-__kernel __attribute__((reqd_work_group_size(WGS, 1, 1))) \
+__kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
 void Xselu(const int n, const real_arg alpha_arg, const real_arg gamma_arg,
     const __global real* restrict xgm, const int x_offset, const int x_inc,
     __global real* ygm, const int y_offset, const int y_inc)
@@ -58,7 +75,7 @@ void Xselu(const int n, const real_arg alpha_arg, const real_arg gamma_arg,
   }
 }
 
-__kernel __attribute__((reqd_work_group_size(WGS, 1, 1))) \
+__kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
 void Xelu(const int n, const real_arg alpha_arg, const real_arg beta_arg,
     const __global real* restrict xgm, const int x_offset, const int x_inc,
     __global real* ygm, const int y_offset, const int y_inc)
@@ -72,7 +89,7 @@ void Xelu(const int n, const real_arg alpha_arg, const real_arg beta_arg,
   }
 }
 
-__kernel __attribute__((reqd_work_group_size(WGS, 1, 1))) \
+__kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
 void Xhard_sigmoid(const int n, const real_arg alpha_arg, const real_arg beta_arg,
     const __global real* restrict xgm, const int x_offset, const int x_inc,
     __global real* ygm, const int y_offset, const int y_inc)
@@ -85,7 +102,7 @@ void Xhard_sigmoid(const int n, const real_arg alpha_arg, const real_arg beta_ar
   }
 }
 
-__kernel __attribute__((reqd_work_group_size(WGS, 1, 1))) \
+__kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
 void Xsoftsign(const int n, const real_arg alpha_arg, const real_arg beta_arg,
     const __global real* restrict xgm, const int x_offset, const int x_inc,
     __global real* ygm, const int y_offset, const int y_inc)
@@ -96,7 +113,7 @@ void Xsoftsign(const int n, const real_arg alpha_arg, const real_arg beta_arg,
   }
 }
 
-__kernel __attribute__((reqd_work_group_size(WGS, 1, 1))) \
+__kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
 void Xsoftplus(const int n, const real_arg alpha_arg, const real_arg beta_arg,
     const __global real* restrict xgm, const int x_offset, const int x_inc,
     __global real* ygm, const int y_offset, const int y_inc)

@@ -23,12 +23,18 @@ TYPED_TEST(EvaluateTest, Simple) {
     y->addInput(g.addInput("C", DataType::FLOAT, {1}));
     g.addOutput(y->addOutput("Y"));
 
+    auto z = g.append<Clip>();
+    z->set_min(10)->set_max(15);
+    z->addInput(y->output());
+    g.addOutput(z->addOutput("Z"));
+
     Evaluator<Context, float> eval(g);
     eval.set(0, Tensor<float>({2, 3}, {1, 2, 3, 4, 5, 6}));
     eval.set(1, scalar<float>(3));
     eval.set(2, scalar<float>(2));
     eval.evaluate();
-    EXPECT_EQ(eval.get(0), Tensor<float >({2, 3}, {8, 10, 12, 14, 16, 18}));
+    EXPECT_EQ(eval.get(0), Tensor<float>({2, 3}, {8, 10, 12, 14, 16, 18}));
+    EXPECT_EQ(eval.get(1), Tensor<float>({2, 3}, {10, 10, 12, 14, 15, 15}));
 }
 
 TYPED_TEST(EvaluateTest, Gemm) {

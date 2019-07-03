@@ -192,6 +192,20 @@ private:
     DEFINE_UNARY_OPERATOR(Sigmoid, sigmoid)
     #undef DEFINE_UNARY_OPERATOR
 
+    struct ClipOp : Operator {
+        xfn::clip<T> op; TensorT<> X, Y;
+        ClipOp(const T& min, const T& max, TensorT<>&& X, TensorT<>&& Y)
+            : op(min, max), X(std::move(X)), Y(std::move(Y)) {}
+        void evaluate() override {
+            dlf::transformTo(X, Y, op);
+        }
+    };
+
+    void visit(model::Clip* n) override {
+        result = std::make_unique<ClipOp>(
+            n->min(), n->max(), alloc(n->input()), alloc(n->output()));
+    }
+
     struct ReluOp : Operator {
         TensorT<> X, Y;
         ReluOp(TensorT<>&& X, TensorT<>&& Y)

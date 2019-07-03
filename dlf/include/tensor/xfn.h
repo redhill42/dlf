@@ -130,6 +130,16 @@ struct power<void> {
 //==-------------------------------------------------------------------------
 
 template <typename T>
+struct clip : std::unary_function<T,T>, parameterized_function<T> {
+    static constexpr auto name = "clip";
+    constexpr clip(const T& min, const T& max)
+        : parameterized_function<T>(min, max) {}
+    constexpr T operator()(const T& x) const {
+        return cxx::clamp(x, this->alpha, this->beta);
+    }
+};
+
+template <typename T>
 struct relu : std::unary_function<T,T>, parameterized_function<T> {
     static constexpr auto name = "relu";
     constexpr T operator()(const T& x) const {

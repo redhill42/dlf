@@ -26,80 +26,80 @@ END_OPERATOR()
         { return hasAttribute(k##name); } \
     const float name() const \
         { return get_f(k##name, def); } \
-    void set_##name(float value) \
-        { set_f(k##name, value); }
+    auto set_##name(float value) \
+        { set_f(k##name, value); return this; }
 
 #define DEFINE_INT_ATTRIBUTE(name, def) \
     bool has_##name() const noexcept \
         { return hasAttribute(k##name); } \
     const int64_t name() const \
         { return get_i(k##name, def); } \
-    void set_##name(int64_t value) \
-        { set_i(k##name, value); }
+    auto set_##name(int64_t value) \
+        { set_i(k##name, value); return this; }
 
 #define DEFINE_BOOL_ATTRIBUTE(name, def) \
     bool has_##name() const noexcept \
         { return hasAttribute(k##name); } \
     bool name() const \
         { return !!get_i(k##name, static_cast<int64_t>(def)); } \
-    void set_##name(bool value) \
-        { set_i(k##name, static_cast<int64_t>(value)); }
+    auto set_##name(bool value) \
+        { set_i(k##name, static_cast<int64_t>(value)); return this; }
 
 #define DEFINE_STRING_ATTRIBUTE(name, def) \
     bool has_##name() const noexcept \
         { return hasAttribute(k##name); } \
     std::string name() const \
         { return get_s(k##name, def); } \
-    void set_##name(std::string value) \
-         { set_s(k##name, std::move(value)); }
+    auto set_##name(std::string value) \
+         { set_s(k##name, std::move(value)); return this; }
 
 #define DEFINE_GRAPH_ATTRIBUTE(name) \
     bool has_##name() const noexcept \
         { return hasAttribute(k##name); } \
     std::shared_ptr<Graph> name() const \
         { return get_g(k##name); } \
-    void set_##name(std::shared_ptr<Graph> value) \
-        { set_g(k##name, value); }
+    auto set_##name(std::shared_ptr<Graph> value) \
+        { set_g(k##name, value); return this; }
 
 #define DEFINE_TENSOR_ATTRIBUTE(name) \
     bool has_##name() const noexcept \
         { return hasAttribute(k##name); } \
     const TensorData& name() const \
         { return get_t(k##name); } \
-    void set_##name(TensorData value) \
-        { set_t(k##name, std::move(value)); }
+    auto set_##name(TensorData value) \
+        { set_t(k##name, std::move(value)); return this; }
 
 #define DEFINE_INTS_ATTRIBUTE(name) \
     bool has_##name() const noexcept \
         { return hasAttribute(k##name); } \
     const std::vector<int64_t>& name() const \
         { return get_is(k##name); } \
-    void set_##name(std::vector<int64_t> value) \
-        { set_is(k##name, std::move(value)); }
+    auto set_##name(std::vector<int64_t> value) \
+        { set_is(k##name, std::move(value)); return this; }
 
 #define DEFINE_FLOATS_ATTRIBUTE(name) \
     bool has_##name() const noexcept \
         { return hasAttribute(k##name); } \
     const std::vector<float>& name() const \
         { return get_fs(k##name); } \
-    void set_##name(std::vector<float> value) \
-        { set_fs(k##name, std::move(value)); }
+    auto set_##name(std::vector<float> value) \
+        { set_fs(k##name, std::move(value)); return this; }
 
 #define DEFINE_STRINGS_ATTRIBUTE(name) \
     bool has_##name() const noexcept \
         { return hasAttribute(k##name); } \
     const std::vector<std::string>& name() const \
         { return get_ss(k##name); } \
-    void set_##name(std::vector<std::string> value) \
-        { set_ss(k##name, std::move(value)); }
+    auto set_##name(std::vector<std::string> value) \
+        { set_ss(k##name, std::move(value)); return this; }
 
 #define DEFINE_DTYPE_ATTRIBUTE(name) \
     bool has_##name() const noexcept \
         { return hasAttribute(k##name); } \
     DataType name() const  \
         { return has_##name() ? static_cast<DataType>(get_i(k##name)) : DataType::FLOAT; } \
-    void set_##name(DataType dt) \
-        { set_i(k##name, static_cast<int64_t>(dt)); }
+    auto set_##name(DataType dt) \
+        { set_i(k##name, static_cast<int64_t>(dt)); return this; }
 
 #define DEFINE_SHAPE_ATTRIBUTE(name) \
     bool has_##name() const noexcept { return hasAttribute(k##name); } \
@@ -107,8 +107,9 @@ END_OPERATOR()
         const auto& shape__ = get_is(k##name); \
         return Dims(shape__.begin(), shape__.end()); \
     } \
-    void set_##name(const Dims& dims__) { \
+    auto set_##name(const Dims& dims__) { \
         set_is(k##name, std::vector<int64_t>(dims__.begin(), dims__.end())); \
+        return this; \
     }
 
 //==-------------------------------------------------------------------------
@@ -265,8 +266,8 @@ DEFINE_OPERATOR(Sum)
 DEFINE_OPERATOR(Mean)
 
 BEGIN_OPERATOR(Clip)
-    DEFINE_FLOAT_ATTRIBUTE(min, -3.4028234663852886e+38f)
-    DEFINE_FLOAT_ATTRIBUTE(max, 3.4028234663852886e+38f)
+    DEFINE_FLOAT_ATTRIBUTE(min, std::numeric_limits<float>::lowest())
+    DEFINE_FLOAT_ATTRIBUTE(max, std::numeric_limits<float>::max())
 END_OPERATOR()
 
 DEFINE_OPERATOR(Sigmoid)
