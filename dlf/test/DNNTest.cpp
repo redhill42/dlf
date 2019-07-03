@@ -96,10 +96,14 @@ TYPED_TEST(TransformTest, Abs) {
     auto B = Tensor<T>({N});
 
     auto dev_A = DevTensor<T>(A);
-    auto dev_B = DevTensor<T>(B);
+    auto dev_B = transform(dev_A, xfn::abs<>());
 
-    gpgpu::dnn::abs(dev_A.size(), dev_A.data(), dev_B.data());
     dev_B.read(B);
+    for (size_t i = 0; i < N; i++) {
+        EXPECT_EQ(B(i), std::abs(A(i)));
+    }
+
+    auto C = abs(dev_A).read();
     for (size_t i = 0; i < N; i++) {
         EXPECT_EQ(B(i), std::abs(A(i)));
     }
@@ -113,9 +117,8 @@ TYPED_TEST(TransformTest, Neg) {
     auto B = Tensor<T>({N});
 
     auto dev_A = DevTensor<T>(A);
-    auto dev_B = DevTensor<T>(B);
+    auto dev_B = transform(dev_A, xfn::negate<>());
 
-    gpgpu::dnn::neg(dev_A.size(), dev_A.data(), dev_B.data());
     dev_B.read(B);
     for (size_t i = 0; i < N; i++) {
         EXPECT_EQ(B(i), -A(i));
@@ -130,9 +133,8 @@ TYPED_TEST(TransformTest, Sign) {
     auto B = Tensor<T>({N});
 
     auto dev_A = DevTensor<T>(A);
-    auto dev_B = DevTensor<T>(B);
+    auto dev_B = transform(dev_A, xfn::sign<>());
 
-    gpgpu::dnn::sign(dev_A.size(), dev_A.data(), dev_B.data());
     dev_B.read(B);
     for (size_t i = 0; i < N; i++) {
         EXPECT_EQ(B(i), A(i)<0 ? -1 : A(i)>0 ? 1 : 0);
@@ -153,11 +155,9 @@ TYPED_TEST(BinaryTest, Add) {
 
     auto dev_A = DevTensor<T>(A);
     auto dev_B = DevTensor<T>(B);
-    auto dev_C = DevTensor<T>(C);
+    auto dev_C = transform(dev_A, dev_B, xfn::plus<>());
 
-    gpgpu::dnn::transform2("add", N, dev_A.data(), N, dev_B.data(), dev_C.data());
     dev_C.read(C);
-
     for (size_t i = 0; i < N; i++) {
         ExpectEQ(T(A(i) + B(i)), C(i));
     }
@@ -173,11 +173,9 @@ TYPED_TEST(BinaryTest, Sub) {
 
     auto dev_A = DevTensor<T>(A);
     auto dev_B = DevTensor<T>(B);
-    auto dev_C = DevTensor<T>(C);
+    auto dev_C = transform(dev_A, dev_B, xfn::minus<>());
 
-    gpgpu::dnn::transform2("sub", N, dev_A.data(), N, dev_B.data(), dev_C.data());
     dev_C.read(C);
-
     for (size_t i = 0; i < N; i++) {
         ExpectEQ(T(A(i) - B(i)), C(i));
     }
@@ -193,11 +191,9 @@ TYPED_TEST(BinaryTest, Mul) {
 
     auto dev_A = DevTensor<T>(A);
     auto dev_B = DevTensor<T>(B);
-    auto dev_C = DevTensor<T>(C);
+    auto dev_C = transform(dev_A, dev_B, xfn::multiplies<>());
 
-    gpgpu::dnn::transform2("mul", N, dev_A.data(), N, dev_B.data(), dev_C.data());
     dev_C.read(C);
-
     for (size_t i = 0; i < N; i++) {
         ExpectEQ(T(A(i) * B(i)), C(i));
     }
@@ -213,16 +209,21 @@ TYPED_TEST(BinaryTest, Div) {
 
     auto dev_A = DevTensor<T>(A);
     auto dev_B = DevTensor<T>(B);
-    auto dev_C = DevTensor<T>(C);
+    auto dev_C = transform(dev_A, dev_B, xfn::divides<>());
 
-    gpgpu::dnn::transform2("div", N, dev_A.data(), N, dev_B.data(), dev_C.data());
     dev_C.read(C);
-
     for (size_t i = 0; i < N; i++) {
         if (B(i) == T(0))
             continue;
         ExpectEQ(T(A(i) / B(i)), C(i));
     }
+}
+
+TEST(BinaryTest, Pow) {
+    auto A = Tensor<float>({7}, {-3, -2, -1, 0, 1, 2, 3});
+    auto B = Tensor<float>({7}, {9, 4, 1, 0, 1, 4, 9});
+    EXPECT_EQ(transform(A, scalar<float>(2), xfn::power<>()), B);
+    EXPECT_EQ(transform(dev(A), dev<float>(2), xfn::power<>()).read(), B);
 }
 
 TEST(BinaryTest, ShapeBroadcastArthimetic) {

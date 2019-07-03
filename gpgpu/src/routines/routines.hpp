@@ -79,10 +79,7 @@
 // DNN includes
 #include "routines/dnn/xcopy.hpp"
 #include "routines/dnn/xtransform.hpp"
-#include "routines/dnn/xbinary.hpp"
-#include "routines/dnn/xactivation.hpp"
-#include "routines/dnn/xabs.hpp"
-#include "routines/dnn/xneg.hpp"
-#include "routines/dnn/xsign.hpp"
+#include "routines/dnn/xtransform_b.hpp"
+#include "routines/dnn/xtransform_p.hpp"
 
 #endif // GPGPU_BLAS_ROUTINES_ROUTINES_H_

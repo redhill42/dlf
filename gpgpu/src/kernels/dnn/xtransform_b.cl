@@ -101,6 +101,24 @@ void name(const int x_size, const __global real* restrict xgm, const int x_offse
 }                                                                           \
                                                                             \
 __kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))                   \
+void name##Strided(const int n, const int rank, __constant int* shape,      \
+                   const __global real* restrict xgm,                       \
+                   const __global real* restrict ygm,                       \
+                   __global real* zgm)                                      \
+{                                                                           \
+  for (int id = get_global_id(0); id < n; id += get_global_size(0)) {       \
+    real x_value = xgm[unravel(id, rank, &shape[rank], shape)];             \
+    real y_value = ygm[unravel(id, rank, &shape[rank*2], shape)];           \
+    real z_value;                                                           \
+    op(z_value, x_value, y_value);                                          \
+    zgm[id] = z_value;                                                      \
+  }                                                                         \
+}
+
+#define DEFINE_BINARY_V(name, op)                                           \
+DEFINE_BINARY(name, op)                                                     \
+                                                                            \
+__kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))                   \
 void name##Faster(const int n,                                              \
     const __global realV* restrict xgm, const __global realV* restrict ygm, \
     __global realV* zgm)                                                    \
@@ -132,21 +150,6 @@ void name##Fastest(const int n,                                             \
     OPV(op, zvec, xvec, yvec);                                              \
     zgm[id] = zvec;                                                         \
   }                                                                         \
-}                                                                           \
-                                                                            \
-__kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))                   \
-void name##Strided(const int n, const int rank, __constant int* shape,      \
-                   const __global real* restrict xgm,                       \
-                   const __global real* restrict ygm,                       \
-                   __global real* zgm)                                      \
-{                                                                           \
-  for (int id = get_global_id(0); id < n; id += get_global_size(0)) {       \
-    real x_value = xgm[unravel(id, rank, &shape[rank], shape)];             \
-    real y_value = ygm[unravel(id, rank, &shape[rank*2], shape)];           \
-    real z_value;                                                           \
-    op(z_value, x_value, y_value);                                          \
-    zgm[id] = z_value;                                                      \
-  }                                                                         \
 }
 
 // The scalar division function
@@ -163,9 +166,36 @@ void name##Strided(const int n, const int rank, __constant int* shape,      \
   #define Divide(c,a,b) c = a / b
 #endif
 
-DEFINE_BINARY(Xadd, Add)
-DEFINE_BINARY(Xsub, Subtract)
-DEFINE_BINARY(Xmul, Multiply)
-DEFINE_BINARY(Xdiv, Divide)
+DEFINE_BINARY_V(Xadd_v, Add)
+DEFINE_BINARY_V(Xsub_v, Subtract)
+DEFINE_BINARY_V(Xmul_v, Multiply)
+DEFINE_BINARY_V(Xdiv_v, Divide)
+
+#if PRECISION !=3232 && PRECISION != 6464
+
+#ifdef CUDA
+  #if PRECISION == 16
+    #define xpow hpow
+  #elif PRECISION == 32
+    #define xpow powf
+  #elif PRECISION == 64
+    #define xpow pow
+  #else
+    #define xpow(x,y) pow((float)x,(float)y)
+  #endif
+#else
+  #if INTEGER_PRECISION
+    #define xpow(x,y) pow((float)x,(float)y)
+  #else
+    #define xpow pow
+  #endif
+#endif
+#define Pow(c,a,b) c = xpow(a,b)
+DEFINE_BINARY(Xpow, Pow)
+
+#define PRelu(c,a,b) c = a<ZERO ? a*b : a
+DEFINE_BINARY(Xprelu, PRelu)
+
+#endif
 
 )" // End of the C++11 raw string literal

@@ -14,6 +14,22 @@ void X##name(const int n, \
   } \
 }
 
+#if INTEGER_PRECISION
+  #define xabs abs
+#else
+  #define xabs fabs
+#endif
+TRANSFORM(abs, xabs)
+
+#define neg(x) (-(x))
+TRANSFORM(neg, neg)
+
+#if defined(CUDA) || INTEGER_PRECISION
+  #define sign(x) ((ZERO<(x)) - ((x)<ZERO))
+#endif
+TRANSFORM(sign, sign)
+
+#if PRECISION == 16 || PRECISION == 32 || PRECISION == 64
 #ifdef CUDA
   #if PRECISION == 16
     #define XOP(op) h##op
@@ -25,7 +41,6 @@ void X##name(const int n, \
 #else
   #define XOP(op) op
 #endif
-
 #define TRANSFORM_X(name) TRANSFORM(name, XOP(name))
 
 TRANSFORM_X(floor)
@@ -53,5 +68,6 @@ TRANSFORM_X(erf)
 
 TRANSFORM(reciprocal, reciprocal)
 TRANSFORM(sigmoid, sigmoid)
+#endif
 
 )" // End of the C++11 raw string literal

@@ -316,7 +316,7 @@ TEST_F(TensorTest, FloatingOpRValueOptimization) {
 TEST_F(TensorTest, ComplexOp) {
     using namespace std::literals::complex_literals;
     Tensor<std::complex<double>> a({2, 2}, {1.0+2i, 2.0+3i, 3.0-4i, 4.0-5i});
-    Tensor<std::complex<double>> b({2, 2}, {-3.0-4i, 5.0-2i, 4.0+1i, -3i});
+    Tensor<std::complex<double>> b({2, 2}, {-3.0-4i, 5.0-2i, 4.0+1i, 0.0-3i});
     EXPECT_EQ(a + b, Tensor<std::complex<double>>({2, 2}, {-2.0-2i, 7.0+1i, 7.0-3i, 4.0-8i}));
 }
 

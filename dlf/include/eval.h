@@ -160,15 +160,14 @@ private:
             TensorT<> X, Y; \
             Name##Op(TensorT<>&& X, TensorT<>&& Y) \
                 : X(std::move(X)), Y(std::move(Y)) {} \
-            void evaluate() override { \
-                dlf::transformTo(X, Y, ::dlf::xfn::fn<T>()); \
-            } \
+            void evaluate() override \
+                { dlf::transformTo(X, Y, ::dlf::xfn::fn<T>()); } \
         }; \
         result = std::make_unique<Name##Op>(alloc(n->input()), alloc(n->output())); \
     }
     
     DEFINE_UNARY_OPERATOR(Abs, abs)
-    DEFINE_UNARY_OPERATOR(Neg, neg)
+    DEFINE_UNARY_OPERATOR(Neg, negate)
     DEFINE_UNARY_OPERATOR(Sign, sign)
     DEFINE_UNARY_OPERATOR(Reciprocal, reciprocal)
     DEFINE_UNARY_OPERATOR(Floor, floor)
@@ -193,135 +192,107 @@ private:
     DEFINE_UNARY_OPERATOR(Sigmoid, sigmoid)
     #undef DEFINE_UNARY_OPERATOR
 
-    void visit(model::Relu* n) override {
-        struct ReluOp : Operator {
-            TensorT<> X, Y;
-            ReluOp(TensorT<>&& X, TensorT<>&& Y)
-                : X(std::move(X)), Y(std::move(Y)) {}
-            void evaluate() override {
-                dlf::transformTo(X, Y, xfn::relu<T>());
-            }
-        };
+    struct ReluOp : Operator {
+        TensorT<> X, Y;
+        ReluOp(TensorT<>&& X, TensorT<>&& Y)
+            : X(std::move(X)), Y(std::move(Y)) {}
+        void evaluate() override {
+            dlf::transformTo(X, Y, xfn::relu<T>());
+        }
+    };
 
-        result = std::make_unique<ReluOp>(
-            alloc(n->input()), alloc(n->output()));
+    void visit(model::Relu* n) override {
+        result = std::make_unique<ReluOp>(alloc(n->input()), alloc(n->output()));
     }
+
+    struct PReluOp : Operator {
+        TensorT<> X, slope, Y;
+        PReluOp(TensorT<>&& X, TensorT<>&& slope, TensorT<>&& Y)
+            : X(std::move(X)), slope(std::move(slope)), Y(std::move(Y)) {}
+        void evaluate() override { dlf::transformTo(X, slope, Y, xfn::prelu<T>()); }
+    };
 
     void visit(model::PRelu* n) override {
-        struct PReluOp : Operator {
-            TensorT<> X, slope, Y;
-            PReluOp(TensorT<>&& X, TensorT<>&& slope, TensorT<>&& Y)
-                : X(std::move(X)), slope(std::move(slope)), Y(std::move(Y)) {}
-            void evaluate() override {
-                dlf::transformTo(X, slope, Y, xfn::prelu<T>());
-            }
-        };
-
-        result = std::make_unique<PReluOp>(
-            alloc(n->input()), alloc(n->slope()), alloc(n->output()));
+        result = std::make_unique<PReluOp>(alloc(n->input()), alloc(n->slope()), alloc(n->output()));
     }
+
+    struct LeakyReluOp : Operator {
+        xfn::leaky_relu<T> op; TensorT<> X, Y;
+        LeakyReluOp(float alpha, TensorT<>&& X, TensorT<>&& Y)
+            : op(alpha), X(std::move(X)), Y(std::move(Y)) {}
+        void evaluate() override { dlf::transformTo(X, Y, op); }
+    };
 
     void visit(model::LeakyRelu* n) override {
-        struct LeakyReluOp : Operator {
-            xfn::leaky_relu<T> op;
-            TensorT<> X, Y;
-            LeakyReluOp(float alpha, TensorT<>&& X, TensorT<>&& Y)
-                : op(alpha), X(std::move(X)), Y(std::move(Y)) {}
-            void evaluate() override {
-                dlf::transformTo(X, Y, op);
-            }
-        };
-
-        result = std::make_unique<LeakyReluOp>(
-            n->alpha(), alloc(n->input()), alloc(n->output()));
+        result = std::make_unique<LeakyReluOp>(n->alpha(), alloc(n->input()), alloc(n->output()));
     }
+
+    struct ThresholdedReluOp : Operator {
+        xfn::thresholded_relu<T> op; TensorT<> X, Y;
+        ThresholdedReluOp(float alpha, TensorT<>&& X, TensorT<>&& Y)
+            : op(alpha), X(std::move(X)), Y(std::move(Y)) {}
+        void evaluate() override { dlf::transformTo(X, Y, op); }
+    };
 
     void visit(model::ThresholdedRelu* n) override {
-        struct ThresholdedReluOp : Operator {
-            xfn::thresholded_relu<T> op;
-            TensorT<> X, Y;
-            ThresholdedReluOp(float alpha, TensorT<>&& X, TensorT<>&& Y)
-                : op(alpha), X(std::move(X)), Y(std::move(Y)) {}
-            void evaluate() override {
-                dlf::transformTo(X, Y, op);
-            }
-        };
-
-        result = std::make_unique<ThresholdedReluOp>(
-            n->alpha(), alloc(n->input()), alloc(n->output()));
+        result = std::make_unique<ThresholdedReluOp>(n->alpha(), alloc(n->input()), alloc(n->output()));
     }
 
-    void visit(model::Selu* n) override {
-        struct SeluOp : Operator {
-            xfn::selu<T> op;
-            TensorT<> X, Y;
-            SeluOp(float alpha, float gamma, TensorT<>&& X, TensorT<>&& Y)
-                : op(alpha, gamma), X(std::move(X)), Y(std::move(Y)) {}
-            void evaluate() override {
-                dlf::transformTo(X, Y, op);
-            }
-        };
+    struct SeluOp : Operator {
+        xfn::selu<T> op; TensorT<> X, Y;
+        SeluOp(float alpha, float gamma, TensorT<>&& X, TensorT<>&& Y)
+            : op(alpha, gamma), X(std::move(X)), Y(std::move(Y)) {}
+        void evaluate() override { dlf::transformTo(X, Y, op); }
+    };
 
+    void visit(model::Selu* n) override {
         result = std::make_unique<SeluOp>(
             n->alpha(), n->gamma(), alloc(n->input()), alloc(n->output()));
     }
 
-    void visit(model::Elu* n) override {
-        struct EluOp : Operator {
-            xfn::elu<T> op;
-            TensorT<> X, Y;
-            EluOp(float alpha, TensorT<>&& X, TensorT<>&& Y)
-                : op(alpha), X(std::move(X)), Y(std::move(Y)) {}
-            void evaluate() override {
-                dlf::transformTo(X, Y, op);
-            }
-        };
+    struct EluOp : Operator {
+        xfn::elu<T> op; TensorT<> X, Y;
+        EluOp(float alpha, TensorT<>&& X, TensorT<>&& Y)
+            : op(alpha), X(std::move(X)), Y(std::move(Y)) {}
+        void evaluate() override { dlf::transformTo(X, Y, op); }
+    };
 
-        result = std::make_unique<EluOp>(
-            n->alpha(), alloc(n->input()), alloc(n->output()));
+    void visit(model::Elu* n) override {
+        result = std::make_unique<EluOp>(n->alpha(), alloc(n->input()), alloc(n->output()));
     }
 
-    void visit(model::HardSigmoid* n) override {
-        struct HardSigmoidOp : Operator {
-            xfn::hard_sigmoid<T> op;
-            TensorT<> X, Y;
-            HardSigmoidOp(T alpha, T beta, TensorT<>&& X, TensorT<>&& Y)
-                : op(alpha, beta), X(std::move(X)), Y(std::move(Y)) {}
-            void evaluate() override {
-                dlf::transformTo(X, Y, op);
-            }
-        };
+    struct HardSigmoidOp : Operator {
+        xfn::hard_sigmoid<T> op; TensorT<> X, Y;
+        HardSigmoidOp(T alpha, T beta, TensorT<>&& X, TensorT<>&& Y)
+            : op(alpha, beta), X(std::move(X)), Y(std::move(Y)) {}
+        void evaluate() override { dlf::transformTo(X, Y, op); }
+    };
 
+    void visit(model::HardSigmoid* n) override {
         result = std::make_unique<HardSigmoidOp>(
             n->alpha(), n->beta(), alloc(n->input()), alloc(n->output()));
     }
 
-    void visit(model::Softsign* n) override {
-        struct SoftsignOp : Operator {
-            TensorT<> X, Y;
-            SoftsignOp(TensorT<>&& X, TensorT<>&& Y)
-                : X(std::move(X)), Y(std::move(Y)) {}
-            void evaluate() override {
-                dlf::transformTo(X, Y, xfn::softsign<T>());
-            }
-        };
+    struct SoftsignOp : Operator {
+        TensorT<> X, Y;
+        SoftsignOp(TensorT<>&& X, TensorT<>&& Y)
+            : X(std::move(X)), Y(std::move(Y)) {}
+        void evaluate() override { dlf::transformTo(X, Y, xfn::softsign<T>()); }
+    };
 
-        result = std::make_unique<SoftsignOp>(
-            alloc(n->input()), alloc(n->output()));
+    void visit(model::Softsign* n) override {
+        result = std::make_unique<SoftsignOp>(alloc(n->input()), alloc(n->output()));
     }
 
-    void visit(model::Softplus* n) override {
-        struct SoftplusOp : Operator {
-            TensorT<> X, Y;
-            SoftplusOp(TensorT<>&& X, TensorT<>&& Y)
-                : X(std::move(X)), Y(std::move(Y)) {}
-            void evaluate() override {
-                dlf::transformTo(X, Y, xfn::softplus<T>());
-            }
-        };
+    struct SoftplusOp : Operator {
+        TensorT<> X, Y;
+        SoftplusOp(TensorT<>&& X, TensorT<>&& Y)
+            : X(std::move(X)), Y(std::move(Y)) {}
+        void evaluate() override { dlf::transformTo(X, Y, xfn::softplus<T>()); }
+    };
 
-        result = std::make_unique<SoftplusOp>(
-            alloc(n->input()), alloc(n->output()));
+    void visit(model::Softplus* n) override {
+        result = std::make_unique<SoftplusOp>(alloc(n->input()), alloc(n->output()));
     }
 
     #define DEFINE_BINARY_OPERATOR(Name, fn) \
@@ -330,9 +301,7 @@ private:
             TensorT<> A, B, C; \
             Name##Op(TensorT<>&& A, TensorT<>&& B, TensorT<>&& C) \
                 : A(std::move(A)), B(std::move(B)), C(std::move(C)) {} \
-            void evaluate() override { \
-                dlf::transformTo(A, B, C, ::dlf::xfn::fn<>()); \
-            } \
+            void evaluate() override { dlf::transformTo(A, B, C, ::dlf::xfn::fn<T>()); } \
         }; \
         result = std::make_unique<Name##Op>(alloc(n->A()), alloc(n->B()), alloc(n->C())); \
     }
@@ -341,25 +310,26 @@ private:
     DEFINE_BINARY_OPERATOR(Sub, minus)
     DEFINE_BINARY_OPERATOR(Mul, multiplies)
     DEFINE_BINARY_OPERATOR(Div, divides)
+    DEFINE_BINARY_OPERATOR(Pow, power)
     #undef DEFINE_BINARY_OPERATOR
 
+    struct GemmOp : Operator {
+        T alpha, beta;
+        bool transA, transB;
+        TensorT<> A, B, C, Y;
+
+        GemmOp(T alpha, T beta, bool transA, bool transB,
+               TensorT<>&& A, TensorT<>&& B, TensorT<>&& C, TensorT<>&& Y)
+            : alpha(alpha), beta(beta), transA(transA), transB(transB),
+              A(std::move(A)), B(std::move(B)), C(std::move(C)),
+              Y(std::move(Y)) {}
+
+        void evaluate() override {
+            gemm(alpha, A, B, beta, C, Y, transA, transB);
+        }
+    };
+
     void visit(model::Gemm* n) override {
-        struct GemmOp : Operator {
-            T alpha, beta;
-            bool transA, transB;
-            TensorT<> A, B, C, Y;
-
-            GemmOp(T alpha, T beta, bool transA, bool transB,
-                   TensorT<>&& A, TensorT<>&& B, TensorT<>&& C, TensorT<>&& Y)
-                : alpha(alpha), beta(beta), transA(transA), transB(transB),
-                  A(std::move(A)), B(std::move(B)), C(std::move(C)),
-                  Y(std::move(Y)) {}
-
-            void evaluate() override {
-                gemm(alpha, A, B, beta, C, Y, transA, transB);
-            }
-        };
-
         result = std::make_unique<GemmOp>(
             T(n->alpha()), T(n->beta()), n->transA(), n->transB(),
             alloc(n->A()), alloc(n->B()), alloc(n->C()), alloc(n->Y()));

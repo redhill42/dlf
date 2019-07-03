@@ -15,19 +15,6 @@ void Xrelu(const int n, const real_arg alpha_arg, const real_arg beta_arg,
 }
 
 __kernel __attribute__((reqd_work_group_size(WGS, 1, 1))) \
-void Xprelu(const int x_size, const __global real* restrict xgm, const int x_offset, const int x_inc,
-            const int y_size, const __global real* restrict ygm, const int y_offset, const int y_inc,
-            __global real* zgm, const int z_offset, const int z_inc)
-{
-  for (int id = get_global_id(0); id < x_size; id += get_global_size(0)) {
-    real x = xgm[id*x_inc + x_offset];
-    if (x < ZERO)
-      x *= ygm[(id*y_inc + y_offset) % y_size];
-    zgm[id*z_inc + z_offset] = x;
-  }
-}
-
-__kernel __attribute__((reqd_work_group_size(WGS, 1, 1))) \
 void Xleaky_relu(const int n, const real_arg alpha_arg, const real_arg beta_arg,
     const __global real* restrict xgm, const int x_offset, const int x_inc,
     __global real* ygm, const int y_offset, const int y_inc)

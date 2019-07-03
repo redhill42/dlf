@@ -7,19 +7,63 @@
 
 namespace dlf { namespace xfn {
 
-#define DEFINE_UNARY_FUNCTION($fn, $op) \
-template <typename T> \
-struct $fn : std::unary_function<T,T> { \
-    static const std::string name; \
-    constexpr T operator()(const T& x) { return $op; } \
-}; \
-template <typename T> \
-const std::string $fn<T>::name = #$fn;
+template <typename T>
+struct parameterized_function {
+    const T alpha{0}, beta{0};
+    constexpr parameterized_function() = default;
+    constexpr explicit parameterized_function(const T& alpha)
+        : alpha(alpha) {}
+    constexpr explicit parameterized_function(const T& alpha, const T& beta)
+        : alpha(alpha), beta(beta) {}
+};
 
-DEFINE_UNARY_FUNCTION(abs, std::abs(x))
-DEFINE_UNARY_FUNCTION(neg, T(-x))
-DEFINE_UNARY_FUNCTION(sign, T((T(0)<x) - (x<T(0))))
-DEFINE_UNARY_FUNCTION(reciprocal, T(T(1)/x))
+template <typename T = void>
+struct abs : std::unary_function<T,T> {
+    static constexpr auto name = "abs";
+    constexpr T operator()(const T& x) const
+        { return std::abs(x); }
+};
+
+template <>
+struct abs<void> {
+    static constexpr auto name = "abs";
+    template <typename T>
+    constexpr auto operator()(T&& x) const
+    noexcept(noexcept(std::abs(std::forward<T>(x))))
+    -> decltype      (std::abs(std::forward<T>(x)))
+        { return      std::abs(std::forward<T>(x)); }
+};
+
+template <typename T = void>
+struct negate : std::negate<T> {
+    static constexpr auto name = "neg";
+};
+
+template <typename T = void>
+struct sign : std::unary_function<T,T> {
+    static constexpr auto name = "sign";
+    constexpr T operator()(const T& x) const
+        { return (T() < x) - (x < T()); }
+};
+
+template <>
+struct sign<void> {
+    static constexpr auto name = "sign";
+    template <typename T>
+    constexpr auto operator()(T&& x) const
+    noexcept(noexcept((T() < x) - (x < T())))
+    -> decltype      ((T() < x) - (x < T()))
+        { return      (T() < x) - (x < T()); }
+};
+
+#define DEFINE_UNARY_FUNCTION(fn, op) \
+template <typename T> \
+struct fn : std::unary_function<T,T> { \
+    static constexpr auto name = #fn; \
+    T operator()(const T& x) const { return op; } \
+};
+
+DEFINE_UNARY_FUNCTION(reciprocal, T(1)/x)
 DEFINE_UNARY_FUNCTION(floor, std::floor(x))
 DEFINE_UNARY_FUNCTION(ceil, std::ceil(x))
 DEFINE_UNARY_FUNCTION(round, std::round(x))
@@ -47,168 +91,123 @@ DEFINE_UNARY_FUNCTION(sigmoid, T(1)/(T(1)+std::exp(-x)))
 
 template <typename T = void>
 struct plus : std::plus<T> {
-    static const std::string name;
+    static constexpr auto name = "add_v";
 };
-template <typename T>
-const std::string plus<T>::name = "add";
 
 template <typename T = void>
 struct minus : std::minus<T> {
-    static const std::string name;
+    static constexpr auto name = "sub_v";
 };
-template <typename T>
-const std::string minus<T>::name = "sub";
 
 template <typename T = void>
 struct multiplies : std::multiplies<T> {
-    static const std::string name;
+    static constexpr auto name = "mul_v";
 };
-template <typename T>
-const std::string multiplies<T>::name = "mul";
 
 template <typename T = void>
 struct divides : std::divides<T> {
-    static const std::string name;
+    static constexpr auto name = "div_v";
 };
-template <typename T>
-const std::string divides<T>::name = "div";
+
+template <typename T = void>
+struct power : std::binary_function<T,T,T> {
+    static constexpr auto name = "pow";
+    T operator()(const T& x, const T& y) const {
+        return std::pow(x, y);
+    }
+};
+
+template <>
+struct power<void> {
+    static constexpr auto name = "pow";
+    template <class T1, class T2>
+    auto operator()(T1&& x, T2&& y) const
+    noexcept(noexcept(std::pow(std::forward<T1>(x), std::forward<T2>(y))))
+    -> decltype      (std::pow(std::forward<T1>(x), std::forward<T2>(y)))
+        { return      std::pow(std::forward<T1>(x), std::forward<T2>(y)); }
+};
 
 //==-------------------------------------------------------------------------
 
 template <typename T>
-struct activation_function : std::unary_function<T,T> {
-    const T alpha{0}, beta{0};
-
-    activation_function() = default;
-
-    template <typename T1>
-    activation_function(const T1& alpha)
-        : alpha(static_cast<T>(alpha)) {}
-
-    template <typename T1, typename T2>
-    activation_function(const T1& alpha, const T2& beta)
-        : alpha(static_cast<T>(alpha)), beta(static_cast<T>(beta)) {}
-};
-
-template <typename T>
-struct relu : activation_function<T> {
-    static const std::string name;
-    constexpr T operator()(const T& x) {
-        return std::max(T(0), x);
+struct relu : std::unary_function<T,T>, parameterized_function<T> {
+    static constexpr auto name = "relu";
+    constexpr T operator()(const T& x) const {
+        return std::max(T(), x);
     }
 };
-template <typename T>
-const std::string relu<T>::name = "relu";
 
 template <typename T>
 struct prelu : std::binary_function<T,T,T> {
-    static const std::string name;
-    constexpr T operator()(const T& x, const T& slope) {
-        return x < T(0) ? x*slope : x;
+    static constexpr auto name = "prelu";
+    constexpr T operator()(const T& x, const T& slope) const {
+        return x < T() ? x*slope : x;
     }
 };
-template <typename T>
-const std::string prelu<T>::name = "prelu";
 
 template <typename T>
-struct leaky_relu : activation_function<T> {
-    static const std::string name;
-    using activation_function<T>::alpha;
-
-    template <typename U>
-    constexpr leaky_relu(const U& alpha)
-        : activation_function<T>(alpha) {}
-
-    constexpr T operator()(const T& x) {
-        return x < T(0) ? x*alpha : x;
+struct leaky_relu : std::unary_function<T,T>, parameterized_function<T> {
+    static constexpr auto name = "leaky_relu";
+    constexpr leaky_relu(const T& alpha)
+        : parameterized_function<T>(alpha) {}
+    constexpr T operator()(const T& x) const {
+        return x < T() ? x*this->alpha : x;
     }
 };
-template <typename T>
-const std::string leaky_relu<T>::name = "leaky_relu";
 
 template <typename T>
-struct thresholded_relu : activation_function<T> {
-    static const std::string name;
-    using activation_function<T>::alpha;
-
-    template <typename U>
-    constexpr thresholded_relu(const U& alpha)
-        : activation_function<T>(static_cast<T>(alpha)) {}
-
-    constexpr T operator()(const T& x) {
-        return x > alpha ? x : T(0);
+struct thresholded_relu : std::unary_function<T,T>, parameterized_function<T> {
+    static constexpr auto name = "thresholded_relu";
+    constexpr thresholded_relu(const T& alpha)
+        : parameterized_function<T>(alpha) {}
+    constexpr T operator()(const T& x) const {
+        return x > this->alpha ? x : T();
     }
 };
-template <typename T>
-const std::string thresholded_relu<T>::name = "thresholded_relu";
 
 template <typename T>
-struct selu : activation_function<T> {
-    static const std::string name;
-    using activation_function<T>::alpha;
-    using activation_function<T>::beta;
-
-    template <typename T1, typename T2>
-    constexpr selu(const T1& alpha, const T2& gamma)
-        : activation_function<T>(alpha, gamma) {}
-
-    constexpr T operator()(const T& x) {
-        return T(beta * (x < T(0) ? alpha * (std::exp(x) - T(1)) : x));
+struct selu : std::unary_function<T,T>, parameterized_function<T> {
+    static constexpr auto name = "selu";
+    selu(const T& alpha, const T& gamma)
+        : parameterized_function<T>(alpha, gamma) {}
+    constexpr T operator()(const T& x) const {
+        return this->beta * (x < T() ? this->alpha*(std::exp(x) - T(1)) : x);
     }
 };
-template <typename T>
-const std::string selu<T>::name = "selu";
 
 template <typename T>
-struct elu : activation_function<T> {
-    static const std::string name;
-    using activation_function<T>::alpha;
-
-    template <typename U>
-    constexpr elu(const U& alpha) : activation_function<T>(alpha) {}
-
-    constexpr T operator()(const T& x) {
-        return x < T(0) ? alpha * (std::exp(x) - T(1)) : x;
+struct elu : std::unary_function<T,T>, parameterized_function<T> {
+    static constexpr auto name = "elu";
+    elu(const T& alpha) : parameterized_function<T>(alpha) {}
+    constexpr T operator()(const T& x) const {
+        return x < T() ? this->alpha*(std::exp(x) - T(1)) : x;
     }
 };
-template <typename T>
-const std::string elu<T>::name = "elu";
 
 template <typename T>
-struct hard_sigmoid : activation_function<T> {
-    static const std::string name;
-    using activation_function<T>::alpha;
-    using activation_function<T>::beta;
-
-    template <typename T1, typename T2>
-    constexpr hard_sigmoid(const T1& alpha, const T2& beta)
-        : activation_function<T>(alpha, beta) {}
-
-    constexpr T operator()(const T& x) {
-        return std::max(T(0), std::min(T(1), alpha*x + beta));
+struct hard_sigmoid : std::unary_function<T,T>, parameterized_function<T> {
+    static constexpr auto name = "hard_sigmoid";
+    constexpr hard_sigmoid(const T& alpha, const T& beta)
+        : parameterized_function<T>(alpha, beta) {}
+    constexpr T operator()(const T& x) const {
+        return std::max(T(), std::min(T(1), this->alpha*x + this->beta));
     }
 };
-template <typename T>
-const std::string hard_sigmoid<T>::name = "hard_sigmoid";
 
 template <typename T>
-struct softsign : activation_function<T> {
-    static const std::string name;
-    constexpr T operator()(const T& x) {
-        return T(x / (T(1) + std::abs(x)));
+struct softsign : std::unary_function<T,T>, parameterized_function<T> {
+    static constexpr auto name = "softsign";
+    constexpr T operator()(const T& x) const {
+        return x / (T(1) + std::abs(x));
     }
 };
-template <typename T>
-const std::string softsign<T>::name = "softsign";
 
 template <typename T>
-struct softplus : activation_function<T> {
-    static const std::string name;
-    constexpr T operator()(const T& x) {
-        return T(std::log(std::exp(x) + T(1)));
+struct softplus : std::unary_function<T,T>, parameterized_function<T> {
+    static constexpr auto name = "softplus";
+    constexpr T operator()(const T& x) const {
+        return std::log(std::exp(x) + T(1));
     }
 };
-template <typename T>
-const std::string softplus<T>::name = "softplus";
 
 }} // namespace dlf::xfn

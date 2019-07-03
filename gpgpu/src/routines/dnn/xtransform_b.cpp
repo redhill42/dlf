@@ -1,19 +1,24 @@
-#include "xbinary.hpp"
+#include "xtransform_b.hpp"
 #include <cassert>
 
 namespace gpgpu { namespace dnn {
 using namespace gpgpu::blas;
 
 template <typename T>
-Xbinary<T>::Xbinary(const Queue& queue, Event* event, const std::string& name)
+Xtransform_b<T>::Xtransform_b(const Queue& queue, Event* event, const std::string& name)
     : Routine(queue, event, name, {"Xaxpy"}, PrecisionValue<T>(), {}, {
     #include "../../kernels/level1/level1.cl"
-    #include "kernels/dnn/xbinary.cl"
+    #include "kernels/dnn/xtransform_b.cl"
 }) {
 }
 
+static inline bool ends_with(const std::string& str, const std::string& suffix) {
+    return str.length() >= suffix.length() &&
+        0 == str.compare(str.length()-suffix.length(), suffix.length(), suffix);
+}
+
 template <typename T>
-void Xbinary<T>::DoBinary(
+void Xtransform_b<T>::DoTransform(
     const std::string& name,
     const size_t x_size, const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
     const size_t y_size, const Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
@@ -31,7 +36,8 @@ void Xbinary<T>::DoBinary(
     TestVectorY(n, z_buffer, z_offset, z_inc); // TODO: Make a TestVectorZ function with error codes
 
     // Determines whether or not the fast-version can be used
-    const auto use_faster_kernel = (x_size == y_size) &&
+    const auto use_faster_kernel = (ends_with(name, "_v")) &&
+                                   (x_size == y_size) &&
                                    (x_offset == 0) && (x_inc == 1) &&
                                    (y_offset == 0) && (y_inc == 1) &&
                                    (z_offset == 0) && (z_inc == 1) &&
@@ -85,7 +91,7 @@ void Xbinary<T>::DoBinary(
 }
 
 template <typename T>
-void Xbinary<T>::DoBinaryStrided(const std::string& name, const size_t n,
+void Xtransform_b<T>::DoTransform(const std::string& name, const size_t n,
     const Buffer<T>& x_buffer, const Buffer<T>& y_buffer, Buffer<T>& z_buffer,
     const std::vector<size_t>& lstride, const std::vector<size_t>& rstride,
     const std::vector<size_t>& oshape)
@@ -122,13 +128,13 @@ void Xbinary<T>::DoBinaryStrided(const std::string& name, const size_t n,
     RunKernel(kernel, queue_, device_, global, local, event_);
 }
 
-template class Xbinary<int16_t>;
-template class Xbinary<int32_t>;
-template class Xbinary<int64_t>;
-template class Xbinary<half>;
-template class Xbinary<float>;
-template class Xbinary<double>;
-template class Xbinary<float2>;
-template class Xbinary<double2>;
+template class Xtransform_b<int16_t>;
+template class Xtransform_b<int32_t>;
+template class Xtransform_b<int64_t>;
+template class Xtransform_b<half>;
+template class Xtransform_b<float>;
+template class Xtransform_b<double>;
+template class Xtransform_b<float2>;
+template class Xtransform_b<double2>;
 
 }}

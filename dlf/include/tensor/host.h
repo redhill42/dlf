@@ -34,6 +34,8 @@ class Tensor : public Shaped {
     }
 
 public: // Container View
+    static constexpr bool is_tensor = true;
+
     using value_type                = T;
     using reference                 = value_type&;
     using const_reference           = const value_type&;
@@ -639,26 +641,6 @@ inline Tensor<T> Tensor<T>::broadcast(const Shape& shape) && {
         copy(*this, dst);
         return dst;
     }
-}
-
-template <typename T>
-inline Tensor<T> abs(const Tensor<T>& x) {
-    return transform(x, xfn::abs<T>());
-}
-
-template <typename T>
-inline Tensor<T> abs(Tensor<T>&& x) {
-    return transform(std::move(x), xfn::abs<T>());
-}
-
-template <typename T>
-inline Tensor<T> operator-(const Tensor<T>& x) {
-    return transform(x, xfn::neg<T>());
-}
-
-template <typename T>
-inline Tensor<T> operator-(Tensor<T>&& x) {
-    return transform(std::move(x), xfn::neg<T>());
 }
 
 //==-------------------------------------------------------------------------
