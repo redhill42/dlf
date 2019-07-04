@@ -6,21 +6,21 @@ R"(
 
 // Full version of the kernel with offsets and strided accesses
 __kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
-void Xcopy(const int x_size, const __global real* restrict xgm, const int x_offset, const int x_inc,
-           const int y_size, __global real* ygm, const int y_offset, const int y_inc)
+void Xcopy(const int x_size, const __global real* restrict xgm,
+           const int y_size, __global real* ygm)
 {
   if (x_size == 1) {
-    real x_value = xgm[x_offset];
+    real x_value = xgm[0];
     for (int id = get_global_id(0); id < y_size; id += get_global_size(0)) {
-      ygm[id*y_inc + y_offset] = x_value;
+      ygm[id] = x_value;
     }
   } else if (x_size < y_size) {
     for (int id = get_global_id(0); id < y_size; id += get_global_size(0)) {
-      ygm[id*y_inc + y_offset] = xgm[(id*x_inc + x_offset) % x_size];
+      ygm[id] = xgm[id % x_size];
     }
   } else {
     for (int id = get_global_id(0); id < y_size; id += get_global_size(0)) {
-      ygm[id*y_inc + y_offset] = xgm[id*x_inc + x_offset];
+      ygm[id] = xgm[id];
     }
   }
 }

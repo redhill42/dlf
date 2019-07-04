@@ -4,13 +4,10 @@ R"(
 
 #define TRANSFORM(name, op) \
 __kernel __attribute__((reqd_work_group_size(WGS, 1, 1))) \
-void X##name(const int n, \
-    const __global real* restrict xgm, const int x_offset, const int x_inc, \
-    __global real* ygm, const int y_offset, const int y_inc) \
-{ \
+void X##name(const int n, const __global real* restrict xgm, __global real* ygm) { \
   for (int id = get_global_id(0); id < n; id += get_global_size(0)) { \
-    real x_value = xgm[id*x_inc + x_offset]; \
-    ygm[id*y_inc + y_offset] = op(x_value); \
+    real x = xgm[id]; \
+    ygm[id] = op(x); \
   } \
 }
 

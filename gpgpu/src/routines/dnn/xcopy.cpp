@@ -14,44 +14,32 @@ Xcopy<T>::Xcopy(const Queue& queue, Event* event, const std::string& name):
 
 // The main routine
 template <typename T>
-void Xcopy<T>::DoCopy(
-    const size_t x_size, const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
-    const size_t y_size, Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc)
+void Xcopy<T>::DoCopy(const size_t x_size, const Buffer<T>& x_buffer,
+                      const size_t y_size, Buffer<T>& y_buffer)
 {
   // Makes sure all dimensions are larger than zero
   if (x_size == 0 || y_size == 0)
       throw BLASError(StatusCode::kInvalidDimension);
 
   // Tests the vectors for validity
-  TestVectorX(x_size, x_buffer, x_offset, x_inc);
-  TestVectorY(y_size, y_buffer, y_offset, y_inc);
+  TestVectorX(x_size, x_buffer, 0, 1);
+  TestVectorY(y_size, y_buffer, 0, 1);
 
   // Determines whether or not the fast-version can be used
   bool use_fast_kernel = (x_size == y_size) &&
-                         (x_offset == 0) && (x_inc == 1) &&
-                         (y_offset == 0) && (y_inc == 1) &&
                          IsMultiple(y_size, db_["WGS"]*db_["WPT"]*db_["VW"]);
 
   // If possible, run the fast-version of the kernel
-  auto kernel_name = (use_fast_kernel) ? "XcopyFast" : "Xcopy";
+  auto kernel_name = use_fast_kernel ? "XcopyFast" : "Xcopy";
 
   // Retrieves the Xcopy kernel from the compiled binary
   auto kernel = program_.getKernel(kernel_name);
 
   // Sets the kernel arguments
   if (use_fast_kernel) {
-    kernel.setArgument(0, static_cast<int>(y_size));
-    kernel.setArgument(1, x_buffer);
-    kernel.setArgument(2, y_buffer);
+    kernel.setArguments(static_cast<int>(y_size), x_buffer, y_buffer);
   } else {
-    kernel.setArgument(0, static_cast<int>(x_size));
-    kernel.setArgument(1, x_buffer);
-    kernel.setArgument(2, static_cast<int>(x_offset));
-    kernel.setArgument(3, static_cast<int>(x_inc));
-    kernel.setArgument(4, static_cast<int>(y_size));
-    kernel.setArgument(5, y_buffer);
-    kernel.setArgument(6, static_cast<int>(y_offset));
-    kernel.setArgument(7, static_cast<int>(y_inc));
+    kernel.setArguments(static_cast<int>(x_size), x_buffer, static_cast<int>(y_size), y_buffer);
   }
 
   // Launches the kernel

@@ -15,27 +15,20 @@ Xtransform<T>::Xtransform(const Queue& queue, Event* event, const std::string& n
 template <typename T>
 void Xtransform<T>::DoTransform(
     const std::string& name, const size_t n,
-    const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
-    Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc)
+    const Buffer<T>& x_buffer,Buffer<T>& y_buffer)
 {
     // Make sure all dimensions are larger than zero
     if (n == 0) throw BLASError(StatusCode::kInvalidDimension);
 
     // Tests the vector for validity
-    TestVectorX(n, x_buffer, x_offset, x_inc);
-    TestVectorY(n, y_buffer, y_offset, y_inc);
+    TestVectorX(n, x_buffer, 0, 1);
+    TestVectorY(n, y_buffer, 0, 1);
 
     // Retrieves the transform kernel from the compiled binary
     auto kernel = program_.getKernel("X" + name);
 
     // Sets the kernel arguments
-    kernel.setArgument(0, static_cast<int>(n));
-    kernel.setArgument(1, x_buffer);
-    kernel.setArgument(2, static_cast<int>(x_offset));
-    kernel.setArgument(3, static_cast<int>(x_inc));
-    kernel.setArgument(4, y_buffer);
-    kernel.setArgument(5, static_cast<int>(y_offset));
-    kernel.setArgument(6, static_cast<int>(y_inc));
+    kernel.setArguments(static_cast<int>(n), x_buffer, y_buffer);
 
     // Launches the kernel
     auto n_ceiled = Ceil(n, db_["WGS"]*db_["WPT"]);

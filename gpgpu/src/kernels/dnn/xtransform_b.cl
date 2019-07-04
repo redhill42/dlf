@@ -53,49 +53,49 @@ R"(
 
 #define DEFINE_BINARY(name, op)                                             \
 __kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))                   \
-void name(const int x_size, const __global real* restrict xgm, const int x_offset, const int x_inc, \
-          const int y_size, const __global real* restrict ygm, const int y_offset, const int y_inc, \
-          __global real *zgm, const int z_offset, const int z_inc)          \
+void name(const int x_size, const __global real* restrict xgm,              \
+          const int y_size, const __global real* restrict ygm,              \
+          __global real *zgm)                                               \
 {                                                                           \
   if (x_size == 1) {                                                        \
-    real x_value = xgm[x_offset];                                           \
-    for (int id = get_global_id(0); id < y_size; id += get_global_size(0)) {\
-      real y_value = ygm[id*y_inc + y_offset];                              \
+    real x_value = xgm[0];                                                  \
+    for (int id = get_global_id(0); id<y_size; id += get_global_size(0)) {  \
+      real y_value = ygm[id];                                               \
       real z_value;                                                         \
       op(z_value, x_value, y_value);                                        \
-      zgm[id*z_inc + z_offset] = z_value;                                   \
+      zgm[id] = z_value;                                                    \
     }                                                                       \
   } else if (y_size == 1) {                                                 \
-    real y_value = ygm[y_offset];                                           \
-    for (int id = get_global_id(0); id < x_size; id += get_global_size(0)) {\
-      real x_value = xgm[id*x_inc + x_offset];                              \
+    real y_value = ygm[0];                                                  \
+    for (int id = get_global_id(0); id<x_size; id += get_global_size(0)) {  \
+      real x_value = xgm[id];                                               \
       real z_value;                                                         \
       op(z_value, x_value, y_value);                                        \
-      zgm[id*z_inc + z_offset] = z_value;                                   \
+      zgm[id] = z_value;                                                    \
     }                                                                       \
   } else if (x_size < y_size) {                                             \
-    for (int id = get_global_id(0); id < y_size; id += get_global_size(0)) {\
-      real x_value = xgm[(id*x_inc + x_offset) % x_size];                   \
-      real y_value = ygm[id*y_inc + y_offset];                              \
+    for (int id = get_global_id(0); id<y_size; id += get_global_size(0)) {  \
+      real x_value = xgm[id % x_size];                                      \
+      real y_value = ygm[id];                                               \
       real z_value;                                                         \
       op(z_value, x_value, y_value);                                        \
-      zgm[id*z_inc + z_offset] = z_value;                                   \
+      zgm[id] = z_value;                                                    \
     }                                                                       \
   } else if (x_size > y_size) {                                             \
-    for (int id = get_global_id(0); id < x_size; id += get_global_size(0)) {\
-      real x_value = xgm[id*x_inc + x_offset];                              \
-      real y_value = ygm[(id*y_inc + y_offset) % y_size];                   \
+    for (int id = get_global_id(0); id<x_size; id += get_global_size(0)) {  \
+      real x_value = xgm[id];                                               \
+      real y_value = ygm[id % y_size];                                      \
       real z_value;                                                         \
       op(z_value, x_value, y_value);                                        \
-      zgm[id*z_inc + z_offset] = z_value;                                   \
+      zgm[id] = z_value;                                                    \
     }                                                                       \
   } else {                                                                  \
-    for (int id = get_global_id(0); id < x_size; id += get_global_size(0)) {\
-      real x_value = xgm[id*x_inc + x_offset];                              \
-      real y_value = ygm[id*y_inc + y_offset];                              \
+    for (int id = get_global_id(0); id<x_size; id += get_global_size(0)) {  \
+      real x_value = xgm[id];                                               \
+      real y_value = ygm[id];                                               \
       real z_value;                                                         \
       op(z_value, x_value, y_value);                                        \
-      zgm[id*z_inc + z_offset] = z_value;                                   \
+      zgm[id] = z_value;                                                    \
     }                                                                       \
   }                                                                         \
 }                                                                           \

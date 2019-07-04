@@ -15,29 +15,22 @@ Xtransform_p<T>::Xtransform_p(const gpgpu::Queue& queue, gpgpu::Event* event, co
 template <typename T>
 void Xtransform_p<T>::DoTransform(
     const std::string& name, const size_t n, const T alpha, const T beta,
-    const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
-    Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc)
+    const Buffer<T>& x_buffer, Buffer<T>& y_buffer)
 {
     // Make sure all dimensions are larger than zero
     if (n == 0) throw BLASError(StatusCode::kInvalidDimension);
 
     // Tests the vector for validity
-    TestVectorX(n, x_buffer, x_offset, x_inc);
-    TestVectorY(n, y_buffer, y_offset, y_inc);
+    TestVectorX(n, x_buffer, 0, 1);
+    TestVectorY(n, y_buffer, 0, 1);
 
     // Retrieves the activation kernel from the compiled binary
     auto kernel = program_.getKernel("X" + name);
 
     // Sets the kernel arguments
-    kernel.setArgument(0, static_cast<int>(n));
-    kernel.setArgument(1, GetRealArg(alpha));
-    kernel.setArgument(2, GetRealArg(beta));
-    kernel.setArgument(3, x_buffer);
-    kernel.setArgument(4, static_cast<int>(x_offset));
-    kernel.setArgument(5, static_cast<int>(x_inc));
-    kernel.setArgument(6, y_buffer);
-    kernel.setArgument(7, static_cast<int>(y_offset));
-    kernel.setArgument(8, static_cast<int>(y_inc));
+    kernel.setArguments(static_cast<int>(n),
+                        GetRealArg(alpha), GetRealArg(beta),
+                        x_buffer, y_buffer);
 
     // Launches the kernel
     auto n_ceiled = Ceil(n, db_["WGS"]*db_["WPT"]);
