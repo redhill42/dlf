@@ -16,7 +16,6 @@ class DevTensor : public Shaped {
     gpgpu::Buffer<T> m_data;
 
 public:
-    static constexpr bool is_tensor = true;
     using value_type = T;
 
     DevTensor() = default;
@@ -38,6 +37,14 @@ public:
         : Shaped(std::move(shape)), m_data(std::move(data))
     {
     }
+
+    DevTensor(const DevTensor& src, const gpgpu::Queue& queue = gpgpu::current::queue())
+        : DevTensor(src.shape(), queue)
+    {
+        src.copyTo(*this, queue);
+    }
+
+    DevTensor(DevTensor&&) = default;
 
     /**
      * Read data from device.

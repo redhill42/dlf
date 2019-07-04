@@ -804,7 +804,7 @@ public:
         auto rank = dims.size();
         auto axis = n->axis();
         if (axis < 0) axis += rank;
-        if (axis < 0 || axis >= rank)
+        if (axis < 0 || axis > rank)
             fail_shape_inference("Flatten: Invalid value (", axis, ") for attribute 'axis'");
         size_t a = std::accumulate(dims.begin(), dims.begin()+axis, 1, std::multiplies<>());
         size_t b = std::accumulate(dims.begin()+axis, dims.end(), 1, std::multiplies<>());

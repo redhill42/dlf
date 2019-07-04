@@ -676,6 +676,16 @@ public:
     }
 };
 
+template <typename T>
+bool operator==(const Buffer<T>& lhs, const Buffer<T>& rhs) {
+    return lhs.handle() == rhs.handle();
+}
+
+template <typename T>
+bool operator!=(const Buffer<T>& lhs, const Buffer<T>& rhs) {
+    return lhs.handle() != rhs.handle();
+}
+
 class Program {
     std::shared_ptr<raw::Program> m_raw;
 

@@ -70,19 +70,7 @@ TEST_F(GPGPUTest, DevTensorCopyConstructor) {
     auto dev_A = DevTensor<float>(A);
     auto dev_B = dev_A;
     EXPECT_EQ(dev_B.read(), A);
-}
-
-TEST_F(GPGPUTest, DevTensorCopyAssignment) {
-    Shape shape{2, 3, 4};
-    auto A = Tensor<float>::range(shape, 1);
-    auto B = Tensor<float>::range(shape, 3);
-    auto dev_A = DevTensor<float>(shape);
-    auto dev_B = DevTensor<float>(shape);
-    dev_A.write(A);
-    dev_B.write(B);
-    EXPECT_EQ(dev_B.read(), B);
-    dev_B = dev_A;
-    EXPECT_EQ(dev_B.read(), A);
+    EXPECT_NE(dev_A.data(), dev_B.data());
 }
 
 template <typename T>

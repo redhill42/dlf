@@ -348,6 +348,21 @@ private:
             T(n->alpha()), T(n->beta()), n->transA(), n->transB(),
             alloc(n->A()), alloc(n->B()), alloc(n->C()), alloc(n->Y()));
     }
+
+    struct ReshapeOp : Operator {
+        TensorT<> X, Y;
+        ReshapeOp(TensorT<>&& X, TensorT<>&& Y)
+            : X(std::move(X)), Y(std::move(Y)) {}
+        void evaluate() override { reshape(X, Y); }
+    };
+
+    void visit(model::Reshape* n) override {
+        result = std::make_unique<ReshapeOp>(alloc(n->input()), alloc(n->output()));
+    }
+
+    void visit(model::Flatten* n) override {
+        result = std::make_unique<ReshapeOp>(alloc(n->input()), alloc(n->output()));
+    }
 };
 
 template <typename Context, typename T>

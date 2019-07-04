@@ -421,9 +421,7 @@ void encodeGraph(GraphProto* gp, const Graph* g) {
     for (auto input : g->inputs()) {
         encodeValueInfo(gp->add_input(), input);
         if (input->has_initializer()) {
-            auto init = gp->add_initializer();
-            init->set_name(input->name());
-            encodeTensor(init, input->initializer());
+            encodeTensor(gp->add_initializer(), input->initializer());
         }
     }
 

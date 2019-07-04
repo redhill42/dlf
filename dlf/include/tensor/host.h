@@ -34,8 +34,6 @@ class Tensor : public Shaped {
     }
 
 public: // Container View
-    static constexpr bool is_tensor = true;
-
     using value_type                = T;
     using reference                 = value_type&;
     using const_reference           = const value_type&;

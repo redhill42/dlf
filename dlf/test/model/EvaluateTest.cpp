@@ -16,25 +16,38 @@ TYPED_TEST(EvaluateTest, Simple) {
     auto x = g.append<Add>();
     x->addInput(g.addInput("A", DataType::FLOAT, {2, 3}));
     x->addInput(g.addInput("B", DataType::FLOAT, {1}));
-    x->addOutput("T");
+    x->addOutput("X");
 
     auto y = g.append<Mul>();
     y->addInput(x->output());
     y->addInput(g.addInput("C", DataType::FLOAT, {1}));
     g.addOutput(y->addOutput("Y"));
 
-    auto z = g.append<Clip>();
-    z->set_min(10)->set_max(15);
-    z->addInput(y->output());
-    g.addOutput(z->addOutput("Z"));
+    auto o1 = g.append<Clip>();
+    o1->set_min(10)->set_max(15);
+    o1->addInput(y->output());
+    g.addOutput(o1->addOutput("Z"));
+
+    auto o2 = g.append<Reshape>();
+    o2->addInput(y->output());
+    o2->addInput(g.addInitializer(TensorData("shape", DataType::INT64, {2}, {3, 2})));
+    g.addOutput(o2->addOutput("reshaped"));
+
+    auto o3 = g.append<Flatten>();
+    o3->set_axis(0);
+    o3->addInput(y->output());
+    g.addOutput(o3->addOutput("flatten"));
 
     Evaluator<Context, float> eval(g);
     eval.set(0, Tensor<float>({2, 3}, {1, 2, 3, 4, 5, 6}));
     eval.set(1, scalar<float>(3));
     eval.set(2, scalar<float>(2));
     eval.evaluate();
+
     EXPECT_EQ(eval.get(0), Tensor<float>({2, 3}, {8, 10, 12, 14, 16, 18}));
     EXPECT_EQ(eval.get(1), Tensor<float>({2, 3}, {10, 10, 12, 14, 15, 15}));
+    EXPECT_EQ(eval.get(2), Tensor<float>({3, 2}, {8, 10, 12, 14, 16, 18}));
+    EXPECT_EQ(eval.get(3), Tensor<float>({1, 6}, {8, 10, 12, 14, 16, 18}));
 }
 
 TYPED_TEST(EvaluateTest, Gemm) {
