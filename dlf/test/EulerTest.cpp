@@ -60,30 +60,6 @@ inline long psi(long n) {
     return ((n & 3) == 1 || (n & 3) == 2) ? 1 : 0;
 }
 
-static long Problem210_seq(long r) {
-    if (r % 8 != 0)
-        throw std::logic_error("Unsolvable with current algorithm");
-
-    auto n = r * r / 32 - 1;
-    auto u = static_cast<long>(std::sqrt(n));
-    long sum = 0;
-
-    for (long a = 1; a <= u; a++) {
-        long b = n / a;
-        sum += psi(b);
-        if ((a & 3) == 1)
-            sum += b;
-        if ((a & 3) == 3)
-            sum -= b;
-    }
-
-    sum *= 4;
-    sum -= 4 * u * psi(u);
-    sum -= r / 4 - 2;
-    sum += 3 * r * r / 2;
-    return sum;
-}
-
 static long Problem210_par(long r) {
     if (r % 8 != 0)
         throw std::runtime_error("Unsolvable with current algorithm");
@@ -112,13 +88,13 @@ static long Problem210_par(long r) {
     return ans;
 }
 
-static long Problem210_gpu(long r, const gpgpu::Queue& queue) {
+static long Problem210_gpu(long r) {
     if (r % 8 != 0)
         throw std::runtime_error("Unsolvable with current algorithm");
 
     auto n = r * r / 32 - 1;
     auto u = static_cast<long>(std::sqrt(n));
-    auto routine = Problem(queue, nullptr, "EULER210");
+    auto routine = Problem(gpgpu::current::queue(), nullptr, "EULER210");
     auto ans = routine.solve("Euler210", n, u);
 
     ans *= 4;
@@ -132,17 +108,13 @@ TEST_F(EulerTest, Problem210) {
     constexpr auto n = 1'000'000'000L;
     constexpr auto solution = 1598174770174689458L;
 
-    timing("Problem 210 CPU sequential", 1, [=]() {
-        EXPECT_EQ(Problem210_seq(n), solution);
-    });
-
     timing("Problem 210 CPU parallel", 1, [=]() {
         EXPECT_EQ(Problem210_par(n), solution);
     });
 
-    doTest([=](auto const& queue) {
-        timing("Problem 210 GPU " + queue.context().device().name(), 1, [&]() {
-            EXPECT_EQ(Problem210_gpu(n, queue), solution);
+    doTest([=]() {
+        timing("Problem 210 GPU " + gpgpu::current::context().device().name(), 1, [&]() {
+            EXPECT_EQ(Problem210_gpu(n), solution);
         });
     });
 }

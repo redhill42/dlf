@@ -562,25 +562,6 @@ public:
     }
 };
 
-/**
- * The context activation guard.
- */
-class ContextActivation {
-    const Context& m_context;
-
-public:
-    explicit ContextActivation(const Context& context) : m_context(context) {
-        m_context.activate();
-    }
-
-    ~ContextActivation() {
-        m_context.deactivate();
-    }
-
-    ContextActivation(const ContextActivation&) = delete;
-    ContextActivation& operator=(const ContextActivation&) = delete;
-};
-
 class Queue {
     Context m_context;
     std::shared_ptr<raw::Queue> m_raw;
@@ -759,7 +740,20 @@ private:
 
 class current {
 public:
-    current() = delete; // disable construction
+    /**
+     * Create a new context and associate it with current thread.
+     */
+    current(const Queue& queue);
+
+    /**
+     * Deassociate context from current thread.
+     */
+     ~current();
+
+     current(const current&) = delete;
+     current(current&&) = delete;
+     current& operator=(const current&) = delete;
+     current& operator=(current&&) = delete;
 
     /**
      * Returns the context associated with current thread.
@@ -770,6 +764,9 @@ public:
      * Returns the queue associated with current thread.
      */
     static const Queue& queue();
+
+private:
+    Queue previous_queue;
 };
 
 //==-------------------------------------------------------------------------

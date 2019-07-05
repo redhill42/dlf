@@ -153,19 +153,36 @@ static Context select_current_context() {
     } while (true);
 }
 
-static thread_local Context current_context;
 static thread_local Queue current_queue;
 
-const Context& current::context() {
-    if (current_context.id() == 0)
-        current_context = select_current_context().activate();
-    return current_context;
+const Queue& current::queue() {
+    if (current_queue.id() == 0) {
+        Context context = select_current_context();
+        context.activate();
+        current_queue = context.createQueue();
+    }
+    return current_queue;
 }
 
-const Queue& current::queue() {
-    if (current_queue.id() == 0)
-        current_queue = current::context().createQueue();
-    return current_queue;
+const Context& current::context() {
+    return current::queue().context();
+}
+
+current::current(const Queue& queue) {
+    if (current_queue.id() != 0)
+        current_queue.context().deactivate();
+    if (queue.id() != 0)
+        queue.context().activate();
+    previous_queue = current_queue;
+    current_queue = queue;
+}
+
+current::~current() {
+    if (current_queue.id() != 0)
+        current_queue.context().deactivate();
+    if (previous_queue.id() != 0)
+        previous_queue.context().activate();
+    current_queue = previous_queue;
 }
 
 } // namespace gpgpu

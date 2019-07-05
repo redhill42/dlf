@@ -34,17 +34,17 @@ protected:
         EXPECT_FALSE(contexts.empty());
 
         for (auto& context : contexts) {
-            // Activate the context and associate it to current thread.
-            // The context will be deactivated when control leaves the scope.
-            gpgpu::ContextActivation act(context);
-
             // Create GPGPU queue for each context. The queue can be used to
             // schedule commands such as launching a kernel or perform a
             // device-host memory copy.
             auto queue = context.createQueue();
 
+            // Activate the context and associate it to current thread.
+            // The context will be deactivated when control leaves the scope.
+            gpgpu::current current(queue);
+
             // Run the test on the queues
-            test(queue);
+            test();
         }
     }
 };

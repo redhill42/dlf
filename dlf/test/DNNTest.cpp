@@ -44,7 +44,7 @@ static void transform_test(const std::string& name, Unary op) {
     auto dev_B = DevTensor<T>(B);
 
     gpgpu::dnn::transform(name, dev_A.size(), dev_A.data(), dev_B.data());
-    dev_B.read(B);
+    dev_B.readTo(B);
 
     SCOPED_TRACE(name);
     for (size_t i = 0; i < N; i++) {
@@ -98,7 +98,7 @@ TYPED_TEST(TransformTest, Abs) {
     auto dev_A = DevTensor<T>(A);
     auto dev_B = transform(dev_A, xfn::abs<>());
 
-    dev_B.read(B);
+    dev_B.readTo(B);
     for (size_t i = 0; i < N; i++) {
         EXPECT_EQ(B(i), std::abs(A(i)));
     }
@@ -119,7 +119,7 @@ TYPED_TEST(TransformTest, Neg) {
     auto dev_A = DevTensor<T>(A);
     auto dev_B = transform(dev_A, xfn::negate<>());
 
-    dev_B.read(B);
+    dev_B.readTo(B);
     for (size_t i = 0; i < N; i++) {
         EXPECT_EQ(B(i), -A(i));
     }
@@ -135,7 +135,7 @@ TYPED_TEST(TransformTest, Sign) {
     auto dev_A = DevTensor<T>(A);
     auto dev_B = transform(dev_A, xfn::sign<>());
 
-    dev_B.read(B);
+    dev_B.readTo(B);
     for (size_t i = 0; i < N; i++) {
         EXPECT_EQ(B(i), A(i)<0 ? -1 : A(i)>0 ? 1 : 0);
     }
@@ -157,7 +157,7 @@ TYPED_TEST(BinaryTest, Add) {
     auto dev_B = DevTensor<T>(B);
     auto dev_C = transform(dev_A, dev_B, xfn::plus<>());
 
-    dev_C.read(C);
+    dev_C.readTo(C);
     for (size_t i = 0; i < N; i++) {
         ExpectEQ(T(A(i) + B(i)), C(i));
     }
@@ -175,7 +175,7 @@ TYPED_TEST(BinaryTest, Sub) {
     auto dev_B = DevTensor<T>(B);
     auto dev_C = transform(dev_A, dev_B, xfn::minus<>());
 
-    dev_C.read(C);
+    dev_C.readTo(C);
     for (size_t i = 0; i < N; i++) {
         ExpectEQ(T(A(i) - B(i)), C(i));
     }
@@ -193,7 +193,7 @@ TYPED_TEST(BinaryTest, Mul) {
     auto dev_B = DevTensor<T>(B);
     auto dev_C = transform(dev_A, dev_B, xfn::multiplies<>());
 
-    dev_C.read(C);
+    dev_C.readTo(C);
     for (size_t i = 0; i < N; i++) {
         ExpectEQ(T(A(i) * B(i)), C(i));
     }
@@ -211,7 +211,7 @@ TYPED_TEST(BinaryTest, Div) {
     auto dev_B = DevTensor<T>(B);
     auto dev_C = transform(dev_A, dev_B, xfn::divides<>());
 
-    dev_C.read(C);
+    dev_C.readTo(C);
     for (size_t i = 0; i < N; i++) {
         if (B(i) == T(0))
             continue;

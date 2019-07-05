@@ -5,8 +5,8 @@
 
 using namespace dlf;
 
-static gpgpu::Program compile(const gpgpu::Queue& queue, std::string source) {
-    auto context = queue.context();
+static gpgpu::Program compile(std::string source) {
+    auto context = gpgpu::current::context();
     auto device = context.device();
 
     // Translate OpenCL kernel code into CUDA.
@@ -32,16 +32,16 @@ __kernel void multiply(__global float* x, __global float* y, const int factor) {
 })";
 
 TEST_F(GPGPUTest, CompileProgram) {
-    doTest([](auto const& queue) {
-        auto kernel = compile(queue, program_source).getKernel("multiply");
+    doTest([]() {
+        auto kernel = compile(program_source).getKernel("multiply");
 
         // Populate regular host vectors with example data
         auto host_a = Tensor<float>::range({2048, 2048}, 0);
 
         // Creates two new device buffers and copies the host data to these
         // device buffer
-        auto dev_a = DevTensor<float>(host_a, queue);
-        auto dev_b = DevTensor<float>(host_a.shape(), queue);
+        auto dev_a = DevTensor<float>(host_a);
+        auto dev_b = DevTensor<float>(host_a.shape());
 
         // Creates a 1-dimensional thread configuration with thread-blocks/work-groups
         // of 256 threads and a total number of threads equal to the number of elements
@@ -51,10 +51,10 @@ TEST_F(GPGPUTest, CompileProgram) {
         // Enqueues the kernel. Note that launching the kernel is always asynchronous
         // and thus requires finishing the queue in order to complete the operation.
         kernel.setArguments(dev_a.data(), dev_b.data(), 2);
-        kernel.launch(queue, {dev_a.size()}, {kWorkGroupSize});
+        kernel.launch(gpgpu::current::queue(), {dev_a.size()}, {kWorkGroupSize});
 
         // Reads the results back to the host memory
-        auto host_b = dev_b.read(queue);
+        auto host_b = dev_b.read();
 
         // Verify the result
         for (auto index : {4, 900, 1500}) {
@@ -69,6 +69,17 @@ TEST_F(GPGPUTest, DevTensorCopyConstructor) {
     auto A = Tensor<float>::range({2, 3, 4}, 11);
     auto dev_A = DevTensor<float>(A);
     auto dev_B = dev_A;
+    EXPECT_EQ(dev_B.read(), A);
+    EXPECT_NE(dev_A.data(), dev_B.data());
+}
+
+TEST_F(GPGPUTest, DevTensorCopyAssignment) {
+    auto A = Tensor<float>::range({1, 2, 3}, 1);
+    auto B = Tensor<float>::range({2, 3, 4}, 3);
+    auto dev_A = DevTensor<float>(A);
+    auto dev_B = DevTensor<float>(B);
+    EXPECT_EQ(dev_B.read(), B);
+    dev_B = dev_A;
     EXPECT_EQ(dev_B.read(), A);
     EXPECT_NE(dev_A.data(), dev_B.data());
 }
@@ -155,107 +166,107 @@ TEST_F(GPGPUTest, DevTensorBroadcast) {
 }
 
 template <typename T>
-static void vector_dot_vector_test(const gpgpu::Queue& queue) {
+static void vector_dot_vector_test() {
     auto A = Tensor<T>({4}, {2, 7, 3, 4});
     auto B = Tensor<T>({4}, {4, 1, 9, 6});
     auto R = Tensor<T>({1}, {66});
 
-    auto dev_A = DevTensor<T>(A, queue);
-    auto dev_B = DevTensor<T>(B, queue);
-    auto dev_C = DevTensor<T>({1}, queue);
+    auto dev_A = DevTensor<T>(A);
+    auto dev_B = DevTensor<T>(B);
+    auto dev_C = DevTensor<T>({1});
 
-    dot(dev_A, dev_B, &dev_C, queue);
-    EXPECT_EQ(dev_C.read(queue), R);
+    dot(dev_A, dev_B, &dev_C);
+    EXPECT_EQ(dev_C.read(), R);
 
-    auto dev_T = dot(dev_A, dev_B, queue);
-    EXPECT_EQ(dev_T.read(queue), R);
+    auto dev_T = dot(dev_A, dev_B);
+    EXPECT_EQ(dev_T.read(), R);
 
 }
 TEST_F(GPGPUTest, VectorDotVector) {
-    doTest([](auto const& queue) {
-        vector_dot_vector_test<float>(queue);
-        vector_dot_vector_test<int32_t>(queue);
-        vector_dot_vector_test<int64_t>(queue);
+    doTest([]() {
+        vector_dot_vector_test<float>();
+        vector_dot_vector_test<int32_t>();
+        vector_dot_vector_test<int64_t>();
     });
 }
 
 template <typename T>
-static void matrix_dot_vector_test(const gpgpu::Queue& queue) {
+static void matrix_dot_vector_test() {
     auto A = Tensor<T>({2, 3}, {2, 7, 3, 5, 9, 6});
     auto B = Tensor<T>({3}, {9, 6, 7});
     auto R = Tensor<T>({2}, {81, 141});
 
-    auto dev_A = DevTensor<T>(A, queue);
-    auto dev_B = DevTensor<T>(B, queue);
-    auto dev_C = DevTensor<T>({2}, queue);
+    auto dev_A = DevTensor<T>(A);
+    auto dev_B = DevTensor<T>(B);
+    auto dev_C = DevTensor<T>({2});
 
-    dot(dev_A, dev_B, &dev_C, queue);
-    EXPECT_EQ(dev_C.read(queue), R);
+    dot(dev_A, dev_B, &dev_C);
+    EXPECT_EQ(dev_C.read(), R);
 
-    auto dev_T = dot(dev_A, dev_B, queue);
-    EXPECT_EQ(dev_T.read(queue), R);
+    auto dev_T = dot(dev_A, dev_B);
+    EXPECT_EQ(dev_T.read(), R);
 }
 
 TEST_F(GPGPUTest, MatrixDotVector) {
-    doTest([](auto const& queue) {
-         matrix_dot_vector_test<float>(queue);
-         matrix_dot_vector_test<int32_t>(queue);
-         matrix_dot_vector_test<int64_t>(queue);
+    doTest([]() {
+         matrix_dot_vector_test<float>();
+         matrix_dot_vector_test<int32_t>();
+         matrix_dot_vector_test<int64_t>();
     });
 }
 
 template <typename T>
-static void vector_dot_matrix_test(const gpgpu::Queue& queue) {
+static void vector_dot_matrix_test() {
     auto A = Tensor<T>({3}, {9, 6, 7});
     auto B = Tensor<T>({3, 2}, {2, 7, 3, 5, 9, 6});
     auto R = Tensor<T>({2}, {99, 135});
 
-    auto dev_A = DevTensor<T>(A, queue);
-    auto dev_B = DevTensor<T>(B, queue);
-    auto dev_C = DevTensor<T>({2}, queue);
+    auto dev_A = DevTensor<T>(A);
+    auto dev_B = DevTensor<T>(B);
+    auto dev_C = DevTensor<T>({2});
 
-    dot(dev_A, dev_B, &dev_C, queue);
-    EXPECT_EQ(dev_C.read(queue), R);
+    dot(dev_A, dev_B, &dev_C);
+    EXPECT_EQ(dev_C.read(), R);
 
-    auto dev_T = dot(dev_A, dev_B, queue);
-    EXPECT_EQ(dev_T.read(queue), R);
+    auto dev_T = dot(dev_A, dev_B);
+    EXPECT_EQ(dev_T.read(), R);
 }
 
 TEST_F(GPGPUTest, VectorDoMatrix) {
-    doTest([](auto const& queue) {
-        vector_dot_matrix_test<float>(queue);
-        vector_dot_matrix_test<int32_t>(queue);
-        vector_dot_matrix_test<int64_t>(queue);
+    doTest([]() {
+        vector_dot_matrix_test<float>();
+        vector_dot_matrix_test<int32_t>();
+        vector_dot_matrix_test<int64_t>();
     });
 }
 
 template <typename T>
-static void matrix_dot_matrix_test(const gpgpu::Queue& queue) {
+static void matrix_dot_matrix_test() {
     auto A = Tensor<T>({2, 3}, {2, 7, 3, 5, 9, 6});
     auto B = Tensor<T>({3, 2}, {2, 7, 3, 5, 9, 6});
     auto R = Tensor<T>({2, 2}, {52, 67, 91, 116});
 
-    auto dev_A = DevTensor<T>(A, queue);
-    auto dev_B = DevTensor<T>(B, queue);
-    auto dev_C = DevTensor<T>({2, 2}, queue);
+    auto dev_A = DevTensor<T>(A);
+    auto dev_B = DevTensor<T>(B);
+    auto dev_C = DevTensor<T>({2, 2});
 
-    dot(dev_A, dev_B, &dev_C, queue);
-    EXPECT_EQ(dev_C.read(queue), R);
+    dot(dev_A, dev_B, &dev_C);
+    EXPECT_EQ(dev_C.read(), R);
 
-    auto dev_T = dot(dev_A, dev_B, queue);
-    EXPECT_EQ(dev_T.read(queue), R);
+    auto dev_T = dot(dev_A, dev_B);
+    EXPECT_EQ(dev_T.read(), R);
 }
 
 TEST_F(GPGPUTest, MatrixDotMatrix) {
-    doTest([](auto const& queue) {
-        matrix_dot_matrix_test<float>(queue);
-        matrix_dot_matrix_test<int32_t>(queue);
-        matrix_dot_matrix_test<int64_t>(queue);
+    doTest([]() {
+        matrix_dot_matrix_test<float>();
+        matrix_dot_matrix_test<int32_t>();
+        matrix_dot_matrix_test<int64_t>();
     });
 }
 
 template <typename T>
-static void gemm_test(const gpgpu::Queue& queue) {
+static void gemm_test() {
     Tensor<T> A({3, 6}, {
         5, 10, 9,  1, 10, 3,
         7,  6, 6,  6,  1, 1,
@@ -299,30 +310,30 @@ static void gemm_test(const gpgpu::Queue& queue) {
          933,  980, 715,  923
     });
 
-    auto dev_A = DevTensor<T>(A, queue);
-    auto dev_A_t = DevTensor<T>(A_t, queue);
-    auto dev_B = DevTensor<T>(B, queue);
-    auto dev_B_t = DevTensor<T>(B_t, queue);
-    auto dev_C = DevTensor<T>(C, queue);
+    auto dev_A = DevTensor<T>(A);
+    auto dev_A_t = DevTensor<T>(A_t);
+    auto dev_B = DevTensor<T>(B);
+    auto dev_B_t = DevTensor<T>(B_t);
+    auto dev_C = DevTensor<T>(C);
 
     T alpha = T(2), beta = T(3);
 
-    EXPECT_EQ(R, gemm(alpha, dev_A, dev_B, beta, dev_C, false, false, queue).read(queue));
-    EXPECT_EQ(R, gemm(alpha, dev_A_t, dev_B, beta, dev_C, true, false, queue).read(queue));
-    EXPECT_EQ(R, gemm(alpha, dev_A, dev_B_t, beta, dev_C, false, true, queue).read(queue));
-    EXPECT_EQ(R, gemm(alpha, dev_A_t, dev_B_t, beta, dev_C, true, true, queue).read(queue));
+    EXPECT_EQ(R, gemm(alpha, dev_A, dev_B, beta, dev_C, false, false).read());
+    EXPECT_EQ(R, gemm(alpha, dev_A_t, dev_B, beta, dev_C, true, false).read());
+    EXPECT_EQ(R, gemm(alpha, dev_A, dev_B_t, beta, dev_C, false, true).read());
+    EXPECT_EQ(R, gemm(alpha, dev_A_t, dev_B_t, beta, dev_C, true, true).read());
 }
 
 TEST_F(GPGPUTest, GEMM) {
-    doTest([](auto const& queue) {
-        gemm_test<float>(queue);
-        gemm_test<int32_t>(queue);
-        gemm_test<int64_t>(queue);
+    doTest([]() {
+        gemm_test<float>();
+        gemm_test<int32_t>();
+        gemm_test<int64_t>();
     });
 }
 
 template <typename T, int N = 10, typename CBlas, typename GBlas>
-void blas_level1_test(const gpgpu::Queue& queue, CBlas&& cblas, GBlas&& gblas) {
+void blas_level1_test(CBlas&& cblas, GBlas&& gblas) {
     int a;
     do {
         a = rand() % N;
@@ -332,188 +343,188 @@ void blas_level1_test(const gpgpu::Queue& queue, CBlas&& cblas, GBlas&& gblas) {
     auto A = Tensor<int>::random({N}, -N, N).cast<T>();
     auto B = Tensor<int>::random({N}, -N, N).cast<T>();
 
-    auto dev_A = DevTensor<T>(A, queue);
-    auto dev_B = DevTensor<T>(B, queue);
+    auto dev_A = DevTensor<T>(A);
+    auto dev_B = DevTensor<T>(B);
 
     cblas(N, A, B, alpha);
     gblas(N, dev_A, dev_B, alpha);
 
-    EXPECT_EQ(A, dev_A.read(queue));
-    EXPECT_EQ(B, dev_B.read(queue));
+    EXPECT_EQ(A, dev_A.read());
+    EXPECT_EQ(B, dev_B.read());
 }
 
 template <typename T, int N = 10, typename CBlas, typename GBlas>
-void blas_level1_r_test(const gpgpu::Queue& queue, CBlas&& cblas, GBlas&& gblas) {
+void blas_level1_r_test(CBlas&& cblas, GBlas&& gblas) {
     auto A = Tensor<int>::random({N}, -N, N).cast<T>();
     auto B = Tensor<int>::random({N}, -N, N).cast<T>();
 
-    auto dev_A = DevTensor<T>(A, queue);
-    auto dev_B = DevTensor<T>(B, queue);
-    auto dev_R = DevTensor<T>({1}, queue);
+    auto dev_A = DevTensor<T>(A);
+    auto dev_B = DevTensor<T>(B);
+    auto dev_R = DevTensor<T>({1});
 
     auto R = cblas(N, A, B);
     gblas(N, dev_A, dev_B, dev_R);
-    EXPECT_NEAR(R, dev_R.read(queue)(0), 0.0001f);
+    EXPECT_NEAR(R, dev_R.read()(0), 0.0001f);
 }
 
 TEST_F(GPGPUTest, Xcopy) {
     SCOPED_TRACE("Xcopy");
-    doTest([](auto const& queue) {
-        blas_level1_test<float>(queue,
+    doTest([]() {
+        blas_level1_test<float>(
             [](auto N, auto& A, auto& B, auto) {
                 cblas::copy(N, A.data(), 1, B.data(), 1);
             },
             [&](auto N, auto& A, auto& B, auto) {
-                gblas::copy(N, A.data(), 1, B.data(), 1, queue);
+                gblas::copy(N, A.data(), 1, B.data(), 1);
             });
     });
 }
 
 TEST_F(GPGPUTest, Xswap) {
     SCOPED_TRACE("Xswap");
-    doTest([](auto const& queue) {
-        blas_level1_test<float>(queue,
+    doTest([]() {
+        blas_level1_test<float>(
             [](auto N, auto& A, auto& B, auto) {
                 cblas::swap(N, A.data(), 1, B.data(), 1);
             },
             [&](auto N, auto& A, auto& B, auto) {
-                gblas::swap(N, A.data(), 1, B.data(), 1, queue);
+                gblas::swap(N, A.data(), 1, B.data(), 1);
             });
 
-        blas_level1_test<int32_t>(queue,
+        blas_level1_test<int32_t>(
             [](auto N, auto& A, auto& B, auto) {
                 std::swap(A, B);
             },
             [&](auto N, auto& A, auto& B, auto) {
-                gblas::swap(N, A.data(), 1, B.data(), 1, queue);
+                gblas::swap(N, A.data(), 1, B.data(), 1);
             });
 
-        blas_level1_test<int64_t>(queue,
+        blas_level1_test<int64_t>(
             [](auto N, auto& A, auto& B, auto) {
                 std::swap(A, B);
             },
             [&](auto N, auto& A, auto& B, auto) {
-                gblas::swap(N, A.data(), 1, B.data(), 1, queue);
+                gblas::swap(N, A.data(), 1, B.data(), 1);
             });
     });
 }
 
 TEST_F(GPGPUTest, Xscal) {
     SCOPED_TRACE("Xscal");
-    doTest([](auto const& queue) {
-        blas_level1_test<float>(queue,
+    doTest([]() {
+        blas_level1_test<float>(
             [](auto N, auto& A, auto&, auto alpha) {
                 cblas::scal(N, alpha, A.data(), 1);
             },
             [&](auto N, auto& A, auto&, auto alpha) {
-                gblas::scal(N, alpha, A.data(), 1, queue);
+                gblas::scal(N, alpha, A.data(), 1);
             });
 
-        blas_level1_test<int32_t>(queue,
+        blas_level1_test<int32_t>(
             [](auto N, auto& A, auto&, auto alpha) {
                 A *= scalar(alpha);
             },
             [&](auto N, auto& A, auto&, auto alpha) {
-                gblas::scal(N, alpha, A.data(), 1, queue);
+                gblas::scal(N, alpha, A.data(), 1);
             });
 
-        blas_level1_test<int64_t>(queue,
+        blas_level1_test<int64_t>(
             [](auto N, auto& A, auto&, auto alpha) {
                 A *= scalar(alpha);
             },
             [&](auto N, auto& A, auto&, auto alpha) {
-                gblas::scal(N, alpha, A.data(), 1, queue);
+                gblas::scal(N, alpha, A.data(), 1);
             });
     });
 }
 
 TEST_F(GPGPUTest, Xaxpy) {
     SCOPED_TRACE("Xaxpy");
-    doTest([](auto const& queue) {
-        blas_level1_test<float>(queue,
+    doTest([]() {
+        blas_level1_test<float>(
             [](auto N, auto& A, auto& B, auto alpha) {
                 cblas::axpy(N, alpha, A.data(), 1, B.data(), 1);
             },
             [&](auto N, auto& A, auto& B, auto alpha) {
-                gblas::axpy(N, alpha, A.data(), 1, B.data(), 1, queue);
+                gblas::axpy(N, alpha, A.data(), 1, B.data(), 1);
             });
 
-        blas_level1_test<int32_t>(queue,
+        blas_level1_test<int32_t>(
             [](auto N, auto& A, auto& B, auto alpha) {
                 transformTo(A, B, B, [=](auto a, auto b) { return alpha*a+b; });
             },
             [&](auto N, auto& A, auto& B, auto alpha) {
-                gblas::axpy(N, alpha, A.data(), 1, B.data(), 1, queue);
+                gblas::axpy(N, alpha, A.data(), 1, B.data(), 1);
             });
 
-        blas_level1_test<int64_t>(queue,
+        blas_level1_test<int64_t>(
             [](auto N, auto& A, auto& B, auto alpha) {
                 transformTo(A, B, B, [=](auto a, auto b) { return alpha*a+b; });
             },
             [&](auto N, auto& A, auto& B, auto alpha) {
-                gblas::axpy(N, alpha, A.data(), 1, B.data(), 1, queue);
+                gblas::axpy(N, alpha, A.data(), 1, B.data(), 1);
             });
     });
 }
 
 TEST_F(GPGPUTest, Xdot) {
     SCOPED_TRACE("Xdot");
-    doTest([](auto const& queue) {
-        blas_level1_r_test<float>(queue,
+    doTest([]() {
+        blas_level1_r_test<float>(
             [](auto N, auto& A, auto& B) {
                 return cblas::dot(N, A.data(), 1, B.data(), 1);
             },
             [&](auto N, auto& A, auto& B, auto& R) {
-                gblas::dot(N, A.data(), 1, B.data(), 1, R.data(), queue);
+                gblas::dot(N, A.data(), 1, B.data(), 1, R.data());
             });
 
-        blas_level1_r_test<int32_t>(queue,
+        blas_level1_r_test<int32_t>(
             [](auto N, auto& A, auto& B) {
                 Tensor<int32_t> C({1});
                 dot(A, B, &C);
                 return C(0);
             },
             [&](auto N, auto& A, auto& B, auto& R) {
-                gblas::dot(N, A.data(), 1, B.data(), 1, R.data(), queue);
+                gblas::dot(N, A.data(), 1, B.data(), 1, R.data());
             });
 
-        blas_level1_r_test<int64_t>(queue,
+        blas_level1_r_test<int64_t>(
             [](auto N, auto& A, auto& B) {
                 Tensor<int64_t> C({1});
                 dot(A, B, &C);
                 return C(0);
             },
             [&](auto N, auto& A, auto& B, auto& R) {
-                gblas::dot(N, A.data(), 1, B.data(), 1, R.data(), queue);
+                gblas::dot(N, A.data(), 1, B.data(), 1, R.data());
             });
     });
 }
 
 TEST_F(GPGPUTest, Xnrm2) {
     SCOPED_TRACE("Xnrm2");
-    doTest([](auto const& queue) {
-        blas_level1_r_test<float>(queue,
+    doTest([]() {
+        blas_level1_r_test<float>(
             [](auto N, auto& A, auto&) {
                 return cblas::nrm2(N, A.data(), 1);
             },
             [&](auto N, auto& A, auto&, auto& R) {
-                gblas::nrm2(N, A.data(), 1, R.data(), queue);
+                gblas::nrm2(N, A.data(), 1, R.data());
             });
     });
 }
 
 TEST_F(GPGPUTest, Xasum) {
     SCOPED_TRACE("Xasum");
-    doTest([](auto const& queue) {
-        blas_level1_r_test<float>(queue,
+    doTest([]() {
+        blas_level1_r_test<float>(
             [](auto N, auto& A, auto&) {
                 return cblas::asum(N, A.data(), 1);
             },
             [&](auto N, auto& A, auto&, auto& R) {
-                gblas::asum(N, A.data(), 1, R.data(), queue);
+                gblas::asum(N, A.data(), 1, R.data());
             });
 
-        blas_level1_r_test<int32_t>(queue,
+        blas_level1_r_test<int32_t>(
             [](auto N, auto& A, auto&) {
                 int32_t r = 0;
                 for (auto x : A)
@@ -521,10 +532,10 @@ TEST_F(GPGPUTest, Xasum) {
                 return r;
             },
             [&](auto N, auto& A, auto&, auto& R) {
-                gblas::asum(N, A.data(), 1, R.data(), queue);
+                gblas::asum(N, A.data(), 1, R.data());
             });
 
-        blas_level1_r_test<int64_t>(queue,
+        blas_level1_r_test<int64_t>(
             [](auto N, auto& A, auto&) {
                 int64_t r = 0;
                 for (auto x : A)
@@ -532,7 +543,7 @@ TEST_F(GPGPUTest, Xasum) {
                 return r;
             },
             [&](auto N, auto& A, auto&, auto& R) {
-                gblas::asum(N, A.data(), 1, R.data(), queue);
+                gblas::asum(N, A.data(), 1, R.data());
             });
     });
 }
