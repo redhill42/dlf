@@ -1,5 +1,7 @@
 #pragma once
 
+#include <unordered_set>
+
 namespace dlf {
 
 //==-------------------------------------------------------------------------
@@ -108,16 +110,70 @@ inline void reshape(const DevTensor<T>& src, DevTensor<T>& dst) {
 }
 
 template <typename TensorT>
-inline enable_if_tensor<TensorT> flatten(TensorT&& tensor, int axis) {
+enable_if_tensor<TensorT> flatten(TensorT&& tensor, int axis) {
     auto rank = tensor.rank();
     if (axis < 0) axis += rank;
     if (axis < 0 || axis > rank)
-        throw shape_error("flatten: invalid axis");
+        throw shape_error("flatten: invalid axis value");
 
     auto dims = tensor.shape().extents();
     size_t rows = std::accumulate(dims.begin(), dims.begin()+axis, 1, std::multiplies<>());
     size_t cols = std::accumulate(dims.begin()+axis, dims.end(), 1, std::multiplies<>());
     return reshape(std::forward<TensorT>(tensor), {rows, cols});
+}
+
+template <typename TensorT>
+enable_if_tensor<TensorT> squeeze(TensorT&& tensor, const std::vector<int>& axes = {}) {
+    auto rank = tensor.rank();
+
+    std::unordered_set<int> adjusted_axes;
+    for (auto a : axes) {
+        if (a < 0) a += rank;
+        if (a < 0 || a >= rank)
+            throw shape_error("squeeze: invalid axis value");
+        adjusted_axes.insert(a); // duplicate is ok
+    }
+
+    std::vector<size_t> shape;
+    for (int i = 0; i < rank; i++) {
+        auto dim = tensor.extent(i);
+        if (adjusted_axes.find(i) != adjusted_axes.end()) {
+            if (dim != 1)
+                throw shape_error("squeeze: cannot select an axis to squeeze out which has size not equal to 1");
+            continue;
+        } else if (adjusted_axes.empty() && dim == 1) {
+            continue;
+        } else {
+            shape.push_back(dim);
+        }
+    }
+
+    return reshape(std::forward<TensorT>(tensor), shape);
+}
+
+template <typename TensorT>
+enable_if_tensor<TensorT> unsqueeze(TensorT&& tensor, const std::vector<int>& axes) {
+    auto rank = tensor.rank() + axes.size();
+    std::unordered_set<int> adjusted_axes;
+    for (auto a : axes) {
+        if (a < 0) a += rank;
+        if (a < 0 || a >= rank)
+            throw shape_error("unsqueeze: invalid axis value");
+        if (adjusted_axes.find(a) != adjusted_axes.end())
+            throw shape_error("unsqueeze: duplicate axis value");
+        adjusted_axes.insert(a);
+    }
+
+    std::vector<size_t> shape;
+    for (size_t i = 0, j = 0; i < rank; i++) {
+        if (adjusted_axes.find(i) != adjusted_axes.end()) {
+            shape.push_back(1);
+        } else {
+            shape.push_back(tensor.extent(j++));
+        }
+    }
+
+    return reshape(std::forward<TensorT>(tensor), shape);
 }
 
 namespace detail {
@@ -192,7 +248,7 @@ concat(int axis, const std::vector<const tensor_type<TensorT>*>& inputs, TensorT
     auto rank = output.rank();
     if (axis < 0) axis += rank;
     if (axis < 0 || axis >= rank)
-        throw shape_error("concat: invalid axis");
+        throw shape_error("concat: invalid axis value");
 
     size_t dim_sum = 0;
     for (auto t : inputs) {
@@ -213,8 +269,7 @@ concat(int axis, const std::vector<const tensor_type<TensorT>*>& inputs, TensorT
     auto dims = output.shape().extents();
     const size_t batch = std::accumulate(dims.begin(), dims.begin()+axis, 1, std::multiplies<>());
     const size_t stride = std::accumulate(dims.begin()+axis, dims.end(), 1, std::multiplies<>());
-    std::vector<size_t> offsets;
-    std::vector<size_t> blocks;
+    std::vector<size_t> offsets, blocks;
 
     size_t offset = 0;
     for (auto t : inputs) {
@@ -234,11 +289,11 @@ std::enable_if_t<
     cxx::conjunction<std::is_same<TensorT, Tensors>...>::value,
     tensor_type<TensorT>
 >
-inline concat(int axis, const TensorT& first, const Tensors&... rest) {
+concat(int axis, const TensorT& first, const Tensors&... rest) {
     auto rank = first.rank();
     if (axis < 0) axis += rank;
     if (axis < 0 || axis >= rank)
-        throw shape_error("concat: invalid axis");
+        throw shape_error("concat: invalid axis value");
 
     std::vector<const tensor_type<TensorT>*> inputs{&first, &rest...};
     std::vector<size_t> dims = first.shape().extents();
@@ -260,7 +315,7 @@ split(int axis, const TensorT& input, const std::vector<tensor_type<TensorT>*>& 
     auto rank = input.rank();
     if (axis < 0) axis += rank;
     if (axis < 0 || axis >= rank)
-        throw shape_error("split: invalid axis");
+        throw shape_error("split: invalid axis value");
 
     size_t dim_sum = 0;
     for(auto t : outputs) {
@@ -281,8 +336,7 @@ split(int axis, const TensorT& input, const std::vector<tensor_type<TensorT>*>& 
     auto dims = input.shape().extents();
     const size_t batch = std::accumulate(dims.begin(), dims.begin()+axis, 1, std::multiplies<>());
     const size_t stride = std::accumulate(dims.begin()+axis, dims.end(), 1, std::multiplies<>());
-    std::vector<size_t> offsets;
-    std::vector<size_t> blocks;
+    std::vector<size_t> offsets, blocks;
 
     size_t offset = 0;
     for (auto t : outputs) {

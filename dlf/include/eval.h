@@ -364,6 +364,14 @@ private:
         result = std::make_unique<ReshapeOp>(alloc(n->input()), alloc(n->output()));
     }
 
+    void visit(model::Squeeze* n) override {
+        result = std::make_unique<ReshapeOp>(alloc(n->input()), alloc(n->output()));
+    }
+
+    void visit(model::Unsqueeze* n) override {
+        result = std::make_unique<ReshapeOp>(alloc(n->input()), alloc(n->output()));
+    }
+
     struct ConcatOp : Operator {
         const int axis;
         std::list<TensorT<>> inputs;

@@ -53,6 +53,20 @@ TEST(UniformTest, FlattenGPU) {
     EXPECT_ANY_THROW(flatten(A, 4));
 }
 
+TEST(UniformTest, SqueezeCPU) {
+    auto A = Tensor<int>::range({2, 1, 3, 1, 4}, 1);
+    EXPECT_EQ(squeeze(A), Tensor<int>::range({2, 3, 4}, 1));
+    EXPECT_EQ(squeeze(A, {1}), Tensor<int>::range({2, 3, 1, 4}, 1));
+    EXPECT_EQ(squeeze(A, {-2}), Tensor<int>::range({2, 1, 3, 4}, 1));
+    EXPECT_ANY_THROW(squeeze(A, {0}));
+}
+
+TEST(UniformTest, UnsqueezeCPU) {
+    auto A = Tensor<int>::range({2, 3, 4}, 1);
+    EXPECT_EQ(unsqueeze(A, {1, -2}), Tensor<int>::range({2, 1, 3, 1, 4}, 1));
+    EXPECT_ANY_THROW(unsqueeze(A, {1, 5}));
+}
+
 TEST(UniformTest, ConcatCPU) {
     {
         auto A = Tensor<int>::range({2, 3, 2}, 1);
