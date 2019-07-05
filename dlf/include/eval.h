@@ -413,6 +413,30 @@ private:
             outputs.push_back(alloc(o));
         result = std::make_unique<SplitOp>(n->axis(), alloc(n->input()), std::move(outputs));
     }
+
+    struct TransposeOp : Operator {
+        std::vector<size_t> perm;
+        TensorT<> X, Y;
+        TransposeOp(std::vector<size_t>&& perm, TensorT<>&& X, TensorT<>&& Y)
+            : perm(std::move(perm)), X(std::move(X)), Y(std::move(Y)) {}
+        void evaluate() override {
+            transpose(X, perm, Y);
+        }
+    };
+
+    void visit(model::Transpose* n) override {
+        std::vector<size_t> perm;
+        if (n->has_perm()) {
+            auto& x_perm = n->perm();
+            perm.resize(x_perm.size());
+            std::copy(x_perm.begin(), x_perm.end(), perm.begin());
+        } else {
+            perm.resize(n->input()->dims().size());
+            std::iota(perm.begin(), perm.end(), 0);
+            std::reverse(perm.begin(), perm.end());
+        }
+        result = std::make_unique<TransposeOp>(std::move(perm), alloc(n->input()), alloc(n->output()));
+    }
 };
 
 template <typename Context, typename T>

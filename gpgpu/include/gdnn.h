@@ -26,6 +26,12 @@ void split_copy(const size_t n, const size_t offset, const size_t block, const s
                 const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 template <typename T>
+void transpose_copy(const size_t n, const Buffer<T>& x_buffer, Buffer<T>& y_buffer,
+                    const std::vector<size_t>& shape, const std::vector<size_t>& stride,
+                    const std::vector<size_t>& perm,
+                    const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
+
+template <typename T>
 void transform(const std::string& name, const size_t n,
                const Buffer<T>& x_buffer, Buffer<T>& y_buffer,
                const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);

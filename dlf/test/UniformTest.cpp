@@ -205,7 +205,7 @@ TEST(UniformTest, SplitCPU) {
             49, 50, 51,
             52, 53, 54
 
-     */
+    */
     {
         auto X = Tensor<int>::range({2, 9, 3}, 1);
         auto A = Tensor<int>({2, 2, 3});
@@ -369,4 +369,114 @@ TEST(UniformTest, SplitGPU) {
             42, 43, 44, 45, 51, 52, 53, 54
         }));
     }
+}
+
+template <typename T> struct TransposeTest : public testing::Test {};
+using TransposeTestTypes = testing::Types<int, float>;
+TYPED_TEST_CASE(TransposeTest, TransposeTestTypes);
+
+TYPED_TEST(TransposeTest, Transpose1D_CPU) {
+    auto A = Tensor<TypeParam>({4}, {1, 2, 3, 4});
+    auto B = Tensor<TypeParam>({4, 1}, {1, 2, 3, 4});
+    EXPECT_EQ(transpose(A), B);
+}
+
+TYPED_TEST(TransposeTest, Transpose1D_GPU) {
+    auto A = dev(Tensor<TypeParam>({4}, {1, 2, 3, 4}));
+    auto B = Tensor<TypeParam>({4, 1}, {1, 2, 3, 4});
+    EXPECT_EQ(transpose(A).read(), B);
+}
+
+TYPED_TEST(TransposeTest, TransposeSquare_CPU) {
+    auto A = Tensor<TypeParam>::range({3, 3}, 1);
+    auto B = Tensor<TypeParam>({3, 3}, {1, 4, 7, 2, 5, 8, 3, 6, 9});
+    EXPECT_EQ(transpose(A), B);
+}
+
+TYPED_TEST(TransposeTest, TransposeSquare_GPU) {
+    auto A = dev(Tensor<TypeParam>::range({3, 3}, 1));
+    auto B = Tensor<TypeParam>({3, 3}, {1, 4, 7, 2, 5, 8, 3, 6, 9});
+    EXPECT_EQ(transpose(A).read(), B);
+}
+
+TYPED_TEST(TransposeTest, Transpose2D_CPU) {
+    auto A = Tensor<TypeParam>::range({3, 4}, 1);
+    auto B = Tensor<TypeParam>({4, 3}, {1, 5, 9, 2, 6, 10, 3, 7, 11, 4, 8, 12});
+    EXPECT_EQ(transpose(A), B);
+}
+
+TYPED_TEST(TransposeTest, Transpose2D_GPU) {
+    auto A = dev(Tensor<TypeParam>::range({3, 4}, 1));
+    auto B = Tensor<TypeParam>({4, 3}, {1, 5, 9, 2, 6, 10, 3, 7, 11, 4, 8, 12});
+    EXPECT_EQ(transpose(A).read(), B);
+}
+
+TYPED_TEST(TransposeTest, Transpose3D_CPU) {
+    auto A = Tensor<TypeParam>::range({2, 3, 4}, 1);
+    auto B = Tensor<TypeParam>({4, 3, 2}, {
+        1, 13, 5, 17,  9, 21,
+        2, 14, 6, 18, 10, 22,
+        3, 15, 7, 19, 11, 23,
+        4, 16, 8, 20, 12, 24
+    });
+    EXPECT_EQ(transpose(A), B);
+}
+
+TYPED_TEST(TransposeTest, Transpose3D_GPU) {
+    auto A = dev(Tensor<TypeParam>::range({2, 3, 4}, 1));
+    auto B = Tensor<TypeParam>({4, 3, 2}, {
+        1, 13, 5, 17,  9, 21,
+        2, 14, 6, 18, 10, 22,
+        3, 15, 7, 19, 11, 23,
+        4, 16, 8, 20, 12, 24
+    });
+    EXPECT_EQ(transpose(A).read(), B);
+}
+
+TYPED_TEST(TransposeTest, TransposePerm_CPU) {
+    auto A = Tensor<TypeParam>::range({2, 3, 4}, 1);
+    auto B1 = Tensor<TypeParam>({3, 2, 4}, {
+         1,  2,  3,  4,
+        13, 14, 15, 16,
+         5,  6,  7,  8,
+        17, 18, 19, 20,
+         9, 10, 11, 12,
+        21, 22, 23, 24
+    });
+    auto B2 = Tensor<TypeParam>({2, 4, 3}, {
+         1,  5,  9,
+         2,  6, 10,
+         3,  7, 11,
+         4,  8, 12,
+        13, 17, 21,
+        14, 18, 22,
+        15, 19, 23,
+        16, 20, 24
+    });
+    EXPECT_EQ(transpose(A, {1, 0, 2}), B1);
+    EXPECT_EQ(transpose(A, {0, 2, 1}), B2);
+}
+
+TYPED_TEST(TransposeTest, TransposePerm_GPU) {
+    auto A = dev(Tensor<TypeParam>::range({2, 3, 4}, 1));
+    auto B1 = Tensor<TypeParam>({3, 2, 4}, {
+         1,  2,  3,  4,
+        13, 14, 15, 16,
+         5,  6,  7,  8,
+        17, 18, 19, 20,
+         9, 10, 11, 12,
+        21, 22, 23, 24
+    });
+    auto B2 = Tensor<TypeParam>({2, 4, 3}, {
+         1,  5,  9,
+         2,  6, 10,
+         3,  7, 11,
+         4,  8, 12,
+        13, 17, 21,
+        14, 18, 22,
+        15, 19, 23,
+        16, 20, 24
+    });
+    EXPECT_EQ(transpose(A, {1, 0, 2}).read(), B1);
+    EXPECT_EQ(transpose(A, {0, 2, 1}).read(), B2);
 }

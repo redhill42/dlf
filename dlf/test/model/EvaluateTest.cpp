@@ -51,6 +51,10 @@ TYPED_TEST(EvaluateTest, Simple) {
     g.addOutput(o5->addOutput("split2"));
     g.addOutput(o5->addOutput("split3"));
 
+    auto o6 = g.append<Transpose>();
+    o6->addInput(y->output());
+    g.addOutput(o6->addOutput("transpose"));
+
     Evaluator<Context, float> eval(g);
     eval.set(0, Tensor<float>({2, 3}, {1, 2, 3, 4, 5, 6}));
     eval.set(1, scalar<float>(3));
@@ -66,6 +70,7 @@ TYPED_TEST(EvaluateTest, Simple) {
     EXPECT_EQ(eval.get(5), Tensor<float>({2, 2}, {8, 10, 14, 16}));
     EXPECT_EQ(eval.get(6), Tensor<float>({2, 2}, {12, 10, 18, 14}));
     EXPECT_EQ(eval.get(7), Tensor<float>({2, 2}, {10, 12, 15, 15}));
+    EXPECT_EQ(eval.get(8), Tensor<float>({3, 2}, {8, 14, 10, 16, 12, 18}));
 }
 
 TYPED_TEST(EvaluateTest, Gemm) {

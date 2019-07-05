@@ -350,4 +350,144 @@ split(int axis, const TensorT& input, const std::vector<tensor_type<TensorT>*>& 
     detail::split(input, outputs, batch, stride, offsets, blocks);
 }
 
+namespace detail {
+inline bool validate_perm(size_t rank, const std::vector<size_t>& perm) {
+    if (perm.size() != rank)
+        return false;
+
+    std::unordered_set<size_t> unique_index;
+    for (auto index : perm) {
+        if (!(0 <= index && index < rank))
+            return false;
+        if (unique_index.find(index) != unique_index.end())
+            return false;
+        unique_index.insert(index);
+    }
+    return true;
+}
+
+#if HAS_MKL
+template <typename T>
+constexpr bool RequireMKL = cblas::RequireBlasType<T>;
+#else
+template <typename T>
+constexpr bool RequireMKL = false;
+#endif
+
+#if HAS_MKL
+template <typename T>
+std::enable_if_t<RequireMKL<T>>
+transpose2d(const Tensor<T>& src, Tensor<T>& dst) {
+    mkl::omatcopy('R', 'T', src.extent(0), src.extent(1), T(1),
+                  src.data(), src.stride(0), dst.data(), dst.stride(0));
+}
+#endif
+
+template <typename T>
+std::enable_if_t<!RequireMKL<T>>
+transpose2d(const Tensor<T>& src, Tensor<T>& dst) {
+    // FIXME: improve algorithm
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, src.extent(1), GRAINSIZE), [&](auto& r) {
+        auto m = src.extent(0), n = src.extent(1);
+        auto py = dst.data() + r.begin()*m;
+        for (size_t i = r.begin(); i < r.end(); i++) {
+            auto px = src.data() + i;
+            for (size_t j = 0; j < m; j++, px += n)
+                *py++ = *px;
+        }
+    });
+}
+
+template <typename T>
+void transpose2d(const DevTensor<T>& src, DevTensor<T>& dst) {
+    gpgpu::blas::omatcopy(gpgpu::blas::Layout::RowMajor,
+                          gpgpu::blas::Transpose::Trans,
+                          src.extent(0), src.extent(1),
+                          T(1), src.data(), src.stride(0),
+                          dst.data(), dst.stride(0));
+}
+
+template <typename T>
+void transpose(const Tensor<T>& src, const std::vector<size_t> perm, Tensor<T>& dst) {
+    tbb::parallel_for(tbb::blocked_range<int>(0, src.size(), GRAINSIZE), [&](auto& r) {
+        auto rank = src.rank();
+        auto shape = dst.shape().extents();
+        auto stride = src.shape().strides();
+        auto px = src.data();
+        auto py = dst.data() + r.begin();
+
+        for (int i = r.begin(); i < r.end(); i++) {
+            int idx = 0, idy = i;
+            for (int j = rank; --j >= 0; ) {
+                int tmp = idy / shape[j];
+                int coord = idy - tmp * shape[j];
+                idx += coord * stride[perm[j]];
+                idy = tmp;
+            }
+            *py++ = px[idx];
+        }
+    });
+}
+
+template <typename T>
+void transpose(const DevTensor<T>& src, const std::vector<size_t> perm, DevTensor<T>& dst) {
+    gpgpu::dnn::transpose_copy(src.size(), src.data(), dst.data(),
+                               dst.shape().extents(), src.shape().strides(), perm);
+}
+} // namespace detail
+
+template <typename TensorT>
+enable_if_tensor<TensorT, void>
+transpose(const TensorT& src, const std::vector<size_t> perm, TensorT& dst) {
+    auto rank = src.rank();
+    if (!detail::validate_perm(rank, perm)) {
+        throw shape_error("transpose: invalid permutation");
+    }
+
+    bool do_transpose = false;
+    if (dst.rank() != rank)
+        throw shape_error("transpose: invalid output shape");
+    for (size_t i = 0; i < rank; i++) {
+        if (dst.extent(i) != src.extent(perm[i]))
+            throw shape_error("transpose: invalid output shape");
+        if (perm[i] != i)
+            do_transpose = true;
+    }
+
+    if (!do_transpose) {
+        reshape(src, dst);
+    } else if (rank == 2) {
+        detail::transpose2d(src, dst);
+    } else {
+        detail::transpose(src, perm, dst);
+    }
+}
+
+template <typename TensorT>
+enable_if_tensor<TensorT> transpose(const TensorT& src, const std::vector<size_t>& perm) {
+    auto rank = src.rank();
+    detail::validate_perm(rank, perm);
+
+    std::vector<size_t> dims(rank);
+    for (size_t i = 0; i < rank; i++) {
+        dims[i] = src.extent(perm[i]);
+    }
+
+    tensor_type<TensorT> dst{Shape(dims)};
+    transpose(src, perm, dst);
+    return dst;
+}
+
+template <typename TensorT>
+enable_if_tensor<TensorT> transpose(TensorT&& src) {
+    if (src.is_vector()) {
+        return reshape(std::forward<TensorT>(src), {src.extent(0), 1});
+    } else {
+        std::vector<size_t> perm(src.rank());
+        std::iota(perm.begin(), perm.end(), 0);
+        std::reverse(perm.begin(), perm.end());
+        return transpose(src, perm);
+    }
+}
+
 } // namespace dlf
