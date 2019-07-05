@@ -13,11 +13,9 @@ public:
 
 #define fail_convert(...) throw ConvertError(cxx::concat(__VA_ARGS__))
 
-enum class ModelFormat {
-    ONNX
-};
+struct ONNX {};
 
-template <ModelFormat> std::unique_ptr<Graph> importModel(std::istream& input);
-template <ModelFormat> void exportModel(std::ostream& output, const Graph& graph);
+template <typename Format> std::unique_ptr<Graph> importModel(std::istream& input);
+template <typename Format> void exportModel(std::ostream& output, const Graph& graph);
 
 }} // namespace dlf::model
