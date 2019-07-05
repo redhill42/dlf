@@ -9,12 +9,12 @@ namespace dlf {
 namespace detail {
 template <typename TensorT>
 struct tensor_traits_impl {
-    static constexpr bool is_tensor = false;
+    using is_tensor = std::false_type;
 };
 
 template <typename T>
 struct tensor_traits_impl<Tensor<T>> {
-    static constexpr bool is_tensor = true;
+    using is_tensor = std::true_type;
     using type = Tensor<T>;
     using reference = type&;
     using const_reference = const type&;
@@ -25,7 +25,7 @@ struct tensor_traits_impl<Tensor<T>> {
 
 template <typename T>
 struct tensor_traits_impl<DevTensor<T>> {
-    static constexpr bool is_tensor = true;
+    using is_tensor = std::true_type;
     using type = DevTensor<T>;
     using reference = type&;
     using const_reference = const type&;
@@ -38,8 +38,8 @@ struct tensor_traits_impl<DevTensor<T>> {
 template <typename TensorT>
 struct tensor_traits : detail::tensor_traits_impl<std::decay_t<TensorT>> {};
 
-template <typename TensorT, typename T = void>
-using enable_if_tensor = std::enable_if_t<tensor_traits<TensorT>::is_tensor, T>;
+template <typename TensorT>
+using is_tensor = typename tensor_traits<TensorT>::is_tensor;
 
 template <typename TensorT>
 using tensor_type = typename tensor_traits<TensorT>::type;
@@ -47,9 +47,12 @@ using tensor_type = typename tensor_traits<TensorT>::type;
 template <typename TensorT>
 using tensor_value_type = typename tensor_traits<TensorT>::value_type;
 
+template <typename TensorT, typename T = tensor_type<TensorT>>
+using enable_if_tensor = std::enable_if_t<is_tensor<TensorT>::value, T>;
+
 #define DEFINE_UNARY_OPERATOR(name, op) \
-template <typename TensorT, enable_if_tensor<TensorT, int> = 0> \
-inline tensor_type<TensorT> name(TensorT&& x) { \
+template <typename TensorT> \
+inline enable_if_tensor<TensorT> name(TensorT&& x) { \
     using T = tensor_value_type<TensorT>; \
     return ::dlf::transform(std::forward<TensorT>(x), ::dlf::xfn::op<T>()); \
 }
@@ -84,8 +87,8 @@ DEFINE_UNARY_OPERATOR(sigmoid, sigmoid)
 // Tensor shape operations
 //==-------------------------------------------------------------------------
 
-template <typename TensorT, enable_if_tensor<TensorT, int> = 0>
-inline tensor_type<TensorT> reshape(TensorT&& tensor, const std::vector<size_t>& newshape) {
+template <typename TensorT>
+inline enable_if_tensor<TensorT> reshape(TensorT&& tensor, const std::vector<size_t>& newshape) {
     tensor_type<TensorT> ret = std::forward<TensorT>(tensor);
     if (!ret.reshape(newshape))
         throw shape_error("cannot reshape to given shape");
@@ -108,8 +111,8 @@ inline void reshape(const DevTensor<T>& src, DevTensor<T>& dst) {
         src.data().copyToAsync(gpgpu::current::queue(), dst.data(), dst.size());
 }
 
-template <typename TensorT, enable_if_tensor<TensorT, int> = 0>
-inline tensor_type<TensorT> flatten(TensorT&& tensor, size_t axis) {
+template <typename TensorT>
+inline enable_if_tensor<TensorT> flatten(TensorT&& tensor, size_t axis) {
     if (axis > tensor.shape().rank())
         throw std::logic_error("flatten: invalid axis");
 
@@ -117,6 +120,113 @@ inline tensor_type<TensorT> flatten(TensorT&& tensor, size_t axis) {
     size_t rows = std::accumulate(dims.begin(), dims.begin()+axis, 1, std::multiplies<>());
     size_t cols = std::accumulate(dims.begin()+axis, dims.end(), 1, std::multiplies<>());
     return reshape(std::forward<TensorT>(tensor), {rows, cols});
+}
+
+namespace detail {
+template <typename T>
+void concat(Tensor<T>& dest, const std::vector<const Tensor<T>*>& tensors,
+            size_t batch, size_t stride,
+            const std::vector<size_t>& offsets,
+            const std::vector<size_t>& blocks)
+{
+    tbb::parallel_for(tbb::blocked_range2d<int>(0, tensors.size(), 1, 0, batch, 256), [&](auto r) {
+        for (int i = r.rows().begin(); i < r.rows().end(); i++) {
+            auto& t = *tensors[i];
+            for (int j = r.cols().begin(); j < r.cols().end(); j++) {
+                std::copy(t.begin() + blocks[i]*j, t.begin() + blocks[i]*(j+1),
+                          dest.data() + stride*j + offsets[i]);
+            }
+        }
+    });
+}
+
+template <typename T>
+void concat(DevTensor<T>& dest, const std::vector<const DevTensor<T>*>& tensors,
+            size_t, size_t stride,
+            const std::vector<size_t>& offsets,
+            const std::vector<size_t>& blocks)
+{
+    for (size_t i = 0; i < tensors.size(); i++) {
+        auto& t = *tensors[i];
+        gpgpu::dnn::concat_copy(t.size(), offsets[i], blocks[i], stride, t.data(), dest.data());
+    }
+}
+} // namespace detail
+
+template <typename TensorT>
+enable_if_tensor<TensorT, void>
+concat(int axis, const std::vector<const tensor_type<TensorT>*>& tensors, TensorT& dest) {
+#ifndef NDEBUG
+    assert(axis >= 0 && axis < dest.rank());
+    size_t sum = 0;
+    for (auto t : tensors) {
+        assert(t->rank() == dest.rank());
+        for (size_t i = 0; i < t->rank(); i++) {
+            if (i == axis) {
+                sum += t->extent(i);
+                continue;
+            }
+            assert(t->extent(i) == dest.extent(i));
+        }
+    }
+    assert(sum == dest.extent(axis));
+#endif
+
+    auto dims = dest.shape().extents();
+    const size_t batch = std::accumulate(dims.begin(), dims.begin()+axis, 1, std::multiplies<>());
+    const size_t stride = std::accumulate(dims.begin()+axis, dims.end(), 1, std::multiplies<>());
+    std::vector<size_t> offsets;
+    std::vector<size_t> blocks;
+
+    size_t offset = 0;
+    for (auto t : tensors) {
+        auto d = t->shape().extents();
+        size_t block = std::accumulate(d.begin()+axis, d.end(), 1, std::multiplies<>());
+        offsets.push_back(offset);
+        blocks.push_back(block);
+        offset += block;
+    }
+
+    detail::concat(dest, tensors, batch, stride, offsets, blocks);
+}
+
+template <typename TensorT>
+enable_if_tensor<TensorT> concat(int axis, const std::vector<const tensor_type<TensorT>*>& tensors) {
+    assert(tensors.size() > 0);
+    auto rank = tensors[0]->rank();
+    if (axis < 0) axis += rank;
+    if (axis < 0 || axis >= rank)
+        throw shape_error("concat: invalid axis");
+
+    std::vector<size_t> dims(rank);
+    for (size_t i = 0; i < tensors.size(); i++) {
+        const auto& shape = tensors[i]->shape();
+        if (shape.rank() != rank)
+            throw shape_error("concat: all tensors to concat must have same rank");
+        for (size_t j = 0; j < rank; j++) {
+            if (j == axis) {
+                dims[j] += shape.extent(j);
+            } else if (i == 0) {
+                dims[j] = shape.extent(j);
+            } else if (dims[j] != shape.extent(j)) {
+                throw shape_error("concat: incompatible input tensor shape");
+            }
+        }
+    }
+
+    tensor_type<TensorT> res{Shape(dims)};
+    concat(axis, tensors, res);
+    return res;
+}
+
+template <typename TensorT, typename... Tensors>
+std::enable_if_t<
+    is_tensor<TensorT>::value &&
+    cxx::conjunction<std::is_same<TensorT, Tensors>...>::value,
+    tensor_type<TensorT>
+>
+inline concat(int axis, const TensorT& first, const Tensors&... rest) {
+    return concat<TensorT>(axis, {&first, &rest...});
 }
 
 } // namespace dlf

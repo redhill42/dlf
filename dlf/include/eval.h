@@ -363,6 +363,34 @@ private:
     void visit(model::Flatten* n) override {
         result = std::make_unique<ReshapeOp>(alloc(n->input()), alloc(n->output()));
     }
+
+    struct ConcatOp : Operator {
+        const int axis;
+        std::list<TensorT<>> inputs;
+        TensorT<> output;
+        ConcatOp(int axis, std::list<TensorT<>>&& inputs, TensorT<>&& output)
+            : axis(axis), inputs(std::move(inputs)), output(std::move(output)) {}
+        void evaluate() override {
+            std::vector<const TensorT<>*> tmp;
+            for (const auto& t : inputs)
+                tmp.push_back(&t);
+            concat(axis, tmp, output);
+        }
+    };
+
+    void visit(model::Concat* n) override {
+        std::list<TensorT<>> inputs;
+        for (auto i : n->inputs()) {
+            inputs.push_back(alloc(i));
+        }
+
+        TensorT<> output = alloc(n->output());
+        int axis = static_cast<int>(n->axis());
+        if (axis < 0) axis += output.rank();
+        assert(axis >= 0 && axis < output.rank());
+
+        result = std::make_unique<ConcatOp>(axis, std::move(inputs), std::move(output));
+    }
 };
 
 template <typename Context, typename T>

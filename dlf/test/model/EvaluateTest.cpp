@@ -38,6 +38,12 @@ TYPED_TEST(EvaluateTest, Simple) {
     o3->addInput(y->output());
     g.addOutput(o3->addOutput("flatten"));
 
+    auto o4 = g.append<Concat>();
+    o4->set_axis(1);
+    o4->addInput(y->output());
+    o4->addInput(o1->output());
+    g.addOutput(o4->addOutput("concat"));
+
     Evaluator<Context, float> eval(g);
     eval.set(0, Tensor<float>({2, 3}, {1, 2, 3, 4, 5, 6}));
     eval.set(1, scalar<float>(3));
@@ -48,6 +54,8 @@ TYPED_TEST(EvaluateTest, Simple) {
     EXPECT_EQ(eval.get(1), Tensor<float>({2, 3}, {10, 10, 12, 14, 15, 15}));
     EXPECT_EQ(eval.get(2), Tensor<float>({3, 2}, {8, 10, 12, 14, 16, 18}));
     EXPECT_EQ(eval.get(3), Tensor<float>({1, 6}, {8, 10, 12, 14, 16, 18}));
+    EXPECT_EQ(eval.get(4), Tensor<float>({2, 6}, {8, 10, 12, 10, 10, 12,
+                                                  14, 16, 18, 14, 15, 15}));
 }
 
 TYPED_TEST(EvaluateTest, Gemm) {
