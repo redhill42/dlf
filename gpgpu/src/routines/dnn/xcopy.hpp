@@ -19,6 +19,10 @@ class Xcopy: public blas::Routine {
     void DoConcatCopy(const size_t n,
               const size_t offset, const size_t block, const size_t stride,
               const Buffer<T>& x_buffer, Buffer<T>& y_buffer);
+
+    void DoSplitCopy(const size_t n,
+              const size_t offset, const size_t block, const size_t stride,
+              const Buffer<T>& x_buffer, Buffer<T>& y_buffer);
 };
 
 }} // namespace gpgpu::dnn

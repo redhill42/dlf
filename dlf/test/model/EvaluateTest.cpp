@@ -39,10 +39,17 @@ TYPED_TEST(EvaluateTest, Simple) {
     g.addOutput(o3->addOutput("flatten"));
 
     auto o4 = g.append<Concat>();
-    o4->set_axis(1);
+    o4->set_axis(-1);
     o4->addInput(y->output());
     o4->addInput(o1->output());
     g.addOutput(o4->addOutput("concat"));
+
+    auto o5 = g.append<Split>();
+    o5->set_axis(-1);
+    o5->addInput(o4->output());
+    g.addOutput(o5->addOutput("split1"));
+    g.addOutput(o5->addOutput("split2"));
+    g.addOutput(o5->addOutput("split3"));
 
     Evaluator<Context, float> eval(g);
     eval.set(0, Tensor<float>({2, 3}, {1, 2, 3, 4, 5, 6}));
@@ -56,6 +63,9 @@ TYPED_TEST(EvaluateTest, Simple) {
     EXPECT_EQ(eval.get(3), Tensor<float>({1, 6}, {8, 10, 12, 14, 16, 18}));
     EXPECT_EQ(eval.get(4), Tensor<float>({2, 6}, {8, 10, 12, 10, 10, 12,
                                                   14, 16, 18, 14, 15, 15}));
+    EXPECT_EQ(eval.get(5), Tensor<float>({2, 2}, {8, 10, 14, 16}));
+    EXPECT_EQ(eval.get(6), Tensor<float>({2, 2}, {12, 10, 18, 14}));
+    EXPECT_EQ(eval.get(7), Tensor<float>({2, 2}, {10, 12, 15, 15}));
 }
 
 TYPED_TEST(EvaluateTest, Gemm) {

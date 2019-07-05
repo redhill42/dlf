@@ -57,4 +57,15 @@ void Xconcat_copy(const int n, const int offset, const int block, const int stri
   }
 }
 
+__kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
+void Xsplit_copy(const int n, const int offset, const int block, const int stride,
+                 const __global real* restrict xgm, __global real* ygm)
+{
+  for (int id = get_global_id(0); id < n; id += get_global_size(0)) {
+    const int tmp = id / block;
+    const int xid = tmp*stride + (id-tmp*block) + offset;
+    ygm[id] = xgm[xid];
+  }
+}
+
 )" // End of the C++11 raw string literal

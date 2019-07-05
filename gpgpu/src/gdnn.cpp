@@ -106,6 +106,40 @@ template void PUBLIC_API concat_copy<double2>(const size_t, const size_t, const 
                                               const Queue&, Event*);
 
 template <typename T>
+void split_copy(const size_t n, const size_t offset, const size_t block, const size_t stride,
+                 const Buffer<T>& x_buffer, Buffer<T>& y_buffer,
+                 const Queue& queue, Event* event)
+{
+    auto routine = Xcopy<T>(queue, event);
+    routine.DoSplitCopy(n, offset, block, stride, x_buffer, y_buffer);
+}
+
+template void PUBLIC_API split_copy<int16_t>(const size_t, const size_t, const size_t, const size_t,
+                                             const Buffer<int16_t>&, Buffer<int16_t>&,
+                                             const Queue&, Event*);
+template void PUBLIC_API split_copy<int32_t>(const size_t, const size_t, const size_t, const size_t,
+                                             const Buffer<int32_t>&, Buffer<int32_t>&,
+                                             const Queue&, Event*);
+template void PUBLIC_API split_copy<int64_t>(const size_t, const size_t, const size_t, const size_t,
+                                             const Buffer<int64_t>&, Buffer<int64_t>&,
+                                             const Queue&, Event*);
+template void PUBLIC_API split_copy<half>   (const size_t, const size_t, const size_t, const size_t,
+                                             const Buffer<half>&, Buffer<half>&,
+                                             const Queue&, Event*);
+template void PUBLIC_API split_copy<float>  (const size_t, const size_t, const size_t, const size_t,
+                                             const Buffer<float>&, Buffer<float>&,
+                                             const Queue&, Event*);
+template void PUBLIC_API split_copy<double> (const size_t, const size_t, const size_t, const size_t,
+                                             const Buffer<double>&, Buffer<double>&,
+                                             const Queue&, Event*);
+template void PUBLIC_API split_copy<float2> (const size_t, const size_t, const size_t, const size_t,
+                                             const Buffer<float2>&, Buffer<float2>&,
+                                             const Queue&, Event*);
+template void PUBLIC_API split_copy<double2>(const size_t, const size_t, const size_t, const size_t,
+                                             const Buffer<double2>&, Buffer<double2>&,
+                                             const Queue&, Event*);
+
+template <typename T>
 void transform(const std::string& name, const size_t n,
                const Buffer<T>& x_buffer, Buffer<T>& y_buffer,
                const Queue& queue, Event* event)

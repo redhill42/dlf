@@ -21,6 +21,11 @@ void concat_copy(const size_t n, const size_t offset, const size_t block, const 
                  const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 template <typename T>
+void split_copy(const size_t n, const size_t offset, const size_t block, const size_t stride,
+                const Buffer<T>& x_buffer, Buffer<T>& y_buffer,
+                const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
+
+template <typename T>
 void transform(const std::string& name, const size_t n,
                const Buffer<T>& x_buffer, Buffer<T>& y_buffer,
                const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);

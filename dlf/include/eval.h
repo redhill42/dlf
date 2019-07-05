@@ -380,16 +380,30 @@ private:
 
     void visit(model::Concat* n) override {
         std::list<TensorT<>> inputs;
-        for (auto i : n->inputs()) {
+        for (auto i : n->inputs())
             inputs.push_back(alloc(i));
+        result = std::make_unique<ConcatOp>(n->axis(), std::move(inputs), alloc(n->output()));
+    }
+
+    struct SplitOp : Operator {
+        const int axis;
+        TensorT<> input;
+        std::list<TensorT<>> outputs;
+        SplitOp(int axis, TensorT<>&& input, std::list<TensorT<>>&& outputs)
+            : axis(axis), input(std::move(input)), outputs(std::move(outputs)) {}
+        void evaluate() override {
+            std::vector<TensorT<>*> tmp;
+            for (auto& t : outputs)
+                tmp.push_back(&t);
+            split(axis, input, tmp);
         }
+    };
 
-        TensorT<> output = alloc(n->output());
-        int axis = static_cast<int>(n->axis());
-        if (axis < 0) axis += output.rank();
-        assert(axis >= 0 && axis < output.rank());
-
-        result = std::make_unique<ConcatOp>(axis, std::move(inputs), std::move(output));
+    void visit(model::Split* n) override {
+        std::list<TensorT<>> outputs;
+        for (auto o : n->outputs())
+            outputs.push_back(alloc(o));
+        result = std::make_unique<SplitOp>(n->axis(), alloc(n->input()), std::move(outputs));
     }
 };
 
