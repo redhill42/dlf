@@ -2,7 +2,7 @@
 
 namespace dlf { namespace model {
 
-#define fail_shape_inference(...) throw ShapeInferenceError(cxx::concat(__VA_ARGS__))
+#define fail_shape_inference(...) throw ShapeInferenceError(cxx::string_concat(__VA_ARGS__))
 
 inline bool hasInput(Value* input) {
     return input != nullptr && input->type() != DataType::UNDEFINED;

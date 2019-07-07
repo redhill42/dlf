@@ -151,7 +151,7 @@ public:
 
 private:
     void visitNode(model::Node* n) override {
-        throw std::runtime_error(cxx::concat("Unsupported operator ", n->kind().str()));
+        throw std::runtime_error(cxx::string_concat("Unsupported operator ", n->kind().str()));
     }
 
     template <typename Fn>

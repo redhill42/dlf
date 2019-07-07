@@ -147,22 +147,26 @@ TEST_F(EulerTest, Problem210) {
 using Matrix = dlf::Tensor<long>;
 using Vector = dlf::Tensor<long>;
 
-static Matrix matrix(std::initializer_list<std::initializer_list<long>> init) {
-    size_t rows = init.size();
+static Matrix matrix(std::initializer_list<std::initializer_list<long>> data) {
+    size_t rows = data.size();
     size_t cols = 0;
-    std::vector<long> data;
-    for (auto& col : init) {
-        if (cols == 0)
-            cols = col.size();
-        else if (cols != col.size())
-            throw std::logic_error("invalid matrix shape");
-        std::copy(col.begin(), col.end(), std::back_inserter(data));
+    for (auto col : data) {
+        cols = std::max(cols, col.size());
     }
-    return Matrix({rows, cols}, data.begin(), data.end());
+
+    Matrix mat({rows, cols});
+    long* p = mat.data();
+    for (auto col : data) {
+        std::copy(col.begin(), col.end(), p);
+        if (col.size() < cols)
+            std::fill(p+col.size(), p+cols, 0);
+        p += cols;
+    }
+    return mat;
 }
 
-static Vector vector(std::initializer_list<long> init) {
-    return Vector({init.size()}, init);
+static Vector vector(std::initializer_list<long> data) {
+    return Vector({data.size()}, data);
 }
 
 static std::string Problem220(long steps) {
@@ -216,9 +220,60 @@ static std::string Problem220(long steps) {
     }
 
     if (steps == 1) v = (F , v);
-    return std::to_string(v(0)) + "," + std::to_string(v(1));
+    return cxx::string_concat(v(0), ',', v(1));
 }
 
 TEST(Euler, Problem220) {
     EXPECT_EQ(Problem220(1e12), "139776,963904");
+}
+
+//==-------------------------------------------------------------------------
+// Problem 577: Counting hexagons
+
+namespace Problem577 {
+inline bool inside(int n, Vector p) {
+    auto x = p(0), y = p(1);
+    return x >= 0 && y >= 0 && x + y <= n;
+}
+
+bool inside(int n, int x1, int y1, int x2, int y2) {
+    using namespace dlf::dot_product;
+
+    if (x1 == x2 && y1 == y2)
+        return false;
+
+    Matrix m = matrix({{0, -1}, {1, 1}});
+    Vector p1 = vector({x1, y1});
+    Vector p2 = vector({x2, y2});
+    Vector p3 = p2 + (m , (p2 - p1));
+    Vector p4 = p3 + (m , (p3 - p2));
+    Vector p5 = p4 + (m , (p4 - p3));
+    Vector p6 = p5 + (m , (p5 - p4));
+    return inside(n, p3) && inside(n, p4) && inside(n, p5) && inside(n, p6);
+}
+
+int H(int n) {
+    int s = 0;
+    for (int x1 = 0; x1 <= n; x1++)
+    for (int y1 = 0; y1 <= n - x1; y1++)
+    for (int x2 = 0; x2 <= n; x2++)
+    for (int y2 = 0; y2 <= n - x2; y2++)
+        if (inside(n, x1, y1, x2, y2))
+            s++;
+    return s / 6;
+}
+
+long solve(int n) {
+    long sum = 0;
+    for (long k = 3; k <= n; k += 3)
+        sum += k * (n-k+1) * (n-k+2) * (n-k+3) / 18;
+    return sum;
+}
+} // namespace Problem577
+
+TEST(Euler, Problem577) {
+    EXPECT_EQ(Problem577::H(3), 1);
+    EXPECT_EQ(Problem577::H(6), 12);
+    EXPECT_EQ(Problem577::H(20), 966);
+    EXPECT_EQ(Problem577::solve(12345), 265695031399260211L);
 }

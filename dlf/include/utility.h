@@ -233,24 +233,24 @@ public:
 namespace detail {
 #if __cplusplus >= 201703L
 template <typename... Args>
-inline void concat(std::stringstream& ss, const Args&... args) {
-    (void)(ss << ... << args);
+inline void string_concat(std::stringstream& ss, Args&&... args) {
+    (void)(ss << ... << std::forward<Args>(args));
 }
 #else
-inline void concat(std::stringstream&) {}
+inline void string_concat(std::stringstream&) {}
 
 template <typename T, typename... Args>
-inline void concat(std::stringstream& ss, const T& t, const Args&... args) {
-    ss << t;
-    concat(ss, args...);
+inline void string_concat(std::stringstream& ss, T&& t, Args&&... args) {
+    ss << std::forward<T>(t);
+    string_concat(ss, std::forward<Args>(args)...);
 }
 #endif
 }
 
 template <typename... Args>
-std::string concat(const Args&... args) {
+std::string string_concat(Args&&... args) {
     std::stringstream ss;
-    detail::concat(ss, args...);
+    detail::string_concat(ss, std::forward<Args>(args)...);
     return ss.str();
 }
 

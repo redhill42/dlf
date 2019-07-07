@@ -11,7 +11,7 @@ public:
     ConvertError(const std::string& message) : std::runtime_error(message) {}
 };
 
-#define fail_convert(...) throw ConvertError(cxx::concat(__VA_ARGS__))
+#define fail_convert(...) throw ConvertError(cxx::string_concat(__VA_ARGS__))
 
 struct ONNX {};
 
