@@ -18,7 +18,7 @@ class DevTensor : public Shaped {
 public:
     DevTensor() = default;
 
-    DevTensor(Shape shape) : Shaped(std::move(shape)){
+    explicit DevTensor(Shape shape) : Shaped(std::move(shape)){
         m_data = gpgpu::current::context().createBuffer<T>(size());
     }
 
@@ -143,18 +143,6 @@ public:
     const gpgpu::Buffer<T>& data() const noexcept {
         return m_data;
     }
-
-    /**
-     * Broadcast this tensor to the given shape.
-     */
-    DevTensor<T> broadcast(const Shape& shape) const &;
-    DevTensor<T> broadcast(const Shape& shape) &&;
-
-public:
-    DevTensor<T>& operator+=(const DevTensor<T>& rhs);
-    DevTensor<T>& operator-=(const DevTensor<T>& rhs);
-    DevTensor<T>& operator*=(const DevTensor<T>& rhs);
-    DevTensor<T>& operator/=(const DevTensor<T>& rhs);
 };
 
 template <typename T>
@@ -216,24 +204,6 @@ inline void copy(const DevTensor<T>& src, DevTensor<T>& dst) {
     }
 }
 
-template <typename T>
-inline DevTensor<T> DevTensor<T>::broadcast(const Shape& shape) const & {
-    DevTensor<T> dst(shape);
-    dlf::copy(*this, dst);
-    return dst;
-}
-
-template <typename T>
-inline DevTensor<T> DevTensor<T>::broadcast(const Shape& shape) && {
-    if (shape == this->shape()) {
-        return std::move(*this);
-    } else {
-        DevTensor<T> dst(shape);
-        dlf::copy(*this, dst);
-        return dst;
-    }
-}
-
 //==-------------------------------------------------------------------------
 // DevTensor binary transformations
 //==-------------------------------------------------------------------------
@@ -286,34 +256,6 @@ inline DevTensor<T> transform(DevTensor<T>&& x, DevTensor<T>&& y, Op&& op) {
     else
         return transform(x, y, std::forward<Op>(op));
 }
-
-#define DEFINE_BINARY_OP(op, fn) \
-template <typename T> \
-inline DevTensor<T>& DevTensor<T>::operator op##=(const DevTensor<T>& rhs) { \
-    return transformTo(*this, rhs, *this, dlf::xfn::fn<>()); \
-} \
-template <typename T> \
-inline DevTensor<T> operator op(const DevTensor<T>& lhs, const DevTensor<T>& rhs) { \
-    return transform(lhs, rhs, dlf::xfn::fn<>()); \
-} \
-template <typename T> \
-inline DevTensor<T> operator op(DevTensor<T>&& lhs, const DevTensor<T>& rhs) { \
-    return transform(std::move(lhs), rhs, dlf::xfn::fn<>()); \
-} \
-template <typename T> \
-inline DevTensor<T> operator op(const DevTensor<T>& lhs, DevTensor<T>&& rhs) { \
-    return transform(lhs, std::move(rhs), dlf::xfn::fn<>()); \
-} \
-template <typename T> \
-inline DevTensor<T> operator op(DevTensor<T>&& lhs, DevTensor<T>&& rhs) { \
-    return transform(std::move(lhs), std::move(rhs), dlf::xfn::fn<>()); \
-}
-
-DEFINE_BINARY_OP(+, plus)
-DEFINE_BINARY_OP(-, minus)
-DEFINE_BINARY_OP(*, multiplies)
-DEFINE_BINARY_OP(/, divides)
-#undef DEFINE_BINARY_OP
 
 //==-------------------------------------------------------------------------
 // DevTensor production
@@ -464,7 +406,7 @@ inline DevTensor<T> gemm(const T& alpha, const DevTensor<T>& A, const DevTensor<
     if (transB)
         std::swap(p, n);
 
-    auto Y = C.broadcast({m, n});
+    auto Y = broadcast(C, {m, n});
     gemm(alpha, A, B, beta, &Y, transA, transB);
     return Y;
 }

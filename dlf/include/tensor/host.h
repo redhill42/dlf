@@ -226,19 +226,6 @@ public: // Attributes
     template <typename... Args, typename = RequireIndexes<Args...>>
     T& operator()(Args... args) noexcept;
 
-public: // Operators
-    template <typename U, typename = std::enable_if_t<std::is_convertible<U,T>::value>>
-    Tensor& operator+=(const Tensor<U>& y);
-
-    template <typename U, typename = std::enable_if_t<std::is_convertible<U,T>::value>>
-    Tensor& operator-=(const Tensor<U>& y);
-
-    template <typename U, typename = std::enable_if_t<std::is_convertible<U,T>::value>>
-    Tensor& operator*=(const Tensor<U>& y);
-
-    template <typename U, typename = std::enable_if_t<std::is_convertible<U,T>::value>>
-    Tensor& operator/=(const Tensor<U>& y);
-
 public: // Transformations
     /**
      * Transform tensor's elements by applying a unary function on tensor's elements.
@@ -267,12 +254,6 @@ public: // Transformations
      */
     template <typename U>
     Tensor<U> cast() const;
-
-    /**
-     * Broadcast this tensor to the given shape.
-     */
-    Tensor broadcast(const Shape& shape) const &;
-    Tensor broadcast(const Shape& shape) &&;
 
 private: // Formatting
     friend std::ostream& operator<<(std::ostream& os, const Tensor& t) {
@@ -623,57 +604,6 @@ void copy(const Tensor<T>& src, Tensor<T>& dst) {
     }
 }
 
-template <typename T>
-inline Tensor<T> Tensor<T>::broadcast(const Shape& shape) const & {
-    Tensor<T> dst(shape);
-    copy(*this, dst);
-    return dst;
-}
-
-template <typename T>
-inline Tensor<T> Tensor<T>::broadcast(const Shape& shape) && {
-    if (shape == this->shape()) {
-        return std::move(*this);
-    } else {
-        Tensor<T> dst(shape);
-        copy(*this, dst);
-        return dst;
-    }
-}
-
-//==-------------------------------------------------------------------------
-// Tensor arithmetic operators
-//==-------------------------------------------------------------------------
-
-#define DEFINE_BINARY_OPERATOR(op, fn) \
-    template <typename T> \
-    template <typename U, typename> \
-    inline Tensor<T>& Tensor<T>::operator op##=(const Tensor<U>& y) { \
-        return transformTo(*this, y, *this, dlf::xfn::fn<>()); \
-    } \
-    template <typename T, typename U, typename W = std::common_type_t<T,U>> \
-    inline Tensor<W> operator op(const Tensor<T>& x, const Tensor<U>& y) { \
-        return transform(x, y, dlf::xfn::fn<>()); \
-    } \
-    template <typename T> \
-    inline Tensor<T> operator op(Tensor<T>&& x, const Tensor<T>& y) { \
-        return transform(std::move(x), y, dlf::xfn::fn<>()); \
-    } \
-    template <typename T> \
-    inline Tensor<T> operator op(const Tensor<T>& x, Tensor<T>&& y) { \
-        return transform(x, std::move(y), dlf::xfn::fn<>()); \
-    } \
-    template <typename T> \
-    inline Tensor<T> operator op(Tensor<T>&& x, Tensor<T>&& y) { \
-        return transform(std::move(x), std::move(y), dlf::xfn::fn<>()); \
-    }
-
-DEFINE_BINARY_OPERATOR(+, plus)
-DEFINE_BINARY_OPERATOR(-, minus)
-DEFINE_BINARY_OPERATOR(*, multiplies)
-DEFINE_BINARY_OPERATOR(/, divides)
-#undef DEFINE_BINARY_OPERATOR
-
 //==-------------------------------------------------------------------------
 // Tensor logical operators
 //==-------------------------------------------------------------------------
@@ -974,23 +904,6 @@ Tensor<T> dot(const Tensor<T>& A, const Tensor<T>& B) {
     }
 }
 
-template <typename T>
-Tensor<T> pow(const Tensor<T>& x, long n) {
-    assert(x.is_square() && n >= 0);
-    if (n == 0)
-        return Tensor<T>::identity(x.extent(0));
-    n--;
-
-    auto A = x, B = x, t = x;
-    while (n > 0) {
-        if (n & 1)
-            std::swap(B, dot(A, B, &t));
-        std::swap(A, dot(A, A, &t));
-        n >>= 1;
-    }
-    return B;
-}
-
 /**
  * General matrix multiplication.
  */
@@ -1084,7 +997,7 @@ Tensor<T> gemm(const T& alpha, const Tensor<T>& A, const Tensor<T>& B,
         std::swap(p, n);
     assert(k == p);
 
-    auto Y = C.broadcast({m, n});
+    auto Y = broadcast(C, {m, n});
     gemm(alpha, A, B, beta, &Y, transA, transB);
     return Y;
 }

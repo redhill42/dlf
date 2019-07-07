@@ -9,23 +9,51 @@ namespace dlf {
 //==-------------------------------------------------------------------------
 
 namespace detail {
-template <typename TensorT>
+template <typename T> struct cpu {};
+template <typename T> struct gpu {};
+
+template <typename T>
 struct tensor_traits_impl {
     using is_tensor = std::false_type;
+    using tag = void;
+    using value_type = T;
+
+    template <typename U>
+    using tensor_type = void;
 };
 
 template <typename T>
 struct tensor_traits_impl<Tensor<T>> {
     using is_tensor = std::true_type;
-    using type = Tensor<T>;
+    using tag = cpu<void>;
     using value_type = T;
+
+    template <typename U>
+    using tensor_type = Tensor<std::decay_t<U>>;
+
+    template <typename U>
+    static tensor_type<U> scalar(U&& value) {
+        tensor_type<U> ret({1});
+        ret.data()[0] = std::forward<U>(value);
+        return ret;
+    }
 };
 
 template <typename T>
 struct tensor_traits_impl<DevTensor<T>> {
     using is_tensor = std::true_type;
-    using type = DevTensor<T>;
+    using tag = gpu<T>;
     using value_type = T;
+
+    template <typename U>
+    using tensor_type = DevTensor<std::decay_t<U>>;
+
+    template <typename U>
+    static tensor_type<U> scalar(U value) {
+        tensor_type<U> ret({1});
+        ret.data().write(gpgpu::current::queue(), &value, 1);
+        return ret;
+    }
 };
 } // namespace detail
 
@@ -35,14 +63,37 @@ struct tensor_traits : detail::tensor_traits_impl<std::decay_t<TensorT>> {};
 template <typename TensorT>
 using is_tensor = typename tensor_traits<TensorT>::is_tensor;
 
-template <typename TensorT>
-using tensor_type = typename tensor_traits<TensorT>::type;
+template <typename X, typename Y>
+using is_same_tensor = std::conjunction<
+    is_tensor<X>, is_tensor<Y>,
+    std::is_same<typename tensor_traits<X>::tag, typename tensor_traits<Y>::tag>>;
 
 template <typename TensorT>
 using tensor_value_type = typename tensor_traits<TensorT>::value_type;
 
-template <typename TensorT, typename T = tensor_type<TensorT>>
-using enable_if_tensor = std::enable_if_t<is_tensor<TensorT>::value, T>;
+template <typename TensorT, typename U = tensor_value_type<TensorT>>
+using tensor_type = typename tensor_traits<TensorT>::template tensor_type<U>;
+
+template <typename TensorT, typename R = tensor_type<TensorT>>
+using enable_if_tensor = std::enable_if_t<is_tensor<TensorT>::value, R>;
+
+template <typename Fn, typename LHS, typename RHS>
+using tensor_invoke_result =
+    std::conditional_t<is_tensor<LHS>::value,
+        tensor_type<LHS, cxx::invoke_result_t<Fn, tensor_value_type<LHS>, tensor_value_type<RHS>>>,
+        tensor_type<RHS, cxx::invoke_result_t<Fn, tensor_value_type<LHS>, tensor_value_type<RHS>>>>;
+
+template <typename LHS, typename RHS, typename Fn, typename R = tensor_invoke_result<Fn, LHS, RHS>>
+using enable_if_tensors =
+    std::enable_if_t<
+        is_same_tensor<LHS, RHS>::value ||
+        is_tensor<LHS>::value ||
+        is_tensor<RHS>::value, R>;
+
+template <typename TensorT, typename U>
+inline tensor_type<TensorT, U> tensor_scalar(U&& value) {
+    return tensor_traits<TensorT>::scalar(std::forward<U>(value));
+}
 
 //==-------------------------------------------------------------------------
 // Tensor unary operations
@@ -82,8 +133,103 @@ DEFINE_UNARY_OPERATOR(sigmoid, sigmoid)
 #undef DEFINE_UNARY_OPERATOR
 
 //==-------------------------------------------------------------------------
+// Tensor binary operations
+//==-------------------------------------------------------------------------
+
+template <typename LHS, typename RHS, typename Fn>
+std::enable_if_t<is_tensor<LHS>::value && !is_tensor<RHS>::value, tensor_invoke_result<Fn, LHS, RHS>>
+inline transform(LHS&& lhs, RHS&& rhs, Fn fn) {
+    return transform(std::forward<LHS>(lhs), tensor_scalar<LHS>(std::forward<RHS>(rhs)), fn);
+}
+
+template <typename LHS, typename RHS, typename Fn>
+std::enable_if_t<!is_tensor<LHS>::value && is_tensor<RHS>::value, tensor_invoke_result<Fn, LHS, RHS>>
+inline transform(LHS&& lhs, RHS&& rhs, Fn fn) {
+    return transform(tensor_scalar<RHS>(std::forward<LHS>(lhs)), std::forward<RHS>(rhs), fn);
+}
+
+#define DEFINE_BINARY_OPERATOR(op, fn)                                              \
+template <typename LHS, typename RHS>                                               \
+std::enable_if_t<is_same_tensor<LHS, RHS>::value, tensor_type<LHS>&>                \
+inline operator op##=(LHS& lhs, RHS&& rhs) {                                        \
+    return transformTo(lhs, std::forward<RHS>(rhs), lhs, xfn::fn<>());              \
+}                                                                                   \
+                                                                                    \
+template <typename LHS, typename RHS>                                               \
+std::enable_if_t<is_tensor<LHS>::value && !is_tensor<RHS>::value, tensor_type<LHS>&>\
+inline operator op##=(LHS& lhs, RHS&& rhs) {                                        \
+    return operator op##=(lhs, tensor_scalar<LHS>(std::forward<RHS>(rhs)));         \
+}                                                                                   \
+                                                                                    \
+template <typename LHS, typename RHS>                                               \
+enable_if_tensors<LHS, RHS, xfn::fn<>>                                              \
+inline operator op(LHS&& lhs, RHS&& rhs) {                                          \
+    return transform(std::forward<LHS>(lhs), std::forward<RHS>(rhs), xfn::fn<>());  \
+}
+
+DEFINE_BINARY_OPERATOR(+, plus)
+DEFINE_BINARY_OPERATOR(-, minus)
+DEFINE_BINARY_OPERATOR(*, multiplies)
+DEFINE_BINARY_OPERATOR(/, divides)
+#undef DEFINE_BINARY_OPERATOR
+
+template <typename LHS, typename RHS>
+inline enable_if_tensors<LHS, RHS, xfn::power<>>
+pow(LHS&& lhs, RHS&& rhs) {
+    return transform(std::forward<LHS>(lhs), std::forward<RHS>(rhs), xfn::power<>());
+}
+
+template <typename TensorT>
+enable_if_tensor<TensorT> matpow(TensorT&& x, long n) {
+    assert(x.is_square() && n >= 0);
+    if (n == 0)
+        return Tensor<tensor_value_type<TensorT>>::identity(x.extent(0));
+    n--;
+
+    auto A = x, B = x, t = x;
+    while (n > 0) {
+        if (n & 1)
+            std::swap(B, dot(A, B, &t));
+        std::swap(A, dot(A, A, &t));
+        n >>= 1;
+    }
+    return B;
+}
+
+namespace dot_product {
+/**
+ * We use comma operator to represent dot product, because C++ doesn't have dot
+ * operator yet, and comma and dot are looks similar. To use the comma operator
+ * be sure to enclose the expression in parentheses to avoid ambiguity. That is,
+ * use
+ *     auto z = (x , y)
+ * instead of
+ *     auto z = x, y
+ */
+template <typename T>
+Tensor<T> operator,(const Tensor<T>& lhs, const Tensor<T>& rhs) {
+    return dot(lhs, rhs);
+}
+template <typename T>
+inline DevTensor<T> operator,(const DevTensor<T>& lhs, const DevTensor<T>& rhs) {
+    return dot(lhs, rhs);
+}
+} // namespace dot_product
+
+//==-------------------------------------------------------------------------
 // Tensor shape operations
 //==-------------------------------------------------------------------------
+
+template <typename TensorT>
+inline enable_if_tensor<TensorT> broadcast(TensorT&& tensor, const Shape& shape) {
+    if (shape == tensor.shape()) {
+        return std::forward<TensorT>(tensor);
+    } else {
+        tensor_type<TensorT> result(shape);
+        copy(tensor, result);
+        return result;
+    }
+}
 
 template <typename TensorT>
 inline enable_if_tensor<TensorT> reshape(TensorT&& tensor, const std::vector<size_t>& newshape) {

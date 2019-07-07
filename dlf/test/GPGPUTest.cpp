@@ -93,28 +93,28 @@ static void dev_tensor_operator_test() {
     auto dev_B = DevTensor<T>(B);
 
     EXPECT_EQ((dev_A + dev_B).read(), A + B);
-    EXPECT_EQ((dev_A + dev<T>(7)).read(), A + scalar<T>(7));
-    EXPECT_EQ((dev<T>(3) + dev_A).read(), scalar<T>(3) + A);
+    EXPECT_EQ((dev_A + T(7)).read(), A + T(7));
+    EXPECT_EQ((T(3) + dev_A).read(), T(3) + A);
 
     EXPECT_EQ((dev_A - dev_B).read(), A - B);
-    EXPECT_EQ((dev_A - dev<T>(7)).read(), A - scalar<T>(7));
-    EXPECT_EQ((dev<T>(3) - dev_A).read(), scalar<T>(3) - A);
+    EXPECT_EQ((dev_A - T(7)).read(), A - T(7));
+    EXPECT_EQ((T(3) - dev_A).read(), T(3) - A);
 
     EXPECT_EQ((dev_A * dev_B).read(), A * B);
-    EXPECT_EQ((dev_A * dev<T>(7)).read(), A * scalar<T>(7));
-    EXPECT_EQ((dev<T>(7) * dev_A).read(), scalar<T>(7) * A);
+    EXPECT_EQ((dev_A * T(7)).read(), A * T(7));
+    EXPECT_EQ((T(7) * dev_A).read(), T(7) * A);
 
-    EXPECT_EQ(((dev_A + dev_B) * dev<T>(3)).read(), (A + B) * scalar<T>(3));
-    EXPECT_EQ((dev<T>(3) * (dev_A - dev_B)).read(), scalar<T>(3) * (A - B));
+    EXPECT_EQ(((dev_A + dev_B) * T(3)).read(), (A + B) * T(3));
+    EXPECT_EQ((T(3) * (dev_A - dev_B)).read(), T(3) * (A - B));
     EXPECT_EQ(((dev_A + dev_B) * (dev_A - dev_B)).read(), (A + B) * (A - B));
 
-    EXPECT_EQ((dev_A * dev<T>(3) + dev_B).read(), A * scalar<T>(3) + B);
-    EXPECT_EQ((dev_A + dev_B * dev<T>(3)).read(), A + B * scalar<T>(3));
-    EXPECT_EQ((dev_A * dev<T>(3) + dev_B * dev<T>(7)).read(), A * scalar<T>(3) + B * scalar<T>(7));
+    EXPECT_EQ((dev_A * T(3) + dev_B).read(), A * T(3) + B);
+    EXPECT_EQ((dev_A + dev_B * T(3)).read(), A + B * T(3));
+    EXPECT_EQ((dev_A * T(3) + dev_B * T(7)).read(), A * T(3) + B * T(7));
 
-    EXPECT_EQ((dev_A * dev<T>(3) - dev_B).read(), A * scalar<T>(3) - B);
-    EXPECT_EQ((dev_A - dev_B * dev<T>(3)).read(), A - B * scalar<T>(3));
-    EXPECT_EQ((dev_A * dev<T>(3) - dev_B * dev<T>(7)).read(), A * scalar<T>(3) - B * scalar<T>(7));
+    EXPECT_EQ((dev_A * T(3) - dev_B).read(), A * T(3) - B);
+    EXPECT_EQ((dev_A - dev_B * T(3)).read(), A - B * T(3));
+    EXPECT_EQ((dev_A * T(3) - dev_B * T(7)).read(), A * T(3) - B * T(7));
 }
 
 TEST_F(GPGPUTest, DevTensorOperators) {
@@ -422,7 +422,7 @@ TEST_F(GPGPUTest, Xscal) {
 
         blas_level1_test<int32_t>(
             [](auto N, auto& A, auto&, auto alpha) {
-                A *= scalar(alpha);
+                A *= alpha;
             },
             [&](auto N, auto& A, auto&, auto alpha) {
                 gblas::scal(N, alpha, A.data(), 1);
@@ -430,7 +430,7 @@ TEST_F(GPGPUTest, Xscal) {
 
         blas_level1_test<int64_t>(
             [](auto N, auto& A, auto&, auto alpha) {
-                A *= scalar(alpha);
+                A *= alpha;
             },
             [&](auto N, auto& A, auto&, auto alpha) {
                 gblas::scal(N, alpha, A.data(), 1);

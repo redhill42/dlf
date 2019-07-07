@@ -3,6 +3,48 @@
 
 using namespace dlf;
 
+TEST(UniformTest, PowCPU) {
+    auto A = Tensor<float>({4}, {1, 2, 3, 4});
+    auto B = pow(A, 2);
+    EXPECT_EQ(B, Tensor<double>({4}, {1, 4, 9, 16}));
+}
+
+TEST(UnifromTest, PowGPU) {
+    auto A = Tensor<float>({4}, {1, 2, 3, 4});
+    auto B = pow(dev(A), 2.f);
+    EXPECT_EQ(B.read(), Tensor<float>({4}, {1, 4, 9, 16}));
+}
+
+TEST(UniformTest, MatPowCPU) {
+    auto A = Tensor<int>({2, 2}, {1, 1, 1, 0});
+    EXPECT_EQ(matpow(A, 0)(0, 0), 1);
+    EXPECT_EQ(matpow(A, 11)(0, 0), 144);
+}
+
+TEST(UniformTest, MatPowGPU) {
+    auto A = dev(Tensor<int>({2, 2}, {1, 1, 1, 0}));
+    EXPECT_EQ(matpow(A, 0).read()(0, 0), 1);
+    EXPECT_EQ(matpow(A, 11).read()(0, 0), 144);
+}
+
+TEST(UniformTest, NestedTensor) {
+    auto A = Tensor<Tensor<int>>({2, 2}, {
+        {{2, 2}, { 1,  2,  3,  4}},
+        {{2, 2}, { 5,  6,  7,  8}},
+        {{2, 2}, { 9, 10, 11, 12}},
+        {{2, 2}, {13, 14, 15, 16}}
+    });
+
+    auto B = Tensor<float>({2, 2}, {1, 2, 3, 4});
+
+    EXPECT_EQ(A * B, Tensor<Tensor<float>>({2, 2}, {
+        {{2, 2}, { 1,  2,  3,  4}},
+        {{2, 2}, {10, 12, 14, 16}},
+        {{2, 2}, {27, 30, 33, 36}},
+        {{2, 2}, {52, 56, 60, 64}}
+    }));
+}
+
 TEST(UniformTest, ReshapeCPU) {
     auto A = Tensor<int>({2, 3}, {1, 2, 3, 4, 5, 6});
     auto R = Tensor<int>({6}, {1, 2, 3, 4, 5, 6});
@@ -308,7 +350,6 @@ TEST(UniformTest, SplitGPU) {
             46, 47, 48,
             49, 50, 51,
             52, 53, 54
-
      */
     {
         auto X = dev(Tensor<int>::range({2, 9, 3}, 1));
@@ -349,7 +390,7 @@ TEST(UniformTest, SplitGPU) {
             28, 29, 30, 31, 32, 33, 34, 35, 36,
             37, 38, 39, 40, 41, 42, 43, 44, 45,
             46, 47, 48, 49, 50, 51, 52, 53, 54
-     */
+    */
     {
         auto X = dev(Tensor<int>::range({2, 3, 9}, 1));
         auto A = dev(Tensor<int>({2, 3, 2}));

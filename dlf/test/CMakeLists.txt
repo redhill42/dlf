@@ -8,13 +8,6 @@ elseif (APPLE)
   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -framework Accelerate")
 endif()
 
-find_package(GMP)
-if (GMP_FOUND)
-  add_definitions(-DHAS_GMP=1)
-  include_directories(${GMP_INCLUDES})
-  target_link_libraries(unit_tests ${GMP_LIBRARIES})
-endif()
-
 set(TEST_FILE ${CMAKE_BINARY_DIR}/data/resnet18v1.onnx)
 if(NOT EXISTS ${TEST_FILE})
   file(DOWNLOAD

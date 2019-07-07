@@ -10,10 +10,6 @@
 
 #include "tensor.h"
 
-#if HAS_GMP
-#include <gmpxx.h>
-#endif
-
 using namespace dlf;
 using ::testing::ElementsAre;
 using ::testing::ElementsAreArray;
@@ -82,7 +78,7 @@ TEST_F(TensorTest, InitializedToZero) {
 TEST_F(TensorTest, Wrap) {
     int32_t data[2*3*4] = {0};
     auto t = Tensor<int32_t>::wrap({2,3,4}, data);
-    t += scalar(5);
+    t += 5;
 
     EXPECT_EQ(data, t.data());
     EXPECT_THAT(t, Each(5));
@@ -209,22 +205,22 @@ TEST_F(TensorTest, BinaryAssignOp) {
 }
 
 TEST_F(TensorTest, ScalarOp) {
-    { SCOPED_TRACE("+5"); testScalarOp(t1+scalar(5), 5, std::plus<>()); }
-    { SCOPED_TRACE("-5"); testScalarOp(t1-scalar(5), 5, std::minus<>()); }
-    { SCOPED_TRACE("*5"); testScalarOp(t1*scalar(5), 5, std::multiplies<>()); }
-    { SCOPED_TRACE("/5"); testScalarOp(t1/scalar(5), 5, std::divides<>()); }
+    { SCOPED_TRACE("+5"); testScalarOp(t1+5, 5, std::plus<>()); }
+    { SCOPED_TRACE("-5"); testScalarOp(t1-5, 5, std::minus<>()); }
+    { SCOPED_TRACE("*5"); testScalarOp(t1*5, 5, std::multiplies<>()); }
+    { SCOPED_TRACE("/5"); testScalarOp(t1/5, 5, std::divides<>()); }
 
-    { SCOPED_TRACE("100+"); testScalarOp(100, scalar(100)+t1, std::plus<>()); }
-    { SCOPED_TRACE("100-"); testScalarOp(100, scalar(100)-t1, std::minus<>()); }
-    { SCOPED_TRACE("100*"); testScalarOp(100, scalar(100)*t1, std::multiplies<>()); }
-    { SCOPED_TRACE("100/"); testScalarOp(100, scalar(100)/t1, std::divides<>()); }
+    { SCOPED_TRACE("100+"); testScalarOp(100, 100+t1, std::plus<>()); }
+    { SCOPED_TRACE("100-"); testScalarOp(100, 100-t1, std::minus<>()); }
+    { SCOPED_TRACE("100*"); testScalarOp(100, 100*t1, std::multiplies<>()); }
+    { SCOPED_TRACE("100/"); testScalarOp(100, 100/t1, std::divides<>()); }
 }
 
 TEST_F(TensorTest, ScalarAssignOp) {
-    { SCOPED_TRACE("+=5"); auto t = t1; t += scalar(5); testScalarOp(t, 5, std::plus<>()); }
-    { SCOPED_TRACE("-=5"); auto t = t1; t -= scalar(5); testScalarOp(t, 5, std::minus<>()); }
-    { SCOPED_TRACE("*=5"); auto t = t1; t *= scalar(5); testScalarOp(t, 5, std::multiplies<>()); }
-    { SCOPED_TRACE("/=5"); auto t = t1; t /= scalar(5); testScalarOp(t, 5, std::divides<>()); }
+    { SCOPED_TRACE("+=5"); auto t = t1; t += 5; testScalarOp(t, 5, std::plus<>()); }
+    { SCOPED_TRACE("-=5"); auto t = t1; t -= 5; testScalarOp(t, 5, std::minus<>()); }
+    { SCOPED_TRACE("*=5"); auto t = t1; t *= 5; testScalarOp(t, 5, std::multiplies<>()); }
+    { SCOPED_TRACE("/=5"); auto t = t1; t /= 5; testScalarOp(t, 5, std::divides<>()); }
 }
 
 TEST_F(TensorTest, BinaryOpWithDifferentElementType) {
@@ -243,17 +239,17 @@ TEST_F(TensorTest, BinaryOpWithDifferentElementType) {
     static_assert(std::is_same<decltype(y-x), Tensor<double>>::value, "");
     EXPECT_THAT(y-x, ElementsAre(3.1-1, 3.2-2, 3.3-3, 5.5-4, 5.6-5, 5.7-6));
 
-    static_assert(std::is_same<decltype(x+scalar(5.5)), Tensor<double>>::value, "");
-    EXPECT_THAT(x+scalar(5.5), ElementsAre(1+5.5, 2+5.5, 3+5.5, 4+5.5, 5+5.5, 6+5.5));
+    static_assert(std::is_same<decltype(x+5.5), Tensor<double>>::value, "");
+    EXPECT_THAT(x+5.5, ElementsAre(1+5.5, 2+5.5, 3+5.5, 4+5.5, 5+5.5, 6+5.5));
 
-    static_assert(std::is_same<decltype(scalar(5.5)-x), Tensor<double>>::value, "");
-    EXPECT_THAT(scalar(5.5)-x, ElementsAre(5.5-1, 5.5-2, 5.5-3, 5.5-4, 5.5-5, 5.5-6));
+    static_assert(std::is_same<decltype(5.5-x), Tensor<double>>::value, "");
+    EXPECT_THAT(5.5-x, ElementsAre(5.5-1, 5.5-2, 5.5-3, 5.5-4, 5.5-5, 5.5-6));
 
     EXPECT_THAT(-x, ElementsAre(-1, -2, -3, -4, -5, -6));
     EXPECT_THAT(-y, ElementsAre(-3.1, -3.2, -3.3, -5.5, -5.6, -5.7));
 
     Tensor<std::string> greetings({4}, {"Hello", "Bonjour", "Ciao", "Aloha"});
-    greetings += scalar(" world");
+    greetings += std::string(" world");
     EXPECT_THAT(greetings, ElementsAre("Hello world", "Bonjour world", "Ciao world", "Aloha world"));
 }
 
@@ -322,7 +318,7 @@ TEST_F(TensorTest, ComplexOp) {
 
 TEST_F(TensorTest, Expression) {
     SCOPED_TRACE("(5+x)*y+x*3");
-    testBinaryOp((scalar(5)+t1)*t2+t1*scalar(3), [](auto x, auto y) { return (5+x)*y+x*3; });
+    testBinaryOp((5+t1)*t2+t1*3, [](auto x, auto y) { return (5+x)*y+x*3; });
 }
 
 TEST_F(TensorTest, ShapeBroadcastArthimetic) {
@@ -392,11 +388,11 @@ TEST_F(TensorTest, ShapeBroadcastCopy) {
         1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3,
         1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3
     });
-    EXPECT_EQ(A.broadcast({2, 3, 4}), B);
+    EXPECT_EQ(broadcast(A, {2, 3, 4}), B);
 }
 
 template <typename T>
-static void inner_test() {
+static void dot_test() {
     // Vector . Vector
     {
         Tensor<T> a({3}, {1, 2, 3});
@@ -463,12 +459,12 @@ static void inner_test() {
     }
 }
 
-TEST_F(TensorTest, Inner) {
-    inner_test<int>();
-    inner_test<float>();
-    inner_test<double>();
-    inner_test<std::complex<float>>();
-    inner_test<std::complex<double>>();
+TEST_F(TensorTest, Dot) {
+    dot_test<int>();
+    dot_test<float>();
+    dot_test<double>();
+    dot_test<std::complex<float>>();
+    dot_test<std::complex<double>>();
 }
 
 TEST_F(TensorTest, VectorOuter) {
@@ -492,21 +488,6 @@ TEST_F(TensorTest, MatrixOuter) {
         20, 24, 28, 32, 36, 40
     });
     EXPECT_EQ(outer(A, B), C);
-}
-
-template <typename T = int>
-T quick_fibonacci(int n) {
-    Tensor<T> A({2, 2}, {1, 1, 1, 0});
-    return pow(A, n-1)(0, 0);
-}
-
-TEST(Tensor, Fibonacci) {
-    EXPECT_EQ(quick_fibonacci(12), 144);
-
-#if HAS_GMP
-    auto z = quick_fibonacci<mpz_class>(12);
-    EXPECT_EQ(z, mpz_class(144));
-#endif
 }
 
 template <typename T>
@@ -678,7 +659,7 @@ TEST_F(TensorTest, TransformRValueOptimization) {
 TEST_F(TensorTest, Complex) {
     using namespace std::complex_literals;
     Tensor<std::complex<double>> t({2,2}, {1.+2i, 3.+4i, -1.+1i, 2.-5i});
-    t += scalar<std::complex<double>>({1, 1});
+    t += std::complex<double>{1, 1};
     EXPECT_THAT(t, ElementsAre(2.+3i, 4.+5i, 0.+2i, 3.-4i));
 }
 

@@ -1,6 +1,7 @@
 // Use parallel algorithms to solve Euler Project problems.
 
 #include <tbb/tbb.h>
+#include "tensor.h"
 #include "routine.hpp"
 #include "test_utility.h"
 #include "GPGPUTest.h"
@@ -117,4 +118,107 @@ TEST_F(EulerTest, Problem210) {
             EXPECT_EQ(Problem210_gpu(n), solution);
         });
     });
+}
+
+//==-------------------------------------------------------------------------
+// Problem 220: Heighway Dragon
+//
+// Let D0 be the two-letter string "Fa". For n≥1, derive Dn from Dn-1 by the
+// string-rewriting rules:
+//
+// "a" → "aRbFR"
+// "b" → "LFaLb"
+//
+// Thus, D0 = "Fa", D1 = "FaRbFR", D2 = "FaRbFRRLFaLbFR", and so on.
+//
+// These strings can be interpreted as instructions to a computer graphics program,
+// with "F" meaning "draw forward one unit", "L" meaning "turn left 90 degrees",
+// "R" meaning "turn right 90 degrees", and "a" and "b" being ignored. The initial
+// position of the computer cursor is (0,0), pointing up towards (0,1).
+//
+// Then Dn is an exotic drawing known as the Heighway Dragon of order n. For example,
+// D10 is shown below; counting each "F" as one step, the highlighted spot at (18,16)
+// is the position reached after 500 steps.
+//
+//
+// What is the position of the cursor after 1012 steps in D50 ?
+// Give your answer in the form x,y with no spaces.
+
+using Matrix = dlf::Tensor<long>;
+using Vector = dlf::Tensor<long>;
+
+static Matrix matrix(std::initializer_list<std::initializer_list<long>> init) {
+    size_t rows = init.size();
+    size_t cols = 0;
+    std::vector<long> data;
+    for (auto& col : init) {
+        if (cols == 0)
+            cols = col.size();
+        else if (cols != col.size())
+            throw std::logic_error("invalid matrix shape");
+        std::copy(col.begin(), col.end(), std::back_inserter(data));
+    }
+    return Matrix({rows, cols}, data.begin(), data.end());
+}
+
+static Vector vector(std::initializer_list<long> init) {
+    return Vector({init.size()}, init);
+}
+
+static std::string Problem220(long steps) {
+    using namespace dlf::dot_product;
+
+    struct Rule {
+        long x; Matrix r, l;
+        Rule(long x, Matrix r, Matrix l)
+            : x(x), r(std::move(r)), l(std::move(l)) {}
+    };
+
+    // matrices transform the vector (x, y, dx,dy)
+    const Matrix F = matrix({{1, 0, 1, 0}, {0, 1, 0, 1}, {0, 0, 1, 0}, {0, 0, 0, 1}});
+    const Matrix R = matrix({{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 0, 1}, {0, 0, -1, 0}});
+    const Matrix L = matrix({{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 0, -1}, {0, 0, 1, 0}});
+    const Matrix R1 = (F , R , F);
+    const Matrix L1 = (F , L , F);
+
+    long x = 0;
+    Matrix r = R, l = L;
+    std::vector<Rule> rules;
+
+    while (x < steps) {
+        auto r1 = (l , R1 , r);
+        auto l1 = (l , L1 , r);
+        r = std::move(r1);
+        l = std::move(l1);
+        x = 2 * x + 2;
+        rules.emplace_back(x, r, l);
+    }
+
+    Vector v = vector({0, 0, 0, 1});
+    v = (F , v);
+    steps--;
+
+    bool in_r = true;
+    for (int i = rules.size()-1; i >= 0 && steps > 1; i--) {
+        Rule& rule = rules[i];
+        if (rule.x > steps) {
+            in_r = true;
+            continue;
+        }
+
+        v = (rule.r , v);
+        steps -= rule.x;
+        if (steps >= 2) {
+            v = in_r ? (R1 , v) : (L1 , v);
+            steps -= 2;
+        }
+        in_r = false;
+    }
+
+    if (steps == 1) v = (F , v);
+    return std::to_string(v(0)) + "," + std::to_string(v(1));
+}
+
+TEST(Euler, Problem220) {
+    EXPECT_EQ(Problem220(1e12), "139776,963904");
 }

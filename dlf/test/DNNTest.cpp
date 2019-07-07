@@ -294,7 +294,7 @@ TEST(DNNTest, ShapeBroadcastCopy) {
         1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3
     });
 
-    auto dev_A = dev(A).broadcast({2, 3, 4});
+    auto dev_A = broadcast(dev(A), {2, 3, 4});
     EXPECT_EQ(dev_A.read(), B);
 }
 
