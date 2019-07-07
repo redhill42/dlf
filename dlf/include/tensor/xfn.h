@@ -127,6 +127,28 @@ struct power<void> {
         { return      std::pow(std::forward<T1>(x), std::forward<T2>(y)); }
 };
 
+template <typename T, typename Compare = std::less<>>
+struct max : std::binary_function<T,T,T> {
+    static constexpr auto name = "max";
+    const Compare comp{};
+    constexpr max() = default;
+    constexpr max(Compare comp) : comp(comp) {}
+    constexpr T operator()(const T& x, const T& y) const {
+        return std::max(x, y, comp);
+    }
+};
+
+template <typename T, typename Compare = std::less<>>
+struct min : std::binary_function<T,T,T> {
+    static constexpr auto name = "min";
+    const Compare comp{};
+    constexpr min() = default;
+    constexpr min(Compare comp) : comp(comp) {}
+    constexpr T operator()(const T& x, const T& y) const {
+        return std::min(x, y, comp);
+    }
+};
+
 //==-------------------------------------------------------------------------
 
 template <typename T>

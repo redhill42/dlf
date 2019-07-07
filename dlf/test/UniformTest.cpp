@@ -45,6 +45,97 @@ TEST(UniformTest, NestedTensor) {
     }));
 }
 
+TEST(UniformTest, AggregateCPU) {
+    auto A = Tensor<int>::range({3, 4}, 1);
+    auto B = Tensor<int>::range({2, 3, 1}, 1);
+    auto C = Tensor<int>({4}, {1, 2, 3, 4});
+
+    EXPECT_EQ(sum(A, B, C), Tensor<int>({2, 3, 4}, {
+         3,  5,  7,  9,
+         8, 10, 12, 14,
+        13, 15, 17, 19,
+         6,  8, 10, 12,
+        11, 13, 15, 17,
+        16, 18, 20, 22
+    }));
+
+    EXPECT_EQ(mean(A, B, C), Tensor<int>({2, 3, 4}, {
+        1, 1, 2, 3,
+        2, 3, 4, 4,
+        4, 5, 5, 6,
+        2, 2, 3, 4,
+        3, 4, 5, 5,
+        5, 6, 6, 7
+    }));
+
+    EXPECT_EQ(max(A, B, C), Tensor<int>({2, 3, 4}, {
+        1,  2,  3,  4,
+        5,  6,  7,  8,
+        9, 10, 11, 12,
+        4,  4,  4,  4,
+        5,  6,  7,  8,
+        9, 10, 11, 12
+    }));
+
+    EXPECT_EQ(min(A, B, C), Tensor<int>({2, 3, 4}, {
+         1, 1, 1, 1,
+         1, 2, 2, 2,
+         1, 2, 3, 3,
+         1, 2, 3, 4,
+         1, 2, 3, 4,
+         1, 2, 3, 4
+     }));
+}
+
+TEST(UniformTest, AggregateGPU) {
+    auto A = dev(Tensor<int>::range({3, 4}, 1));
+    auto B = dev(Tensor<int>::range({2, 3, 1}, 1));
+    auto C = dev(Tensor<int>({4}, {1, 2, 3, 4}));
+
+    EXPECT_EQ(sum(A, B, C).read(), Tensor<int>({2, 3, 4}, {
+         3,  5,  7,  9,
+         8, 10, 12, 14,
+        13, 15, 17, 19,
+         6,  8, 10, 12,
+        11, 13, 15, 17,
+        16, 18, 20, 22
+    }));
+
+    EXPECT_EQ(mean(A, B, C).read(), Tensor<int>({2, 3, 4}, {
+        1, 1, 2, 3,
+        2, 3, 4, 4,
+        4, 5, 5, 6,
+        2, 2, 3, 4,
+        3, 4, 5, 5,
+        5, 6, 6, 7
+    }));
+
+    EXPECT_EQ(max(A, B, C).read(), Tensor<int>({2, 3, 4}, {
+        1,  2,  3,  4,
+        5,  6,  7,  8,
+        9, 10, 11, 12,
+        4,  4,  4,  4,
+        5,  6,  7,  8,
+        9, 10, 11, 12
+    }));
+
+    EXPECT_EQ(min(A, B, C).read(), Tensor<int>({2, 3, 4}, {
+         1, 1, 1, 1,
+         1, 2, 2, 2,
+         1, 2, 3, 3,
+         1, 2, 3, 4,
+         1, 2, 3, 4,
+         1, 2, 3, 4
+     }));
+}
+
+TEST(UniformTest, MinMaxGPU) {
+    auto A = dev(Tensor<float>({4}, {-2.718, 3.14, 5.25, 1.234}));
+    auto B = dev(Tensor<float>({4}, {4.178, 1.412, 4.13, 2.913}));
+    EXPECT_EQ(max(A, B).read(), Tensor<float>({4}, {4.178, 3.14, 5.25, 2.913}));
+    EXPECT_EQ(min(A, B).read(), Tensor<float>({4}, {-2.718, 1.412, 4.13, 1.234}));
+}
+
 TEST(UniformTest, ReshapeCPU) {
     auto A = Tensor<int>({2, 3}, {1, 2, 3, 4, 5, 6});
     auto R = Tensor<int>({6}, {1, 2, 3, 4, 5, 6});

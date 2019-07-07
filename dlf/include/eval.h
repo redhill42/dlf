@@ -154,18 +154,19 @@ private:
         throw std::runtime_error(cxx::concat("Unsupported operator ", n->kind().str()));
     }
 
+    template <typename Fn>
+    struct UnaryOp : Operator {
+        TensorT<> X, Y;
+        UnaryOp(TensorT<>&& X, TensorT<>&& Y)
+            : X(std::move(X)), Y(std::move(Y)) {}
+        void evaluate() override { transformTo(X, Y, Fn{}); }
+    };
+
     #define DEFINE_UNARY_OPERATOR(Name, fn) \
     void visit(model::Name* n) override { \
-        struct Name##Op : Operator { \
-            TensorT<> X, Y; \
-            Name##Op(TensorT<>&& X, TensorT<>&& Y) \
-                : X(std::move(X)), Y(std::move(Y)) {} \
-            void evaluate() override \
-                { dlf::transformTo(X, Y, ::dlf::xfn::fn<T>()); } \
-        }; \
-        result = std::make_unique<Name##Op>(alloc(n->input()), alloc(n->output())); \
+        result = std::make_unique<UnaryOp<xfn::fn<T>>>(alloc(n->input()), alloc(n->output())); \
     }
-    
+
     DEFINE_UNARY_OPERATOR(Abs, abs)
     DEFINE_UNARY_OPERATOR(Neg, negate)
     DEFINE_UNARY_OPERATOR(Sign, sign)
@@ -309,23 +310,111 @@ private:
         result = std::make_unique<SoftplusOp>(alloc(n->input()), alloc(n->output()));
     }
 
-    #define DEFINE_BINARY_OPERATOR(Name, fn) \
-    void visit(model::Name* n) override { \
-        struct Name##Op : Operator { \
-            TensorT<> A, B, C; \
-            Name##Op(TensorT<>&& A, TensorT<>&& B, TensorT<>&& C) \
-                : A(std::move(A)), B(std::move(B)), C(std::move(C)) {} \
-            void evaluate() override { dlf::transformTo(A, B, C, ::dlf::xfn::fn<T>()); } \
-        }; \
-        result = std::make_unique<Name##Op>(alloc(n->A()), alloc(n->B()), alloc(n->C())); \
+    template <typename Fn>
+    struct BinaryOp : Operator {
+        TensorT<> A, B, C;
+        BinaryOp(TensorT<>&& A, TensorT<>&& B, TensorT<>&& C)
+            : A(std::move(A)), B(std::move(B)), C(std::move(C)) {}
+        void evaluate() override { transformTo(A, B, C, Fn{}); }
+    };
+
+    void visit(model::Add* n) override {
+        result = std::make_unique<BinaryOp<xfn::plus<T>>>(
+            alloc(n->A()), alloc(n->B()), alloc(n->C()));
     }
 
-    DEFINE_BINARY_OPERATOR(Add, plus)
-    DEFINE_BINARY_OPERATOR(Sub, minus)
-    DEFINE_BINARY_OPERATOR(Mul, multiplies)
-    DEFINE_BINARY_OPERATOR(Div, divides)
-    DEFINE_BINARY_OPERATOR(Pow, power)
-    #undef DEFINE_BINARY_OPERATOR
+    void visit(model::Sub* n) override {
+        result = std::make_unique<BinaryOp<xfn::minus<T>>>(
+            alloc(n->A()), alloc(n->B()), alloc(n->C()));
+    }
+
+    void visit(model::Mul* n) override {
+        result = std::make_unique<BinaryOp<xfn::multiplies<T>>>(
+            alloc(n->A()), alloc(n->B()), alloc(n->C()));
+    }
+
+    void visit(model::Div* n) override {
+        result = std::make_unique<BinaryOp<xfn::divides<T>>>(
+            alloc(n->A()), alloc(n->B()), alloc(n->C()));
+    }
+
+    void visit(model::Pow* n) override {
+        result = std::make_unique<BinaryOp<xfn::power<T>>>(
+            alloc(n->A()), alloc(n->B()), alloc(n->C()));
+    }
+
+    template <typename Fn>
+    struct AggregateOp : Operator {
+        std::list<TensorT<>> inputs;
+        TensorT<> output;
+
+        AggregateOp(std::list<TensorT<>>&& inputs, TensorT<>&& output)
+            : inputs(std::move(inputs)), output(std::move(output)) {}
+
+        void evaluate() override {
+            if (inputs.size() == 0)
+                return; // FIXME: fill with zero?
+            if (inputs.size() == 1) {
+                copy(inputs.front(), output);
+                return;
+            }
+
+            auto iterator = inputs.begin();
+            auto& a = *iterator++;
+            auto& b = *iterator++;
+            transformTo(a, b, output, Fn{});
+            while (iterator != inputs.end()) {
+                transformTo(output, *iterator, output, Fn{});
+                ++iterator;
+            }
+        }
+    };
+
+    void visit(model::Max* n) override {
+        std::list<TensorT<>> inputs;
+        for (auto i : n->inputs())
+            inputs.push_back(alloc(i));
+        result = std::make_unique<AggregateOp<xfn::max<T>>>(
+            std::move(inputs), alloc(n->output()));
+    }
+
+    void visit(model::Min* n) override {
+        std::list<TensorT<>> inputs;
+        for (auto i : n->inputs())
+            inputs.push_back(alloc(i));
+        result = std::make_unique<AggregateOp<xfn::min<T>>>(
+            std::move(inputs), alloc(n->output()));
+    }
+
+    void visit(model::Sum* n) override {
+        std::list<TensorT<>> inputs;
+        for (auto i : n->inputs())
+            inputs.push_back(alloc(i));
+        result = std::make_unique<AggregateOp<xfn::plus<T>>>(
+            std::move(inputs), alloc(n->output()));
+    }
+
+    struct MeanOp : AggregateOp<xfn::plus<T>> {
+        TensorT<> count;
+
+        MeanOp(std::list<TensorT<>>&& inputs, TensorT<>&& output)
+            : AggregateOp<xfn::plus<T>>(std::move(inputs), std::move(output))
+        {
+            count = TensorT<>(Tensor<T>({1}, {static_cast<T>(this->inputs.size())}));
+        }
+
+        void evaluate() override {
+            AggregateOp<xfn::plus<T>>::evaluate();
+            transformTo(this->output, count, this->output, xfn::divides<T>());
+        }
+    };
+
+    void visit(model::Mean* n) override {
+        std::list<TensorT<>> inputs;
+        for (auto i : n->inputs())
+            inputs.push_back(alloc(i));
+        result = std::make_unique<MeanOp>(std::move(inputs), alloc(n->output()));
+    }
 
     struct GemmOp : Operator {
         T alpha, beta;

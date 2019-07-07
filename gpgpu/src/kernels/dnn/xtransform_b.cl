@@ -173,6 +173,11 @@ DEFINE_BINARY_V(Xdiv_v, Divide)
 
 #if PRECISION !=3232 && PRECISION != 6464
 
+#define Max(c,a,b) c = max(a,b)
+#define Min(c,a,b) c = min(a,b)
+DEFINE_BINARY(Xmax, Max)
+DEFINE_BINARY(Xmin, Min)
+
 #ifdef CUDA
   #if PRECISION == 16
     #define xpow hpow
