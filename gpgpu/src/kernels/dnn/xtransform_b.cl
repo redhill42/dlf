@@ -203,4 +203,14 @@ DEFINE_BINARY(Xprelu, PRelu)
 
 #endif
 
+#if INTEGER_PRECISION
+#define BitAnd(c,a,b) c = a & b;
+#define BitOr(c,a,b)  c = a | b;
+#define BitXor(c,a,b) c = a ^ b;
+
+DEFINE_BINARY(Xbit_and, BitAnd)
+DEFINE_BINARY(Xbit_or,  BitOr)
+DEFINE_BINARY(Xbit_xor, BitXor)
+#endif
+
 )" // End of the C++11 raw string literal

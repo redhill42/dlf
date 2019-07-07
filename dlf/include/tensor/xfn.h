@@ -151,6 +151,43 @@ struct min : std::binary_function<T,T,T> {
 
 //==-------------------------------------------------------------------------
 
+template <typename T = void>
+struct bit_and : std::bit_and<T> {
+    static constexpr auto name = "bit_and";
+};
+
+template <typename T = void>
+struct bit_or : std::bit_or<T> {
+    static constexpr auto name = "bit_or";
+};
+
+template <typename T = void>
+struct bit_xor : std::bit_xor<T> {
+    static constexpr auto name = "bit_xor";
+};
+
+template <typename T = void>
+struct bit_not : std::bit_not<T> {
+    static constexpr auto name = "bit_not";
+};
+
+template <typename T = void>
+struct logical_and : std::logical_and<T> {
+    static constexpr auto name = "logical_and";
+};
+
+template <typename T = void>
+struct logical_or : std::logical_or<T> {
+    static constexpr auto name = "logical_or";
+};
+
+template <typename T = void>
+struct logical_not : std::logical_not<T> {
+    static constexpr auto name = "logical_not";
+};
+
+//==-------------------------------------------------------------------------
+
 template <typename T>
 struct clip : std::unary_function<T,T>, parameterized_function<T> {
     static constexpr auto name = "clip";

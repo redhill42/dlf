@@ -171,7 +171,28 @@ DEFINE_BINARY_OPERATOR(+, plus)
 DEFINE_BINARY_OPERATOR(-, minus)
 DEFINE_BINARY_OPERATOR(*, multiplies)
 DEFINE_BINARY_OPERATOR(/, divides)
+DEFINE_BINARY_OPERATOR(&, bit_and)
+DEFINE_BINARY_OPERATOR(|, bit_or)
+DEFINE_BINARY_OPERATOR(^, bit_xor)
 #undef DEFINE_BINARY_OPERATOR
+
+template <typename LHS, typename RHS>
+enable_if_tensors<LHS, RHS, xfn::logical_and<>>
+inline operator&&(LHS&& lhs, RHS&& rhs) {
+    return transform(std::forward<LHS>(lhs), std::forward<RHS>(rhs), xfn::logical_and<>());
+}
+
+template <typename LHS, typename RHS>
+enable_if_tensors<LHS, RHS, xfn::logical_or<>>
+inline operator||(LHS&& lhs, RHS&& rhs) {
+    return transform(std::forward<LHS>(lhs), std::forward<RHS>(rhs), xfn::logical_or<>());
+}
+
+template <typename TensorT>
+enable_if_tensor<TensorT, Tensor<bool>>
+inline operator!(TensorT&& x) {
+    return transform(x, xfn::logical_not<tensor_value_type<TensorT>>());
+}
 
 template <typename LHS, typename RHS>
 inline enable_if_tensors<LHS, RHS, xfn::power<>>
@@ -210,6 +231,7 @@ template <typename T>
 Tensor<T> operator,(const Tensor<T>& lhs, const Tensor<T>& rhs) {
     return dot(lhs, rhs);
 }
+
 template <typename T>
 inline DevTensor<T> operator,(const DevTensor<T>& lhs, const DevTensor<T>& rhs) {
     return dot(lhs, rhs);
@@ -709,6 +731,15 @@ enable_if_tensor<TensorT> transpose(TensorT&& src) {
         std::reverse(perm.begin(), perm.end());
         return transpose(src, perm);
     }
+}
+
+/**
+ * We use ~ operator to represent tensor transposition instead of bitwise not
+ * operator.
+ */
+template <typename TensorT>
+enable_if_tensor<TensorT> operator~(TensorT&& src) {
+    return transpose(std::forward<TensorT>(src));
 }
 
 } // namespace dlf
