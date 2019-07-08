@@ -100,7 +100,6 @@ public:
      * Copy data into target.
      */
     void copyTo(DevTensor<T>& dest) const {
-        assert(shape() == dest.shape());
         if (m_data != dest.data()) {
             m_data.copyTo(gpgpu::current::queue(), dest.data(), size());
         }
@@ -110,7 +109,6 @@ public:
      * Asynchronously copy data into destination.
      */
     void copyToAsync(DevTensor<T>& dest) const {
-        assert(shape() == dest.shape());
         if (m_data != dest.data()) {
             m_data.copyToAsync(gpgpu::current::queue(), dest.data(), size());
         }
@@ -196,20 +194,20 @@ inline DevTensor<T> transform(DevTensor<T>&& x, Op&& op) {
 template <typename T>
 void copy(const DevTensor<T>& src, const Shape& shape, DevTensor<T>& dst) {
     assert(dst.shape() == shape);
-    if (src.data() != dst.data()) {
-        if (src.shape() == shape) {
-            src.copyToAsync(dst);
-        } else if (src.shape().is_tail(shape)) {
-            gpgpu::dnn::copy(src.size(), src.data(), dst.size(), dst.data());
-        } else {
-            gpgpu::dnn::copy(shape.size(), src.data(), dst.data(),
-                             shape.strides(), shape.extents());
-        }
+    if (src.data() == dst.data())
+        return;
+    if (src.shape().is_identical(shape)) {
+        src.copyToAsync(dst);
+    } else if (src.shape().is_tail(shape)) {
+        gpgpu::dnn::copy(src.size(), src.data(), dst.size(), dst.data());
+    } else {
+        gpgpu::dnn::copy(shape.size(), src.data(), dst.data(), shape.strides(), shape.extents());
     }
 }
 
 template <typename T>
 inline void copy(const DevTensor<T>& src, DevTensor<T>& dst) {
+    assert(src.shape() == dst.shape());
     src.copyToAsync(dst);
 }
 

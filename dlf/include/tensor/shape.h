@@ -96,6 +96,12 @@ public:
     }
 
     /**
+     * Returns true if two shapes are identical. This include shape extents
+     * and strides.
+     */
+    bool is_identical(const Shape& other) const noexcept;
+
+    /**
      * Returns true if the shape represents a contiguous addressing,
      * false otherwise.
      */
@@ -116,6 +122,11 @@ public:
      * Broadcast the shape to target shape.
      */
     Shape broadcast(const Shape& to) const;
+
+    /**
+     * Create a transposed shape.
+     */
+    Shape transpose(const std::vector<size_t>& perm) const;
 
     /**
      * Return the data offset for the given index.
@@ -144,14 +155,14 @@ public:
     /**
      * Compare two shapes for equality.
      */
-    bool operator==(const Shape& other) const {
+    bool operator==(const Shape& other) const noexcept {
         return m_dims == other.m_dims;
     }
 
     /**
      * Compare two shapes for non-equality.
      */
-    bool operator!=(const Shape& other) const {
+    bool operator!=(const Shape& other) const noexcept {
         return m_dims != other.m_dims;
     }
 

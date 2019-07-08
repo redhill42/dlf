@@ -19,7 +19,11 @@ void timing(const std::string& name, int iteration, Body&& body) {
               << std::setprecision(6)
               #endif
               << seconds << 's';
-    if (iteration > 1)
-        std::cout << " (" << (seconds/iteration) << "s per iteration)";
+    if (iteration > 1) {
+        #if __cplusplus > 201402L
+        std::cout << std::setprecision(4);
+        #endif
+        std::cout << " (" << (seconds*1000/iteration) << "ms per iteration)";
+    }
     std::cout << std::endl;
 }

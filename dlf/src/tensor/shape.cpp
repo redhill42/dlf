@@ -1,3 +1,5 @@
+#include <unordered_set>
+#include <cstring>
 #include "tensor/shape.h"
 #include "utility.h"
 
@@ -26,6 +28,12 @@ void Shape::init() noexcept {
         m_dims[i].stride = size;
         size *= m_dims[i].extent;
     }
+}
+
+bool Shape::is_identical(const Shape& other) const noexcept {
+    if (rank() != other.rank())
+        return false;
+    return std::memcmp(m_dims.data(), other.m_dims.data(), rank()*sizeof(dim_t)) == 0;
 }
 
 bool Shape::is_contiguous() const noexcept {
@@ -57,6 +65,8 @@ bool Shape::is_tail(const dlf::Shape& shape) const noexcept {
 
     for (idim = ndim - 1; idim >= idim_start; --idim) {
         if (extent(idim - idim_start) != shape.extent(idim))
+            return false;
+        if (stride(idim - idim_start) != shape.stride(idim))
             return false;
     }
     return true;
@@ -194,6 +204,31 @@ Shape Shape::broadcast(const std::vector<Shape>& shapes) {
     }
 
     return Shape(result_shape);
+}
+
+static bool validate_perm(size_t rank, const std::vector<size_t>& perm) {
+    if (perm.size() != rank)
+        return false;
+    std::unordered_set<size_t> unique_index;
+    for (auto index : perm) {
+        if (!(0 <= index && index < rank))
+            return false;
+        if (unique_index.find(index) != unique_index.end())
+            return false;
+        unique_index.insert(index);
+    }
+    return true;
+}
+
+Shape Shape::transpose(const std::vector<size_t>& perm) const {
+    if (!validate_perm(rank(), perm)) {
+        throw shape_error("transpose: invalid permutation");
+    }
+    std::vector<dim_t> dims(rank());
+    for (size_t i = 0; i < rank(); i++) {
+        dims[i] = m_dims[perm[i]];
+    }
+    return Shape(std::move(dims), size());
 }
 
 std::ostream& operator<<(std::ostream& os, const Shape& shape) {

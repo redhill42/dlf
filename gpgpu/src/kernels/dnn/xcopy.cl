@@ -68,22 +68,4 @@ void Xsplit_copy(const int n, const int offset, const int block, const int strid
   }
 }
 
-__kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
-void Xtranspose_copy(const int n, const int rank, __constant int* shape,
-                     const __global real* restrict xgm, __global real* ygm)
-{
-  __constant int* stride = shape + rank;
-  __constant int* perm = stride + rank;
-  for (int id = get_global_id(0); id < n; id += get_global_size(0)) {
-    int idx = 0, idy = id;
-    for (int i = rank; --i >= 0; ) {
-      int tmp = idy / shape[i];
-      int coord = idy - tmp * shape[i];
-      idx += coord * stride[perm[i]];
-      idy = tmp;
-    }
-    ygm[id] = xgm[idx];
-  }
-}
-
 )" // End of the C++11 raw string literal

@@ -145,39 +145,6 @@ void Xcopy<T>::DoSplitCopy(const size_t n,
     RunKernel(kernel, queue_, device_, global, local, event_);
 }
 
-template <typename T>
-void Xcopy<T>::DoTransposeCopy(const size_t n,
-    const Buffer<T>& x_buffer, Buffer<T>& y_buffer,
-    const std::vector<size_t>& shape, const std::vector<size_t>& stride,
-    const std::vector<size_t>& perm)
-{
-    // Makes sure all dimensions are larger than zero
-    if (n == 0) throw BLASError(StatusCode::kInvalidDimension);
-
-    // Create compact buffer to hold stride and shape
-    auto rank = shape.size();
-    assert(stride.size() == rank && perm.size() == rank);
-    std::vector<int> shape_data(rank * 3);
-    std::copy(shape.begin(), shape.end(), shape_data.begin());
-    std::copy(stride.begin(), stride.end(), shape_data.begin() + rank);
-    std::copy(perm.begin(), perm.end(), shape_data.begin() + rank*2);
-    Buffer<int> shape_buffer = context_.createBuffer<int>(rank*3, BufferAccess::WriteOnly);
-    shape_buffer.write(queue_, shape_data.data(), shape_data.size());
-
-    // Retrieves the Xcopy kernel from the compiled binary
-    auto kernel = program_.getKernel("Xtranspose_copy");
-
-    // Sets the kernel arguments
-    kernel.setArguments(static_cast<int>(n), static_cast<int>(rank),
-                        shape_buffer, x_buffer, y_buffer);
-
-    // Launches the kernel
-    auto n_ceiled = Ceil(n, db_["WGS"]*db_["WPT"]);
-    auto global = std::vector<size_t>{n_ceiled/db_["WPT"]};
-    auto local = std::vector<size_t>{db_["WGS"]};
-    RunKernel(kernel, queue_, device_, global, local, event_);
-}
-
 template class Xcopy<int16_t>;
 template class Xcopy<int32_t>;
 template class Xcopy<int64_t>;

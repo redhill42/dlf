@@ -23,11 +23,6 @@ class Xcopy: public blas::Routine {
     void DoSplitCopy(const size_t n,
               const size_t offset, const size_t block, const size_t stride,
               const Buffer<T>& x_buffer, Buffer<T>& y_buffer);
-
-    void DoTransposeCopy(
-              const size_t n, const Buffer<T>& x_buffer, Buffer<T>& y_buffer,
-              const std::vector<size_t>& shape, const std::vector<size_t>& stride,
-              const std::vector<size_t>& perm);
 };
 
 }} // namespace gpgpu::dnn

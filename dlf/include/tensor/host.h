@@ -595,12 +595,12 @@ inline Tensor<U> Tensor<T>::cast() const {
 template <typename T>
 void copy(const Tensor<T>& src, const Shape& shape, Tensor<T>& dst) {
     assert(dst.shape() == shape);
-    if (src.data() != dst.data()) {
-        if (src.shape() == shape) {
-            std::copy(src.begin(), src.end(), dst.begin());
-        } else {
-            std::copy(src.begin(shape), src.end(shape), dst.begin());
-        }
+    if (src.data() == dst.data())
+        return;
+    if (src.shape().is_identical(shape)) {
+        par::copy(src.begin(), src.end(), dst.begin());
+    } else {
+        par::copy(src.begin(shape), src.end(shape), dst.begin());
     }
 }
 
@@ -608,7 +608,7 @@ template <typename T>
 inline void copy(const Tensor<T>& src, Tensor<T>& dst) {
     assert(src.shape() == dst.shape());
     if (src.data() != dst.data()) {
-        std::copy(src.begin(), src.end(), dst.begin());
+        par::copy(src.begin(), src.end(), dst.begin());
     }
 }
 
