@@ -30,13 +30,6 @@ struct tensor_traits_impl<Tensor<T>> {
 
     template <typename U>
     using tensor_type = Tensor<std::decay_t<U>>;
-
-    template <typename U>
-    static tensor_type<U> scalar(U&& value) {
-        tensor_type<U> ret({1});
-        ret.data()[0] = std::forward<U>(value);
-        return ret;
-    }
 };
 
 template <typename T>
@@ -47,13 +40,6 @@ struct tensor_traits_impl<DevTensor<T>> {
 
     template <typename U>
     using tensor_type = DevTensor<std::decay_t<U>>;
-
-    template <typename U>
-    static tensor_type<U> scalar(U value) {
-        tensor_type<U> ret({1});
-        ret.data().write(gpgpu::current::queue(), &value, 1);
-        return ret;
-    }
 };
 } // namespace detail
 
@@ -92,7 +78,7 @@ using enable_if_tensors =
 
 template <typename TensorT, typename U>
 inline tensor_type<TensorT, U> tensor_scalar(U&& value) {
-    return tensor_traits<TensorT>::scalar(std::forward<U>(value));
+    return tensor_type<TensorT, U>::scalar(std::forward<U>(value));
 }
 
 //==-------------------------------------------------------------------------
@@ -192,7 +178,7 @@ inline operator||(LHS&& lhs, RHS&& rhs) {
 template <typename TensorT>
 enable_if_tensor<TensorT, Tensor<bool>>
 inline operator!(TensorT&& x) {
-    return transform(x, xfn::logical_not<tensor_value_type<TensorT>>());
+    return transform(std::forward<TensorT>(x), xfn::logical_not<tensor_value_type<TensorT>>());
 }
 
 template <typename LHS, typename RHS>
@@ -202,20 +188,23 @@ pow(LHS&& lhs, RHS&& rhs) {
 }
 
 template <typename TensorT>
-enable_if_tensor<TensorT> matpow(TensorT&& x, long n) {
-    assert(x.is_square() && n >= 0);
+enable_if_tensor<TensorT> matpow(TensorT&& A, long n) {
+    assert(A.is_square() && n >= 0);
     if (n == 0)
-        return Tensor<tensor_value_type<TensorT>>::identity(x.extent(0));
+        return Tensor<tensor_value_type<TensorT>>::identity(A.extent(0));
+    if (n == 1)
+        return std::forward<TensorT>(A);
     n--;
 
-    auto A = x, B = x, t = x;
+    auto x = std::forward<TensorT>(A);
+    auto y = x, t = x;
     while (n > 0) {
         if (n & 1)
-            std::swap(B, dot(A, B, &t));
-        std::swap(A, dot(A, A, &t));
+            std::swap(y, dot(x, y, &t));
+        std::swap(x, dot(x, x, &t));
         n >>= 1;
     }
-    return B;
+    return y;
 }
 
 namespace dot_product {
@@ -229,7 +218,7 @@ namespace dot_product {
  *     auto z = x, y
  */
 template <typename T>
-Tensor<T> operator,(const Tensor<T>& lhs, const Tensor<T>& rhs) {
+inline Tensor<T> operator,(const Tensor<T>& lhs, const Tensor<T>& rhs) {
     return dot(lhs, rhs);
 }
 
@@ -259,7 +248,8 @@ struct aggregate_type<Fn, First, Tensors...> {
 
 template <typename Fn, typename TensorY, typename TensorA>
 inline void aggregate(Fn, TensorY& Y, TensorA&& A) {
-    copy(std::forward<TensorA>(A), Y);
+    assert(A.shape() == Y.shape());
+    flat_copy(std::forward<TensorA>(A), Y);
 }
 
 template <typename Fn, typename TensorY, typename First, typename Second, typename... Rest>
@@ -332,25 +322,16 @@ inline enable_if_tensor<TensorT> broadcast(TensorT&& src, const Shape& shape) {
 template <typename TensorT>
 inline enable_if_tensor<TensorT> reshape(TensorT&& tensor, const std::vector<size_t>& newshape) {
     tensor_type<TensorT> ret = std::forward<TensorT>(tensor);
-    if (!ret.reshape(newshape))
-        throw shape_error("cannot reshape to given shape");
+    ret.reshape(newshape);
     return ret;
 }
 
-template <typename T>
-inline void reshape(const Tensor<T>& src, Tensor<T>& dst) {
+template <typename TensorT>
+enable_if_tensor<TensorT, void>
+inline reshape(const TensorT& src, TensorT& dst) {
     if (src.size() != dst.size())
         throw shape_error("cannot reshape to destination tensor");
-    if (src.data() != dst.data())
-        std::copy(src.begin(), src.end(), dst.begin());
-}
-
-template <typename T>
-inline void reshape(const DevTensor<T>& src, DevTensor<T>& dst) {
-    if (src.size() != dst.size())
-        throw shape_error("cannot reshape to destination tensor");
-    if (src.data() != dst.data())
-        src.data().copyToAsync(gpgpu::current::queue(), dst.data(), dst.size());
+    flat_copy(src, dst);
 }
 
 template <typename TensorT>
@@ -602,7 +583,7 @@ inline void transpose(const Tensor<T>& src, const Shape& shape, Tensor<T>& dst) 
 
 template <typename T>
 inline void transpose(const DevTensor<T>& src, const Shape& shape, DevTensor<T>& dst) {
-    if (shape.rank() == 2 && !src.shape().is_identical(shape)) {
+    if (shape.rank() == 2 && !shape.is_contiguous()) {
         gpgpu::blas::omatcopy(gpgpu::blas::Layout::RowMajor,
                               gpgpu::blas::Transpose::Trans,
                               src.extent(0), src.extent(1),
@@ -625,8 +606,9 @@ transpose(const TensorT& src, const std::vector<size_t> perm, TensorT& dst) {
 
 template <typename TensorT>
 enable_if_tensor<TensorT> transpose(const TensorT& src, const std::vector<size_t>& perm) {
-    tensor_type<TensorT> dst(src.shape().transpose(perm));
-    transpose(src, perm, dst);
+    Shape shape = src.shape().transpose(perm);
+    tensor_type<TensorT> dst(shape);
+    detail::transpose(src, shape, dst);
     return dst;
 }
 

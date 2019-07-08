@@ -40,7 +40,9 @@ template <> struct Datum<CPU> {
     template <typename T>
     void set(const Tensor<T>& val) {
         auto dst = get<T>();
-        dlf::copy(val, dst);
+        if (val.shape() != dst.shape())
+            throw shape_error("incompatible shape");
+        flat_copy(val, dst);
     }
 
 private:
@@ -70,7 +72,10 @@ template <> struct Datum<GPU> {
 
     template <typename T>
     void set(const Tensor<T>& val) {
-        get<T>().write(val);
+        auto dst = get<T>();
+        if (val.shape() != dst.shape())
+            throw shape_error("incompatible shape");
+        dst.write(val);
     }
 
 private:
@@ -144,6 +149,14 @@ public:
         return allocDatum<U>(value)->template get<U>();
     }
 
+    template <typename U = T>
+    std::list<TensorT<U>> alloc_all(cxx::array_ref<model::Value*> values) {
+        std::list<TensorT<U>> inputs;
+        for (auto v : values)
+            inputs.push_back(alloc<U>(v));
+        return inputs;
+    }
+
     std::unique_ptr<Operator> createOperator(model::Node* node) {
         node->accept(*this);
         return std::move(result);
@@ -164,7 +177,8 @@ private:
 
     #define DEFINE_UNARY_OPERATOR(Name, fn) \
     void visit(model::Name* n) override { \
-        result = std::make_unique<UnaryOp<xfn::fn<T>>>(alloc(n->input()), alloc(n->output())); \
+        result = std::make_unique<UnaryOp<xfn::fn<T>>>( \
+            alloc(n->input()), alloc(n->output())); \
     }
 
     DEFINE_UNARY_OPERATOR(Abs, abs)
@@ -228,7 +242,8 @@ private:
     };
 
     void visit(model::PRelu* n) override {
-        result = std::make_unique<PReluOp>(alloc(n->input()), alloc(n->slope()), alloc(n->output()));
+        result = std::make_unique<PReluOp>(
+            alloc(n->input()), alloc(n->slope()), alloc(n->output()));
     }
 
     struct LeakyReluOp : Operator {
@@ -239,7 +254,8 @@ private:
     };
 
     void visit(model::LeakyRelu* n) override {
-        result = std::make_unique<LeakyReluOp>(n->alpha(), alloc(n->input()), alloc(n->output()));
+        result = std::make_unique<LeakyReluOp>(
+            n->alpha(), alloc(n->input()), alloc(n->output()));
     }
 
     struct ThresholdedReluOp : Operator {
@@ -250,7 +266,8 @@ private:
     };
 
     void visit(model::ThresholdedRelu* n) override {
-        result = std::make_unique<ThresholdedReluOp>(n->alpha(), alloc(n->input()), alloc(n->output()));
+        result = std::make_unique<ThresholdedReluOp>(
+            n->alpha(), alloc(n->input()), alloc(n->output()));
     }
 
     struct SeluOp : Operator {
@@ -273,7 +290,8 @@ private:
     };
 
     void visit(model::Elu* n) override {
-        result = std::make_unique<EluOp>(n->alpha(), alloc(n->input()), alloc(n->output()));
+        result = std::make_unique<EluOp>(
+            n->alpha(), alloc(n->input()), alloc(n->output()));
     }
 
     struct HardSigmoidOp : Operator {
@@ -360,7 +378,8 @@ private:
             if (inputs.size() == 0)
                 return; // FIXME: fill with zero?
             if (inputs.size() == 1) {
-                copy(inputs.front(), output);
+                assert(inputs.front().shape() == output.shape());
+                flat_copy(inputs.front(), output);
                 return;
             }
 
@@ -376,27 +395,18 @@ private:
     };
 
     void visit(model::Max* n) override {
-        std::list<TensorT<>> inputs;
-        for (auto i : n->inputs())
-            inputs.push_back(alloc(i));
         result = std::make_unique<AggregateOp<xfn::max<T>>>(
-            std::move(inputs), alloc(n->output()));
+            alloc_all(n->inputs()), alloc(n->output()));
     }
 
     void visit(model::Min* n) override {
-        std::list<TensorT<>> inputs;
-        for (auto i : n->inputs())
-            inputs.push_back(alloc(i));
         result = std::make_unique<AggregateOp<xfn::min<T>>>(
-            std::move(inputs), alloc(n->output()));
+            alloc_all(n->inputs()), alloc(n->output()));
     }
 
     void visit(model::Sum* n) override {
-        std::list<TensorT<>> inputs;
-        for (auto i : n->inputs())
-            inputs.push_back(alloc(i));
         result = std::make_unique<AggregateOp<xfn::plus<T>>>(
-            std::move(inputs), alloc(n->output()));
+            alloc_all(n->inputs()), alloc(n->output()));
     }
 
     struct MeanOp : AggregateOp<xfn::plus<T>> {
@@ -405,7 +415,7 @@ private:
         MeanOp(std::list<TensorT<>>&& inputs, TensorT<>&& output)
             : AggregateOp<xfn::plus<T>>(std::move(inputs), std::move(output))
         {
-            count = TensorT<>(Tensor<T>({1}, {static_cast<T>(this->inputs.size())}));
+            count = TensorT<>::scalar(static_cast<T>(this->inputs.size()));
         }
 
         void evaluate() override {
@@ -415,10 +425,8 @@ private:
     };
 
     void visit(model::Mean* n) override {
-        std::list<TensorT<>> inputs;
-        for (auto i : n->inputs())
-            inputs.push_back(alloc(i));
-        result = std::make_unique<MeanOp>(std::move(inputs), alloc(n->output()));
+        result = std::make_unique<MeanOp>(
+            alloc_all(n->inputs()), alloc(n->output()));
     }
 
     struct GemmOp : Operator {
@@ -481,10 +489,8 @@ private:
     };
 
     void visit(model::Concat* n) override {
-        std::list<TensorT<>> inputs;
-        for (auto i : n->inputs())
-            inputs.push_back(alloc(i));
-        result = std::make_unique<ConcatOp>(n->axis(), std::move(inputs), alloc(n->output()));
+        result = std::make_unique<ConcatOp>(
+            n->axis(), alloc_all(n->inputs()), alloc(n->output()));
     }
 
     struct SplitOp : Operator {
@@ -502,10 +508,8 @@ private:
     };
 
     void visit(model::Split* n) override {
-        std::list<TensorT<>> outputs;
-        for (auto o : n->outputs())
-            outputs.push_back(alloc(o));
-        result = std::make_unique<SplitOp>(n->axis(), alloc(n->input()), std::move(outputs));
+        result = std::make_unique<SplitOp>(
+            n->axis(), alloc(n->input()), alloc_all(n->outputs()));
     }
 
     struct TransposeOp : Operator {
@@ -529,7 +533,8 @@ private:
             std::iota(perm.begin(), perm.end(), 0);
             std::reverse(perm.begin(), perm.end());
         }
-        result = std::make_unique<TransposeOp>(std::move(perm), alloc(n->input()), alloc(n->output()));
+        result = std::make_unique<TransposeOp>(
+            std::move(perm), alloc(n->input()), alloc(n->output()));
     }
 };
 

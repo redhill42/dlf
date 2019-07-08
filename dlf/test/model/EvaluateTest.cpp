@@ -57,8 +57,8 @@ TYPED_TEST(EvaluateTest, Simple) {
 
     Evaluator<Context, float> eval(g);
     eval.set(0, Tensor<float>({2, 3}, {1, 2, 3, 4, 5, 6}));
-    eval.set(1, scalar<float>(3));
-    eval.set(2, scalar<float>(2));
+    eval.set(1, Tensor<float>::scalar(3));
+    eval.set(2, Tensor<float>::scalar(2));
     eval.evaluate();
 
     EXPECT_EQ(eval.get(0), Tensor<float>({2, 3}, {8, 10, 12, 14, 16, 18}));

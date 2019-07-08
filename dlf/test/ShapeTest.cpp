@@ -142,11 +142,11 @@ TEST(Shape, BroadcastPerformance) {
         });
 
         timing("Broadcast scalar right", 100, [&]() {
-            A1 + scalar(5);
+            A1 + Tensor<int>::scalar(5);
         });
 
         timing("Broadcast scalar left", 100, [&]() {
-            scalar(5) + A1;
+            Tensor<int>::scalar(5) + A1;
         });
 
         std::cout << std::endl;
@@ -190,7 +190,7 @@ TEST(Shape, GPUBroadcastPerformance) {
 
         timing("GPU broadcast scalar right", 1, [&]() {
             auto C = DevTensor<float>({1024, 1024});
-            auto S = dev(5.f);
+            auto S = DevTensor<float>::scalar(5.f);
             for (int i = 0; i < 100; i++)
                 transformTo(A1, S, C, xfn::plus<>());
             C.read();
@@ -198,7 +198,7 @@ TEST(Shape, GPUBroadcastPerformance) {
 
         timing("GPU broadcast scalar left", 1, [&]() {
             auto C = DevTensor<float>({1024, 1024});
-            auto S = dev(5.f);
+            auto S = DevTensor<float>::scalar(5.f);
             for (int i = 0; i < 100; i++)
                 transformTo(S, A1, C, xfn::plus<>());
             C.read();

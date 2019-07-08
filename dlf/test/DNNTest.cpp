@@ -222,8 +222,8 @@ TYPED_TEST(BinaryTest, Div) {
 TEST(BinaryTest, Pow) {
     auto A = Tensor<float>({7}, {-3, -2, -1, 0, 1, 2, 3});
     auto B = Tensor<float>({7}, {9, 4, 1, 0, 1, 4, 9});
-    EXPECT_EQ(transform(A, scalar<float>(2), xfn::power<>()), B);
-    EXPECT_EQ(transform(dev(A), dev<float>(2), xfn::power<>()).read(), B);
+    EXPECT_EQ(transform(A, Tensor<float>::scalar(2), xfn::power<>()), B);
+    EXPECT_EQ(transform(dev(A), DevTensor<float>::scalar(2), xfn::power<>()).read(), B);
 }
 
 TEST(BinaryTest, ShapeBroadcastArthimetic) {
@@ -323,7 +323,7 @@ TEST(ActivationTest, PRelu) {
 
     auto A = Tensor<int>::random({N}, -int(N), int(N)).template cast<float>();
     auto dev_A = DevTensor<float>(A);
-    auto B = transform(A, scalar(0.01f), xfn::prelu<float>());
-    auto dev_B = transform(dev_A, dev(0.01f), xfn::prelu<float>());
+    auto B = transform(A, Tensor<float>::scalar(0.01f), xfn::prelu<float>());
+    auto dev_B = transform(dev_A, DevTensor<float>::scalar(0.01f), xfn::prelu<float>());
     ExpectEQ(B, dev_B.read());
 }

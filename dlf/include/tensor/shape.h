@@ -96,12 +96,6 @@ public:
     }
 
     /**
-     * Returns true if two shapes are identical. This include shape extents
-     * and strides.
-     */
-    bool is_identical(const Shape& other) const noexcept;
-
-    /**
      * Returns true if the shape represents a contiguous addressing,
      * false otherwise.
      */
@@ -116,7 +110,7 @@ public:
      * Change dimensions of this shape. The new shape must compatible to
      * this shape.
      */
-    bool reshape(std::vector<size_t> newshape) noexcept;
+    void reshape(std::vector<size_t> newshape);
 
     /**
      * Broadcast the shape to target shape.
@@ -231,8 +225,8 @@ public:
      * @return true if shape changed, false if new shape is not
      * compatible with current shape.
      */
-    bool reshape(const std::vector<size_t> newshape) noexcept {
-        return m_shape.reshape(newshape);
+    void reshape(const std::vector<size_t> newshape) {
+        m_shape.reshape(newshape);
     }
 
     /**
@@ -431,111 +425,6 @@ public:
         assert(index() >= 0 && index() < m_shape.size());
         return &m_data[offset()];
     }
-};
-
-//---------------------------------------------------------------------------
-// Scalar iterator
-
-template <typename T>
-class scalar_iterator {
-    T* m_data;
-    ptrdiff_t m_index;
-
-public:
-    using value_type = T;
-    using difference_type = ptrdiff_t;
-    using reference = value_type&;
-    using pointer = value_type*;
-    using iterator_category = std::random_access_iterator_tag;
-
-    scalar_iterator(T* data, difference_type start)
-        : m_data(data), m_index(start) {}
-
-    scalar_iterator& operator++() noexcept
-        { ++m_index; return *this; }
-    scalar_iterator& operator--() noexcept
-        { --m_index; return *this; }
-    scalar_iterator operator++(int) noexcept
-        { return scalar_iterator(m_data, m_index++); }
-    scalar_iterator operator--(int) noexcept
-        { return scalar_iterator(m_data, m_index--); }
-    scalar_iterator& operator+=(difference_type n) noexcept
-        { m_index += n; return *this; }
-    scalar_iterator& operator-=(difference_type n) noexcept
-        { m_index -= n; return *this; }
-    scalar_iterator operator+(difference_type n) const noexcept
-        { return scalar_iterator(m_data, m_index+n); }
-    scalar_iterator operator-(difference_type n) const noexcept
-        { return scalar_iterator(m_data, m_index-n); }
-    difference_type operator-(const scalar_iterator& rhs) const noexcept
-        { return m_index - rhs.m_index; }
-    reference operator*() const noexcept
-        { return *m_data; }
-    pointer operator->() const noexcept
-        { return m_data; }
-    bool operator==(const scalar_iterator& rhs) const noexcept
-        { return m_index == rhs.m_index; }
-    bool operator!=(const scalar_iterator& rhs) const noexcept
-        { return m_index != rhs.m_index; }
-    bool operator< (const scalar_iterator& rhs) const noexcept
-        { return m_index <  rhs.m_index; }
-    bool operator<=(const scalar_iterator& rhs) const noexcept
-        { return m_index <= rhs.m_index; }
-    bool operator> (const scalar_iterator& rhs) const noexcept
-        { return m_index >  rhs.m_index; }
-    bool operator>=(const scalar_iterator& rhs) const noexcept
-        { return m_index >= rhs.m_index; }
-};
-
-template <typename T>
-class const_scalar_iterator {
-    const T* m_data;
-    ptrdiff_t m_index;
-
-public:
-    using value_type = T;
-    using difference_type = ptrdiff_t;
-    using reference = const value_type&;
-    using pointer = const value_type*;
-    using iterator_category = std::random_access_iterator_tag;
-
-    const_scalar_iterator(const T* data, difference_type start)
-        : m_data(data), m_index(start) {}
-
-    const_scalar_iterator& operator++() noexcept
-        { ++m_index; return *this; }
-    const_scalar_iterator& operator--() noexcept
-        { --m_index; return *this; }
-    const_scalar_iterator operator++(int) noexcept
-        { return const_scalar_iterator(m_data, m_index++); }
-    const_scalar_iterator operator--(int) noexcept
-        { return const_scalar_iterator(m_data, m_index--); }
-    const_scalar_iterator& operator+=(difference_type n) noexcept
-        { m_index += n; return *this; }
-    const_scalar_iterator& operator-=(difference_type n) noexcept
-        { m_index -= n; return *this; }
-    const_scalar_iterator operator+(difference_type n) const noexcept
-        { return const_scalar_iterator(m_data, m_index+n); }
-    const_scalar_iterator operator-(difference_type n) const noexcept
-        { return const_scalar_iterator(m_data, m_index-n); }
-    difference_type  operator-(const const_scalar_iterator& rhs) const noexcept
-        { return m_index - rhs.m_index; }
-    reference operator*() const noexcept
-        { return *m_data; }
-    pointer operator->() const noexcept
-        { return m_data; }
-    bool operator==(const const_scalar_iterator& rhs) const noexcept
-        { return m_index == rhs.m_index; }
-    bool operator!=(const const_scalar_iterator& rhs) const noexcept
-        { return m_index != rhs.m_index; }
-    bool operator< (const const_scalar_iterator& rhs) const noexcept
-        { return m_index <  rhs.m_index; }
-    bool operator<=(const const_scalar_iterator& rhs) const noexcept
-        { return m_index <= rhs.m_index; }
-    bool operator> (const const_scalar_iterator& rhs) const noexcept
-        { return m_index >  rhs.m_index; }
-    bool operator>=(const const_scalar_iterator& rhs) const noexcept
-        { return m_index >= rhs.m_index; }
 };
 
 } // namespace dlf

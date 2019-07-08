@@ -145,6 +145,8 @@ public:
     const gpgpu::Buffer<T>& data() const noexcept {
         return m_data;
     }
+
+    static DevTensor scalar(const T& value);
 };
 
 template <typename T>
@@ -153,7 +155,7 @@ inline DevTensor<T> dev(const Tensor<T>& host) {
 }
 
 template <typename T>
-inline DevTensor<T> dev(T value) {
+inline DevTensor<T> DevTensor<T>::scalar(const T& value) {
     DevTensor<T> res({1});
     res.data().write(gpgpu::current::queue(), &value, 1);
     return res;
@@ -163,32 +165,32 @@ inline DevTensor<T> dev(T value) {
 // DevTensor unary transformations
 //==-------------------------------------------------------------------------
 
-template <typename T, typename Op>
-std::enable_if_t<!std::is_base_of<xfn::parameterized_function<T>, Op>::value, DevTensor<T>&>
-inline transformTo(const DevTensor<T>& x, DevTensor<T>& y, Op) {
+template <typename T, typename Fn>
+std::enable_if_t<!std::is_base_of<xfn::parameterized_function<T>, Fn>::value, DevTensor<T>&>
+inline transformTo(const DevTensor<T>& x, DevTensor<T>& y, Fn) {
     assert(x.shape() == y.shape());
-    gpgpu::dnn::transform(Op::name, x.size(), x.data(), y.data());
+    gpgpu::dnn::transform(Fn::name, x.size(), x.data(), y.data());
     return y;
 }
 
-template <typename T, typename Op>
-std::enable_if_t<std::is_base_of<xfn::parameterized_function<T>, Op>::value, DevTensor<T>&>
-inline transformTo(const DevTensor<T>& X, DevTensor<T>& Y, Op op) {
+template <typename T, typename Fn>
+std::enable_if_t<std::is_base_of<xfn::parameterized_function<T>, Fn>::value, DevTensor<T>&>
+inline transformTo(const DevTensor<T>& X, DevTensor<T>& Y, Fn fn) {
     assert(X.shape() == Y.shape());
-    gpgpu::dnn::transform(Op::name, X.size(), op.alpha, op.beta, X.data(), Y.data());
+    gpgpu::dnn::transform(Fn::name, X.size(), fn.alpha, fn.beta, X.data(), Y.data());
     return Y;
 }
 
-template <typename T, typename Op>
-inline DevTensor<T> transform(const DevTensor<T>& x, Op&& op) {
+template <typename T, typename Fn>
+inline DevTensor<T> transform(const DevTensor<T>& x, Fn fn) {
     DevTensor<T> y(x.shape());
-    transformTo(x, y, std::forward<Op>(op));
+    transformTo(x, y, fn);
     return y;
 }
 
-template <typename T, typename Op>
-inline DevTensor<T> transform(DevTensor<T>&& x, Op&& op) {
-    return std::move(transformTo(x, x, std::forward<Op>(op)));
+template <typename T, typename Fn>
+inline DevTensor<T> transform(DevTensor<T>&& x, Fn fn) {
+    return std::move(transformTo(x, x, fn));
 }
 
 template <typename T>
@@ -196,7 +198,7 @@ void copy(const DevTensor<T>& src, const Shape& shape, DevTensor<T>& dst) {
     assert(dst.shape() == shape);
     if (src.data() == dst.data())
         return;
-    if (src.shape().is_identical(shape)) {
+    if (src.size() == shape.size() && shape.is_contiguous()) {
         src.copyToAsync(dst);
     } else if (src.shape().is_tail(shape)) {
         gpgpu::dnn::copy(src.size(), src.data(), dst.size(), dst.data());
@@ -206,8 +208,8 @@ void copy(const DevTensor<T>& src, const Shape& shape, DevTensor<T>& dst) {
 }
 
 template <typename T>
-inline void copy(const DevTensor<T>& src, DevTensor<T>& dst) {
-    assert(src.shape() == dst.shape());
+inline void flat_copy(const DevTensor<T>& src, DevTensor<T>& dst) {
+    assert(src.size() == dst.size());
     src.copyToAsync(dst);
 }
 
@@ -220,53 +222,55 @@ inline void broadcast(const DevTensor<T>& src, DevTensor<T>& dst) {
 // DevTensor binary transformations
 //==-------------------------------------------------------------------------
 
-template <typename T, typename Op>
-DevTensor<T>& transformTo(const DevTensor<T>& x, const DevTensor<T>& y, DevTensor<T>& z, Op) {
-    if (x.shape().is_tail(y.shape()) || y.shape().is_tail(x.shape())) {
-        assert(z.shape() == Shape::broadcast(x, y));
-        gpgpu::dnn::transform(Op::name, x.size(), x.data(), y.size(), y.data(), z.data());
+template <typename T, typename Fn>
+DevTensor<T>& transformTo(const DevTensor<T>& A, const DevTensor<T>& B, DevTensor<T>& C, Fn) {
+    Shape final_shape = Shape::broadcast(A, B);
+    if (C.shape() != final_shape) {
+        throw shape_error("incompatible shape");
+    }
+    if (A.shape().is_tail(B.shape()) || B.shape().is_tail(A.shape())) {
+        gpgpu::dnn::transform(Fn::name, A.size(), A.data(), B.size(), B.data(), C.data());
     } else {
-        Shape final_shape = Shape::broadcast(x, y);
-        gpgpu::dnn::transform(Op::name, final_shape.size(), x.data(), y.data(), z.data(),
-                              x.shape().broadcast(final_shape).strides(),
-                              y.shape().broadcast(final_shape).strides(),
+        gpgpu::dnn::transform(Fn::name, final_shape.size(), A.data(), B.data(), C.data(),
+                              A.shape().broadcast(final_shape).strides(),
+                              B.shape().broadcast(final_shape).strides(),
                               final_shape.extents());
     }
-    return z;
+    return C;
 }
 
-template <typename T, typename Op>
-inline DevTensor<T> transform(const DevTensor<T>& x, const DevTensor<T>& y, Op&& op) {
-    DevTensor<T> z(Shape::broadcast(x, y));
-    transformTo(x, y, z, std::forward<Op>(op));
-    return z;
+template <typename T, typename Fn>
+inline DevTensor<T> transform(const DevTensor<T>& A, const DevTensor<T>& B, Fn fn) {
+    DevTensor<T> C(Shape::broadcast(A, B));
+    transformTo(A, B, C, fn);
+    return C;
 }
 
-template <typename T, typename Op>
-inline DevTensor<T> transform(DevTensor<T>&& x, const DevTensor<T>& y, Op&& op) {
-    if (x.shape() == Shape::broadcast(x, y))
-        return std::move(transformTo(x, y, x, std::forward<Op>(op)));
+template <typename T, typename Fn>
+inline DevTensor<T> transform(DevTensor<T>&& A, const DevTensor<T>& B, Fn fn) {
+    if (A.shape() == Shape::broadcast(A, B))
+        return std::move(transformTo(A, B, A, fn));
     else
-        return transform(x, y, std::forward<Op>(op));
+        return transform(A, B, fn);
 }
 
-template <typename T, typename Op>
-inline DevTensor<T> transform(const DevTensor<T>& x, DevTensor<T>&& y, Op&& op) {
-    if (y.shape() == Shape::broadcast(x, y))
-        return std::move(transformTo(x, y, y, std::forward<Op>(op)));
+template <typename T, typename Fn>
+inline DevTensor<T> transform(const DevTensor<T>& A, DevTensor<T>&& B, Fn fn) {
+    if (B.shape() == Shape::broadcast(A, B))
+        return std::move(transformTo(A, B, B, fn));
     else
-        return transform(x, y, std::forward<Op>(op));
+        return transform(A, B, fn);
 }
 
-template <typename T, typename Op>
-inline DevTensor<T> transform(DevTensor<T>&& x, DevTensor<T>&& y, Op&& op) {
-    Shape final_shape = Shape::broadcast(x, y);
-    if (x.shape() == final_shape)
-        return std::move(transformTo(x, y, x, std::forward<Op>(op)));
-    else if (y.shape() == final_shape)
-        return std::move(transformTo(x, y, y, std::forward<Op>(op)));
+template <typename T, typename Fn>
+inline DevTensor<T> transform(DevTensor<T>&& A, DevTensor<T>&& B, Fn fn) {
+    Shape final_shape = Shape::broadcast(A, B);
+    if (A.shape() == final_shape)
+        return std::move(transformTo(A, B, A, fn));
+    else if (B.shape() == final_shape)
+        return std::move(transformTo(A, B, B, fn));
     else
-        return transform(x, y, std::forward<Op>(op));
+        return transform(A, B, fn);
 }
 
 //==-------------------------------------------------------------------------

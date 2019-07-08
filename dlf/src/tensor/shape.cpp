@@ -30,21 +30,15 @@ void Shape::init() noexcept {
     }
 }
 
-bool Shape::is_identical(const Shape& other) const noexcept {
-    if (rank() != other.rank())
-        return false;
-    return std::memcmp(m_dims.data(), other.m_dims.data(), rank()*sizeof(dim_t)) == 0;
-}
-
 bool Shape::is_contiguous() const noexcept {
-    if (m_dims.size() != 0) {
+    if (rank() != 0) {
         size_t size = 1;
-        for (size_t i = m_dims.size(); i-- != 0;) {
-            if (m_dims[i].stride == 0 && m_dims[i].extent == 1)
+        for (size_t i = rank(); i-- != 0;) {
+            if (stride(i) == 0 && extent(i) == 1)
                 continue;
-            if (m_dims[i].stride != size)
+            if (stride(i) != size)
                 return false;
-            size *= m_dims[i].extent;
+            size *= extent(i);
         }
     }
     return true;
@@ -124,7 +118,7 @@ bool Shape::previous(std::vector<size_t>& index) const noexcept {
     return false;
 }
 
-bool Shape::reshape(std::vector<size_t> extents) noexcept {
+void Shape::reshape(std::vector<size_t> extents) {
     size_t newsize = 1;
     int pending = -1;
 
@@ -134,7 +128,7 @@ bool Shape::reshape(std::vector<size_t> extents) noexcept {
         for (int i = 0; i < extents.size(); i++) {
             if (extents[i] == size_t(-1)) {
                 if (pending != -1)
-                    return false;
+                    throw shape_error("reshape: incompatible shape");
                 pending = i;
             } else {
                 newsize *= extents[i];
@@ -148,9 +142,8 @@ bool Shape::reshape(std::vector<size_t> extents) noexcept {
     }
 
     if (size() != newsize)
-        return false;
+        throw shape_error("reshape: incompatible shape");
     init(extents);
-    return true;
 }
 
 Shape Shape::broadcast(const Shape& to) const {

@@ -37,12 +37,12 @@ public: // Container View
     using value_type                = T;
     using reference                 = value_type&;
     using const_reference           = const value_type&;
-    using iterator                  = value_type*;
-    using const_iterator            = const value_type*;
     using pointer                   = value_type*;
     using const_pointer             = const value_type*;
     using size_type                 = size_t;
     using difference_type           = ptrdiff_t;
+    using iterator                  = value_type*;
+    using const_iterator            = const value_type*;
     using reverse_iterator          = std::reverse_iterator<iterator>;
     using const_reverse_iterator    = std::reverse_iterator<const_iterator>;
 
@@ -69,11 +69,6 @@ public: // Container View
         { return const_shaped_iterator<T>(std::move(shape), data(), 0); }
     const_shaped_iterator<T> end(Shape shape) const
         { return const_shaped_iterator<T>(std::move(shape), data(), shape.size()); }
-
-    ::dlf::scalar_iterator<T> scalar_iterator(size_t offset)
-        { return ::dlf::scalar_iterator<T>(data(), offset); }
-    ::dlf::const_scalar_iterator<T> scalar_iterator(size_t offset) const
-        { return ::dlf::const_scalar_iterator<T>(data(), offset); }
 
 private: // Concepts
     template <typename InputIterator>
@@ -154,6 +149,13 @@ public: // Constructors
      * @param data the wrapped tensor data.
      */
     static Tensor wrap(Shape shape, T* data);
+
+    /**
+     * Create a scalar.
+     *
+     * @param value the scalar value
+     */
+    static Tensor scalar(const T& value);
 
     /**
      * Build the tensor with given generator function.
@@ -315,6 +317,13 @@ inline Tensor<T> Tensor<T>::wrap(Shape shape, T* data) {
 }
 
 template <typename T>
+inline Tensor<T> Tensor<T>::scalar(const T& value) {
+    Tensor<T> ret({1});
+    *ret.data() = value;
+    return ret;
+}
+
+template <typename T>
 template <typename F>
 inline Tensor<T> Tensor<T>::build(Shape shape, F f) { // NOLINT(performance-unnecessary-value-param)
     Tensor<T> res(std::move(shape));
@@ -398,18 +407,6 @@ Tensor<T>& Tensor<T>::operator=(Tensor&& t) noexcept {
     m_data = std::exchange(t.m_data, nullptr);
     m_alloc_data = std::move(t.m_alloc_data);
     return *this;
-}
-
-/**
- * Construct a scalar.
- *
- * @param value the scalar value
- */
-template <typename T>
-inline Tensor<std::decay_t<T>> scalar(T&& value) {
-    Tensor<std::decay_t<T>> ret({1});
-    ret.data()[0] = std::forward<T>(value);
-    return ret;
 }
 
 //==-------------------------------------------------------------------------
@@ -500,40 +497,30 @@ inline Tensor<T> transform(Tensor<T>&& A, F f) {
 // Tensor binary transformations
 //==-------------------------------------------------------------------------
 
-template <typename TA, typename TB, typename Op>
-auto broadcast_do(TA&& A, TB&& B, Op&& op) {
-    if (A.shape() == B.shape()) {
-        return op(A.shape(), A.begin(), A.end(), B.begin());
-    }
-
+template <typename T, typename U, typename W, typename F>
+Tensor<W>& transformTo(const Tensor<T>& A, const Tensor<U>& B, Tensor<W>& C, F f) {
     Shape final_shape = Shape::broadcast(A, B);
     Shape sA = A.shape().broadcast(final_shape);
     Shape sB = B.shape().broadcast(final_shape);
 
-    if (A.size() == 1) {
-        return op(final_shape, A.scalar_iterator(0), A.scalar_iterator(sA.size()), B.begin());
-    } else if (B.size() == 1) {
-        return op(final_shape, A.begin(), A.end(), B.scalar_iterator(0));
-    } else if (sA.is_contiguous()) {
-        return op(final_shape, A.begin(), A.end(), B.begin(sB));
-    } else if (sB.is_contiguous()) {
-        return op(final_shape, A.begin(sA), A.end(sB), B.begin());
-    } else {
-        return op(final_shape, A.begin(sA), A.end(sB), B.begin(sB));
+    if (C.shape() != final_shape) {
+        throw shape_error("incompatible shape");
     }
-}
 
-/**
- * Transform tensor A and B's elements to tensor C by applying the given binary
- * function.
- */
-template <typename T, typename U, typename W, typename F>
-Tensor<W>& transformTo(const Tensor<T>& A, const Tensor<U>& B, Tensor<W>& C, F f) {
-    broadcast_do(A, B, [&](auto& s, auto b1, auto e1, auto b2) {
-        if (C.shape() != s)
-            throw shape_error("incompatible shape");
-        par::transform(b1, e1, b2, C.begin(), f);
-    });
+    if (A.shape() == B.shape()) {
+        par::transform(A.begin(), A.end(), B.begin(), C.begin(), f);
+    } else if (A.size() == 1) {
+        par::transform(B.begin(), B.end(), C.begin(), [x=*A.data(),f](auto& y){ return f(x, y); });
+    } else if (B.size() == 1) {
+        par::transform(A.begin(), A.end(), C.begin(), [y=*B.data(),f](auto& x){ return f(x, y); });
+    } else if (sA.is_contiguous()) {
+        par::transform(A.begin(), A.end(), B.begin(sB), C.begin(), f);
+    } else if (sB.is_contiguous()) {
+        par::transform(A.begin(sA), A.end(sB), B.begin(), C.begin(), f);
+    } else {
+        par::transform(A.begin(sA), A.end(sB), B.begin(sB), C.begin(), f);
+    }
+
     return C;
 }
 
@@ -597,7 +584,9 @@ void copy(const Tensor<T>& src, const Shape& shape, Tensor<T>& dst) {
     assert(dst.shape() == shape);
     if (src.data() == dst.data())
         return;
-    if (src.shape().is_identical(shape)) {
+    if (src.size() == 1) {
+        std::fill(dst.begin(), dst.end(), *src.data());
+    } if (src.size() == shape.size() && shape.is_contiguous()) {
         par::copy(src.begin(), src.end(), dst.begin());
     } else {
         par::copy(src.begin(shape), src.end(shape), dst.begin());
@@ -605,8 +594,8 @@ void copy(const Tensor<T>& src, const Shape& shape, Tensor<T>& dst) {
 }
 
 template <typename T>
-inline void copy(const Tensor<T>& src, Tensor<T>& dst) {
-    assert(src.shape() == dst.shape());
+inline void flat_copy(const Tensor<T>& src, Tensor<T>& dst) {
+    assert(src.size() == dst.size());
     if (src.data() != dst.data()) {
         par::copy(src.begin(), src.end(), dst.begin());
     }
@@ -789,7 +778,7 @@ gemm(const T& alpha, const Tensor<T>& A, const Tensor<T>& B,
     assert(C->shape() == Shape({m, n}));
 
     if (alpha == T(0)) {
-        *C *= scalar(beta);
+        *C *= Tensor<T>::scalar(beta);
         return;
     }
 
