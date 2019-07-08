@@ -33,6 +33,8 @@ class Shape final {
     Shape(std::vector<dim_t>&& dims, size_t size)
         : m_dims(std::move(dims)), m_size(size) {}
     void init(const std::vector<size_t>& extents) noexcept;
+    void init() noexcept;
+    friend class Shaped;
 
 public:
     Shape() = default;
@@ -197,8 +199,8 @@ private:
 
 public:
     Shaped() = default;
-    explicit Shaped(const Shape& shape) : m_shape(shape) {}
-    explicit Shaped(Shape&& shape) : m_shape(std::move(shape)) {}
+    explicit Shaped(const Shape& shape) : m_shape(shape) { m_shape.init(); }
+    explicit Shaped(Shape&& shape) : m_shape(std::move(shape)) { m_shape.init(); }
 
     /**
      * Returns the shape of this shaped object.

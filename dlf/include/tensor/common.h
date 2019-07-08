@@ -319,13 +319,13 @@ inline auto product(First&& first, Rest&&... rest) {
 //==-------------------------------------------------------------------------
 
 template <typename TensorT>
-inline enable_if_tensor<TensorT> broadcast(TensorT&& tensor, const Shape& shape) {
-    if (shape == tensor.shape()) {
-        return std::forward<TensorT>(tensor);
+inline enable_if_tensor<TensorT> broadcast(TensorT&& src, const Shape& shape) {
+    if (src.shape() == shape) {
+        return std::forward<TensorT>(src);
     } else {
-        tensor_type<TensorT> result(shape);
-        copy(tensor, result);
-        return result;
+        tensor_type<TensorT> dst(shape);
+        broadcast(src, dst);
+        return dst;
     }
 }
 

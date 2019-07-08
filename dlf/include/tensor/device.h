@@ -101,7 +101,9 @@ public:
      */
     void copyTo(DevTensor<T>& dest) const {
         assert(shape() == dest.shape());
-        m_data.copyTo(gpgpu::current::queue(), dest.data(), size());
+        if (m_data != dest.data()) {
+            m_data.copyTo(gpgpu::current::queue(), dest.data(), size());
+        }
     }
 
     /**
@@ -109,7 +111,9 @@ public:
      */
     void copyToAsync(DevTensor<T>& dest) const {
         assert(shape() == dest.shape());
-        m_data.copyToAsync(gpgpu::current::queue(), dest.data(), size());
+        if (m_data != dest.data()) {
+            m_data.copyToAsync(gpgpu::current::queue(), dest.data(), size());
+        }
     }
 
     /**
@@ -190,18 +194,28 @@ inline DevTensor<T> transform(DevTensor<T>&& x, Op&& op) {
 }
 
 template <typename T>
-inline void copy(const DevTensor<T>& src, DevTensor<T>& dst) {
-    if (&src != &dst) {
-        if (src.shape() == dst.shape()) {
+void copy(const DevTensor<T>& src, const Shape& shape, DevTensor<T>& dst) {
+    assert(dst.shape() == shape);
+    if (src.data() != dst.data()) {
+        if (src.shape() == shape) {
             src.copyToAsync(dst);
-        } else if (src.shape().is_tail(dst.shape())) {
+        } else if (src.shape().is_tail(shape)) {
             gpgpu::dnn::copy(src.size(), src.data(), dst.size(), dst.data());
         } else {
-            gpgpu::dnn::copy(dst.size(), src.data(), dst.data(),
-                             src.shape().broadcast(dst.shape()).strides(),
-                             dst.shape().extents());
+            gpgpu::dnn::copy(shape.size(), src.data(), dst.data(),
+                             shape.strides(), shape.extents());
         }
     }
+}
+
+template <typename T>
+inline void copy(const DevTensor<T>& src, DevTensor<T>& dst) {
+    src.copyToAsync(dst);
+}
+
+template <typename T>
+inline void broadcast(const DevTensor<T>& src, DevTensor<T>& dst) {
+    copy(src, src.shape().broadcast(dst.shape()), dst);
 }
 
 //==-------------------------------------------------------------------------
@@ -388,7 +402,7 @@ void gemm(const T& alpha, const DevTensor<T>& A, const DevTensor<T>& B,
           const T& beta, const DevTensor<T>& C, DevTensor<T>& Y,
           bool transA = false, bool transB = false)
 {
-    copy(C, Y);
+    broadcast(C, Y);
     gemm(alpha, A, B, beta, &Y, transA, transB);
 }
 

@@ -593,15 +593,28 @@ inline Tensor<U> Tensor<T>::cast() const {
 }
 
 template <typename T>
-void copy(const Tensor<T>& src, Tensor<T>& dst) {
+void copy(const Tensor<T>& src, const Shape& shape, Tensor<T>& dst) {
+    assert(dst.shape() == shape);
     if (src.data() != dst.data()) {
-        if (src.shape() == dst.shape()) {
+        if (src.shape() == shape) {
             std::copy(src.begin(), src.end(), dst.begin());
         } else {
-            Shape s = src.shape().broadcast(dst.shape());
-            std::copy(src.begin(s), src.end(s), dst.begin());
+            std::copy(src.begin(shape), src.end(shape), dst.begin());
         }
     }
+}
+
+template <typename T>
+inline void copy(const Tensor<T>& src, Tensor<T>& dst) {
+    assert(src.shape() == dst.shape());
+    if (src.data() != dst.data()) {
+        std::copy(src.begin(), src.end(), dst.begin());
+    }
+}
+
+template <typename T>
+inline void broadcast(const Tensor<T>& src, Tensor<T>& dst) {
+    copy(src, src.shape().broadcast(dst.shape()), dst);
 }
 
 //==-------------------------------------------------------------------------
@@ -829,7 +842,7 @@ void gemm(const T& alpha, const Tensor<T>& A, const Tensor<T>& B,
           const T& beta, const Tensor<T>& C, Tensor<T>& Y,
           bool transA = false, bool transB = false)
 {
-    copy(C, Y);
+    broadcast(C, Y);
     gemm(alpha, A, B, beta, &Y, transA, transB);
 }
 

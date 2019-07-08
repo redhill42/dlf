@@ -20,6 +20,14 @@ void Shape::init(const std::vector<size_t>& extents) noexcept {
     }
 }
 
+void Shape::init() noexcept {
+    size_t size = 1;
+    for (size_t i = m_dims.size(); i-- != 0; ) {
+        m_dims[i].stride = size;
+        size *= m_dims[i].extent;
+    }
+}
+
 bool Shape::is_contiguous() const noexcept {
     if (m_dims.size() != 0) {
         size_t size = 1;
