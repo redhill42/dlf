@@ -117,6 +117,43 @@ struct power : std::binary_function<T,T,T> {
     }
 };
 
+template <typename T = void>
+struct modulus : std::binary_function<T, T, T> {
+    static constexpr auto name = "mod";
+    T operator()(const T& x, const T& y) const {
+        return x % y;
+    }
+};
+
+template <>
+inline float modulus<float>::operator()(const float& x, const float& y) const {
+    return std::fmod(x, y);
+}
+
+template <>
+inline double modulus<double>::operator()(const double& x, const double& y) const {
+    return std::fmod(x, y);
+}
+
+template <>
+struct modulus<void> {
+    static constexpr auto name = "mod";
+
+    template <class T1, class T2, std::enable_if_t<
+        !(std::is_floating_point<T1>::value || std::is_floating_point<T2>::value), int> = 0>
+    constexpr auto operator()(T1&& x, T2&& y) const
+    noexcept(noexcept(std::forward<T1>(x) % std::forward<T2>(y)))
+    -> decltype      (std::forward<T1>(x) % std::forward<T2>(y))
+        { return      std::forward<T1>(x) % std::forward<T2>(y); }
+
+    template <class T1, class T2, std::enable_if_t<
+        std::is_floating_point<T1>::value || std::is_floating_point<T2>::value, int> = 0>
+    constexpr auto operator()(T1 x, T2 y) const
+    noexcept(noexcept(std::fmod(x, y)))
+    -> decltype      (std::fmod(x, y))
+        { return      std::fmod(x, y); }
+};
+
 template <>
 struct power<void> {
     static constexpr auto name = "pow";

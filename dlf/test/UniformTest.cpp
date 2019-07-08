@@ -27,6 +27,18 @@ TEST(UniformTest, MatPowGPU) {
     EXPECT_EQ(matpow(A, 11).read()(0, 0), 144);
 }
 
+TEST(UniformTest, ModCPU) {
+    auto A = Tensor<int>::range({10}, 1);
+    auto B = A % 7;
+    EXPECT_EQ(B, Tensor<int>({10}, {1, 2, 3, 4, 5, 6, 0, 1, 2, 3}));
+}
+
+TEST(UniformTest, ModGPU) {
+    auto A = dev(Tensor<float>::range({10}, 1));
+    auto B = A % 7.f;
+    EXPECT_EQ(B.read(), Tensor<float>({10}, {1, 2, 3, 4, 5, 6, 0, 1, 2, 3}));
+}
+
 TEST(UniformTest, NestedTensor) {
     auto A = Tensor<Tensor<int>>({2, 2}, {
         {{2, 2}, { 1,  2,  3,  4}},

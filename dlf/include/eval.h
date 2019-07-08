@@ -338,6 +338,11 @@ private:
             alloc(n->A()), alloc(n->B()), alloc(n->C()));
     }
 
+    void visit(model::Mod* n) override {
+        result = std::make_unique<BinaryOp<xfn::modulus<T>>>(
+            alloc(n->A()), alloc(n->B()), alloc(n->C()));
+    }
+
     void visit(model::Pow* n) override {
         result = std::make_unique<BinaryOp<xfn::power<T>>>(
             alloc(n->A()), alloc(n->B()), alloc(n->C()));

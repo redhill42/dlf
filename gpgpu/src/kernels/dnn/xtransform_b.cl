@@ -173,28 +173,35 @@ DEFINE_BINARY_V(Xdiv_v, Divide)
 
 #if PRECISION !=3232 && PRECISION != 6464
 
+#ifdef CUDA
+  #if PRECISION == 32
+    #define xpow powf
+    #define xmod fmodf
+  #elif PRECISION == 64
+    #define xpow pow
+    #define xmod fmod
+  #else
+    #define xpow(x,y) pow((float)x,(float)y)
+    #define xmod(x,y) (x%y)
+  #endif
+#else
+  #if INTEGER_PRECISION
+    #define xpow(x,y) pow((float)x,(float)y)
+    #define xmod(x,y) (x%y)
+  #else
+    #define xpow pow
+    #define xmod fmod
+  #endif
+#endif
+
 #define Max(c,a,b) c = max(a,b)
 #define Min(c,a,b) c = min(a,b)
 DEFINE_BINARY(Xmax, Max)
 DEFINE_BINARY(Xmin, Min)
 
-#ifdef CUDA
-  #if PRECISION == 16
-    #define xpow hpow
-  #elif PRECISION == 32
-    #define xpow powf
-  #elif PRECISION == 64
-    #define xpow pow
-  #else
-    #define xpow(x,y) pow((float)x,(float)y)
-  #endif
-#else
-  #if INTEGER_PRECISION
-    #define xpow(x,y) pow((float)x,(float)y)
-  #else
-    #define xpow pow
-  #endif
-#endif
+#define Mod(c,a,b) c = xmod(a,b)
+DEFINE_BINARY(Xmod, Mod)
+
 #define Pow(c,a,b) c = xpow(a,b)
 DEFINE_BINARY(Xpow, Pow)
 
