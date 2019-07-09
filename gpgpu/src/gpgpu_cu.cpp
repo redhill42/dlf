@@ -225,6 +225,15 @@ cublasHandle_t cuQueue::getCublasHandle() const {
     return m_cublas;
 }
 
+cudnnHandle_t cuQueue::getCudnnHandle() const {
+    if (m_cudnn == nullptr) {
+        // TODO: check error
+        cudnnCreate(&m_cudnn);
+        cudnnSetStream(m_cudnn, m_queue);
+    }
+    return m_cudnn;
+}
+
 void cuQueue::finish(raw::Event& event) const {
     CheckError(cuEventSynchronize(cuEvent::end(event)));
     finish();
@@ -239,6 +248,8 @@ cuQueue::~cuQueue() {
         CheckErrorDtor(cuStreamDestroy(m_queue));
     if (m_cublas)
         cublasDestroy(m_cublas);
+    if (m_cudnn)
+        cudnnDestroy(m_cudnn);
 }
 
 void cuBuffer::read(const raw::Queue& queue, void* host, size_t size, size_t offset, raw::Event*) const {

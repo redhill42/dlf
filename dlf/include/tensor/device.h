@@ -427,4 +427,25 @@ inline DevTensor<T> gemm(const T& alpha, const DevTensor<T>& A, const DevTensor<
     return Y;
 }
 
+//==-------------------------------------------------------------------------
+// Tensor DNN operations
+//==-------------------------------------------------------------------------
+
+template <typename T>
+void batch_norm(const DevTensor<T>& X, DevTensor<T>& Y,
+                const DevTensor<T>& scale, const DevTensor<T>& bias,
+                const DevTensor<T>& mean, const DevTensor<T>& var,
+                const T epsilon = T(1e-5))
+{
+    assert(X.shape() == Y.shape());
+    assert(scale.is_vector() && scale.extent(0) == X.extent(1));
+    assert(bias.is_vector() && bias.extent(0) == X.extent(1));
+    assert(mean.is_vector() && mean.extent(0) == X.extent(1));
+    assert(var.is_vector() && var.extent(0) == X.extent(1));
+
+    gpgpu::dnn::batch_norm(X.shape().extents(), X.data(), Y.data(),
+                           scale.data(), bias.data(), mean.data(),
+                           var.data(), epsilon);
+}
+
 } // namespace dlf

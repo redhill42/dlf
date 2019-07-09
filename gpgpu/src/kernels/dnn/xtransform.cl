@@ -12,11 +12,10 @@ void X##name(const int n, const __global real* restrict xgm, __global real* ygm)
 }
 
 #if INTEGER_PRECISION
-  #define xabs abs
+  TRANSFORM(abs, abs)
 #else
-  #define xabs fabs
+  TRANSFORM(abs, fabs)
 #endif
-TRANSFORM(abs, xabs)
 
 #define neg(x) (-(x))
 TRANSFORM(neg, neg)
@@ -27,18 +26,15 @@ TRANSFORM(neg, neg)
 TRANSFORM(sign, sign)
 
 #if PRECISION == 16 || PRECISION == 32 || PRECISION == 64
-#ifdef CUDA
-  #if PRECISION == 16
-    #define XOP(op) h##op
-  #elif PRECISION == 32
-    #define XOP(op) op##f
-  #else
-    #define XOP(op) op
-  #endif
+
+#if defined(CUDA) && PRECISION == 16
+  #define XF(name) h##name
+#elif defined(CUDA) && PRECISION == 32
+  #define XF(name) name##f
 #else
-  #define XOP(op) op
+  #define XF(name) name
 #endif
-#define TRANSFORM_X(name) TRANSFORM(name, XOP(name))
+#define TRANSFORM_X(name) TRANSFORM(name, XF(name))
 
 TRANSFORM_X(floor)
 TRANSFORM_X(ceil)

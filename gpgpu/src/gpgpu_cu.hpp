@@ -5,6 +5,7 @@
 #include <cuda.h>
 #include <nvrtc.h>
 #include <cublas_v2.h>
+#include <cudnn.h>
 
 namespace gpgpu { namespace cu {
 
@@ -167,9 +168,10 @@ public:
 class cuQueue final : public raw::Queue {
     CUstream m_queue;
     mutable cublasHandle_t m_cublas;
+    mutable cudnnHandle_t m_cudnn;
 public:
     explicit cuQueue(CUstream queue)
-        : m_queue(queue), m_cublas(nullptr) {}
+        : m_queue(queue), m_cublas(nullptr), m_cudnn(nullptr) {}
 
     ~cuQueue() override;
 
@@ -178,6 +180,7 @@ public:
     }
 
     cublasHandle_t getCublasHandle() const;
+    cudnnHandle_t getCudnnHandle() const;
 
     void finish(raw::Event& event) const override;
     void finish() const override;

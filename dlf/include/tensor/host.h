@@ -889,4 +889,49 @@ inline Tensor<W> outer(const Tensor<T>& A, const Tensor<U>& B) {
     return outer(A, B, [](const T& a, const U& b) -> W { return a * b; });
 }
 
+//==-------------------------------------------------------------------------
+// Tensor DNN operations
+//==-------------------------------------------------------------------------
+
+template <typename T>
+void batch_norm(const Tensor<T>& X, Tensor<T>& Y,
+                const Tensor<T>& scale, const Tensor<T>& bias,
+                const Tensor<T>& mean, const Tensor<T>& var,
+                const T epsilon = T(1e-5))
+{
+    assert(X.shape() == Y.shape());
+    auto batches  = X.extent(0);
+    auto channels = X.extent(1);
+    auto spatial  = X.size() / (batches * channels);
+
+    assert(scale.is_vector() && scale.extent(0) == channels);
+    assert(bias.is_vector() && bias.extent(0) == channels);
+    assert(mean.is_vector() && mean.extent(0) == channels);
+    assert(var.is_vector() && var.extent(0) == channels);
+
+    const T* x = X.data();
+          T* y = Y.data();
+    const T* s = scale.data();
+    const T* b = bias.data();
+    const T* m = mean.data();
+
+    T* v = reinterpret_cast<T*>(alloca(channels * sizeof(T)));
+    std::transform(var.begin(), var.end(), v, [=](auto x) {
+        return std::sqrt(x + epsilon);
+    });
+
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, spatial, 256), [=](auto& r) {
+        for (size_t bat = 0; bat < batches; bat++) {
+            for (size_t c = 0; c < channels; c++) {
+                auto offset = (bat * channels + c) * spatial + r.begin();
+                auto px = x + offset;
+                auto py = y + offset;
+                for (auto n = r.size(); n--; ) {
+                    *py++ = s[c] * (*px++ - m[c]) / v[c] + b[c];
+                }
+            }
+        }
+    });
+}
+
 } // namespace dlf

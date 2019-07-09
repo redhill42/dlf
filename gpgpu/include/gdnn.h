@@ -49,6 +49,18 @@ void transform(const std::string& name, const size_t n,
                const std::vector<size_t>& oshape,
                const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
+template <typename T>
+void batch_norm(const std::vector<size_t>& dims,
+                const Buffer<T>& x_buffer,
+                      Buffer<T>& y_buffer,
+                const Buffer<T>& scale_buffer,
+                const Buffer<T>& bias_buffer,
+                const Buffer<T>& mean_buffer,
+                const Buffer<T>& var_buffer,
+                const T epsilon,
+                const Queue& queue = gpgpu::current::queue(),
+                Event* event = nullptr);
+
 }} // namespace gpgpu::dnn
 
 #endif //GPGPU_DNN_H_

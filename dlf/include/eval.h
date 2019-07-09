@@ -445,6 +445,30 @@ private:
         }
     };
 
+    struct BatchNormalizationOp : Operator {
+        T epsilon;
+        TensorT<> X, Y, S, B, M, V;
+        BatchNormalizationOp(TensorT<>&& X, TensorT<>&& Y,
+                             TensorT<>&& S, TensorT<>&& B,
+                             TensorT<>&& M, TensorT<>&& V,
+                             T epsilon)
+            : X(std::move(X)), Y(std::move(Y)),
+              S(std::move(S)), B(std::move(B)),
+              M(std::move(M)), V(std::move(V)),
+              epsilon(epsilon) {}
+        void evaluate() override {
+            batch_norm(X, Y, S, B, M, V, epsilon);
+        }
+    };
+
+    void visit(model::BatchNormalization* n) override {
+        result = std::make_unique<BatchNormalizationOp>(
+            alloc(n->X()), alloc(n->Y()),
+            alloc(n->scale()), alloc(n->B()),
+            alloc(n->mean()), alloc(n->var()),
+            n->epsilon());
+    }
+
     void visit(model::Gemm* n) override {
         result = std::make_unique<GemmOp>(
             T(n->alpha()), T(n->beta()), n->transA(), n->transB(),

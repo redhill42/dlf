@@ -3,6 +3,7 @@
 #include "gdnn.h"
 #include "gtest/gtest.h"
 #include "gmock/gmock.h"
+#include "test_utility.h"
 
 using namespace dlf;
 
@@ -11,28 +12,48 @@ void ExpectEQ(T a, T b) {
     EXPECT_EQ(a, b);
 }
 
-void ExpectEQ(float a, float b) {
+template <typename T>
+bool isFloatEQ(T a, T b, T eps = T{1e-5}) {
     if (std::isnan(a))
-        EXPECT_TRUE(std::isnan(b));
-    else if (std::isinf(a))
-        EXPECT_TRUE(std::isinf(b));
-    else
-        EXPECT_FLOAT_EQ(a, b);
+        return std::isnan(b);
+    if (std::isinf(a))
+        return std::isinf(b);
+    if (std::signbit(a) != std::signbit(b))
+        return std::abs(a - b) <= eps;
+    if (std::signbit(a)) {
+        a = -a; b = -b;
+    }
+
+    int e = static_cast<int>(std::log10(a));
+    if (e != static_cast<int>(std::log10(b)))
+        return false;
+    T scale = static_cast<T>(std::pow(10, std::abs(e)));
+    return e >= 0
+        ? std::abs(a/scale - b/scale) <= eps
+        : std::abs(a*scale - b*scale) <= eps;
+}
+
+void ExpectEQ(float a, float b) {
+    if (!isFloatEQ(a, b))
+        FAIL() << a << " and " << b << " are not equal";
 }
 
 void ExpectEQ(double a, double b) {
-    if (std::isnan(a))
-        EXPECT_TRUE(std::isnan(b));
-    else if (std::isinf(a))
-        EXPECT_TRUE(std::isinf(b));
-    else
-        EXPECT_DOUBLE_EQ(a, b);
+    if (!isFloatEQ(a, b))
+        FAIL() << a << " and " << b << " are not equal";
 }
 
 template <typename T>
 void ExpectEQ(std::complex<T> a, std::complex<T> b) {
     ExpectEQ(a.real(), b.real());
     ExpectEQ(a.imag(), b.imag());
+}
+
+template <typename T>
+void ExpectElementsEQ(const Tensor<T>& a, const Tensor<T>& b) {
+    for (size_t i = 0; i < a.size(); i++) {
+        ExpectEQ(a.data()[i], b.data()[i]);
+    }
 }
 
 template <typename T, size_t N, typename Unary>
@@ -326,4 +347,106 @@ TEST(ActivationTest, PRelu) {
     auto B = transform(A, Tensor<float>::scalar(0.01f), xfn::prelu<float>());
     auto dev_B = transform(dev_A, DevTensor<float>::scalar(0.01f), xfn::prelu<float>());
     ExpectEQ(B, dev_B.read());
+}
+
+template <typename T>
+Tensor<T> batch_norm_test(const Tensor<T>& x, Tensor<T> s, Tensor<T> b,
+                           Tensor<T> m, Tensor<T> v, T epsilon = T(1e-5))
+{
+    auto c = x.extent(1);
+    s.reshape({1, c, 1, 1});
+    b.reshape({1, c, 1, 1});
+    m.reshape({1, c, 1, 1});
+    v.reshape({1, c, 1, 1});
+    return s * (x - m) / sqrt(v + epsilon) + b;
+}
+
+TEST(DNNTest, BatchNormalizationCPU) {
+    {
+        auto x = Tensor<float>({1, 2, 1, 3}, {-1, 0, 1, 2, 3, 4});
+        auto s = Tensor<float>({2}, {1.0, 1.5});
+        auto b = Tensor<float>({2}, {0, 1});
+        auto m = Tensor<float>({2}, {0, 3});
+        auto v = Tensor<float>({2}, {1, 1.5});
+        auto t = batch_norm_test(x, s, b, m, v);
+
+        auto y = Tensor<float>({1, 2, 1, 3});
+        batch_norm(x, y, s, b, m, v);
+        ExpectElementsEQ(t, y);
+    }
+
+    {
+        auto x = Tensor<float>::random({2, 3, 4, 5}, -10, 10);
+        auto s = Tensor<float>::random({3}, 0.5, 1.5);
+        auto b = Tensor<float>::random({3}, 0, 1);
+        auto m = Tensor<float>::random({3}, 0, 3);
+        auto v = Tensor<float>::random({3}, 1, 1.5);
+        auto t = batch_norm_test(x, s, b, m, v);
+
+        auto y = Tensor<float>({2, 3, 4, 5});
+        batch_norm(x, y, s, b, m, v);
+        ExpectElementsEQ(t, y);
+    }
+}
+
+TEST(DNNTest, BatchNormalizationGPU) {
+    {
+        auto x = Tensor<float>({1, 2, 1, 3}, {-1, 0, 1, 2, 3, 4});
+        auto s = Tensor<float>({2}, {1.0, 1.5});
+        auto b = Tensor<float>({2}, {0, 1});
+        auto m = Tensor<float>({2}, {0, 3});
+        auto v = Tensor<float>({2}, {1, 1.5});
+        auto t = batch_norm_test(x, s, b, m, v);
+
+        auto y = DevTensor<float>({1, 2, 1, 3});
+        batch_norm(dev(x), y, dev(s), dev(b), dev(m), dev(v));
+        ExpectElementsEQ(t, y.read());
+    }
+
+    {
+        auto x = Tensor<float>::random({2, 3, 4, 5}, -10, 10);
+        auto s = Tensor<float>::random({3}, 0.5, 1.5);
+        auto b = Tensor<float>::random({3}, 0, 1);
+        auto m = Tensor<float>::random({3}, 0, 3);
+        auto v = Tensor<float>::random({3}, 1, 1.5);
+        auto t = batch_norm_test(x, s, b, m, v);
+
+        auto y = DevTensor<float>({2, 3, 4, 5});
+        batch_norm(dev(x), y, dev(s), dev(b), dev(m), dev(v));
+        ExpectElementsEQ(t, y.read());
+    }
+}
+
+TEST(DNNTest, BatchNormalizationPerformanceCPU) {
+    auto x = Tensor<float>::random({2, 3, 1024, 1024}, -10, 10);
+    auto s = Tensor<float>::random({3}, 0.5, 1.5);
+    auto b = Tensor<float>::random({3}, 0, 1);
+    auto m = Tensor<float>::random({3}, 0, 3);
+    auto v = Tensor<float>::random({3}, 1, 1.5);
+    auto y = Tensor<float>({2, 3, 1024, 1024});
+
+    for (int i = 0; i < 3; i++) {
+        timing("Batch normalization CPU", 1, [&]() {
+            for (int j = 0; j < 100; j++)
+                batch_norm(x, y, s, b, m, v);
+        });
+    }
+    std::cout << std::endl;
+}
+
+TEST(DNNTest, BatchNormalizationPerformanceGPU) {
+    auto x = dev(Tensor<float>::random({2, 3, 1024, 1024}, -10, 10));
+    auto s = dev(Tensor<float>::random({3}, 0.5, 1.5));
+    auto b = dev(Tensor<float>::random({3}, 0, 1));
+    auto m = dev(Tensor<float>::random({3}, 0, 3));
+    auto v = dev(Tensor<float>::random({3}, 1, 1.5));
+    auto y = dev(Tensor<float>({2, 3, 1024, 1024}));
+
+    for (int i = 0; i < 3; i++)
+        timing("Batch normalization GPU", 1, [&]() {
+            for (int j = 0; j < 100; j++)
+                batch_norm(x, y, s, b, m, v);
+            y.read();
+        });
+    std::cout << std::endl;
 }

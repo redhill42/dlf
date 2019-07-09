@@ -48,7 +48,8 @@ find_package(CUDA REQUIRED)
 find_cuda_helper_libs("cuda")
 find_cuda_helper_libs("nvrtc")
 find_cuda_helper_libs("cublas")
-set(CUDA_LIBRARIES ${CUDA_cuda_LIBRARY} ${CUDA_nvrtc_LIBRARY} ${CUDA_cublas_LIBRARY})
+find_cuda_helper_libs("cudnn")
+set(CUDA_LIBRARIES ${CUDA_cuda_LIBRARY} ${CUDA_nvrtc_LIBRARY} ${CUDA_cublas_LIBRARY} ${CUDA_cudnn_LIBRARY})
 include_directories(${CUDA_INCLUDE_DIRS})
 
 # add sub-directories that we want CMake to scan

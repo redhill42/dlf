@@ -1,9 +1,60 @@
+#include <cassert>
 #include "gdnn.h"
 #include "routines/routines.hpp"
+#include "gpgpu_cu.hpp"
 
 namespace gpgpu { namespace dnn {
-
 using namespace gpgpu::blas;
+
+template <typename T>
+class TensorDescriptor {
+    cudnnTensorDescriptor_t desc;
+
+public:
+    TensorDescriptor() {
+        cudnnCreateTensorDescriptor(&desc);
+    }
+
+    explicit TensorDescriptor(const std::vector<size_t> dims) {
+        cudnnDataType_t dtype;
+        switch (PrecisionValue<T>()) {
+        case Precision::Half:
+            dtype = cudnnDataType_t::CUDNN_DATA_HALF;
+            break;
+        case Precision::Single:
+            dtype = cudnnDataType_t::CUDNN_DATA_FLOAT;
+            break;
+        case Precision::Double:
+            dtype = cudnnDataType_t::CUDNN_DATA_DOUBLE;
+            break;
+        case Precision::Int:
+            dtype = cudnnDataType_t::CUDNN_DATA_INT32;
+            break;
+        default:
+            throw std::runtime_error("cudnn: unsupported data type");
+        }
+
+        int  rank = dims.size();
+        int* i_dims = reinterpret_cast<int*>(alloca(rank * sizeof(int)));
+        int* i_strides = reinterpret_cast<int*>(alloca(rank * sizeof(int)));
+        int  size = 1;
+        for (int i = 0; i < rank; i++) {
+            i_dims[i] = static_cast<int>(dims[i]);
+            i_strides[i] = size;
+            size *= dims[i];
+        }
+
+        cudnnCreateTensorDescriptor(&desc);
+        cudnnSetTensorNdDescriptor(desc, dtype, rank, i_dims, i_strides);
+    }
+
+    ~TensorDescriptor() {
+        cudnnDestroyTensorDescriptor(desc);
+    }
+
+    operator cudnnTensorDescriptor_t() { return desc; }
+    operator const cudnnTensorDescriptor_t() const { return desc; }
+};
 
 template <typename T>
 void copy(const size_t x_size, const Buffer<T>& x_buffer,
@@ -289,5 +340,41 @@ template void PUBLIC_API transform<float> (const std::string&, const size_t, con
 template void PUBLIC_API transform<double>(const std::string&, const size_t, const double, const double,
                                            const Buffer<double>&, Buffer<double>&,
                                            const Queue&, Event*);
+
+template <typename T>
+void batch_norm(const std::vector<size_t>& dims,
+                const Buffer<T>& x_buffer,
+                      Buffer<T>& y_buffer,
+                const Buffer<T>& scale_buffer,
+                const Buffer<T>& bias_buffer,
+                const Buffer<T>& mean_buffer,
+                const Buffer<T>& var_buffer,
+                const T epsilon,
+                const Queue& queue, Event* event)
+{
+    auto batches = dims[0];
+    auto channels = dims[1];
+    auto spatial = std::accumulate(dims.begin()+2, dims.end(), size_t{1}, std::multiplies<>());
+
+    auto routine = Xbatch_norm<T>(queue, event);
+    routine.DoBatchNorm(batches, channels, spatial, x_buffer, y_buffer,
+                        scale_buffer, bias_buffer, mean_buffer, var_buffer, epsilon);
+}
+
+template void PUBLIC_API batch_norm<half>  (const std::vector<size_t>&,
+                                            const Buffer<half>&, Buffer<half>&,
+                                            const Buffer<half>&, const Buffer<half>&,
+                                            const Buffer<half>&, const Buffer<half>&,
+                                            const half, const Queue&, Event*);
+template void PUBLIC_API batch_norm<float> (const std::vector<size_t>&,
+                                            const Buffer<float>&, Buffer<float>&,
+                                            const Buffer<float>&, const Buffer<float>&,
+                                            const Buffer<float>&, const Buffer<float>&,
+                                            const float, const Queue&, Event*);
+template void PUBLIC_API batch_norm<double>(const std::vector<size_t>&,
+                                            const Buffer<double>&, Buffer<double>&,
+                                            const Buffer<double>&, const Buffer<double>&,
+                                            const Buffer<double>&, const Buffer<double>&,
+                                            const double, const Queue&, Event*);
 
 }} // namespace gpgpu::dnn
