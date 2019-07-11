@@ -491,6 +491,7 @@ public:
             }
         } else {
             dilations.assign(n_axes, 1);
+            n->set_is(kdilations, dilations);
         }
 
         if (n->hasAttribute(kstrides)) {
@@ -500,6 +501,7 @@ public:
             }
         } else {
             strides.assign(n_axes, 1);
+            n->set_is(kstrides, strides);
         }
 
         if (n->hasAttribute(kkernel_shape)) {
@@ -551,8 +553,8 @@ public:
                         pads[i + n_axes] = half_pad;
                     }
                 }
-                n->set_is(kpads, pads);
             }
+            n->set_is(kpads, pads);
         }
 
         return true;

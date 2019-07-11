@@ -61,6 +61,17 @@ void batch_norm(const std::vector<size_t>& dims,
                 const Queue& queue = gpgpu::current::queue(),
                 Event* event = nullptr);
 
+template <typename T>
+void conv2d(const size_t channels, const size_t height, const size_t width,
+            const size_t kernel_h, const size_t kernel_w,
+            const size_t pad_t, const size_t pad_l, const size_t pad_b, const size_t pad_r,
+            const size_t stride_h, const size_t stride_w,
+            const size_t dilation_h, const size_t dilation_w,
+            const size_t num_kernels, const size_t batch_count,
+            const Buffer<T>& im_buffer, const Buffer<T>& kernel_buffer,
+            Buffer<T>& result_buffer,
+            const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
+
 }} // namespace gpgpu::dnn
 
 #endif //GPGPU_DNN_H_

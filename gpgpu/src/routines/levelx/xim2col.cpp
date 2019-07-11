@@ -33,8 +33,9 @@ Xim2col<T>::Xim2col(const Queue &queue, Event* event, const std::string &name):
 template <typename T>
 void Xim2col<T>::DoIm2col(const KernelMode kernel_mode,
                           const size_t channels, const size_t height, const size_t width,
-                          const size_t kernel_h, const size_t kernel_w, const size_t pad_h,
-                          const size_t pad_w, const size_t stride_h, const size_t stride_w,
+                          const size_t kernel_h, const size_t kernel_w,
+                          const size_t pad_t, const size_t pad_l, const size_t pad_b, const size_t pad_r,
+                          const size_t stride_h, const size_t stride_w,
                           const size_t dilation_h, const size_t dilation_w,
                           const Buffer<T> &im_buffer, const size_t im_offset,
                           Buffer<T> &col_buffer, const size_t col_offset) {
@@ -46,10 +47,10 @@ void Xim2col<T>::DoIm2col(const KernelMode kernel_mode,
   if ((channels == 0) || (height == 0) || (width == 0)) { throw BLASError(StatusCode::kInvalidDimension); }
 
   // Sets the height and width of the 'col' result
-  const auto size_h = height + 2 * pad_h;
+  const auto size_h = height + pad_t + pad_b;
   const auto padding_h = dilation_h * (kernel_h - 1) + 1;
   const auto col_h = (size_h >= padding_h) ? (size_h - padding_h) / stride_h + 1 : 1;
-  const auto size_w = width + 2 * pad_w;
+  const auto size_w = width + pad_l + pad_r;
   const auto padding_w = dilation_w * (kernel_w - 1) + 1;
   const auto col_w = (size_w >= padding_w) ? (size_w - padding_w) / stride_w + 1 : 1;
 
@@ -64,8 +65,8 @@ void Xim2col<T>::DoIm2col(const KernelMode kernel_mode,
   kernel.setArgument(4, static_cast<int>(col_w));
   kernel.setArgument(5, static_cast<int>(kernel_h));
   kernel.setArgument(6, static_cast<int>(kernel_w));
-  kernel.setArgument(7, static_cast<int>(pad_h));
-  kernel.setArgument(8, static_cast<int>(pad_w));
+  kernel.setArgument(7, static_cast<int>(pad_t));
+  kernel.setArgument(8, static_cast<int>(pad_l));
   kernel.setArgument(9, static_cast<int>(stride_h));
   kernel.setArgument(10, static_cast<int>(stride_w));
   kernel.setArgument(11, static_cast<int>(dilation_h));

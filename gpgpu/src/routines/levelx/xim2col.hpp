@@ -32,7 +32,7 @@ class Xim2col: public Routine {
   void DoIm2col(const KernelMode kernel_mode,
                 const size_t channels, const size_t height, const size_t width,
                 const size_t kernel_h, const size_t kernel_w,
-                const size_t pad_h, const size_t pad_w,
+                const size_t pad_t, const size_t pad_l, const size_t pad_b, const size_t pad_r,
                 const size_t stride_h, const size_t stride_w,
                 const size_t dilation_h, const size_t dilation_w,
                 const Buffer<T> &im_buffer, const size_t im_offset,

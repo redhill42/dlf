@@ -934,4 +934,99 @@ void batch_norm(const Tensor<T>& X, Tensor<T>& Y,
     });
 }
 
+namespace detail {
+template <typename T>
+void im2col(const size_t channels,
+            const size_t input_h, const size_t input_w,
+            const size_t output_h, const size_t output_w,
+            const size_t kernel_h, const size_t kernel_w,
+            const size_t pad_h, const size_t pad_w,
+            const size_t stride_h, const size_t stride_w,
+            const size_t dilation_h, const size_t dilation_w,
+            const T* im_buffer, T* col_buffer)
+{
+    tbb::parallel_for(tbb::blocked_range2d<int>(0, output_w, 32, 0, output_h*channels, 32), [&](auto& r) {
+        for (int w_id = r.rows().begin(); w_id < r.rows().end(); w_id++) {
+            for (int hc_id = r.cols().begin(); hc_id < r.cols().end(); hc_id++) {
+                int c_id = hc_id / output_h;
+                int h_id = hc_id - c_id * output_h;
+
+                for (int kh_id = 0; kh_id < kernel_h; kh_id++) {
+                    for (int kw_id = 0; kw_id < kernel_w; kw_id++) {
+                        // Retrieves the input value
+                        int h_index = kh_id * dilation_h + stride_h * h_id - pad_h;
+                        int w_index = kw_id * dilation_w + stride_w * w_id - pad_w;
+                        T val{};
+                        if (h_index >= 0 && h_index < input_h &&
+                            w_index >= 0 && w_index < input_w) {
+                            int input_index = (c_id * input_h + h_index) * input_w + w_index;
+                            val = im_buffer[input_index];
+                        }
+
+                        // Sets the output value
+                        int kernel_index = kernel_h * kernel_w - kw_id - kernel_w * kh_id - 1;
+                        int output_index = c_id * output_w * output_h * kernel_h * kernel_w +
+                                           kernel_index * output_w * output_h +
+                                           h_id * output_w + w_id;
+                        col_buffer[output_index] = val;
+                    }
+                }
+            }
+        }
+    });
+}
+} // namespace detail
+
+template <typename T>
+void conv2d(const Tensor<T>& X, const Tensor<T>& W, Tensor<T>& Y,
+            const size_t pad_t, const size_t pad_l, const size_t pad_b, const size_t pad_r,
+            const size_t stride_h, const size_t stride_w,
+            const size_t dilation_h, const size_t dilation_w)
+{
+    assert(X.rank() == 4);
+    const auto batches  = X.extent(0);
+    const auto channels = X.extent(1);
+    const auto height   = X.extent(2);
+    const auto width    = X.extent(3);
+
+    assert(W.rank() == 4);
+    assert(W.extent(1) == channels);
+    const auto num_kernels = W.extent(0);
+    const auto kernel_h = W.extent(2);
+    const auto kernel_w = W.extent(3);
+
+    const auto size_h = height + pad_t + pad_b;
+    const auto padding_h = dilation_h * (kernel_h - 1) + 1;
+    const auto col_h = (size_h >= padding_h) ? (size_h - padding_h) / stride_h + 1 : 1;
+    const auto size_w = width + pad_l + pad_r;
+    const auto padding_w = dilation_w * (kernel_w - 1) + 1;
+    const auto col_w = (size_w >= padding_w) ? (size_w - padding_w) / stride_w + 1 : 1;
+
+    assert(Y.shape() == Shape({batches, num_kernels, col_h, col_w}));
+
+    const auto m = num_kernels;
+    const auto k = channels * kernel_h * kernel_w;
+    const auto n = col_h * col_w;
+    Tensor<T> work({k, n});
+
+    auto x_buffer = X.data();
+    auto y_buffer = Y.data();
+
+    for (size_t b = 0; b < batches; b++) {
+        detail::im2col(channels, height, width, col_h, col_w, kernel_h, kernel_w,
+                       pad_t, pad_l, stride_h, stride_w, dilation_h, dilation_w,
+                       x_buffer, work.data());
+
+        cblas::gemm(cblas::Layout::RowMajor,
+                    cblas::Transpose::NoTrans, cblas::Transpose::NoTrans,
+                    m, n, k, T{1},
+                    W.data(), W.stride(0),
+                    work.data(), work.stride(0), T{0},
+                    y_buffer, Y.stride(1));
+
+        x_buffer += X.stride(0);
+        y_buffer += Y.stride(0);
+    }
+}
+
 } // namespace dlf

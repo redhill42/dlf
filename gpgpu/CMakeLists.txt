@@ -195,6 +195,7 @@ set(HEADERS  # such that they can be discovered by IDEs such as CLion and Visual
   src/cache.hpp
   src/preprocessor.hpp
   src/routine.hpp
+  src/cudnn.hpp
 )
 foreach(ROUTINE ${LEVEL1_ROUTINES})
   set(SOURCES ${SOURCES} src/routines/level1/${ROUTINE}.cpp)

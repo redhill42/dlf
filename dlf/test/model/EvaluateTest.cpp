@@ -92,3 +92,31 @@ TYPED_TEST(EvaluateTest, Gemm) {
     eval.evaluate();
     EXPECT_EQ(eval.get(0), Tensor<float>({2,2}, {28, 32, 52, 60}));
 }
+
+TYPED_TEST(EvaluateTest, Conv) {
+    using Context = TypeParam;
+    Graph g;
+
+    auto x = g.append<Conv>();
+    x->addInput(g.addInput("X", DataType::FLOAT, {1, 1, 5, 5}));
+    x->addInput(g.addInput("W", DataType::FLOAT, {1, 1, 3, 3}));
+    x->addInput(g.addInitializer(TensorData("B", DataType::FLOAT, {1}, {1})));
+    x->set_pads({1, 1, 1, 1});
+    g.addOutput(x->addOutput("Y"));
+
+    Tensor<float> W({1, 1, 3, 3});
+    std::fill(W.begin(), W.end(), 1);
+
+    Evaluator<Context, float> eval(g);
+    eval.set(0, Tensor<float>::range({1, 1, 5, 5}, 0));
+    eval.set(1, W);
+    eval.evaluate();
+
+    EXPECT_EQ(eval.get(0), Tensor<float>({1, 1, 5, 5}, {
+        13, 22, 28, 34, 25,
+        34, 55, 64, 73, 52,
+        64, 100, 109, 118, 82,
+        94, 145, 154, 163, 112,
+        73, 112, 118, 124, 85
+    }));
+}

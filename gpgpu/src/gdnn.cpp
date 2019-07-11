@@ -1,60 +1,10 @@
 #include <cassert>
 #include "gdnn.h"
 #include "routines/routines.hpp"
-#include "gpgpu_cu.hpp"
+#include "cudnn.hpp"
 
 namespace gpgpu { namespace dnn {
 using namespace gpgpu::blas;
-
-template <typename T>
-class TensorDescriptor {
-    cudnnTensorDescriptor_t desc;
-
-public:
-    TensorDescriptor() {
-        cudnnCreateTensorDescriptor(&desc);
-    }
-
-    explicit TensorDescriptor(const std::vector<size_t> dims) {
-        cudnnDataType_t dtype;
-        switch (PrecisionValue<T>()) {
-        case Precision::Half:
-            dtype = cudnnDataType_t::CUDNN_DATA_HALF;
-            break;
-        case Precision::Single:
-            dtype = cudnnDataType_t::CUDNN_DATA_FLOAT;
-            break;
-        case Precision::Double:
-            dtype = cudnnDataType_t::CUDNN_DATA_DOUBLE;
-            break;
-        case Precision::Int:
-            dtype = cudnnDataType_t::CUDNN_DATA_INT32;
-            break;
-        default:
-            throw std::runtime_error("cudnn: unsupported data type");
-        }
-
-        int  rank = dims.size();
-        int* i_dims = reinterpret_cast<int*>(alloca(rank * sizeof(int)));
-        int* i_strides = reinterpret_cast<int*>(alloca(rank * sizeof(int)));
-        int  size = 1;
-        for (int i = 0; i < rank; i++) {
-            i_dims[i] = static_cast<int>(dims[i]);
-            i_strides[i] = size;
-            size *= dims[i];
-        }
-
-        cudnnCreateTensorDescriptor(&desc);
-        cudnnSetTensorNdDescriptor(desc, dtype, rank, i_dims, i_strides);
-    }
-
-    ~TensorDescriptor() {
-        cudnnDestroyTensorDescriptor(desc);
-    }
-
-    operator cudnnTensorDescriptor_t() { return desc; }
-    operator const cudnnTensorDescriptor_t() const { return desc; }
-};
 
 template <typename T>
 void copy(const size_t x_size, const Buffer<T>& x_buffer,
@@ -352,13 +302,33 @@ void batch_norm(const std::vector<size_t>& dims,
                 const T epsilon,
                 const Queue& queue, Event* event)
 {
-    auto batches = dims[0];
-    auto channels = dims[1];
-    auto spatial = std::accumulate(dims.begin()+2, dims.end(), size_t{1}, std::multiplies<>());
+    if (IsOpenCL(queue.context().device()) || (dims.size() != 4 && dims.size() != 5)) {
+        auto batches = dims[0];
+        auto channels = dims[1];
+        auto spatial = std::accumulate(dims.begin()+2, dims.end(), size_t{1}, std::multiplies<>());
 
-    auto routine = Xbatch_norm<T>(queue, event);
-    routine.DoBatchNorm(batches, channels, spatial, x_buffer, y_buffer,
-                        scale_buffer, bias_buffer, mean_buffer, var_buffer, epsilon);
+        auto routine = Xbatch_norm<T>(queue, event);
+        routine.DoBatchNorm(batches, channels, spatial, x_buffer, y_buffer,
+                            scale_buffer, bias_buffer, mean_buffer, var_buffer, epsilon);
+    } else {
+        TensorDescriptor<T> xy_desc(dims);
+        TensorDescriptor<T> sbmv_desc;
+        cudnnDeriveBNTensorDescriptor(sbmv_desc, xy_desc,
+            cudnnBatchNormMode_t::CUDNN_BATCHNORM_SPATIAL);
+
+        const T alpha = 1, beta = 0;
+        cudnnBatchNormalizationForwardInference(
+            cudnn_handle(queue), cudnnBatchNormMode_t::CUDNN_BATCHNORM_SPATIAL,
+            &alpha, &beta,
+            xy_desc, reinterpret_cast<void*>(*cu::cuBuffer::unwrap(x_buffer)),
+            xy_desc, reinterpret_cast<void*>(*cu::cuBuffer::unwrap(y_buffer)),
+            sbmv_desc,
+            reinterpret_cast<void*>(*cu::cuBuffer::unwrap(scale_buffer)),
+            reinterpret_cast<void*>(*cu::cuBuffer::unwrap(bias_buffer)),
+            reinterpret_cast<void*>(*cu::cuBuffer::unwrap(mean_buffer)),
+            reinterpret_cast<void*>(*cu::cuBuffer::unwrap(var_buffer)),
+            epsilon >= CUDNN_BN_MIN_EPSILON ? epsilon : 0.00001); // FIXME
+    }
 }
 
 template void PUBLIC_API batch_norm<half>  (const std::vector<size_t>&,
@@ -376,5 +346,91 @@ template void PUBLIC_API batch_norm<double>(const std::vector<size_t>&,
                                             const Buffer<double>&, const Buffer<double>&,
                                             const Buffer<double>&, const Buffer<double>&,
                                             const double, const Queue&, Event*);
+
+template <typename T>
+void conv2d(const size_t channels, const size_t height, const size_t width,
+            const size_t kernel_h, const size_t kernel_w,
+            const size_t pad_t, const size_t pad_l, const size_t pad_b, const size_t pad_r,
+            const size_t stride_h, const size_t stride_w,
+            const size_t dilation_h, const size_t dilation_w,
+            const size_t num_kernels, const size_t batch_count,
+            const Buffer<T>& im_buffer, const Buffer<T>& kernel_buffer,
+            Buffer<T>& result_buffer, const Queue& queue, Event* event)
+{
+    if (IsOpenCL(queue.context().device()) || (pad_t != pad_b || pad_l != pad_r)) {
+        auto routine = Xconvgemm<T>(queue, event);
+        routine.DoConvgemm(KernelMode::Convolution,
+                           channels, height, width,
+                           kernel_h, kernel_w,
+                           pad_t, pad_l, pad_b, pad_r,
+                           stride_h, stride_w,
+                           dilation_h, dilation_w,
+                           num_kernels, batch_count,
+                           im_buffer, 0,
+                           kernel_buffer, 0,
+                           result_buffer, 0);
+    } else {
+        auto cudnn = cudnn_handle(queue);
+
+        const auto size_h = height + pad_t + pad_b;
+        const auto padding_h = dilation_h * (kernel_h - 1) + 1;
+        const auto output_h = (size_h >= padding_h) ? (size_h - padding_h) / stride_h + 1 : 1;
+        const auto size_w = width + pad_l + pad_r;
+        const auto padding_w = dilation_w * (kernel_w - 1) + 1;
+        const auto output_w = (size_w >= padding_w) ? (size_w - padding_w) / stride_w + 1 : 1;
+
+        auto x_desc = TensorDescriptor<T>(batch_count, channels, height, width);
+        auto w_desc = FilterDescriptor<T>(num_kernels, channels, kernel_h, kernel_w);
+        auto y_desc = TensorDescriptor<T>(batch_count, num_kernels, output_h, output_w);
+        auto conv_desc = ConvolutionDescriptor<T>(pad_t, pad_l, stride_h, stride_w, dilation_h, dilation_w);
+
+        cudnnConvolutionFwdAlgo_t algo;
+        checkCUDNN(cudnnGetConvolutionForwardAlgorithm(
+            cudnn, x_desc, w_desc, conv_desc, y_desc,
+            CUDNN_CONVOLUTION_FWD_PREFER_FASTEST,
+            /*memoryLimitInBytes=*/0,
+            &algo));
+
+        size_t workspace_size = 0;
+        checkCUDNN(cudnnGetConvolutionForwardWorkspaceSize(
+            cudnn, x_desc, w_desc, conv_desc, y_desc, algo, &workspace_size));
+        auto workspace = queue.context().createBuffer<char>(workspace_size);
+
+        const T alpha = 1, beta = 0;
+        checkCUDNN(cudnnConvolutionForward(
+            cudnn, &alpha,
+            x_desc, reinterpret_cast<void*>(*cu::cuBuffer::unwrap(im_buffer)),
+            w_desc, reinterpret_cast<void*>(*cu::cuBuffer::unwrap(kernel_buffer)),
+            conv_desc, algo,
+            reinterpret_cast<void*>(*cu::cuBuffer::unwrap(workspace)), workspace_size,
+            &beta,
+            y_desc, reinterpret_cast<void*>(*cu::cuBuffer::unwrap((result_buffer)))));
+    }
+}
+
+template void PUBLIC_API conv2d<float> (const size_t, const size_t, const size_t,
+                                        const size_t, const size_t,
+                                        const size_t, const size_t, const size_t, const size_t,
+                                        const size_t, const size_t,
+                                        const size_t, const size_t,
+                                        const size_t, const size_t,
+                                        const Buffer<float>&, const Buffer<float>&, Buffer<float>&,
+                                        const Queue&, Event*);
+template void PUBLIC_API conv2d<double>(const size_t, const size_t, const size_t,
+                                        const size_t, const size_t,
+                                        const size_t, const size_t, const size_t, const size_t,
+                                        const size_t, const size_t,
+                                        const size_t, const size_t,
+                                        const size_t, const size_t,
+                                        const Buffer<double>&, const Buffer<double>&, Buffer<double>&,
+                                        const Queue&, Event*);
+template void PUBLIC_API conv2d<half>  (const size_t, const size_t, const size_t,
+                                        const size_t, const size_t,
+                                        const size_t, const size_t, const size_t, const size_t,
+                                        const size_t, const size_t,
+                                        const size_t, const size_t,
+                                        const size_t, const size_t,
+                                        const Buffer<half>&, const Buffer<half>&, Buffer<half>&,
+                                        const Queue&, Event*);
 
 }} // namespace gpgpu::dnn

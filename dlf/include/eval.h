@@ -135,6 +135,10 @@ public:
             return it->second;
         }
 
+        if (value->type() == model::DataType::UNDEFINED)
+            throw std::runtime_error(cxx::string_concat("undefined value '",
+                value->name(), "' in node ", value->node()->kind().str()));
+
         auto datum = std::make_shared<Datum<Context>>(
             model::DataTypeTrait<U>, Shape(value->dims()));
         m_dataset.push_back(datum);
@@ -444,6 +448,55 @@ private:
             gemm(alpha, A, B, beta, C, Y, transA, transB);
         }
     };
+
+    struct ConvOp : Operator {
+        TensorT<> X, W, B, Y;
+        const size_t pad_t, pad_l, pad_b, pad_r;
+        const size_t stride_h, stride_w;
+        const size_t dilation_h, dilation_w;
+
+        ConvOp(TensorT<>&& X, TensorT<>&& W, TensorT<>&& B, TensorT<>&& Y,
+               size_t pad_t, size_t pad_l, size_t pad_b, size_t pad_r,
+               size_t stride_h, size_t stride_w,
+               size_t dilation_h, size_t dilation_w)
+            : X(std::move(X)), W(std::move(W)), B(std::move(B)), Y(std::move(Y)),
+              pad_t(pad_t), pad_l(pad_l), pad_b(pad_b), pad_r(pad_r),
+              stride_h(stride_h), stride_w(stride_w),
+              dilation_h(dilation_h), dilation_w(dilation_w)
+        {}
+
+        void evaluate() override {
+            conv2d(X, W, Y, pad_t, pad_l, pad_b, pad_r, stride_h, stride_w, dilation_h, dilation_w);
+            if (B.size() != 0) {
+                transformTo(Y, B, Y, xfn::plus<T>());
+            }
+        }
+    };
+
+    void visit(model::Conv* n) override {
+        assert(n->X()->dims().size() == 4);
+        assert(n->W()->dims().size() == 4);
+        assert(n->X()->dim(1) == n->W()->dim(1)); // channel
+
+        // attributes should set by shape inference
+        assert(n->has_pads());
+        assert(n->has_strides());
+        assert(n->has_dilations());
+        auto& pads = n->pads();
+        auto& strides = n->strides();
+        auto& dilations = n->dilations();
+        assert(pads.size() == 4);
+        assert(strides.size() == 2);
+        assert(dilations.size() == 2);
+
+        result = std::make_unique<ConvOp>(
+            alloc(n->X()), alloc(n->W()),
+            n->B() ? alloc(n->B()) : TensorT<>(),
+            alloc(n->Y()),
+            pads[0], pads[1], pads[2], pads[3],
+            strides[0], strides[1],
+            dilations[0], dilations[1]);
+    }
 
     struct BatchNormalizationOp : Operator {
         T epsilon;

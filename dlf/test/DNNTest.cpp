@@ -450,3 +450,135 @@ TEST(DNNTest, BatchNormalizationPerformanceGPU) {
         });
     std::cout << std::endl;
 }
+
+TEST(Conv2D, basic_conv_with_padding) {
+    auto X = Tensor<float>::range({1, 1, 5, 5}, 0);
+    auto W = Tensor<float>({1, 1, 3, 3});
+    std::fill(W.begin(), W.end(), 1);
+    auto Y = Tensor<float>({1, 1, 5, 5});
+    auto R = Tensor<float>({1, 1, 5, 5}, {
+        12, 21, 27, 33, 24,
+        33, 54, 63, 72, 51,
+        63, 99, 108, 117, 81,
+        93, 144, 153, 162, 111,
+        72, 111, 117, 123, 84
+    });
+
+    conv2d(X, W, Y, 1, 1, 1, 1, 1, 1, 1, 1);
+    EXPECT_EQ(Y, R);
+
+    auto dev_Y = DevTensor<float>({1, 1, 5, 5});
+    conv2d(dev(X), dev(W), dev_Y, 1, 1, 1, 1, 1, 1, 1, 1);
+    EXPECT_EQ(dev_Y.read(), R);
+}
+
+TEST(Conv2D, basic_conv_without_padding) {
+    auto X = Tensor<float>::range({1, 1, 5, 5}, 0);
+    auto W = Tensor<float>({1, 1, 3, 3});
+    std::fill(W.begin(), W.end(), 1);
+    auto Y = Tensor<float>({1, 1, 3, 3});
+    auto R = Tensor<float>({1, 1, 3, 3}, {
+        54, 63, 72,
+        99, 108, 117,
+        144, 153, 162
+    });
+
+    conv2d(X, W, Y, 0, 0, 0, 0, 1, 1, 1, 1);
+    EXPECT_EQ(Y, R);
+
+    auto dev_Y = DevTensor<float>({1, 1, 3, 3});
+    conv2d(dev(X), dev(W), dev_Y, 0, 0, 0, 0, 1, 1, 1, 1);
+    EXPECT_EQ(dev_Y.read(), R);
+}
+
+TEST(Conv2D, conv_with_strides_padding) {
+    auto X = Tensor<float>::range({1, 1, 7, 5}, 0);
+    auto W = Tensor<float>({1, 1, 3, 3});
+    std::fill(W.begin(), W.end(), 1);
+    auto Y = Tensor<float>({1, 1, 4, 3});
+    auto R = Tensor<float>({1, 1, 4, 3}, {
+        12, 27, 24,
+        63, 108, 81,
+        123, 198, 141,
+        112, 177, 124
+    });
+
+    conv2d(X, W, Y, 1, 1, 1, 1, 2, 2, 1, 1);
+    EXPECT_EQ(Y, R);
+
+    auto dev_Y = DevTensor<float>({1, 1, 4, 3});
+    conv2d(dev(X), dev(W), dev_Y, 1, 1, 1, 1, 2, 2, 1, 1);
+    EXPECT_EQ(dev_Y.read(), R);
+}
+
+TEST(Conv2D, conv_with_strides_no_padding) {
+    auto X = Tensor<float>::range({1, 1, 7, 5}, 0);
+    auto W = Tensor<float>({1, 1, 3, 3});
+    std::fill(W.begin(), W.end(), 1);
+    auto Y = Tensor<float>({1, 1, 3, 2});
+    auto R = Tensor<float>({1, 1, 3, 2}, {
+        54, 72,
+        144, 162,
+        234, 252
+    });
+
+    conv2d(X, W, Y, 0, 0, 0, 0, 2, 2, 1, 1);
+    EXPECT_EQ(Y, R);
+
+    auto dev_Y = DevTensor<float>({1, 1, 3, 2});
+    conv2d(dev(X), dev(W), dev_Y, 0, 0, 0, 0, 2, 2, 1, 1);
+    EXPECT_EQ(dev_Y.read(), R);
+}
+
+TEST(Conv2D, conv_with_strides_and_asymmetric_padding) {
+    auto X = Tensor<float>::range({1, 1, 7, 5}, 0);
+    auto W = Tensor<float>({1, 1, 3, 3});
+    std::fill(W.begin(), W.end(), 1);
+    auto Y = Tensor<float>({1, 1, 4, 2});
+    auto R = Tensor<float>({1, 1, 4, 2}, {
+        21, 33,
+        99, 117,
+        189, 207,
+        171, 183
+    });
+
+    conv2d(X, W, Y, 1, 0, 1, 0, 2, 2, 1, 1);
+    EXPECT_EQ(Y, R);
+
+    auto dev_Y = DevTensor<float>({1, 1, 4, 2});
+    conv2d(dev(X), dev(W), dev_Y, 1, 0, 1, 0, 2, 2, 1, 1);
+    EXPECT_EQ(dev_Y.read(), R);
+}
+
+TEST(Conv2D, conv_with_multiple_channels) {
+    auto X = Tensor<float>::range({2, 3, 5, 5}, 0);
+    auto W = Tensor<float>({8, 3, 3, 3});
+    std::fill(W.begin(), W.end(), 1);
+    auto Y = Tensor<float>({2, 8, 5, 5});
+    auto dev_Y = DevTensor<float>({2, 8, 5, 5});
+
+    conv2d(X, W, Y, 1, 1, 1, 1, 1, 1, 1, 1);
+    conv2d(dev(X), dev(W), dev_Y, 1, 1, 1, 1, 1, 1, 1, 1);
+    EXPECT_EQ(Y, dev_Y.read());
+}
+
+TEST(Conv2D, performance_test) {
+    auto X = Tensor<float>::range({1, 3, 1000, 1000}, 0);
+    auto W = Tensor<float>::range({8, 3, 3, 3}, 0);
+    auto Y = Tensor<float>({1, 8, 1000, 1000});
+
+    for (int i = 0; i < 3; i++) {
+        timing("Conv2D CPU", 1, [&]() {
+            conv2d(X, W, Y, 1, 1, 1, 1, 1, 1, 1, 1);
+        });
+    }
+
+    for (int i = 0; i < 3; i++) {
+        auto dev_X = dev(X), dev_W = dev(W);
+        auto dev_Y = DevTensor<float>({1, 8, 1000, 1000});
+        timing("Conv2D GPU", 1, [&]() {
+            conv2d(dev(X), dev(W), dev_Y, 1, 1, 1, 1, 1, 1, 1, 1);
+            gpgpu::current::queue().finish();
+        });
+    }
+}

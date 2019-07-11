@@ -448,4 +448,35 @@ void batch_norm(const DevTensor<T>& X, DevTensor<T>& Y,
                            var.data(), epsilon);
 }
 
+template <typename T>
+void conv2d(const DevTensor<T>& X, const DevTensor<T>& W, DevTensor<T>& Y,
+            const size_t pad_t, const size_t pad_l, const size_t pad_b, const size_t pad_r,
+            const size_t stride_h, const size_t stride_w,
+            const size_t dilation_h, const size_t dilation_w)
+{
+    assert(X.rank() == 4);
+    const auto batches  = X.extent(0);
+    const auto channels = X.extent(1);
+    const auto height   = X.extent(2);
+    const auto width    = X.extent(3);
+
+    assert(W.rank() == 4);
+    assert(W.extent(1) == channels);
+    const auto num_kernels = W.extent(0);
+    const auto kernel_h = W.extent(2);
+    const auto kernel_w = W.extent(3);
+
+    assert(Y.rank() == 4);
+    assert(Y.extent(0) == batches);
+    assert(Y.extent(1) == num_kernels);
+
+    gpgpu::dnn::conv2d(channels, height, width,
+                       kernel_h, kernel_w,
+                       pad_t, pad_l, pad_b, pad_r,
+                       stride_h, stride_w,
+                       dilation_h, dilation_w,
+                       num_kernels, batches,
+                       X.data(), W.data(), Y.data());
+}
+
 } // namespace dlf
