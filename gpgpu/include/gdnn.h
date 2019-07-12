@@ -62,9 +62,12 @@ void batch_norm(const std::vector<size_t>& dims,
                 Event* event = nullptr);
 
 template <typename T>
-void conv2d(const size_t batches, const size_t channels, const size_t height, const size_t width,
+void conv2d(const size_t batches, const size_t channels,
+            const size_t height, const size_t width,
+            const size_t output_h, const size_t output_w,
             const size_t num_kernels, const size_t kernel_h, const size_t kernel_w,
-            const size_t pad_t, const size_t pad_l, const size_t pad_b, const size_t pad_r,
+            const size_t pad_top, const size_t pad_left,
+            const size_t pad_bottom, const size_t pad_right,
             const size_t stride_h, const size_t stride_w,
             const size_t dilation_h, const size_t dilation_w,
             const Buffer<T>& im_buffer, const Buffer<T>& kernel_buffer,
@@ -72,18 +75,24 @@ void conv2d(const size_t batches, const size_t channels, const size_t height, co
             const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 template <typename T>
-void maxpool(const size_t batches, const size_t channels, const size_t height, const size_t width,
+void maxpool(const size_t batches, const size_t channels,
+             const size_t height, const size_t width,
              const size_t kernel_h, const size_t kernel_w,
-             const size_t pad_t, const size_t pad_l, const size_t pad_b, const size_t pad_r,
+             const size_t output_h, const size_t output_w,
+             const size_t pad_top, const size_t pad_left,
+             const size_t pad_bottom, const size_t pad_right,
              const size_t stride_h, const size_t stride_w,
              const size_t dilation_h, const size_t dilation_w,
              const Buffer<T>& x_buffer, Buffer<T>& y_buffer,
              const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 template <typename T>
-void avgpool(const size_t batches, const size_t channels, const size_t height, const size_t width,
+void avgpool(const size_t batches, const size_t channels,
+             const size_t height, const size_t width,
+             const size_t output_h, const size_t output_w,
              const size_t kernel_h, const size_t kernel_w,
-             const size_t pad_t, const size_t pad_l, const size_t pad_b, const size_t pad_r,
+             const size_t pad_top, const size_t pad_left,
+             const size_t pad_bottom, const size_t pad_right,
              const size_t stride_h, const size_t stride_w,
              const size_t dilation_h, const size_t dilation_w,
              const bool count_include_pad,

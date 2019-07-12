@@ -44,12 +44,13 @@ Xconvgemm<T>::Xconvgemm(const Queue &queue, Event* event, const std::string &nam
 
 template <typename T>
 void Xconvgemm<T>::DoConvgemm(const KernelMode kernel_mode,
-                              const size_t channels, const size_t height, const size_t width,
-                              const size_t kernel_h, const size_t kernel_w,
-                              const size_t pad_t, const size_t pad_l, const size_t pad_b, const size_t pad_r,
+                              const size_t batch_count, const size_t channels,
+                              const size_t height, const size_t width,
+                              const size_t output_h, const size_t output_w,
+                              const size_t num_kernels, const size_t kernel_h, const size_t kernel_w,
+                              const size_t pad_h, const size_t pad_w,
                               const size_t stride_h, const size_t stride_w,
                               const size_t dilation_h, const size_t dilation_w,
-                              const size_t num_kernels, const size_t batch_count,
                               const Buffer<T> &im_buffer, const size_t im_offset,
                               const Buffer<T> &kernel_buffer, const size_t kernel_offset,
                               Buffer<T> &result_buffer, const size_t result_offset) {
@@ -63,14 +64,6 @@ void Xconvgemm<T>::DoConvgemm(const KernelMode kernel_mode,
   if ((channels == 0) || (height == 0) || (width == 0) || (num_kernels == 0)) {
     throw BLASError(StatusCode::kInvalidDimension);
   }
-
-  // Sets the output height and width
-  const auto size_h = height + pad_t + pad_b;
-  const auto padding_h = dilation_h * (kernel_h - 1) + 1;
-  const auto output_h = (size_h >= padding_h) ? (size_h - padding_h) / stride_h + 1 : 1;
-  const auto size_w = width + pad_l + pad_r;
-  const auto padding_w = dilation_w * (kernel_w - 1) + 1;
-  const auto output_w = (size_w >= padding_w) ? (size_w - padding_w) / stride_w + 1 : 1;
 
   // Sets other useful variables
   const auto patch_size = kernel_h * kernel_w * channels;
@@ -94,8 +87,9 @@ void Xconvgemm<T>::DoConvgemm(const KernelMode kernel_mode,
       auto im2col_event = context_.createEvent();
       auto im2col = Xim2col<T>(queue_, &im2col_event);
       im2col.DoIm2col(kernel_mode,
-                      channels, height, width, kernel_h, kernel_w,
-                      pad_t, pad_l, pad_b, pad_r, stride_h, stride_w, dilation_h, dilation_w,
+                      channels, height, width, output_h, output_w,
+                      kernel_h, kernel_w, pad_h, pad_w,
+                      stride_h, stride_w, dilation_h, dilation_w,
                       im_buffer, im_batch_offset,
                       col_buffer, col_batch_offset);
       im2col_event.waitForCompletion();
@@ -148,8 +142,8 @@ void Xconvgemm<T>::DoConvgemm(const KernelMode kernel_mode,
     kernel.setArgument(12, static_cast<int>(channels));
     kernel.setArgument(13, static_cast<int>(kernel_h));
     kernel.setArgument(14, static_cast<int>(kernel_w));
-    kernel.setArgument(15, static_cast<int>(pad_t));
-    kernel.setArgument(16, static_cast<int>(pad_l));
+    kernel.setArgument(15, static_cast<int>(pad_h));
+    kernel.setArgument(16, static_cast<int>(pad_w));
     kernel.setArgument(17, static_cast<int>(stride_h));
     kernel.setArgument(18, static_cast<int>(stride_w));
     kernel.setArgument(19, static_cast<int>(dilation_h));

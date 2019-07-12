@@ -1034,9 +1034,7 @@ void avgpool(const size_t batches, const size_t channels,
                     int c_id = hc_id / output_h;
                     int h_id = hc_id - c_id * output_h;
 
-                    T sum = 0;
-                    int count = 0;
-
+                    T sum = 0; int count = 0;
                     for (int kh_id = 0; kh_id < kernel_h; kh_id++) {
                         int h_index = kh_id * dilation_h + stride_h * h_id - pad_h;
                         if (h_index >= 0 && h_index < input_h) {
@@ -1063,43 +1061,26 @@ void avgpool(const size_t batches, const size_t channels,
 } // namespace detail
 
 template <typename T>
-void conv2d(const Tensor<T>& X, const Tensor<T>& W, Tensor<T>& Y,
-            const size_t pad_t, const size_t pad_l, const size_t pad_b, const size_t pad_r,
-            const size_t stride_h, const size_t stride_w,
-            const size_t dilation_h, const size_t dilation_w)
-{
-    assert(X.rank() == 4);
-    const auto batches  = X.extent(0);
-    const auto channels = X.extent(1);
-    const auto height   = X.extent(2);
-    const auto width    = X.extent(3);
+void conv2d(const Tensor<T>& X, const Tensor<T>& W, Tensor<T>& Y, const FilterShape2D& filter) {
+    assert(X.shape() == filter.input_shape());
+    assert(W.shape() == filter.kernel_shape());
+    assert(Y.shape() == filter.output_shape());
 
-    assert(W.rank() == 4);
-    assert(W.extent(1) == channels);
-    const auto num_kernels = W.extent(0);
-    const auto kernel_h = W.extent(2);
-    const auto kernel_w = W.extent(3);
-
-    const auto size_h = height + pad_t + pad_b;
-    const auto padding_h = dilation_h * (kernel_h - 1) + 1;
-    const auto col_h = (size_h >= padding_h) ? (size_h - padding_h) / stride_h + 1 : 1;
-    const auto size_w = width + pad_l + pad_r;
-    const auto padding_w = dilation_w * (kernel_w - 1) + 1;
-    const auto col_w = (size_w >= padding_w) ? (size_w - padding_w) / stride_w + 1 : 1;
-
-    assert(Y.shape() == Shape({batches, num_kernels, col_h, col_w}));
-
-    const auto m = num_kernels;
-    const auto k = channels * kernel_h * kernel_w;
-    const auto n = col_h * col_w;
+    const auto m = filter.num_kernels();
+    const auto k = filter.channels() * filter.kernel_h() * filter.kernel_w();
+    const auto n = filter.output_h() * filter.output_w();
     Tensor<T> work({k, n});
 
     auto x_buffer = X.data();
     auto y_buffer = Y.data();
 
-    for (size_t b = 0; b < batches; b++) {
-        detail::im2col(channels, height, width, col_h, col_w, kernel_h, kernel_w,
-                       pad_t, pad_l, stride_h, stride_w, dilation_h, dilation_w,
+    for (size_t b = 0; b < filter.batches(); b++) {
+        detail::im2col(filter.channels(), filter.height(), filter.width(),
+                       filter.output_h(), filter.output_w(),
+                       filter.kernel_h(), filter.kernel_w(),
+                       filter.pad_h(), filter.pad_w(),
+                       filter.stride_h(), filter.stride_w(),
+                       filter.dilation_h(), filter.dilation_w(),
                        x_buffer, work.data());
 
         cblas::gemm(cblas::Layout::RowMajor,
@@ -1115,56 +1096,32 @@ void conv2d(const Tensor<T>& X, const Tensor<T>& W, Tensor<T>& Y,
 }
 
 template <typename T>
-void maxpool(const Tensor<T>& X, Tensor<T>& Y,
-             const size_t kernel_h, const size_t kernel_w,
-             const size_t pad_t, const size_t pad_l, const size_t pad_b, const size_t pad_r,
-             const size_t stride_h, const size_t stride_w,
-             const size_t dilation_h, const size_t dilation_w)
-{
-    assert(X.rank() == 4);
-    const auto batches  = X.extent(0);
-    const auto channels = X.extent(1);
-    const auto height   = X.extent(2);
-    const auto width    = X.extent(3);
-
-    const auto size_h = height + pad_t + pad_b;
-    const auto padding_h = dilation_h * (kernel_h - 1) + 1;
-    const auto output_h = (size_h >= padding_h) ? (size_h - padding_h) / stride_h + 1 : 1;
-    const auto size_w = width + pad_l + pad_r;
-    const auto padding_w = dilation_w * (kernel_w - 1) + 1;
-    const auto output_w = (size_w >= padding_w) ? (size_w - padding_w) / stride_w + 1 : 1;
-
-    assert(Y.shape() == Shape({batches, channels, output_h, output_w}));
-    detail::maxpool(batches, channels, height, width, output_h, output_w,
-                    kernel_h, kernel_w, pad_t, pad_l, stride_h, stride_w, dilation_h, dilation_w,
+void maxpool(const Tensor<T>& X, Tensor<T>& Y, const FilterShape2D& filter) {
+    assert(X.shape() == filter.input_shape());
+    assert(Y.shape() == filter.output_shape());
+    detail::maxpool(filter.batches(), filter.channels(),
+                    filter.height(), filter.width(),
+                    filter.output_h(), filter.output_w(),
+                    filter.kernel_h(), filter.kernel_w(),
+                    filter.pad_h(), filter.pad_w(),
+                    filter.stride_h(), filter.stride_w(),
+                    filter.dilation_h(), filter.dilation_w(),
                     X.data(), Y.data());
 }
 
 template <typename T>
-void avgpool(const Tensor<T>& X, Tensor<T>& Y,
-             const size_t kernel_h, const size_t kernel_w,
-             const size_t pad_t, const size_t pad_l, const size_t pad_b, const size_t pad_r,
-             const size_t stride_h, const size_t stride_w,
-             const size_t dilation_h, const size_t dilation_w,
-             const bool count_include_pad)
-{
-    assert(X.rank() == 4);
-    const auto batches  = X.extent(0);
-    const auto channels = X.extent(1);
-    const auto height   = X.extent(2);
-    const auto width    = X.extent(3);
-
-    const auto size_h = height + pad_t + pad_b;
-    const auto padding_h = dilation_h * (kernel_h - 1) + 1;
-    const auto output_h = (size_h >= padding_h) ? (size_h - padding_h) / stride_h + 1 : 1;
-    const auto size_w = width + pad_l + pad_r;
-    const auto padding_w = dilation_w * (kernel_w - 1) + 1;
-    const auto output_w = (size_w >= padding_w) ? (size_w - padding_w) / stride_w + 1 : 1;
-
-    assert(Y.shape() == Shape({batches, channels, output_h, output_w}));
-    detail::avgpool(batches, channels, height, width, output_h, output_w,
-                    kernel_h, kernel_w, pad_t, pad_l, stride_h, stride_w, dilation_h, dilation_w,
-                    count_include_pad, X.data(), Y.data());
+void avgpool(const Tensor<T>& X, Tensor<T>& Y, const FilterShape2D& filter, bool count_include_pad) {
+    assert(X.shape() == filter.input_shape());
+    assert(Y.shape() == filter.output_shape());
+    detail::avgpool(filter.batches(), filter.channels(),
+                    filter.height(), filter.width(),
+                    filter.output_h(), filter.output_w(),
+                    filter.kernel_h(), filter.kernel_w(),
+                    filter.pad_h(), filter.pad_w(),
+                    filter.stride_h(), filter.stride_w(),
+                    filter.dilation_h(), filter.dilation_w(),
+                    count_include_pad,
+                    X.data(), Y.data());
 }
 
 } // namespace dlf

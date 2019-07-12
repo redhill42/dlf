@@ -348,37 +348,37 @@ template void PUBLIC_API batch_norm<double>(const std::vector<size_t>&,
                                             const double, const Queue&, Event*);
 
 template <typename T>
-void conv2d(const size_t batches, const size_t channels, const size_t height, const size_t width,
+void conv2d(const size_t batches, const size_t channels,
+            const size_t height, const size_t width,
+            const size_t output_h, const size_t output_w,
             const size_t num_kernels, const size_t kernel_h, const size_t kernel_w,
-            const size_t pad_t, const size_t pad_l, const size_t pad_b, const size_t pad_r,
+            const size_t pad_top, const size_t pad_left,
+            const size_t pad_bottom, const size_t pad_right,
             const size_t stride_h, const size_t stride_w,
             const size_t dilation_h, const size_t dilation_w,
             const Buffer<T>& im_buffer, const Buffer<T>& kernel_buffer,
             Buffer<T>& result_buffer, const Queue& queue, Event* event)
 {
-    if (IsOpenCL(queue.context().device()) || (pad_t != pad_b || pad_l != pad_r)) {
+    if (IsOpenCL(queue.context().device()) || (pad_top != pad_bottom || pad_left != pad_right)) {
         auto routine = Xconvgemm<T>(queue, event);
         routine.DoConvgemm(KernelMode::Convolution,
-                           channels, height, width,
-                           kernel_h, kernel_w,
-                           pad_t, pad_l, pad_b, pad_r,
+                           batches, channels,
+                           height, width,
+                           output_h, output_w,
+                           num_kernels, kernel_h, kernel_w,
+                           pad_top, pad_left,
                            stride_h, stride_w,
                            dilation_h, dilation_w,
-                           num_kernels, batches,
                            im_buffer, 0,
                            kernel_buffer, 0,
                            result_buffer, 0);
     } else {
         auto cudnn = cudnn_handle(queue);
 
-        auto desc = ConvolutionDescriptor<T>(pad_t, pad_l, stride_h, stride_w, dilation_h, dilation_w);
+        auto desc = ConvolutionDescriptor<T>(pad_top, pad_left, stride_h, stride_w, dilation_h, dilation_w);
         auto x_desc = TensorDescriptor<T>(batches, channels, height, width);
         auto w_desc = FilterDescriptor<T>(num_kernels, channels, kernel_h, kernel_w);
-
-        int n, c, h, w;
-        cudnnGetConvolution2dForwardOutputDim(desc, x_desc, w_desc, &n, &c, &h, &w);
-        assert(result_buffer.size() >= size_t(n*c*h*w));
-        auto y_desc = TensorDescriptor<T>(n, c, h, w);
+        auto y_desc = TensorDescriptor<T>(batches, num_kernels, output_h, output_w);
 
         cudnnConvolutionFwdAlgo_t algo;
         checkCUDNN(cudnnGetConvolutionForwardAlgorithm(
@@ -404,25 +404,31 @@ void conv2d(const size_t batches, const size_t channels, const size_t height, co
     }
 }
 
-template void PUBLIC_API conv2d<float> (const size_t, const size_t, const size_t,
+template void PUBLIC_API conv2d<float> (const size_t, const size_t,
                                         const size_t, const size_t,
-                                        const size_t, const size_t, const size_t, const size_t,
+                                        const size_t, const size_t,
+                                        const size_t, const size_t, const size_t,
+                                        const size_t, const size_t,
                                         const size_t, const size_t,
                                         const size_t, const size_t,
                                         const size_t, const size_t,
                                         const Buffer<float>&, const Buffer<float>&, Buffer<float>&,
                                         const Queue&, Event*);
-template void PUBLIC_API conv2d<double>(const size_t, const size_t, const size_t,
+template void PUBLIC_API conv2d<double>(const size_t, const size_t,
                                         const size_t, const size_t,
-                                        const size_t, const size_t, const size_t, const size_t,
+                                        const size_t, const size_t,
+                                        const size_t, const size_t, const size_t,
+                                        const size_t, const size_t,
                                         const size_t, const size_t,
                                         const size_t, const size_t,
                                         const size_t, const size_t,
                                         const Buffer<double>&, const Buffer<double>&, Buffer<double>&,
                                         const Queue&, Event*);
-template void PUBLIC_API conv2d<half>  (const size_t, const size_t, const size_t,
+template void PUBLIC_API conv2d<half>  (const size_t, const size_t,
                                         const size_t, const size_t,
-                                        const size_t, const size_t, const size_t, const size_t,
+                                        const size_t, const size_t,
+                                        const size_t, const size_t, const size_t,
+                                        const size_t, const size_t,
                                         const size_t, const size_t,
                                         const size_t, const size_t,
                                         const size_t, const size_t,
@@ -430,31 +436,33 @@ template void PUBLIC_API conv2d<half>  (const size_t, const size_t, const size_t
                                         const Queue&, Event*);
 
 template <typename T>
-void maxpool(const size_t batches, const size_t channels, const size_t height, const size_t width,
+void maxpool(const size_t batches, const size_t channels,
+             const size_t height, const size_t width,
+             const size_t output_h, const size_t output_w,
              const size_t kernel_h, const size_t kernel_w,
-             const size_t pad_t, const size_t pad_l, const size_t pad_b, const size_t pad_r,
+             const size_t pad_top, const size_t pad_left,
+             const size_t pad_bottom, const size_t pad_right,
              const size_t stride_h, const size_t stride_w,
              const size_t dilation_h, const size_t dilation_w,
              const Buffer<T>& x_buffer, Buffer<T>& y_buffer,
              const Queue& queue, Event* event)
 {
-    if (IsOpenCL(queue.context().device()) || (pad_t != pad_b || pad_l != pad_r) ||
-                                              (dilation_h != 1 || dilation_w != 1)) {
+    if (IsOpenCL(queue.context().device()) || (pad_top != pad_bottom || pad_left != pad_right)
+                                           || (dilation_h != 1 || dilation_w != 1)) {
         auto routine = Xpool<T>(queue, event);
-        routine.DoMaxPool(batches, channels, height, width,
+        routine.DoMaxPool(batches, channels,
+                          height, width,
+                          output_h, output_w,
                           kernel_h, kernel_w,
-                          pad_t, pad_l, pad_b, pad_r,
-                          stride_h, stride_w, dilation_h, dilation_w,
+                          pad_top, pad_left,
+                          stride_h, stride_w,
+                          dilation_h, dilation_w,
                           x_buffer, 0, y_buffer, 0);
     } else {
         PoolingDescriptor desc(cudnnPoolingMode_t::CUDNN_POOLING_MAX,
-            kernel_h, kernel_w, pad_t, pad_l, stride_h, stride_w);
+            kernel_h, kernel_w, pad_top, pad_left, stride_h, stride_w);
         TensorDescriptor<T> x_desc(batches, channels, height, width);
-
-        int n, c, h, w;
-        checkCUDNN(cudnnGetPooling2dForwardOutputDim(desc, x_desc, &n, &c, &h, &w));
-        assert(y_buffer.size() >= size_t(n*c*h*w));
-        TensorDescriptor<T> y_desc(n, c, h, w);
+        TensorDescriptor<T> y_desc(batches, channels, output_h, output_w);
 
         T alpha = 1, beta = 0;
         cudnnPoolingForward(
@@ -465,57 +473,56 @@ void maxpool(const size_t batches, const size_t channels, const size_t height, c
 }
 
 template void PUBLIC_API maxpool<half>  (const size_t, const size_t, const size_t, const size_t,
-                                         const size_t, const size_t,
                                          const size_t, const size_t, const size_t, const size_t,
-                                         const size_t, const size_t,
-                                         const size_t, const size_t,
+                                         const size_t, const size_t, const size_t, const size_t,
+                                         const size_t, const size_t, const size_t, const size_t,
                                          const Buffer<half>&, Buffer<half>&,
                                          const Queue&, Event*);
 template void PUBLIC_API maxpool<float> (const size_t, const size_t, const size_t, const size_t,
-                                         const size_t, const size_t,
                                          const size_t, const size_t, const size_t, const size_t,
-                                         const size_t, const size_t,
-                                         const size_t, const size_t,
+                                         const size_t, const size_t, const size_t, const size_t,
+                                         const size_t, const size_t, const size_t, const size_t,
                                          const Buffer<float>&, Buffer<float>&,
                                          const Queue&, Event*);
 template void PUBLIC_API maxpool<double>(const size_t, const size_t, const size_t, const size_t,
-                                         const size_t, const size_t,
                                          const size_t, const size_t, const size_t, const size_t,
-                                         const size_t, const size_t,
-                                         const size_t, const size_t,
+                                         const size_t, const size_t, const size_t, const size_t,
+                                         const size_t, const size_t, const size_t, const size_t,
                                          const Buffer<double>&, Buffer<double>&,
                                          const Queue&, Event*);
 
 template <typename T>
-void avgpool(const size_t batches, const size_t channels, const size_t height, const size_t width,
+void avgpool(const size_t batches, const size_t channels,
+             const size_t height, const size_t width,
+             const size_t output_h, const size_t output_w,
              const size_t kernel_h, const size_t kernel_w,
-             const size_t pad_t, const size_t pad_l, const size_t pad_b, const size_t pad_r,
+             const size_t pad_top, const size_t pad_left,
+             const size_t pad_bottom, const size_t pad_right,
              const size_t stride_h, const size_t stride_w,
              const size_t dilation_h, const size_t dilation_w,
              const bool count_include_pad,
              const Buffer<T>& x_buffer, Buffer<T>& y_buffer,
              const Queue& queue, Event* event)
 {
-    if (IsOpenCL(queue.context().device()) || (pad_t != pad_b || pad_l != pad_r) ||
-                                              (dilation_h != 1 || dilation_w != 1)) {
+    if (IsOpenCL(queue.context().device()) || (pad_top != pad_bottom || pad_left != pad_right)
+                                           || (dilation_h != 1 || dilation_w != 1)) {
         auto routine = Xpool<T>(queue, event);
-        routine.DoAvgPool(batches, channels, height, width,
+        routine.DoAvgPool(batches, channels,
+                          height, width,
+                          output_h, output_w,
                           kernel_h, kernel_w,
-                          pad_t, pad_l, pad_b, pad_r,
-                          stride_h, stride_w, dilation_h, dilation_w,
+                          pad_top, pad_left,
+                          stride_h, stride_w,
+                          dilation_h, dilation_w,
                           count_include_pad,
                           x_buffer, 0, y_buffer, 0);
     } else {
         PoolingDescriptor desc(
             count_include_pad ? CUDNN_POOLING_AVERAGE_COUNT_INCLUDE_PADDING
                               : CUDNN_POOLING_AVERAGE_COUNT_EXCLUDE_PADDING,
-            kernel_h, kernel_w, pad_t, pad_l, stride_h, stride_w);
+            kernel_h, kernel_w, pad_top, pad_left, stride_h, stride_w);
         TensorDescriptor<T> x_desc(batches, channels, height, width);
-
-        int n, c, h, w;
-        checkCUDNN(cudnnGetPooling2dForwardOutputDim(desc, x_desc, &n, &c, &h, &w));
-        assert(y_buffer.size() >= size_t(n*c*h*w));
-        TensorDescriptor<T> y_desc(n, c, h, w);
+        TensorDescriptor<T> y_desc(batches, channels, output_h, output_w);
 
         T alpha = 1, beta = 0;
         cudnnPoolingForward(
@@ -526,24 +533,24 @@ void avgpool(const size_t batches, const size_t channels, const size_t height, c
 }
 
 template void PUBLIC_API avgpool<half>  (const size_t, const size_t, const size_t, const size_t,
-                                         const size_t, const size_t,
                                          const size_t, const size_t, const size_t, const size_t,
-                                         const size_t, const size_t,
-                                         const size_t, const size_t, const bool,
+                                         const size_t, const size_t, const size_t, const size_t,
+                                         const size_t, const size_t, const size_t, const size_t,
+                                         const bool,
                                          const Buffer<half>&, Buffer<half>&,
                                          const Queue&, Event*);
 template void PUBLIC_API avgpool<float> (const size_t, const size_t, const size_t, const size_t,
-                                         const size_t, const size_t,
                                          const size_t, const size_t, const size_t, const size_t,
-                                         const size_t, const size_t,
-                                         const size_t, const size_t, const bool,
+                                         const size_t, const size_t, const size_t, const size_t,
+                                         const size_t, const size_t, const size_t, const size_t,
+                                         const bool,
                                          const Buffer<float>&, Buffer<float>&,
                                          const Queue&, Event*);
 template void PUBLIC_API avgpool<double>(const size_t, const size_t, const size_t, const size_t,
-                                         const size_t, const size_t,
                                          const size_t, const size_t, const size_t, const size_t,
-                                         const size_t, const size_t,
-                                         const size_t, const size_t, const bool,
+                                         const size_t, const size_t, const size_t, const size_t,
+                                         const size_t, const size_t, const size_t, const size_t,
+                                         const bool,
                                          const Buffer<double>&, Buffer<double>&,
                                          const Queue&, Event*);
 

@@ -456,6 +456,7 @@ TEST(Conv2D, basic_conv_with_padding) {
     auto W = Tensor<float>({1, 1, 3, 3});
     std::fill(W.begin(), W.end(), 1);
     auto Y = Tensor<float>({1, 1, 5, 5});
+    auto filter = FilterShape2D(X.shape(), W.shape()).pads(1, 1);
     auto R = Tensor<float>({1, 1, 5, 5}, {
         12, 21, 27, 33, 24,
         33, 54, 63, 72, 51,
@@ -464,11 +465,11 @@ TEST(Conv2D, basic_conv_with_padding) {
         72, 111, 117, 123, 84
     });
 
-    conv2d(X, W, Y, 1, 1, 1, 1, 1, 1, 1, 1);
+    conv2d(X, W, Y, filter);
     EXPECT_EQ(Y, R);
 
     auto dev_Y = DevTensor<float>({1, 1, 5, 5});
-    conv2d(dev(X), dev(W), dev_Y, 1, 1, 1, 1, 1, 1, 1, 1);
+    conv2d(dev(X), dev(W), dev_Y, filter);
     EXPECT_EQ(dev_Y.read(), R);
 }
 
@@ -477,17 +478,18 @@ TEST(Conv2D, basic_conv_without_padding) {
     auto W = Tensor<float>({1, 1, 3, 3});
     std::fill(W.begin(), W.end(), 1);
     auto Y = Tensor<float>({1, 1, 3, 3});
+    auto filter = FilterShape2D(X.shape(), W.shape());
     auto R = Tensor<float>({1, 1, 3, 3}, {
         54, 63, 72,
         99, 108, 117,
         144, 153, 162
     });
 
-    conv2d(X, W, Y, 0, 0, 0, 0, 1, 1, 1, 1);
+    conv2d(X, W, Y, filter);
     EXPECT_EQ(Y, R);
 
     auto dev_Y = DevTensor<float>({1, 1, 3, 3});
-    conv2d(dev(X), dev(W), dev_Y, 0, 0, 0, 0, 1, 1, 1, 1);
+    conv2d(dev(X), dev(W), dev_Y, filter);
     EXPECT_EQ(dev_Y.read(), R);
 }
 
@@ -496,6 +498,7 @@ TEST(Conv2D, conv_with_strides_padding) {
     auto W = Tensor<float>({1, 1, 3, 3});
     std::fill(W.begin(), W.end(), 1);
     auto Y = Tensor<float>({1, 1, 4, 3});
+    auto filter = FilterShape2D(X.shape(), W.shape()).pads(1, 1).strides(2, 2);
     auto R = Tensor<float>({1, 1, 4, 3}, {
         12, 27, 24,
         63, 108, 81,
@@ -503,11 +506,11 @@ TEST(Conv2D, conv_with_strides_padding) {
         112, 177, 124
     });
 
-    conv2d(X, W, Y, 1, 1, 1, 1, 2, 2, 1, 1);
+    conv2d(X, W, Y, filter);
     EXPECT_EQ(Y, R);
 
     auto dev_Y = DevTensor<float>({1, 1, 4, 3});
-    conv2d(dev(X), dev(W), dev_Y, 1, 1, 1, 1, 2, 2, 1, 1);
+    conv2d(dev(X), dev(W), dev_Y, filter);
     EXPECT_EQ(dev_Y.read(), R);
 }
 
@@ -516,17 +519,18 @@ TEST(Conv2D, conv_with_strides_no_padding) {
     auto W = Tensor<float>({1, 1, 3, 3});
     std::fill(W.begin(), W.end(), 1);
     auto Y = Tensor<float>({1, 1, 3, 2});
+    auto filter = FilterShape2D(X.shape(), W.shape()).strides(2, 2);
     auto R = Tensor<float>({1, 1, 3, 2}, {
         54, 72,
         144, 162,
         234, 252
     });
 
-    conv2d(X, W, Y, 0, 0, 0, 0, 2, 2, 1, 1);
+    conv2d(X, W, Y, filter);
     EXPECT_EQ(Y, R);
 
     auto dev_Y = DevTensor<float>({1, 1, 3, 2});
-    conv2d(dev(X), dev(W), dev_Y, 0, 0, 0, 0, 2, 2, 1, 1);
+    conv2d(dev(X), dev(W), dev_Y, filter);
     EXPECT_EQ(dev_Y.read(), R);
 }
 
@@ -535,6 +539,7 @@ TEST(Conv2D, conv_with_strides_and_asymmetric_padding) {
     auto W = Tensor<float>({1, 1, 3, 3});
     std::fill(W.begin(), W.end(), 1);
     auto Y = Tensor<float>({1, 1, 4, 2});
+    auto filter = FilterShape2D(X.shape(), W.shape()).pads(1, 0).strides(2, 2);
     auto R = Tensor<float>({1, 1, 4, 2}, {
         21, 33,
         99, 117,
@@ -542,11 +547,11 @@ TEST(Conv2D, conv_with_strides_and_asymmetric_padding) {
         171, 183
     });
 
-    conv2d(X, W, Y, 1, 0, 1, 0, 2, 2, 1, 1);
+    conv2d(X, W, Y, filter);
     EXPECT_EQ(Y, R);
 
     auto dev_Y = DevTensor<float>({1, 1, 4, 2});
-    conv2d(dev(X), dev(W), dev_Y, 1, 0, 1, 0, 2, 2, 1, 1);
+    conv2d(dev(X), dev(W), dev_Y, filter);
     EXPECT_EQ(dev_Y.read(), R);
 }
 
@@ -555,10 +560,24 @@ TEST(Conv2D, conv_with_multiple_channels) {
     auto W = Tensor<float>({8, 3, 3, 3});
     std::fill(W.begin(), W.end(), 1);
     auto Y = Tensor<float>({2, 8, 5, 5});
+    auto filter = FilterShape2D(X.shape(), W.shape()).pads(1, 1);
     auto dev_Y = DevTensor<float>({2, 8, 5, 5});
 
-    conv2d(X, W, Y, 1, 1, 1, 1, 1, 1, 1, 1);
-    conv2d(dev(X), dev(W), dev_Y, 1, 1, 1, 1, 1, 1, 1, 1);
+    conv2d(X, W, Y, filter);
+    conv2d(dev(X), dev(W), dev_Y, filter);
+    EXPECT_EQ(Y, dev_Y.read());
+}
+
+TEST(Conv2D, conv_with_strange_padding) {
+    auto X = Tensor<float>::range({2, 3, 10, 10}, 0);
+    auto W = Tensor<float>({8, 3, 3, 3});
+    std::fill(W.begin(), W.end(), 1);
+    auto filter = FilterShape2D(X.shape(), W.shape()).pads(1, 2, 2, 1);
+    auto Y = Tensor<float>(filter.output_shape());
+    auto dev_Y = DevTensor<float>(Y.shape());
+
+    conv2d(X, W, Y, filter);
+    conv2d(dev(X), dev(W), dev_Y, filter);
     EXPECT_EQ(Y, dev_Y.read());
 }
 
@@ -566,10 +585,11 @@ TEST(Conv2D, performance_test) {
     auto X = Tensor<float>::range({1, 3, 1000, 1000}, 0);
     auto W = Tensor<float>::range({8, 3, 3, 3}, 0);
     auto Y = Tensor<float>({1, 8, 1000, 1000});
+    auto filter = FilterShape2D(X.shape(), W.shape()).pads(1, 1);
 
     for (int i = 0; i < 3; i++) {
         timing("Conv2D CPU", 1, [&]() {
-            conv2d(X, W, Y, 1, 1, 1, 1, 1, 1, 1, 1);
+            conv2d(X, W, Y, filter);
         });
     }
 
@@ -577,7 +597,7 @@ TEST(Conv2D, performance_test) {
         auto dev_X = dev(X), dev_W = dev(W);
         auto dev_Y = DevTensor<float>({1, 8, 1000, 1000});
         timing("Conv2D GPU", 1, [&]() {
-            conv2d(dev(X), dev(W), dev_Y, 1, 1, 1, 1, 1, 1, 1, 1);
+            conv2d(dev(X), dev(W), dev_Y, filter);
             gpgpu::current::queue().finish();
         });
     }
@@ -586,8 +606,9 @@ TEST(Conv2D, performance_test) {
 TEST(MaxPool, basic_2d_with_padding) {
     auto X = Tensor<float>::range({1, 1, 5, 5}, 1);
     auto Y = Tensor<float>({1, 1, 5, 5});
+    auto filter = FilterShape2D(X.shape(), 3, 3).pads(1, 1);
 
-    maxpool(X, Y, 3, 3, 1, 1, 1, 1, 1, 1, 1, 1);
+    maxpool(X, Y, filter);
     EXPECT_EQ(Y, Tensor<float>({1, 1, 5, 5}, {
          7,  8,  9, 10, 10,
         12, 13, 14, 15, 15,
@@ -597,15 +618,16 @@ TEST(MaxPool, basic_2d_with_padding) {
     }));
 
     auto dev_Y = DevTensor<float>({1, 1, 5, 5});
-    maxpool(dev(X), dev_Y, 3, 3, 1, 1, 1, 1, 1, 1, 1, 1);
+    maxpool(dev(X), dev_Y, filter);
     EXPECT_EQ(dev_Y.read(), Y);
 }
 
 TEST(MaxPool, basic_2d_without_padding) {
     auto X = Tensor<float>::range({1, 1, 5, 5}, 1);
     auto Y = Tensor<float>({1, 1, 3, 3});
+    auto filter = FilterShape2D(X.shape(), 3, 3);
 
-    maxpool(X, Y, 3, 3, 0, 0, 0, 0, 1, 1, 1, 1);
+    maxpool(X, Y, filter);
     EXPECT_EQ(Y, Tensor<float>({1, 1, 3, 3}, {
         13, 14, 15,
         18, 19, 20,
@@ -613,7 +635,7 @@ TEST(MaxPool, basic_2d_without_padding) {
     }));
 
     auto dev_Y = DevTensor<float>({1, 1, 3, 3});
-    maxpool(dev(X), dev_Y, 3, 3, 0, 0, 0, 0, 1, 1, 1, 1);
+    maxpool(dev(X), dev_Y, filter);
     EXPECT_EQ(dev_Y.read(), Y);
 }
 
@@ -621,9 +643,10 @@ TEST(MaxPool, basic_2d_with_multiple_channels) {
     auto X = Tensor<float>::range({2, 3, 100, 100}, 0);
     auto Y = Tensor<float>({2, 3, 100, 100});
     auto dev_Y = DevTensor<float>({2, 3, 100, 100});
+    auto filter = FilterShape2D(X.shape(), 3, 3).pads(1, 1);
 
-    maxpool(X, Y, 3, 3, 1, 1, 1, 1, 1, 1, 1, 1);
-    maxpool(dev(X), dev_Y, 3, 3, 1, 1, 1, 1, 1, 1, 1, 1);
+    maxpool(X, Y, filter);
+    maxpool(dev(X), dev_Y, filter);
     EXPECT_EQ(dev_Y.read(), Y);
 }
 
@@ -631,8 +654,9 @@ TEST(AveragePool, basic_2d_with_multiple_channels) {
     auto X = Tensor<float>::range({2, 3, 100, 100}, 0);
     auto Y = Tensor<float>({2, 3, 100, 100});
     auto dev_Y = DevTensor<float>({2, 3, 100, 100});
+    auto filter = FilterShape2D(X.shape(), 3, 3).pads(1, 1);
 
-    avgpool(X, Y, 3, 3, 1, 1, 1, 1, 1, 1, 1, 1, false);
-    avgpool(dev(X), dev_Y, 3, 3, 1, 1, 1, 1, 1, 1, 1, 1, false);
+    avgpool(X, Y, filter, false);
+    avgpool(dev(X), dev_Y, filter, false);
     ExpectElementsEQ(dev_Y.read(), Y);
 }

@@ -33,12 +33,13 @@ class Xconvgemm: public Routine {
 
   // Templated-precision implementation of the routine
   void DoConvgemm(const KernelMode kernel_mode,
-                  const size_t channels, const size_t height, const size_t width,
-                  const size_t kernel_h, const size_t kernel_w,
-                  const size_t pad_t, const size_t pad_l, const size_t pad_b, const size_t pad_r,
+                  const size_t batch_count, const size_t channels,
+                  const size_t height, const size_t width,
+                  const size_t output_h, const size_t output_w,
+                  const size_t num_kernels, const size_t kernel_h, const size_t kernel_w,
+                  const size_t pad_h, const size_t pad_w,
                   const size_t stride_h, const size_t stride_w,
                   const size_t dilation_h, const size_t dilation_w,
-                  const size_t num_kernels, const size_t batch_count,
                   const Buffer<T> &im_buffer, const size_t im_offset,
                   const Buffer<T> &kernel_buffer, const size_t kernel_offset,
                   Buffer<T> &result_buffer, const size_t result_offset);

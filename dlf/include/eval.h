@@ -451,22 +451,11 @@ private:
 
     struct ConvOp : Operator {
         TensorT<> X, W, B, Y;
-        const size_t pad_t, pad_l, pad_b, pad_r;
-        const size_t stride_h, stride_w;
-        const size_t dilation_h, dilation_w;
-
-        ConvOp(TensorT<>&& X, TensorT<>&& W, TensorT<>&& B, TensorT<>&& Y,
-               size_t pad_t, size_t pad_l, size_t pad_b, size_t pad_r,
-               size_t stride_h, size_t stride_w,
-               size_t dilation_h, size_t dilation_w)
-            : X(std::move(X)), W(std::move(W)), B(std::move(B)), Y(std::move(Y)),
-              pad_t(pad_t), pad_l(pad_l), pad_b(pad_b), pad_r(pad_r),
-              stride_h(stride_h), stride_w(stride_w),
-              dilation_h(dilation_h), dilation_w(dilation_w)
-        {}
-
+        FilterShape2D filter;
+        ConvOp(TensorT<>&& X, TensorT<>&& W, TensorT<>&& B, TensorT<>&& Y, const FilterShape2D& filter)
+            : X(std::move(X)), W(std::move(W)), B(std::move(B)), Y(std::move(Y)), filter(filter) {}
         void evaluate() override {
-            conv2d(X, W, Y, pad_t, pad_l, pad_b, pad_r, stride_h, stride_w, dilation_h, dilation_w);
+            conv2d(X, W, Y, filter);
             if (B.size() != 0) {
                 transformTo(Y, B, Y, xfn::plus<T>());
             }
@@ -474,122 +463,55 @@ private:
     };
 
     void visit(model::Conv* n) override {
-        assert(n->X()->dims().size() == 4);
-        assert(n->W()->dims().size() == 4);
-        assert(n->X()->dim(1) == n->W()->dim(1)); // channel
-
         // attributes should set by shape inference
-        assert(n->has_pads());
-        assert(n->has_strides());
-        assert(n->has_dilations());
-        auto& pads = n->pads();
-        auto& strides = n->strides();
-        auto& dilations = n->dilations();
-        assert(pads.size() == 4);
-        assert(strides.size() == 2);
-        assert(dilations.size() == 2);
-
         result = std::make_unique<ConvOp>(
             alloc(n->X()), alloc(n->W()),
             n->B() ? alloc(n->B()) : TensorT<>(),
             alloc(n->Y()),
-            pads[0], pads[1], pads[2], pads[3],
-            strides[0], strides[1],
-            dilations[0], dilations[1]);
+            FilterShape2D(Shape(n->X()->dims()), Shape(n->W()->dims()))
+                .pads(n->pads())
+                .strides(n->strides())
+                .dilations(n->dilations()));
     }
 
     struct MaxPoolOp : Operator {
-        TensorT<> X, Y;
-        const size_t kernel_h, kernel_w;
-        const size_t pad_t, pad_l, pad_b, pad_r;
-        const size_t stride_h, stride_w;
-        const size_t dilation_h, dilation_w;
-
-        MaxPoolOp(TensorT<>&& X, TensorT<>&& Y, size_t kernel_h, size_t kernel_w,
-                  size_t pad_t, size_t pad_l, size_t pad_b, size_t pad_r,
-                  size_t stride_h, size_t stride_w,
-                  size_t dilation_h, size_t dilation_w)
-            : X(std::move(X)), Y(std::move(Y)),
-              kernel_h(kernel_h), kernel_w(kernel_w),
-              pad_t(pad_t), pad_l(pad_l), pad_b(pad_b), pad_r(pad_r),
-              stride_h(stride_h), stride_w(stride_w),
-              dilation_h(dilation_h), dilation_w(dilation_w)
-        {}
-
+        TensorT<> X, Y; FilterShape2D filter;
+        MaxPoolOp(TensorT<>&& X, TensorT<>&& Y, const FilterShape2D& filter)
+            : X(std::move(X)), Y(std::move(Y)), filter(filter) {}
         void evaluate() override {
-            maxpool(X, Y, kernel_h, kernel_w, pad_t, pad_l, pad_b, pad_r,
-                    stride_h, stride_w, dilation_h, dilation_w);
+            maxpool(X, Y, filter);
         }
     };
 
     void visit(model::MaxPool* n) override {
-        assert(n->input()->dims().size() == 4);
-        assert(n->output()->dims().size() == 4);
-
-        // attributes should set by shape inference
-        assert(n->has_kernel_shape());
-        assert(n->has_pads());
-        assert(n->has_strides());
-        assert(n->has_dilations());
-        auto& kernel_shape = n->kernel_shape();
-        auto& pads = n->pads();
-        auto& strides = n->strides();
-        auto& dilations = n->dilations();
-        assert(pads.size() == 4);
-        assert(strides.size() == 2);
-        assert(dilations.size() == 2);
-
+        assert(n->has_kernel_shape() && n->kernel_shape().size() == 2);
+        const auto& kernel_shape = n->kernel_shape();
         result = std::make_unique<MaxPoolOp>(
             alloc(n->input()), alloc(n->output()),
-            kernel_shape[0], kernel_shape[1],
-            pads[0], pads[1], pads[2], pads[3],
-            strides[0], strides[1],
-            dilations[0], dilations[1]);
+            FilterShape2D(Shape(n->input()->dims()), kernel_shape[0], kernel_shape[1])
+                .pads(n->pads())
+                .strides(n->strides())
+                .dilations(n->dilations()));
     }
 
     struct AveragePoolOp : Operator {
-        TensorT<> X, Y;
-        const size_t kernel_h, kernel_w;
-        const size_t pad_t, pad_l, pad_b, pad_r;
-        const size_t stride_h, stride_w;
+        TensorT<> X, Y; FilterShape2D filter;
         const bool count_include_pad;
-
-        AveragePoolOp(TensorT<>&& X, TensorT<>&& Y, size_t kernel_h, size_t kernel_w,
-                      size_t pad_t, size_t pad_l, size_t pad_b, size_t pad_r,
-                      size_t stride_h, size_t stride_w,
-                      bool count_include_pad)
-            : X(std::move(X)), Y(std::move(Y)),
-              kernel_h(kernel_h), kernel_w(kernel_w),
-              pad_t(pad_t), pad_l(pad_l), pad_b(pad_b), pad_r(pad_r),
-              stride_h(stride_h), stride_w(stride_w),
-              count_include_pad(count_include_pad)
-        {}
-
+        AveragePoolOp(TensorT<>&& X, TensorT<>&& Y, const FilterShape2D& filter, bool count_include_pad)
+            : X(std::move(X)), Y(std::move(Y)), filter(filter), count_include_pad(count_include_pad) {}
         void evaluate() override {
-            avgpool(X, Y, kernel_h, kernel_w, pad_t, pad_l, pad_b, pad_r,
-                    stride_h, stride_w, 1, 1, count_include_pad);
+            avgpool(X, Y, filter, count_include_pad);
         }
     };
 
     void visit(model::AveragePool* n) override {
-        assert(n->input()->dims().size() == 4);
-        assert(n->output()->dims().size() == 4);
-
-        // attributes should set by shape inference
-        assert(n->has_kernel_shape());
-        assert(n->has_pads());
-        assert(n->has_strides());
-        auto& kernel_shape = n->kernel_shape();
-        auto& pads = n->pads();
-        auto& strides = n->strides();
-        assert(pads.size() == 4);
-        assert(strides.size() == 2);
-
+        assert(n->has_kernel_shape() && n->kernel_shape().size() == 2);
+        const auto& kernel_shape = n->kernel_shape();
         result = std::make_unique<AveragePoolOp>(
             alloc(n->input()), alloc(n->output()),
-            kernel_shape[0], kernel_shape[1],
-            pads[0], pads[1], pads[2], pads[3],
-            strides[0], strides[1],
+            FilterShape2D(Shape(n->input()->dims()), kernel_shape[0], kernel_shape[1])
+                .pads(n->pads())
+                .strides(n->strides()),
             n->count_include_pad());
     }
 

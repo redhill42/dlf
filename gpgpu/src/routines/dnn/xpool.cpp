@@ -14,8 +14,9 @@ template <typename T>
 void Xpool<T>::DoMaxPool(
     const size_t batches, const size_t channels,
     const size_t height, const size_t width,
+    const size_t output_h, const size_t output_w,
     const size_t kernel_h, const size_t kernel_w,
-    const size_t pad_t, const size_t pad_l, const size_t pad_b, const size_t pad_r,
+    const size_t pad_h, const size_t pad_w,
     const size_t stride_h, const size_t stride_w,
     const size_t dilation_h, const size_t dilation_w,
     const gpgpu::Buffer<T>& x_buffer, const size_t x_offset,
@@ -23,14 +24,6 @@ void Xpool<T>::DoMaxPool(
 {
     if (channels == 0 || height == 0 || width == 0)
         throw BLASError(StatusCode::kInvalidDimension);
-
-    // Sets the height and width of the output
-    const auto size_h = height + pad_t + pad_b;
-    const auto padding_h = dilation_h * (kernel_h - 1) + 1;
-    const auto output_h = (size_h >= padding_h) ? (size_h - padding_h) / stride_h + 1 : 1;
-    const auto size_w = width + pad_l + pad_r;
-    const auto padding_w = dilation_w * (kernel_w - 1) + 1;
-    const auto output_w = (size_w >= padding_w) ? (size_w - padding_w) / stride_w + 1 : 1;
 
     // Retrieves the kernel from the compiled binary
     auto kernel = program_.getKernel("Xmaxpool");
@@ -43,8 +36,8 @@ void Xpool<T>::DoMaxPool(
                         static_cast<int>(output_w),
                         static_cast<int>(kernel_h),
                         static_cast<int>(kernel_w),
-                        static_cast<int>(pad_t),
-                        static_cast<int>(pad_l),
+                        static_cast<int>(pad_h),
+                        static_cast<int>(pad_w),
                         static_cast<int>(stride_h),
                         static_cast<int>(stride_w),
                         static_cast<int>(dilation_h),
@@ -64,8 +57,9 @@ template <typename T>
 void Xpool<T>::DoAvgPool(
     const size_t batches, const size_t channels,
     const size_t height, const size_t width,
+    const size_t output_h, const size_t output_w,
     const size_t kernel_h, const size_t kernel_w,
-    const size_t pad_t, const size_t pad_l, const size_t pad_b, const size_t pad_r,
+    const size_t pad_h, const size_t pad_w,
     const size_t stride_h, const size_t stride_w,
     const size_t dilation_h, const size_t dilation_w,
     const bool count_include_pad,
@@ -74,14 +68,6 @@ void Xpool<T>::DoAvgPool(
 {
     if (channels == 0 || height == 0 || width == 0)
         throw BLASError(StatusCode::kInvalidDimension);
-
-    // Sets the height and width of the output
-    const auto size_h = height + pad_t + pad_b;
-    const auto padding_h = dilation_h * (kernel_h - 1) + 1;
-    const auto output_h = (size_h >= padding_h) ? (size_h - padding_h) / stride_h + 1 : 1;
-    const auto size_w = width + pad_l + pad_r;
-    const auto padding_w = dilation_w * (kernel_w - 1) + 1;
-    const auto output_w = (size_w >= padding_w) ? (size_w - padding_w) / stride_w + 1 : 1;
 
     // Retrieves the kernel from the compiled binary
     auto kernel = program_.getKernel("Xavgpool");
@@ -94,8 +80,8 @@ void Xpool<T>::DoAvgPool(
                         static_cast<int>(output_w),
                         static_cast<int>(kernel_h),
                         static_cast<int>(kernel_w),
-                        static_cast<int>(pad_t),
-                        static_cast<int>(pad_l),
+                        static_cast<int>(pad_h),
+                        static_cast<int>(pad_w),
                         static_cast<int>(stride_h),
                         static_cast<int>(stride_w),
                         static_cast<int>(dilation_h),
