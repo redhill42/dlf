@@ -470,13 +470,56 @@ void conv2d(const DevTensor<T>& X, const DevTensor<T>& W, DevTensor<T>& Y,
     assert(Y.extent(0) == batches);
     assert(Y.extent(1) == num_kernels);
 
-    gpgpu::dnn::conv2d(channels, height, width,
-                       kernel_h, kernel_w,
+    gpgpu::dnn::conv2d(batches, channels, height, width,
+                       num_kernels, kernel_h, kernel_w,
                        pad_t, pad_l, pad_b, pad_r,
                        stride_h, stride_w,
                        dilation_h, dilation_w,
-                       num_kernels, batches,
                        X.data(), W.data(), Y.data());
+}
+
+template <typename T>
+void maxpool(const DevTensor<T>& X, DevTensor<T>& Y,
+             const size_t kernel_h, const size_t kernel_w,
+             const size_t pad_t, const size_t pad_l, const size_t pad_b, const size_t pad_r,
+             const size_t stride_h, const size_t stride_w,
+             const size_t dilation_h, const size_t dilation_w)
+{
+    assert(X.rank() == 4);
+    const auto batches  = X.extent(0);
+    const auto channels = X.extent(1);
+    const auto height   = X.extent(2);
+    const auto width    = X.extent(3);
+
+    gpgpu::dnn::maxpool(batches, channels, height, width,
+                        kernel_h, kernel_w,
+                        pad_t, pad_l, pad_b, pad_r,
+                        stride_h, stride_w,
+                        dilation_h, dilation_w,
+                        X.data(), Y.data());
+}
+
+template <typename T>
+void avgpool(const DevTensor<T>& X, DevTensor<T>& Y,
+             const size_t kernel_h, const size_t kernel_w,
+             const size_t pad_t, const size_t pad_l, const size_t pad_b, const size_t pad_r,
+             const size_t stride_h, const size_t stride_w,
+             const size_t dilation_h, const size_t dilation_w,
+             bool count_include_pad)
+{
+    assert(X.rank() == 4);
+    const auto batches  = X.extent(0);
+    const auto channels = X.extent(1);
+    const auto height   = X.extent(2);
+    const auto width    = X.extent(3);
+
+    gpgpu::dnn::avgpool(batches, channels, height, width,
+                        kernel_h, kernel_w,
+                        pad_t, pad_l, pad_b, pad_r,
+                        stride_h, stride_w,
+                        dilation_h, dilation_w,
+                        count_include_pad,
+                        X.data(), Y.data());
 }
 
 } // namespace dlf

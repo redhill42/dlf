@@ -975,6 +975,91 @@ void im2col(const size_t channels,
         }
     });
 }
+
+template <typename T>
+void maxpool(const size_t batches, const size_t channels,
+             const size_t input_h, const size_t input_w,
+             const size_t output_h, const size_t output_w,
+             const size_t kernel_h, const size_t kernel_w,
+             const size_t pad_h, const size_t pad_w,
+             const size_t stride_h, const size_t stride_w,
+             const size_t dilation_h, const size_t dilation_w,
+             const T* input, T* output)
+{
+    tbb::parallel_for(tbb::blocked_range3d<int>(0, batches, 1, 0, output_w, 32, 0, output_h*channels, 32), [&](auto& r) {
+        for (int b_id = r.pages().begin(); b_id < r.pages().end(); b_id++) {
+            for (int w_id = r.rows().begin(); w_id < r.rows().end(); w_id++) {
+                for (int hc_id = r.cols().begin(); hc_id < r.cols().end(); hc_id++) {
+                    int c_id = hc_id / output_h;
+                    int h_id = hc_id - c_id * output_h;
+
+                    T v = std::numeric_limits<T>::lowest();
+                    for (int kh_id = 0; kh_id < kernel_h; kh_id++) {
+                        int h_index = kh_id * dilation_h + stride_h * h_id - pad_h;
+                        if (h_index >= 0 && h_index < input_h) {
+                            for (int kw_id = 0; kw_id < kernel_w; kw_id++) {
+                                int w_index = kw_id * dilation_w + stride_w * w_id - pad_w;
+                                if (w_index >= 0 && w_index < input_w) {
+                                    int input_index =
+                                        ((b_id * channels + c_id) * input_h + h_index) * input_w + w_index;
+                                    v = std::max(v, input[input_index]);
+                                }
+                            }
+                        }
+                    }
+
+                    int output_index = ((b_id * channels + c_id) * output_h + h_id) * output_w + w_id;
+                    output[output_index] = v;
+                }
+            }
+        }
+    });
+}
+
+template <typename T>
+void avgpool(const size_t batches, const size_t channels,
+             const size_t input_h, const size_t input_w,
+             const size_t output_h, const size_t output_w,
+             const size_t kernel_h, const size_t kernel_w,
+             const size_t pad_h, const size_t pad_w,
+             const size_t stride_h, const size_t stride_w,
+             const size_t dilation_h, const size_t dilation_w,
+             const bool count_include_pad,
+             const T* input, T* output)
+{
+    tbb::parallel_for(tbb::blocked_range3d<int>(0, batches, 1, 0, output_w, 32, 0, output_h*channels, 32), [&](auto& r) {
+        for (int b_id = r.pages().begin(); b_id < r.pages().end(); b_id++) {
+            for (int w_id = r.rows().begin(); w_id < r.rows().end(); w_id++) {
+                for (int hc_id = r.cols().begin(); hc_id < r.cols().end(); hc_id++) {
+                    int c_id = hc_id / output_h;
+                    int h_id = hc_id - c_id * output_h;
+
+                    T sum = 0;
+                    int count = 0;
+
+                    for (int kh_id = 0; kh_id < kernel_h; kh_id++) {
+                        int h_index = kh_id * dilation_h + stride_h * h_id - pad_h;
+                        if (h_index >= 0 && h_index < input_h) {
+                            for (int kw_id = 0; kw_id < kernel_w; kw_id++) {
+                                int w_index = kw_id * dilation_w + stride_w * w_id - pad_w;
+                                if (w_index >= 0 && w_index < input_w) {
+                                    int input_index =
+                                        ((b_id * channels + c_id) * input_h + h_index) * input_w + w_index;
+                                    sum += input[input_index];
+                                    count++;
+                                }
+                            }
+                        }
+                    }
+
+                    T val = count_include_pad ? sum/(kernel_h*kernel_w) : sum/count;
+                    int output_index = ((b_id * channels + c_id) * output_h + h_id) * output_w + w_id;
+                    output[output_index] = val;
+                }
+            }
+        }
+    });
+}
 } // namespace detail
 
 template <typename T>
@@ -1027,6 +1112,59 @@ void conv2d(const Tensor<T>& X, const Tensor<T>& W, Tensor<T>& Y,
         x_buffer += X.stride(0);
         y_buffer += Y.stride(0);
     }
+}
+
+template <typename T>
+void maxpool(const Tensor<T>& X, Tensor<T>& Y,
+             const size_t kernel_h, const size_t kernel_w,
+             const size_t pad_t, const size_t pad_l, const size_t pad_b, const size_t pad_r,
+             const size_t stride_h, const size_t stride_w,
+             const size_t dilation_h, const size_t dilation_w)
+{
+    assert(X.rank() == 4);
+    const auto batches  = X.extent(0);
+    const auto channels = X.extent(1);
+    const auto height   = X.extent(2);
+    const auto width    = X.extent(3);
+
+    const auto size_h = height + pad_t + pad_b;
+    const auto padding_h = dilation_h * (kernel_h - 1) + 1;
+    const auto output_h = (size_h >= padding_h) ? (size_h - padding_h) / stride_h + 1 : 1;
+    const auto size_w = width + pad_l + pad_r;
+    const auto padding_w = dilation_w * (kernel_w - 1) + 1;
+    const auto output_w = (size_w >= padding_w) ? (size_w - padding_w) / stride_w + 1 : 1;
+
+    assert(Y.shape() == Shape({batches, channels, output_h, output_w}));
+    detail::maxpool(batches, channels, height, width, output_h, output_w,
+                    kernel_h, kernel_w, pad_t, pad_l, stride_h, stride_w, dilation_h, dilation_w,
+                    X.data(), Y.data());
+}
+
+template <typename T>
+void avgpool(const Tensor<T>& X, Tensor<T>& Y,
+             const size_t kernel_h, const size_t kernel_w,
+             const size_t pad_t, const size_t pad_l, const size_t pad_b, const size_t pad_r,
+             const size_t stride_h, const size_t stride_w,
+             const size_t dilation_h, const size_t dilation_w,
+             const bool count_include_pad)
+{
+    assert(X.rank() == 4);
+    const auto batches  = X.extent(0);
+    const auto channels = X.extent(1);
+    const auto height   = X.extent(2);
+    const auto width    = X.extent(3);
+
+    const auto size_h = height + pad_t + pad_b;
+    const auto padding_h = dilation_h * (kernel_h - 1) + 1;
+    const auto output_h = (size_h >= padding_h) ? (size_h - padding_h) / stride_h + 1 : 1;
+    const auto size_w = width + pad_l + pad_r;
+    const auto padding_w = dilation_w * (kernel_w - 1) + 1;
+    const auto output_w = (size_w >= padding_w) ? (size_w - padding_w) / stride_w + 1 : 1;
+
+    assert(Y.shape() == Shape({batches, channels, output_h, output_w}));
+    detail::avgpool(batches, channels, height, width, output_h, output_w,
+                    kernel_h, kernel_w, pad_t, pad_l, stride_h, stride_w, dilation_h, dilation_w,
+                    count_include_pad, X.data(), Y.data());
 }
 
 } // namespace dlf

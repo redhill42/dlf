@@ -94,4 +94,20 @@ struct ConvolutionDescriptor {
     ~ConvolutionDescriptor() { cudnnDestroyConvolutionDescriptor(desc); }
 };
 
+struct PoolingDescriptor {
+    cudnnPoolingDescriptor_t desc;
+    operator const cudnnPoolingDescriptor_t() { return desc; }
+
+    PoolingDescriptor(cudnnPoolingMode_t mode, size_t kernel_h, size_t kernel_w,
+                      size_t pad_h, size_t pad_w, size_t stride_h, size_t stride_w)
+    {
+        checkCUDNN(cudnnCreatePoolingDescriptor(&desc));
+        checkCUDNN(cudnnSetPooling2dDescriptor(
+            desc, mode, cudnnNanPropagation_t::CUDNN_NOT_PROPAGATE_NAN,
+            kernel_h, kernel_w, pad_h, pad_w, stride_h, stride_w));
+    }
+
+    ~PoolingDescriptor() { cudnnDestroyPoolingDescriptor(desc); }
+};
+
 }} // namespace gpgpu::dnn

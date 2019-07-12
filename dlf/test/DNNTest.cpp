@@ -582,3 +582,57 @@ TEST(Conv2D, performance_test) {
         });
     }
 }
+
+TEST(MaxPool, basic_2d_with_padding) {
+    auto X = Tensor<float>::range({1, 1, 5, 5}, 1);
+    auto Y = Tensor<float>({1, 1, 5, 5});
+
+    maxpool(X, Y, 3, 3, 1, 1, 1, 1, 1, 1, 1, 1);
+    EXPECT_EQ(Y, Tensor<float>({1, 1, 5, 5}, {
+         7,  8,  9, 10, 10,
+        12, 13, 14, 15, 15,
+        17, 18, 19, 20, 20,
+        22, 23, 24, 25, 25,
+        22, 23, 24, 25, 25,
+    }));
+
+    auto dev_Y = DevTensor<float>({1, 1, 5, 5});
+    maxpool(dev(X), dev_Y, 3, 3, 1, 1, 1, 1, 1, 1, 1, 1);
+    EXPECT_EQ(dev_Y.read(), Y);
+}
+
+TEST(MaxPool, basic_2d_without_padding) {
+    auto X = Tensor<float>::range({1, 1, 5, 5}, 1);
+    auto Y = Tensor<float>({1, 1, 3, 3});
+
+    maxpool(X, Y, 3, 3, 0, 0, 0, 0, 1, 1, 1, 1);
+    EXPECT_EQ(Y, Tensor<float>({1, 1, 3, 3}, {
+        13, 14, 15,
+        18, 19, 20,
+        23, 24, 25
+    }));
+
+    auto dev_Y = DevTensor<float>({1, 1, 3, 3});
+    maxpool(dev(X), dev_Y, 3, 3, 0, 0, 0, 0, 1, 1, 1, 1);
+    EXPECT_EQ(dev_Y.read(), Y);
+}
+
+TEST(MaxPool, basic_2d_with_multiple_channels) {
+    auto X = Tensor<float>::range({2, 3, 100, 100}, 0);
+    auto Y = Tensor<float>({2, 3, 100, 100});
+    auto dev_Y = DevTensor<float>({2, 3, 100, 100});
+
+    maxpool(X, Y, 3, 3, 1, 1, 1, 1, 1, 1, 1, 1);
+    maxpool(dev(X), dev_Y, 3, 3, 1, 1, 1, 1, 1, 1, 1, 1);
+    EXPECT_EQ(dev_Y.read(), Y);
+}
+
+TEST(AveragePool, basic_2d_with_multiple_channels) {
+    auto X = Tensor<float>::range({2, 3, 100, 100}, 0);
+    auto Y = Tensor<float>({2, 3, 100, 100});
+    auto dev_Y = DevTensor<float>({2, 3, 100, 100});
+
+    avgpool(X, Y, 3, 3, 1, 1, 1, 1, 1, 1, 1, 1, false);
+    avgpool(dev(X), dev_Y, 3, 3, 1, 1, 1, 1, 1, 1, 1, 1, false);
+    ExpectElementsEQ(dev_Y.read(), Y);
+}

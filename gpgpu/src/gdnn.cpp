@@ -348,12 +348,11 @@ template void PUBLIC_API batch_norm<double>(const std::vector<size_t>&,
                                             const double, const Queue&, Event*);
 
 template <typename T>
-void conv2d(const size_t channels, const size_t height, const size_t width,
-            const size_t kernel_h, const size_t kernel_w,
+void conv2d(const size_t batches, const size_t channels, const size_t height, const size_t width,
+            const size_t num_kernels, const size_t kernel_h, const size_t kernel_w,
             const size_t pad_t, const size_t pad_l, const size_t pad_b, const size_t pad_r,
             const size_t stride_h, const size_t stride_w,
             const size_t dilation_h, const size_t dilation_w,
-            const size_t num_kernels, const size_t batch_count,
             const Buffer<T>& im_buffer, const Buffer<T>& kernel_buffer,
             Buffer<T>& result_buffer, const Queue& queue, Event* event)
 {
@@ -365,35 +364,32 @@ void conv2d(const size_t channels, const size_t height, const size_t width,
                            pad_t, pad_l, pad_b, pad_r,
                            stride_h, stride_w,
                            dilation_h, dilation_w,
-                           num_kernels, batch_count,
+                           num_kernels, batches,
                            im_buffer, 0,
                            kernel_buffer, 0,
                            result_buffer, 0);
     } else {
         auto cudnn = cudnn_handle(queue);
 
-        const auto size_h = height + pad_t + pad_b;
-        const auto padding_h = dilation_h * (kernel_h - 1) + 1;
-        const auto output_h = (size_h >= padding_h) ? (size_h - padding_h) / stride_h + 1 : 1;
-        const auto size_w = width + pad_l + pad_r;
-        const auto padding_w = dilation_w * (kernel_w - 1) + 1;
-        const auto output_w = (size_w >= padding_w) ? (size_w - padding_w) / stride_w + 1 : 1;
-
-        auto x_desc = TensorDescriptor<T>(batch_count, channels, height, width);
+        auto desc = ConvolutionDescriptor<T>(pad_t, pad_l, stride_h, stride_w, dilation_h, dilation_w);
+        auto x_desc = TensorDescriptor<T>(batches, channels, height, width);
         auto w_desc = FilterDescriptor<T>(num_kernels, channels, kernel_h, kernel_w);
-        auto y_desc = TensorDescriptor<T>(batch_count, num_kernels, output_h, output_w);
-        auto conv_desc = ConvolutionDescriptor<T>(pad_t, pad_l, stride_h, stride_w, dilation_h, dilation_w);
+
+        int n, c, h, w;
+        cudnnGetConvolution2dForwardOutputDim(desc, x_desc, w_desc, &n, &c, &h, &w);
+        assert(result_buffer.size() >= size_t(n*c*h*w));
+        auto y_desc = TensorDescriptor<T>(n, c, h, w);
 
         cudnnConvolutionFwdAlgo_t algo;
         checkCUDNN(cudnnGetConvolutionForwardAlgorithm(
-            cudnn, x_desc, w_desc, conv_desc, y_desc,
+            cudnn, x_desc, w_desc, desc, y_desc,
             CUDNN_CONVOLUTION_FWD_PREFER_FASTEST,
             /*memoryLimitInBytes=*/0,
             &algo));
 
         size_t workspace_size = 0;
         checkCUDNN(cudnnGetConvolutionForwardWorkspaceSize(
-            cudnn, x_desc, w_desc, conv_desc, y_desc, algo, &workspace_size));
+            cudnn, x_desc, w_desc, desc, y_desc, algo, &workspace_size));
         auto workspace = queue.context().createBuffer<char>(workspace_size);
 
         const T alpha = 1, beta = 0;
@@ -401,7 +397,7 @@ void conv2d(const size_t channels, const size_t height, const size_t width,
             cudnn, &alpha,
             x_desc, reinterpret_cast<void*>(*cu::cuBuffer::unwrap(im_buffer)),
             w_desc, reinterpret_cast<void*>(*cu::cuBuffer::unwrap(kernel_buffer)),
-            conv_desc, algo,
+            desc, algo,
             reinterpret_cast<void*>(*cu::cuBuffer::unwrap(workspace)), workspace_size,
             &beta,
             y_desc, reinterpret_cast<void*>(*cu::cuBuffer::unwrap((result_buffer)))));
@@ -432,5 +428,123 @@ template void PUBLIC_API conv2d<half>  (const size_t, const size_t, const size_t
                                         const size_t, const size_t,
                                         const Buffer<half>&, const Buffer<half>&, Buffer<half>&,
                                         const Queue&, Event*);
+
+template <typename T>
+void maxpool(const size_t batches, const size_t channels, const size_t height, const size_t width,
+             const size_t kernel_h, const size_t kernel_w,
+             const size_t pad_t, const size_t pad_l, const size_t pad_b, const size_t pad_r,
+             const size_t stride_h, const size_t stride_w,
+             const size_t dilation_h, const size_t dilation_w,
+             const Buffer<T>& x_buffer, Buffer<T>& y_buffer,
+             const Queue& queue, Event* event)
+{
+    if (IsOpenCL(queue.context().device()) || (pad_t != pad_b || pad_l != pad_r) ||
+                                              (dilation_h != 1 || dilation_w != 1)) {
+        auto routine = Xpool<T>(queue, event);
+        routine.DoMaxPool(batches, channels, height, width,
+                          kernel_h, kernel_w,
+                          pad_t, pad_l, pad_b, pad_r,
+                          stride_h, stride_w, dilation_h, dilation_w,
+                          x_buffer, 0, y_buffer, 0);
+    } else {
+        PoolingDescriptor desc(cudnnPoolingMode_t::CUDNN_POOLING_MAX,
+            kernel_h, kernel_w, pad_t, pad_l, stride_h, stride_w);
+        TensorDescriptor<T> x_desc(batches, channels, height, width);
+
+        int n, c, h, w;
+        checkCUDNN(cudnnGetPooling2dForwardOutputDim(desc, x_desc, &n, &c, &h, &w));
+        assert(y_buffer.size() >= size_t(n*c*h*w));
+        TensorDescriptor<T> y_desc(n, c, h, w);
+
+        T alpha = 1, beta = 0;
+        cudnnPoolingForward(
+            cudnn_handle(queue), desc,
+            &alpha, x_desc, reinterpret_cast<void*>(*cu::cuBuffer::unwrap(x_buffer)),
+            &beta, y_desc, reinterpret_cast<void*>(*cu::cuBuffer::unwrap(y_buffer)));
+    }
+}
+
+template void PUBLIC_API maxpool<half>  (const size_t, const size_t, const size_t, const size_t,
+                                         const size_t, const size_t,
+                                         const size_t, const size_t, const size_t, const size_t,
+                                         const size_t, const size_t,
+                                         const size_t, const size_t,
+                                         const Buffer<half>&, Buffer<half>&,
+                                         const Queue&, Event*);
+template void PUBLIC_API maxpool<float> (const size_t, const size_t, const size_t, const size_t,
+                                         const size_t, const size_t,
+                                         const size_t, const size_t, const size_t, const size_t,
+                                         const size_t, const size_t,
+                                         const size_t, const size_t,
+                                         const Buffer<float>&, Buffer<float>&,
+                                         const Queue&, Event*);
+template void PUBLIC_API maxpool<double>(const size_t, const size_t, const size_t, const size_t,
+                                         const size_t, const size_t,
+                                         const size_t, const size_t, const size_t, const size_t,
+                                         const size_t, const size_t,
+                                         const size_t, const size_t,
+                                         const Buffer<double>&, Buffer<double>&,
+                                         const Queue&, Event*);
+
+template <typename T>
+void avgpool(const size_t batches, const size_t channels, const size_t height, const size_t width,
+             const size_t kernel_h, const size_t kernel_w,
+             const size_t pad_t, const size_t pad_l, const size_t pad_b, const size_t pad_r,
+             const size_t stride_h, const size_t stride_w,
+             const size_t dilation_h, const size_t dilation_w,
+             const bool count_include_pad,
+             const Buffer<T>& x_buffer, Buffer<T>& y_buffer,
+             const Queue& queue, Event* event)
+{
+    if (IsOpenCL(queue.context().device()) || (pad_t != pad_b || pad_l != pad_r) ||
+                                              (dilation_h != 1 || dilation_w != 1)) {
+        auto routine = Xpool<T>(queue, event);
+        routine.DoAvgPool(batches, channels, height, width,
+                          kernel_h, kernel_w,
+                          pad_t, pad_l, pad_b, pad_r,
+                          stride_h, stride_w, dilation_h, dilation_w,
+                          count_include_pad,
+                          x_buffer, 0, y_buffer, 0);
+    } else {
+        PoolingDescriptor desc(
+            count_include_pad ? CUDNN_POOLING_AVERAGE_COUNT_INCLUDE_PADDING
+                              : CUDNN_POOLING_AVERAGE_COUNT_EXCLUDE_PADDING,
+            kernel_h, kernel_w, pad_t, pad_l, stride_h, stride_w);
+        TensorDescriptor<T> x_desc(batches, channels, height, width);
+
+        int n, c, h, w;
+        checkCUDNN(cudnnGetPooling2dForwardOutputDim(desc, x_desc, &n, &c, &h, &w));
+        assert(y_buffer.size() >= size_t(n*c*h*w));
+        TensorDescriptor<T> y_desc(n, c, h, w);
+
+        T alpha = 1, beta = 0;
+        cudnnPoolingForward(
+            cudnn_handle(queue), desc,
+            &alpha, x_desc, reinterpret_cast<void*>(*cu::cuBuffer::unwrap(x_buffer)),
+            &beta, y_desc, reinterpret_cast<void*>(*cu::cuBuffer::unwrap(y_buffer)));
+    }
+}
+
+template void PUBLIC_API avgpool<half>  (const size_t, const size_t, const size_t, const size_t,
+                                         const size_t, const size_t,
+                                         const size_t, const size_t, const size_t, const size_t,
+                                         const size_t, const size_t,
+                                         const size_t, const size_t, const bool,
+                                         const Buffer<half>&, Buffer<half>&,
+                                         const Queue&, Event*);
+template void PUBLIC_API avgpool<float> (const size_t, const size_t, const size_t, const size_t,
+                                         const size_t, const size_t,
+                                         const size_t, const size_t, const size_t, const size_t,
+                                         const size_t, const size_t,
+                                         const size_t, const size_t, const bool,
+                                         const Buffer<float>&, Buffer<float>&,
+                                         const Queue&, Event*);
+template void PUBLIC_API avgpool<double>(const size_t, const size_t, const size_t, const size_t,
+                                         const size_t, const size_t,
+                                         const size_t, const size_t, const size_t, const size_t,
+                                         const size_t, const size_t,
+                                         const size_t, const size_t, const bool,
+                                         const Buffer<double>&, Buffer<double>&,
+                                         const Queue&, Event*);
 
 }} // namespace gpgpu::dnn
