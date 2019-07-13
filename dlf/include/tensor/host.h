@@ -1124,4 +1124,59 @@ void avgpool(const Tensor<T>& X, Tensor<T>& Y, const FilterShape2D& filter, bool
                     X.data(), Y.data());
 }
 
+template <typename T>
+void global_maxpool(const Tensor<T>& input, Tensor<T>& output) {
+    assert(input.rank() >= 3);
+    assert(input.rank() == output.rank());
+    auto batches = input.extent(0);
+    auto channels = input.extent(1);
+    auto volume = input.size() / (batches*channels);
+    assert(output.size() == batches*channels);
+
+    auto x_buffer = input.data();
+    auto y_buffer = output.data();
+    tbb::parallel_for(tbb::blocked_range<int>(0, batches*channels, 32), [=](const auto& r) {
+        for (int b = r.begin(); b < r.end(); b++) {
+            y_buffer[b] = tbb::parallel_reduce(
+                tbb::blocked_range<int>(0, volume, 32),
+                std::numeric_limits<T>::lowest(),
+                [=](const auto& r, T acc) {
+                    auto px = x_buffer + b*volume + r.begin();
+                    for (size_t k = r.size(); k-- != 0; )
+                        acc = std::max(acc, *px++);
+                    return acc;
+                },
+                [](auto x, auto y) { return std::max(x, y); });
+        }
+    });
+}
+
+template <typename T>
+void global_avgpool(const Tensor<T>& input, Tensor<T>& output) {
+    assert(input.rank() >= 3);
+    assert(input.rank() == output.rank());
+    auto batches = input.extent(0);
+    auto channels = input.extent(1);
+    auto volume = input.size() / (batches*channels);
+    assert(output.size() == batches*channels);
+
+    auto x_buffer = input.data();
+    auto y_buffer = output.data();
+    tbb::parallel_for(tbb::blocked_range<int>(0, batches*channels, 32), [=](const auto& r) {
+        for (int b = r.begin(); b < r.end(); b++) {
+            auto val = tbb::parallel_reduce(
+                tbb::blocked_range<int>(0, volume, 32),
+                T{},
+                [=](const auto& r, T acc) {
+                    auto px = x_buffer + b*volume + r.begin();
+                    for (size_t k = r.size(); k-- != 0; )
+                        acc += *px++;
+                    return acc;
+                },
+                std::plus<>());
+            y_buffer[b] = val / volume;
+        }
+    });
+}
+
 } // namespace dlf

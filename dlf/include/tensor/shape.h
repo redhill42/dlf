@@ -225,8 +225,8 @@ public:
      * @return true if shape changed, false if new shape is not
      * compatible with current shape.
      */
-    void reshape(const std::vector<size_t> newshape) {
-        m_shape.reshape(newshape);
+    void reshape(std::vector<size_t> newshape) {
+        m_shape.reshape(std::move(newshape));
     }
 
     /**

@@ -660,3 +660,26 @@ TEST(AveragePool, basic_2d_with_multiple_channels) {
     avgpool(dev(X), dev_Y, filter, false);
     ExpectElementsEQ(dev_Y.read(), Y);
 }
+
+TEST(DNNTest, GlobalPooling) {
+    auto X = Tensor<float>::range({2, 3, 2, 2}, 1);
+    auto Y = Tensor<float>({2, 3, 1, 1});
+
+    auto max_R = Tensor<float>({2, 3, 1, 1}, {4, 8, 12, 16, 20, 24});
+    auto avg_R = Tensor<float>({2, 3, 1, 1}, {2.5, 6.5, 10.5, 14.5, 18.5, 22.5});
+
+    global_maxpool(X, Y);
+    EXPECT_EQ(Y, max_R);
+
+    global_avgpool(X, Y);
+    ExpectElementsEQ(Y, avg_R);
+
+    auto dev_X = dev(X);
+    auto dev_Y = DevTensor<float>({2, 3, 1, 1});
+
+    global_maxpool(dev_X, dev_Y);
+    EXPECT_EQ(dev_Y.read(), max_R);
+
+    global_avgpool(dev_X, dev_Y);
+    ExpectElementsEQ(dev_Y.read(), avg_R);
+}

@@ -56,15 +56,6 @@ public:
     }
 
     /**
-     * Asynchronously read data from device.
-     */
-    Tensor<T> readAsync() const {
-        Tensor<T> host(shape());
-        m_data.readAsync(gpgpu::current::queue(), host.data(), host.size());
-        return host;
-    };
-
-    /**
      * Read data from device and store data into given host tensor.
      */
     void readTo(Tensor<T>& host) const {
@@ -115,24 +106,6 @@ public:
     }
 
     /**
-     * Create a copy of this tensor.
-     */
-    DevTensor<T> copy() const {
-        DevTensor<T> dest(shape());
-        m_data.copyTo(gpgpu::current::queue(), dest.data(), size());
-        return dest;
-    }
-
-    /**
-     * Asynchronously create a copy of this tensor.
-     */
-    DevTensor<T> copyAsync() const {
-        DevTensor<T> dest(shape());
-        m_data.copyToAsync(gpgpu::current::queue(), dest.data(), size());
-        return dest;
-    }
-
-    /**
      * Get the underlying device buffer.
      */
     gpgpu::Buffer<T>& data() noexcept {
@@ -146,19 +119,19 @@ public:
         return m_data;
     }
 
-    static DevTensor scalar(const T& value);
+    /**
+     * Create a scalar.
+     */
+    static DevTensor scalar(const T& value) {
+        DevTensor<T> res({1});
+        res.data().write(gpgpu::current::queue(), &value, 1);
+        return res;
+    }
 };
 
 template <typename T>
 inline DevTensor<T> dev(const Tensor<T>& host) {
     return DevTensor<T>(host);
-}
-
-template <typename T>
-inline DevTensor<T> DevTensor<T>::scalar(const T& value) {
-    DevTensor<T> res({1});
-    res.data().write(gpgpu::current::queue(), &value, 1);
-    return res;
 }
 
 //==-------------------------------------------------------------------------
@@ -492,6 +465,22 @@ void avgpool(const DevTensor<T>& X, DevTensor<T>& Y, const FilterShape2D& filter
                         filter.dilation_h(), filter.dilation_w(),
                         count_include_pad,
                         X.data(), Y.data());
+}
+
+template <typename T>
+void global_maxpool(const DevTensor<T>& input, DevTensor<T>& output) {
+    // FIXME
+    FilterShape2D filter(input.shape(), input.extent(2), input.extent(3));
+    filter.strides(input.extent(2), input.extent(3));
+    maxpool(input, output, filter);
+}
+
+template <typename T>
+void global_avgpool(const DevTensor<T>& input, DevTensor<T>& output) {
+    // FIXME
+    FilterShape2D filter(input.shape(), input.extent(2), input.extent(3));
+    filter.strides(input.extent(2), input.extent(3));
+    avgpool(input, output, filter, false);
 }
 
 } // namespace dlf

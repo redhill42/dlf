@@ -93,6 +93,9 @@ class Evaluator {
 public:
     explicit Evaluator(model::Graph& graph);
 
+    explicit Evaluator(std::unique_ptr<model::Graph> graph)
+        : Evaluator(*graph) {}
+
     void evaluate() {
         std::for_each(m_operators.begin(), m_operators.end(), [](auto& op){ op->evaluate(); });
     }
@@ -515,6 +518,32 @@ private:
             n->count_include_pad());
     }
 
+    struct GlobalMaxPoolOp : Operator {
+        TensorT<> X, Y;
+        GlobalMaxPoolOp(TensorT<>&& X, TensorT<>&& Y)
+            : X(std::move(X)), Y(std::move(Y)) {}
+        void evaluate() override {
+            global_maxpool(X, Y);
+        }
+    };
+
+    void visit(model::GlobalMaxPool* n) override {
+        result = std::make_unique<GlobalMaxPoolOp>(alloc(n->input()), alloc(n->output()));
+    }
+
+    struct GlobalAveragePoolOp : Operator {
+        TensorT<> X, Y;
+        GlobalAveragePoolOp(TensorT<>&& X, TensorT<>&& Y)
+            : X(std::move(X)), Y(std::move(Y)) {}
+        void evaluate() override {
+            global_avgpool(X, Y);
+        }
+    };
+
+    void visit(model::GlobalAveragePool* n) override {
+        result = std::make_unique<GlobalAveragePoolOp>(alloc(n->input()), alloc(n->output()));
+    }
+
     struct BatchNormalizationOp : Operator {
         T epsilon;
         TensorT<> X, Y, S, B, M, V;
@@ -629,6 +658,25 @@ private:
         }
         result = std::make_unique<TransposeOp>(
             std::move(perm), alloc(n->input()), alloc(n->output()));
+    }
+
+    // TODO: eliminate Identity by optimizer
+    struct IdentityOp : Operator {
+        TensorT<> X, Y;
+        IdentityOp(TensorT<>&& X, TensorT<>&& Y)
+            : X(std::move(X)), Y(std::move(Y)) {}
+        void evaluate() override {
+            assert(X.shape() == Y.shape());
+            flat_copy(X, Y);
+        }
+    };
+
+    void visit(model::Identity* n) override {
+        result = std::make_unique<IdentityOp>(alloc(n->input()), alloc(n->output()));
+    }
+
+    void visit(model::Dropout* n) override {
+        result = std::make_unique<IdentityOp>(alloc(n->input()), alloc(n->output()));
     }
 };
 
