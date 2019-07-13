@@ -683,3 +683,15 @@ TEST(DNNTest, GlobalPooling) {
     global_avgpool(dev_X, dev_Y);
     ExpectElementsEQ(dev_Y.read(), avg_R);
 }
+
+TEST(DNNTest, Softmax) {
+    auto X = Tensor<float>({2, 4}, {0, 1, 2, 3, 10000, 10001, 10002, 10003});
+    auto R = Tensor<float>({2, 4}, {
+        0.0320586, 0.08714432, 0.23688284, 0.64391428,
+        0.0320586, 0.08714432, 0.23688284, 0.64391428
+    });
+
+    auto Y = softmax(X);
+    EXPECT_EQ(Y.shape(), X.shape());
+    ExpectElementsEQ(Y, R);
+}

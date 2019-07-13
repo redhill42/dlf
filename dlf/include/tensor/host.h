@@ -1125,23 +1125,24 @@ void avgpool(const Tensor<T>& X, Tensor<T>& Y, const FilterShape2D& filter, bool
 }
 
 template <typename T>
-void global_maxpool(const Tensor<T>& input, Tensor<T>& output) {
-    assert(input.rank() >= 3);
-    assert(input.rank() == output.rank());
-    auto batches = input.extent(0);
-    auto channels = input.extent(1);
-    auto volume = input.size() / (batches*channels);
-    assert(output.size() == batches*channels);
+void global_maxpool(const Tensor<T>& X, Tensor<T>& Y) {
+    assert(X.rank() >= 3);
+    assert(X.rank() == Y.rank());
+    auto M = X.extent(0) * X.extent(1);
+    auto N = X.size() / M;
+    assert(Y.size() == M);
 
-    auto x_buffer = input.data();
-    auto y_buffer = output.data();
-    tbb::parallel_for(tbb::blocked_range<int>(0, batches*channels, 32), [=](const auto& r) {
+    size_t grainsize = std::max(size_t(1), GRAINSIZE / N);
+    auto x_buffer = X.data();
+    auto y_buffer = Y.data();
+
+    tbb::parallel_for(tbb::blocked_range<int>(0, M, grainsize), [=](const auto& r) {
         for (int b = r.begin(); b < r.end(); b++) {
             y_buffer[b] = tbb::parallel_reduce(
-                tbb::blocked_range<int>(0, volume, 32),
+                tbb::blocked_range<int>(0, N, GRAINSIZE),
                 std::numeric_limits<T>::lowest(),
                 [=](const auto& r, T acc) {
-                    auto px = x_buffer + b*volume + r.begin();
+                    auto px = x_buffer + b*N + r.begin();
                     for (size_t k = r.size(); k-- != 0; )
                         acc = std::max(acc, *px++);
                     return acc;
@@ -1152,31 +1153,99 @@ void global_maxpool(const Tensor<T>& input, Tensor<T>& output) {
 }
 
 template <typename T>
-void global_avgpool(const Tensor<T>& input, Tensor<T>& output) {
-    assert(input.rank() >= 3);
-    assert(input.rank() == output.rank());
-    auto batches = input.extent(0);
-    auto channels = input.extent(1);
-    auto volume = input.size() / (batches*channels);
-    assert(output.size() == batches*channels);
+void global_avgpool(const Tensor<T>& X, Tensor<T>& Y) {
+    assert(X.rank() >= 3);
+    assert(X.rank() == Y.rank());
+    auto M = X.extent(0) * X.extent(1);
+    auto N = X.size() / M;
+    assert(Y.size() == M);
 
-    auto x_buffer = input.data();
-    auto y_buffer = output.data();
-    tbb::parallel_for(tbb::blocked_range<int>(0, batches*channels, 32), [=](const auto& r) {
+    size_t grainsize = std::max(size_t(1), GRAINSIZE / N);
+    auto x_buffer = X.data();
+    auto y_buffer = Y.data();
+
+    tbb::parallel_for(tbb::blocked_range<int>(0, M, grainsize), [=](const auto& r) {
         for (int b = r.begin(); b < r.end(); b++) {
             auto val = tbb::parallel_reduce(
-                tbb::blocked_range<int>(0, volume, 32),
+                tbb::blocked_range<int>(0, N, grainsize),
                 T{},
                 [=](const auto& r, T acc) {
-                    auto px = x_buffer + b*volume + r.begin();
+                    auto px = x_buffer + b*N + r.begin();
                     for (size_t k = r.size(); k-- != 0; )
                         acc += *px++;
                     return acc;
                 },
                 std::plus<>());
-            y_buffer[b] = val / volume;
+            y_buffer[b] = val / N;
         }
     });
+}
+
+template <typename T>
+void softmax(const Tensor<T>& X, Tensor<T>& Y, int axis = 1) {
+    auto rank = X.rank();
+    if (axis < 0) axis += rank;
+    if (axis < 0 || axis >= rank)
+        throw shape_error("softmax: invalid axis");
+
+    auto dims = X.shape().extents();
+    auto M = std::accumulate(dims.begin(), dims.begin()+axis, size_t(1), std::multiplies<>());
+    auto N = X.size() / M;
+
+    assert(Y.shape() == X.shape() || Y.shape() == Shape({M, N}));
+
+    size_t grainsize = std::max(size_t(1), GRAINSIZE / N);
+    auto x_buffer = X.data();
+    auto y_buffer = Y.data();
+
+    tbb::parallel_for(tbb::blocked_range<int>(0, M, grainsize), [=](const auto& r) {
+        for (int b = r.begin(); b < r.end(); b++) {
+            auto px = x_buffer + b*N;
+            auto py = y_buffer + b*N;
+
+            T amax = px[0];
+            for (size_t i = 1; i < N; i++) {
+                amax = std::max(amax, px[i]);
+            }
+
+            T asum = 0;
+            for (size_t i = 0; i < N; i++) {
+                py[i] = std::exp(px[i] - amax);
+                asum += py[i];
+            }
+            for (size_t i = 0; i < N; i++) {
+                py[i] /= asum;
+            }
+        }
+    });
+}
+
+template <typename T>
+Tensor<T> softmax(const Tensor<T>& X, int axis = 1, bool keepdims = true) {
+    auto rank = X.rank();
+    if (axis < 0) axis += rank;
+    if (axis < 0 || axis >= rank)
+        throw shape_error("softmax: invalid axis");
+
+    if (keepdims) {
+        Tensor<T> Y(X.shape());
+        softmax(X, Y, axis);
+        return Y;
+    } else {
+        auto dims = X.shape().extents();
+        auto M = std::accumulate(dims.begin(), dims.begin()+axis, size_t(1), std::multiplies<>());
+        auto N = X.size() / M;
+
+        Tensor<T> Y({M, N});
+        softmax(X, Y, axis);
+        return Y;
+    }
+}
+
+template <typename T>
+Tensor<T> softmax(Tensor<T>&& X, int axis = 1) {
+    softmax(X, X, axis);
+    return std::move(X);
 }
 
 } // namespace dlf
