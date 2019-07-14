@@ -2,7 +2,7 @@
 
 #include "model.h"
 
-namespace dlf { namespace eval {
+namespace dlf { namespace predict {
 
 struct CPU {
     template <typename T>
@@ -89,14 +89,14 @@ public:
 };
 
 template <typename Context, typename T>
-class Evaluator {
+class Predictor {
 public:
-    explicit Evaluator(model::Graph& graph);
+    explicit Predictor(model::Graph& graph);
 
-    explicit Evaluator(std::unique_ptr<model::Graph> graph)
-        : Evaluator(*graph) {}
+    explicit Predictor(std::unique_ptr<model::Graph> graph)
+        : Predictor(*graph) {}
 
-    void evaluate() {
+    void predict() {
         std::for_each(m_operators.begin(), m_operators.end(), [](auto& op){ op->evaluate(); });
     }
 
@@ -681,7 +681,7 @@ private:
 };
 
 template <typename Context, typename T>
-Evaluator<Context, T>::Evaluator(model::Graph& graph) {
+Predictor<Context, T>::Predictor(model::Graph& graph) {
     OperatorFactory<Context, T> factory(m_dataset);
     model::ShapeInference::Instance().infer(graph);
 
@@ -697,4 +697,4 @@ Evaluator<Context, T>::Evaluator(model::Graph& graph) {
     }
 }
 
-}} // namespace dlf::eval
+}} // namespace dlf::predict

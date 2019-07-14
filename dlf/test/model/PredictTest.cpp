@@ -1,15 +1,15 @@
-#include "eval.h"
+#include "predict.h"
 #include "gtest/gtest.h"
 
 using namespace dlf;
 using namespace dlf::model;
-using namespace dlf::eval;
+using namespace dlf::predict;
 
-template <typename Context> struct EvaluateTest : public testing::Test {};
-using EvaluateTestTypes = testing::Types<CPU, GPU>;
-TYPED_TEST_CASE(EvaluateTest, EvaluateTestTypes);
+template <typename Context> struct PredictTest : public testing::Test {};
+using PredictTestTypes = testing::Types<CPU, GPU>;
+TYPED_TEST_CASE(PredictTest, PredictTestTypes);
 
-TYPED_TEST(EvaluateTest, Simple) {
+TYPED_TEST(PredictTest, Simple) {
     using Context = TypeParam;
     Graph g;
 
@@ -55,25 +55,25 @@ TYPED_TEST(EvaluateTest, Simple) {
     o6->addInput(y->output());
     g.addOutput(o6->addOutput("transpose"));
 
-    Evaluator<Context, float> eval(g);
-    eval.set(0, Tensor<float>({2, 3}, {1, 2, 3, 4, 5, 6}));
-    eval.set(1, Tensor<float>::scalar(3));
-    eval.set(2, Tensor<float>::scalar(2));
-    eval.evaluate();
+    Predictor<Context, float> predictor(g);
+    predictor.set(0, Tensor<float>({2, 3}, {1, 2, 3, 4, 5, 6}));
+    predictor.set(1, Tensor<float>::scalar(3));
+    predictor.set(2, Tensor<float>::scalar(2));
+    predictor.predict();
 
-    EXPECT_EQ(eval.get(0), Tensor<float>({2, 3}, {8, 10, 12, 14, 16, 18}));
-    EXPECT_EQ(eval.get(1), Tensor<float>({2, 3}, {10, 10, 12, 14, 15, 15}));
-    EXPECT_EQ(eval.get(2), Tensor<float>({3, 2}, {8, 10, 12, 14, 16, 18}));
-    EXPECT_EQ(eval.get(3), Tensor<float>({1, 6}, {8, 10, 12, 14, 16, 18}));
-    EXPECT_EQ(eval.get(4), Tensor<float>({2, 6}, {8, 10, 12, 10, 10, 12,
-                                                  14, 16, 18, 14, 15, 15}));
-    EXPECT_EQ(eval.get(5), Tensor<float>({2, 2}, {8, 10, 14, 16}));
-    EXPECT_EQ(eval.get(6), Tensor<float>({2, 2}, {12, 10, 18, 14}));
-    EXPECT_EQ(eval.get(7), Tensor<float>({2, 2}, {10, 12, 15, 15}));
-    EXPECT_EQ(eval.get(8), Tensor<float>({3, 2}, {8, 14, 10, 16, 12, 18}));
+    EXPECT_EQ(predictor.get(0), Tensor<float>({2, 3}, {8, 10, 12, 14, 16, 18}));
+    EXPECT_EQ(predictor.get(1), Tensor<float>({2, 3}, {10, 10, 12, 14, 15, 15}));
+    EXPECT_EQ(predictor.get(2), Tensor<float>({3, 2}, {8, 10, 12, 14, 16, 18}));
+    EXPECT_EQ(predictor.get(3), Tensor<float>({1, 6}, {8, 10, 12, 14, 16, 18}));
+    EXPECT_EQ(predictor.get(4), Tensor<float>({2, 6}, {8, 10, 12, 10, 10, 12,
+                                                       14, 16, 18, 14, 15, 15}));
+    EXPECT_EQ(predictor.get(5), Tensor<float>({2, 2}, {8, 10, 14, 16}));
+    EXPECT_EQ(predictor.get(6), Tensor<float>({2, 2}, {12, 10, 18, 14}));
+    EXPECT_EQ(predictor.get(7), Tensor<float>({2, 2}, {10, 12, 15, 15}));
+    EXPECT_EQ(predictor.get(8), Tensor<float>({3, 2}, {8, 14, 10, 16, 12, 18}));
 }
 
-TYPED_TEST(EvaluateTest, Gemm) {
+TYPED_TEST(PredictTest, Gemm) {
     using Context = TypeParam;
     Graph g;
 
@@ -85,15 +85,15 @@ TYPED_TEST(EvaluateTest, Gemm) {
     x->set_beta(1.0f);
     g.addOutput(x->addOutput("Y"));
 
-    Evaluator<Context, float> eval(g);
-    eval.set(0, Tensor<float>({2, 2}, {1, 2, 3, 4}));
-    eval.set(1, Tensor<float>({2, 2}, {5, 6, 7, 8}));
-    eval.set(2, Tensor<float>({2}, {9, 10}));
-    eval.evaluate();
-    EXPECT_EQ(eval.get(0), Tensor<float>({2,2}, {28, 32, 52, 60}));
+    Predictor<Context, float> predictor(g);
+    predictor.set(0, Tensor<float>({2, 2}, {1, 2, 3, 4}));
+    predictor.set(1, Tensor<float>({2, 2}, {5, 6, 7, 8}));
+    predictor.set(2, Tensor<float>({2}, {9, 10}));
+    predictor.predict();
+    EXPECT_EQ(predictor.get(0), Tensor<float>({2,2}, {28, 32, 52, 60}));
 }
 
-TYPED_TEST(EvaluateTest, Conv) {
+TYPED_TEST(PredictTest, Conv) {
     using Context = TypeParam;
     Graph g;
 
@@ -104,15 +104,16 @@ TYPED_TEST(EvaluateTest, Conv) {
     x->set_pads({1, 1, 1, 1});
     g.addOutput(x->addOutput("Y"));
 
-    Tensor<float> W({1, 1, 3, 3});
+    auto X = Tensor<float>::range({1, 1, 5, 5}, 0);
+    auto W = Tensor<float>({1, 1, 3, 3});
     std::fill(W.begin(), W.end(), 1);
 
-    Evaluator<Context, float> eval(g);
-    eval.set(0, Tensor<float>::range({1, 1, 5, 5}, 0));
-    eval.set(1, W);
-    eval.evaluate();
+    Predictor<Context, float> predictor(g);
+    predictor.set(0, X);
+    predictor.set(1, W);
+    predictor.predict();
 
-    EXPECT_EQ(eval.get(0), Tensor<float>({1, 1, 5, 5}, {
+    EXPECT_EQ(predictor.get(0), Tensor<float>({1, 1, 5, 5}, {
         13, 22, 28, 34, 25,
         34, 55, 64, 73, 52,
         64, 100, 109, 118, 82,
