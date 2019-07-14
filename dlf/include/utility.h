@@ -71,6 +71,19 @@ inline constexpr const T& clamp(const T& v, const T& lo, const T& hi) {
 }
 #endif
 
+#if __cplusplus >= 201703L
+using std::size;
+#else
+template <typename Cont>
+inline constexpr auto size(const Cont& c)
+noexcept(noexcept(c.size()))
+-> decltype      (c.size())
+{ return          c.size(); }
+
+template <typename T, size_t Sz>
+inline constexpr size_t size(const T (&)[Sz]) noexcept { return Sz; }
+#endif
+
 template <class T, class Compare>
 inline constexpr T max(std::initializer_list<T> t, Compare comp) {
     return *std::max_element(t.begin(), t.end(), comp);

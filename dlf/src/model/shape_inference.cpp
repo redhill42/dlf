@@ -59,6 +59,29 @@ static inline Dims broadcastShape(const Dims& shapeL, const Dims& shapeR) {
     return broadcastShape({shapeL, shapeR});
 }
 
+static std::vector<int64_t> decodeShape(Node* n, const TensorData& data, bool positive_only = true) {
+    if (data.type() != DataType::INT64 || data.dims().size() != 1)
+        fail_shape_inference(n->kind().str(), ": Invalid shape");
+
+    std::vector<int64_t> shape;
+    if (data.has_raw_data()) {
+        auto raw = reinterpret_cast<const int64_t*>(data.raw_data().data());
+        auto len = data.dims()[0];
+        shape.assign(raw, raw+len);
+    } else {
+        shape = data.int64_data();
+    }
+
+    if (positive_only) {
+        if (std::any_of(shape.begin(), shape.end(), [](auto x){ return x <= 0; })) {
+            fail_shape_inference(n->kind().str(), ": Invalid shape");
+        }
+    }
+
+    return shape;
+}
+
+
 class ShapeInferenceImpl final : public ShapeInference, DefaultVisitor {
 public:
     void infer(Node* n) override {
@@ -136,34 +159,17 @@ public:
     }
 
     void visit(ConstantOfShape* n) override {
-        if (n->input() == nullptr || !n->input()->has_initializer())
+        if (!hasInput(n->input()) || !n->input()->has_initializer())
             return;
 
-        std::vector<int64_t> input_shape;
-        if (n->input()->initializer().has_raw_data()) {
-            const auto& bytes = n->input()->initializer().raw_data();
-            input_shape.insert(input_shape.end(),
-                               reinterpret_cast<const int64_t*>(bytes.c_str()),
-                               reinterpret_cast<const int64_t*>(bytes.c_str() + bytes.size()));
-        } else {
-            input_shape = n->input()->initializer().int64_data();
-        }
-
-        Dims output_shape;
-        for (auto d : input_shape) {
-            if (d > 0) {
-                output_shape.push_back(static_cast<size_t>(d));
-            } else {
-                fail_shape_inference("ConstantOfShape: Invalid shape value: ", d);
-            }
-        }
+        auto shape = decodeShape(n, n->input()->initializer());
+        n->output()->set_dims({shape.begin(), shape.end()});
 
         if (n->has_value()) {
             n->output()->set_type(n->value().type());
         } else {
             n->output()->set_type(DataType::FLOAT);
         }
-        n->output()->set_dims(output_shape);
     }
 
     void visit(EyeLike* n) override {
@@ -443,7 +449,7 @@ public:
         if (axis < 0 || axis >= rank)
             fail_shape_inference("TopK: Invalid value for attribute axis");
 
-        auto k = n->K()->initializer().int64_data().at(0);
+        auto k = n->K()->initializer().decode<int64_t>()(0);
         if (k > input_shape[axis])
             fail_shape_inference("TopK: Axis has less than the requested k elements");
 
@@ -532,11 +538,11 @@ public:
                 fail_shape_inference(sym, ": Attribute pads has incorrect size");
             }
         } else {
-            auto auto_pad_mode = n->get_s(kauto_pad, "NOTSET");
+            auto auto_pad_mode = n->get_s(kauto_pad, "VALID");
             if (use_auto_pad && auto_pad_mode == "NOTSET")
                 fail_shape_inference(sym, ": No explicit padding provided");
             pads.assign(n_axes*2, 0);
-            if (auto_pad_mode != "VALID") {
+            if (auto_pad_mode == "SAME_UPPER" || auto_pad_mode == "SAME_LOWER") {
                 for (size_t i = 0; i < n_axes; i++) {
                     auto residual = input_shape[i+2] % strides[i];
                     if (residual == 0)
@@ -685,7 +691,7 @@ public:
                 // determined at runtime
                 return;
 
-            auto& shape_data = n->output_shape()->initializer().int64_data();
+            auto shape_data = decodeShape(n, n->output_shape()->initializer());
             if (shape_data.size() != input_shape.size())
                 fail_shape_inference("MaxUnpool: output_shape must have same rank as the shape of input tensor X");
             output_shape.assign(shape_data.begin(), shape_data.end());
@@ -1028,7 +1034,7 @@ public:
 
         auto input_shape = n->data()->dims();
         auto total_size = std::accumulate(input_shape.begin(), input_shape.end(), 1, std::multiplies<>());
-        auto shape = n->shape()->initializer().int64_data();
+        auto shape = decodeShape(n, n->shape()->initializer(), false);
         auto new_size = shape.empty() ? size_t(0) : size_t(1);
         int  pending = -1;
 
@@ -1038,6 +1044,11 @@ public:
                     fail_shape_inference("Reshape: Invalid shape");
                 pending = i;
             } else {
+                if (shape[i] == 0) {
+                    if (i >= input_shape.size())
+                        fail_shape_inference("Reshape: Invalid shape");
+                    shape[i] = input_shape[i];
+                }
                 new_size *= shape[i];
             }
         }
@@ -1459,13 +1470,13 @@ public:
 
         const auto& input_shape = n->input()->dims();
         auto input_rank = input_shape.size();
-        auto& repeats = n->repeats()->initializer().int64_data();
-        if (repeats.size() != input_rank)
+        auto repeats = n->repeats()->initializer().decode<int64_t>();
+        if (repeats.rank() != 1 || repeats.size() != input_rank)
             fail_shape_inference("Tile: 'Repeats' input has incorrect number of values");
 
         Dims output_shape;
         for (size_t i = 0; i < input_rank; i++) {
-            output_shape.push_back(static_cast<size_t>(input_shape[i] * repeats[i]));
+            output_shape.push_back(static_cast<size_t>(input_shape[i] * repeats(i)));
         }
 
         n->output()->set_type(n->input()->type());
@@ -1507,7 +1518,7 @@ public:
             fail_shape_inference("Expand: 'shape' input must be 1D tensor of type INT64");
 
         auto& input_shape = n->input()->dims();
-        auto& shape_data = n->shape()->initializer().int64_data();
+        auto shape_data = decodeShape(n, n->shape()->initializer());
         Dims shape(shape_data.begin(), shape_data.end());
         auto output_shape = broadcastShape(input_shape, shape);
 
@@ -1523,11 +1534,8 @@ public:
         if (n->condition()->dims().size() != 1 || n->condition()->type() != DataType::BOOL)
             fail_shape_inference("Compress: 'condition' input must be 1D tensor of type BOOL");
 
-        size_t num_selected = 0;
-        for (auto b : n->condition()->initializer().int32_data()) {
-            if (b) num_selected++;
-        }
-
+        auto cond = n->condition()->initializer().decode<bool>();
+        auto num_selected = std::count(cond.begin(), cond.end(), true);
         auto& input_shape = n->input()->dims();
         Dims output_shape;
 

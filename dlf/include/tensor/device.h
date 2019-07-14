@@ -483,4 +483,12 @@ void global_avgpool(const DevTensor<T>& input, DevTensor<T>& output) {
     avgpool(input, output, filter, false);
 }
 
+template <typename T>
+void softmax(const DevTensor<T>& X, DevTensor<T>& Y, int axis = 1) {
+    // FIXME
+    auto temp = X.read();
+    softmax(temp, temp, axis);
+    Y.write(temp);
+}
+
 } // namespace dlf

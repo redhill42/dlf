@@ -1,5 +1,7 @@
+#include <fstream>
 #include "predict.h"
 #include "gtest/gtest.h"
+#include "../test_utility.h"
 
 using namespace dlf;
 using namespace dlf::model;
@@ -120,4 +122,24 @@ TYPED_TEST(PredictTest, Conv) {
         94, 145, 154, 163, 112,
         73, 112, 118, 124, 85
     }));
+}
+
+TYPED_TEST(PredictTest, Performance) {
+    std::fstream fs("data/resnet18v1.onnx", std::ios::in | std::ios::binary);
+    auto g = importModel<ONNX>(fs);
+    fs.close();
+
+    Predictor<TypeParam, float> pred(std::move(g));
+
+    auto input = Tensor<float>::random({1, 3, 224, 224}, 0, 1);
+    pred.set(0, input);
+    pred.predict(); // warm up
+    pred.get(0);
+
+    std::string name = std::is_same<TypeParam, CPU>::value ? "CPU" : "GPU";
+    timing("Predict " + name, 100, [&]() {
+        pred.set(0, input);
+        pred.predict();
+        pred.get(0);
+    });
 }

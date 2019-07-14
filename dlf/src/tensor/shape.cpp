@@ -131,6 +131,11 @@ void Shape::reshape(std::vector<size_t> extents) {
                     throw shape_error("reshape: incompatible shape");
                 pending = i;
             } else {
+                if (extents[i] == 0) {
+                    if (i >= rank())
+                        throw shape_error("reshape: incompatible shape");
+                    extents[i] = this->extent(i);
+                }
                 newsize *= extents[i];
             }
         }

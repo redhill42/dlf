@@ -482,30 +482,61 @@ template <typename T>
 Tensor<T> TensorData::decode() const {
     Shape shape(m_dims);
 
-    switch (type()) {
-    case DataType::FLOAT:
-        return Tensor<float>::wrap(shape, const_cast<float*>(float_data().data())).cast<T>();
+    if (has_raw_data()) {
+        void* raw = const_cast<void*>(reinterpret_cast<const void*>(raw_data().data()));
 
-    case DataType::DOUBLE:
-        return Tensor<double>::wrap(shape, const_cast<double*>(double_data().data())).cast<T>();
+        switch (type()) {
+        case DataType::FLOAT:
+            return Tensor<float>::wrap(shape, reinterpret_cast<float*>(raw)).cast<T>();
+        case DataType::DOUBLE:
+            return Tensor<double>::wrap(shape, reinterpret_cast<double*>(raw)).cast<T>();
+        case DataType::UINT8:
+            return Tensor<uint8_t>::wrap(shape, reinterpret_cast<uint8_t*>(raw)).cast<T>();
+        case DataType::INT8:
+            return Tensor<int8_t>::wrap(shape, reinterpret_cast<int8_t*>(raw)).cast<T>();
+        case DataType::UINT16:
+            return Tensor<uint16_t>::wrap(shape, reinterpret_cast<uint16_t*>(raw)).cast<T>();
+        case DataType::INT16:
+            return Tensor<int16_t>::wrap(shape, reinterpret_cast<int16_t*>(raw)).cast<T>();
+        case DataType::INT32:
+            return Tensor<int32_t>::wrap(shape, reinterpret_cast<int32_t*>(raw)).cast<T>();
+        case DataType::BOOL:
+            return Tensor<bool>::wrap(shape, reinterpret_cast<bool*>(raw)).cast<T>();
+        case DataType::INT64:
+            return Tensor<int64_t>::wrap(shape, reinterpret_cast<int64_t*>(raw)).cast<T>();
+        case DataType::UINT32:
+            return Tensor<uint32_t>::wrap(shape, reinterpret_cast<uint32_t*>(raw)).cast<T>();
+        case DataType::UINT64:
+            return Tensor<uint64_t>::wrap(shape, reinterpret_cast<uint64_t*>(raw)).cast<T>();
+        default:
+            throw std::logic_error("invalid tensor data type");
+        }
+    } else {
+        switch (type()) {
+        case DataType::FLOAT:
+            return Tensor<float>::wrap(shape, const_cast<float*>(float_data().data())).cast<T>();
 
-    case DataType::UINT8:
-    case DataType::INT8:
-    case DataType::UINT16:
-    case DataType::INT16:
-    case DataType::INT32:
-    case DataType::BOOL:
-        return Tensor<int32_t>::wrap(shape, const_cast<int32_t*>(int32_data().data())).cast<T>();
+        case DataType::DOUBLE:
+            return Tensor<double>::wrap(shape, const_cast<double*>(double_data().data())).cast<T>();
 
-    case DataType::INT64:
-        return Tensor<int64_t>::wrap(shape, const_cast<int64_t*>(int64_data().data())).cast<T>();
+        case DataType::UINT8:
+        case DataType::INT8:
+        case DataType::UINT16:
+        case DataType::INT16:
+        case DataType::INT32:
+        case DataType::BOOL:
+            return Tensor<int32_t>::wrap(shape, const_cast<int32_t*>(int32_data().data())).cast<T>();
 
-    case DataType::UINT32:
-    case DataType::UINT64:
-        return Tensor<uint64_t>::wrap(shape, const_cast<uint64_t*>(uint64_data().data())).cast<T>();
+        case DataType::INT64:
+            return Tensor<int64_t>::wrap(shape, const_cast<int64_t*>(int64_data().data())).cast<T>();
 
-    default:
-        throw std::logic_error("invalid tensor data type");
+        case DataType::UINT32:
+        case DataType::UINT64:
+            return Tensor<uint64_t>::wrap(shape, const_cast<uint64_t*>(uint64_data().data())).cast<T>();
+
+        default:
+            throw std::logic_error("invalid tensor data type");
+        }
     }
 }
 
@@ -521,8 +552,15 @@ inline Tensor<std::complex<float>> TensorData::decode() const {
     if (type() != DataType::COMPLEX64)
         throw std::logic_error("invalid tensor data type");
 
-    auto data = reinterpret_cast<const std::complex<float>*>(float_data().data());
-    size_t size = float_data().size() / 2;
+    const std::complex<float>* data;
+    size_t size;
+    if (has_raw_data()) {
+        data = reinterpret_cast<const std::complex<float>*>(raw_data().data());
+        size = raw_data().size() / sizeof(std::complex<float>);
+    } else {
+        data = reinterpret_cast<const std::complex<float>*>(float_data().data());
+        size = float_data().size() / 2;
+    }
     return {Shape(m_dims), data, data+size};
 }
 
@@ -531,8 +569,15 @@ inline Tensor<std::complex<double>> TensorData::decode() const {
     if (type() != DataType::COMPLEX128)
         throw std::logic_error("invalid tensor data type");
 
-    auto data = reinterpret_cast<const std::complex<double>*>(float_data().data());
-    size_t size = float_data().size() / 2;
+    const std::complex<double>* data;
+    size_t size;
+    if (has_raw_data()) {
+        data = reinterpret_cast<const std::complex<double>*>(raw_data().data());
+        size = raw_data().size() / sizeof(std::complex<double>);
+    } else {
+        data = reinterpret_cast<const std::complex<double>*>(float_data().data());
+        size = float_data().size() / 2;
+    }
     return {Shape(m_dims), data, data+size};
 }
 

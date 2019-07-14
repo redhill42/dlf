@@ -455,11 +455,17 @@ private:
     struct ConvOp : Operator {
         TensorT<> X, W, B, Y;
         FilterShape2D filter;
+
         ConvOp(TensorT<>&& X, TensorT<>&& W, TensorT<>&& B, TensorT<>&& Y, const FilterShape2D& filter)
-            : X(std::move(X)), W(std::move(W)), B(std::move(B)), Y(std::move(Y)), filter(filter) {}
+            : X(std::move(X)), W(std::move(W)), B(std::move(B)), Y(std::move(Y)), filter(filter) {
+            if (!this->B.empty()) {
+                this->B.reshape({this->W.extent(0), 1, 1});
+            }
+        }
+
         void evaluate() override {
             conv2d(X, W, Y, filter);
-            if (B.size() != 0) {
+            if (!B.empty()) {
                 transformTo(Y, B, Y, xfn::plus<T>());
             }
         }
@@ -542,6 +548,20 @@ private:
 
     void visit(model::GlobalAveragePool* n) override {
         result = std::make_unique<GlobalAveragePoolOp>(alloc(n->input()), alloc(n->output()));
+    }
+
+    struct SoftmaxOp : Operator {
+        TensorT<> X, Y;
+        int axis;
+        SoftmaxOp(TensorT<>&& X, TensorT<>&& Y, int axis)
+            : X(std::move(X)), Y(std::move(Y)), axis(axis) {}
+        void evaluate() override {
+            softmax(X, Y, axis);
+        }
+    };
+
+    void visit(model::Softmax* n) override {
+        result = std::make_unique<SoftmaxOp>(alloc(n->input()), alloc(n->output()), n->axis());
     }
 
     struct BatchNormalizationOp : Operator {

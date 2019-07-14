@@ -52,6 +52,14 @@ find_cuda_helper_libs("cudnn")
 set(CUDA_LIBRARIES ${CUDA_cuda_LIBRARY} ${CUDA_nvrtc_LIBRARY} ${CUDA_cublas_LIBRARY} ${CUDA_cudnn_LIBRARY})
 include_directories(${CUDA_INCLUDE_DIRS})
 
+# OpenCV
+find_package(OpenCV CONFIG)
+if(OpenCV_FOUND)
+  set(HAS_OPENCV YES)
+  add_definitions(-DHAS_OPENCV=1)
+  include_directories(${OpenCV_INCLUDE_DIRS})
+endif()
+
 # add sub-directories that we want CMake to scan
 add_subdirectory(gpgpu)
 include_directories(${gpgpu_SOURCE_DIR}/include ${gpgpu_SOURCE_DIR}/src)
@@ -64,4 +72,12 @@ if (USE_MKL)
   target_link_libraries(demo ${MKL_LIBRARIES})
 elseif (APPLE)
   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -framework Accelerate")
+endif()
+
+if (HAS_OPENCV)
+  add_executable(imagenet imagenet.cpp)
+  target_link_libraries(imagenet gpgpu dlf ${TBB_LIBRARIES} ${OpenCV_LIBS})
+  if (USE_MKL)
+    target_link_libraries(imagenet ${MKL_LIBRARIES})
+  endif()
 endif()
