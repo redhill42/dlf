@@ -353,7 +353,7 @@ template <typename T>
 Tensor<T> batch_norm_test(const Tensor<T>& x, Tensor<T> s, Tensor<T> b,
                            Tensor<T> m, Tensor<T> v, T epsilon = T(1e-5))
 {
-    auto c = x.extent(1);
+    int c = x.extent(1);
     s.reshape({1, c, 1, 1});
     b.reshape({1, c, 1, 1});
     m.reshape({1, c, 1, 1});

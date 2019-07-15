@@ -113,13 +113,13 @@ TEST_F(TensorTest, Reshape) {
     // negative dim
     {
         Tensor<int> A({2, 3, 4});
-        EXPECT_NO_THROW(A.reshape({6, size_t(-1), 2}));
+        EXPECT_NO_THROW(A.reshape({6, -1, 2}));
         EXPECT_EQ(A.shape(), Shape({6, 2, 2}));
     }
     // multiple negative dim
     {
         Tensor<int> A({2, 3, 4});
-        EXPECT_ANY_THROW(A.reshape({2, size_t(-1), size_t(-1)}));
+        EXPECT_ANY_THROW(A.reshape({2, -1, -1}));
         EXPECT_EQ(A.shape(), Shape({2, 3, 4}));
     }
     // zero dimension
@@ -131,12 +131,12 @@ TEST_F(TensorTest, Reshape) {
     // zero and -1 dimension
     {
         Tensor<int> A({2, 3, 4});
-        EXPECT_NO_THROW(A.reshape({0, size_t(-1)}));
+        EXPECT_NO_THROW(A.reshape({0, -1}));
         EXPECT_EQ(A.shape(), Shape({2, 12}));
     }
     {
         Tensor<int> A({2, 3, 4});
-        EXPECT_NO_THROW(A.reshape({size_t(-1), 0}));
+        EXPECT_NO_THROW(A.reshape({-1, 0}));
         EXPECT_EQ(A.shape(), Shape({8, 3}));
     }
     // empty shape
@@ -148,12 +148,12 @@ TEST_F(TensorTest, Reshape) {
     // incompatible shape
     {
         Tensor<int> A({3, 7});
-        EXPECT_ANY_THROW(A.reshape({2, size_t(-1)}));
+        EXPECT_ANY_THROW(A.reshape({2, -1}));
         EXPECT_EQ(A.shape(), Shape({3, 7}));
     }
     {
         Tensor<int> A({2, 3});
-        EXPECT_ANY_THROW(A.reshape({0, 0, 0, size_t(-1)}));
+        EXPECT_ANY_THROW(A.reshape({0, 0, 0, -1}));
     }
 }
 

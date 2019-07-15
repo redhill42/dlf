@@ -118,37 +118,40 @@ bool Shape::previous(std::vector<size_t>& index) const noexcept {
     return false;
 }
 
-void Shape::reshape(std::vector<size_t> extents) {
-    size_t newsize = 1;
+void Shape::reshape(const std::vector<int>& new_shape) {
+    std::vector<size_t> dims(new_shape.size());
+    size_t new_size = 1;
     int pending = -1;
 
-    if (extents.size() == 0) {
-        newsize = 0;
+    if (new_shape.size() == 0) {
+        new_size = 0;
     } else {
-        for (int i = 0; i < extents.size(); i++) {
-            if (extents[i] == size_t(-1)) {
-                if (pending != -1)
-                    throw shape_error("reshape: incompatible shape");
+        for (int i = 0; i < new_shape.size(); i++) {
+            if (new_shape[i] < 0) {
+                if (new_shape[i] != -1 || pending != -1)
+                    throw shape_error("reshape: invalid shape");
                 pending = i;
             } else {
-                if (extents[i] == 0) {
+                if (new_shape[i] == 0) {
                     if (i >= rank())
                         throw shape_error("reshape: incompatible shape");
-                    extents[i] = this->extent(i);
+                    dims[i] = this->extent(i);
+                } else {
+                    dims[i] = new_shape[i];
                 }
-                newsize *= extents[i];
+                new_size *= dims[i];
             }
         }
     }
 
     if (pending != -1) {
-        extents[pending] = size() / newsize;
-        newsize *= extents[pending];
+        dims[pending] = size() / new_size;
+        new_size *= dims[pending];
     }
 
-    if (size() != newsize)
+    if (size() != new_size)
         throw shape_error("reshape: incompatible shape");
-    init(extents);
+    init(std::move(dims));
 }
 
 Shape Shape::broadcast(const Shape& to) const {

@@ -320,9 +320,9 @@ inline enable_if_tensor<TensorT> broadcast(TensorT&& src, const Shape& shape) {
 }
 
 template <typename TensorT>
-inline enable_if_tensor<TensorT> reshape(TensorT&& tensor, const std::vector<size_t>& newshape) {
+inline enable_if_tensor<TensorT> reshape(TensorT&& tensor, const std::vector<int>& new_shape) {
     tensor_type<TensorT> ret = std::forward<TensorT>(tensor);
-    ret.reshape(newshape);
+    ret.reshape(new_shape);
     return ret;
 }
 
@@ -342,8 +342,8 @@ enable_if_tensor<TensorT> flatten(TensorT&& tensor, int axis) {
         throw shape_error("flatten: invalid axis value");
 
     auto dims = tensor.shape().extents();
-    size_t rows = std::accumulate(dims.begin(), dims.begin()+axis, 1, std::multiplies<>());
-    size_t cols = std::accumulate(dims.begin()+axis, dims.end(), 1, std::multiplies<>());
+    auto rows = std::accumulate(dims.begin(), dims.begin()+axis, 1, std::multiplies<>());
+    auto cols = std::accumulate(dims.begin()+axis, dims.end(), 1, std::multiplies<>());
     return reshape(std::forward<TensorT>(tensor), {rows, cols});
 }
 
@@ -359,7 +359,7 @@ enable_if_tensor<TensorT> squeeze(TensorT&& tensor, const std::vector<int>& axes
         adjusted_axes.insert(a); // duplicate is ok
     }
 
-    std::vector<size_t> shape;
+    std::vector<int> shape;
     for (int i = 0; i < rank; i++) {
         auto dim = tensor.extent(i);
         if (adjusted_axes.find(i) != adjusted_axes.end()) {
@@ -389,7 +389,7 @@ enable_if_tensor<TensorT> unsqueeze(TensorT&& tensor, const std::vector<int>& ax
         adjusted_axes.insert(a);
     }
 
-    std::vector<size_t> shape;
+    std::vector<int> shape;
     for (size_t i = 0, j = 0; i < rank; i++) {
         if (adjusted_axes.find(i) != adjusted_axes.end()) {
             shape.push_back(1);
@@ -615,7 +615,7 @@ enable_if_tensor<TensorT> transpose(const TensorT& src, const std::vector<size_t
 template <typename TensorT>
 enable_if_tensor<TensorT> transpose(TensorT&& src) {
     if (src.is_vector()) {
-        return reshape(std::forward<TensorT>(src), {src.extent(0), 1});
+        return reshape(std::forward<TensorT>(src), {0, 1});
     } else {
         std::vector<size_t> perm(src.rank());
         std::iota(perm.begin(), perm.end(), 0);

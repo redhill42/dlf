@@ -1039,8 +1039,8 @@ public:
         int  pending = -1;
 
         for (size_t i = 0; i < shape.size(); i++) {
-            if (shape[i] == -1) {
-                if (pending != -1)
+            if (shape[i] < 0) {
+                if (shape[i] != -1 || pending != -1)
                     fail_shape_inference("Reshape: Invalid shape");
                 pending = i;
             } else {
@@ -1059,7 +1059,7 @@ public:
         }
 
         if (total_size != new_size)
-            fail_shape_inference("Reshape: Invalid shape");
+            fail_shape_inference("Reshape: Incompatible shape");
 
         Dims new_shape;
         for (auto d : shape) {

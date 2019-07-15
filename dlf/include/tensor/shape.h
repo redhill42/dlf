@@ -110,7 +110,7 @@ public:
      * Change dimensions of this shape. The new shape must compatible to
      * this shape.
      */
-    void reshape(std::vector<size_t> newshape);
+    void reshape(const std::vector<int>& new_shape);
 
     /**
      * Broadcast the shape to target shape.
@@ -221,12 +221,12 @@ public:
      * actual dimension value is inferred from the size of the tensor
      * and the remaining dimensions.
      *
-     * @param newshape specifies the new shape.
+     * @param new_shape specifies the new shape.
      * @return true if shape changed, false if new shape is not
      * compatible with current shape.
      */
-    void reshape(std::vector<size_t> newshape) {
-        m_shape.reshape(std::move(newshape));
+    void reshape(const std::vector<int>& new_shape) {
+        m_shape.reshape(new_shape);
     }
 
     /**

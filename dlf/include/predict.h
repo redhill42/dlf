@@ -459,7 +459,7 @@ private:
         ConvOp(TensorT<>&& X, TensorT<>&& W, TensorT<>&& B, TensorT<>&& Y, const FilterShape2D& filter)
             : X(std::move(X)), W(std::move(W)), B(std::move(B)), Y(std::move(Y)), filter(filter) {
             if (!this->B.empty()) {
-                this->B.reshape({this->W.extent(0), 1, 1});
+                this->B.reshape({0, 1, 1});
             }
         }
 
