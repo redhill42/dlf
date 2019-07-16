@@ -1052,6 +1052,7 @@ public:
 
     bool has_initializer() const noexcept;
     const TensorData& initializer() const noexcept;
+    TensorData& initializer() noexcept;
     Value* set_initializer(TensorData initializer) noexcept;
 
     // Replaces all uses of this node with 'newValue'.
@@ -1687,6 +1688,10 @@ public:
         m_input->eraseOutput(i);
     }
 
+    void eraseInput(Value* v) {
+        eraseInput(v->offset());
+    }
+
     Value* addOutput(Value* n) noexcept {
         return m_output->addInput(n);
     }
@@ -1781,6 +1786,12 @@ inline bool Value::has_initializer() const noexcept {
 inline const TensorData& Value::initializer() const noexcept {
     if (m_node->kind() == kConstant)
         return m_node->get_t(kvalue);
+    return m_initializer;
+}
+
+inline TensorData& Value::initializer() noexcept {
+    if (m_node->kind() == kConstant)
+        return const_cast<TensorData&>(m_node->get_t(kvalue));
     return m_initializer;
 }
 

@@ -76,6 +76,11 @@ public:
 
 GlobalPassRegistryImpl::GlobalPassRegistryImpl() {
     registerPass<EliminateIdentity>();
+    registerPass<EliminateDeadEnd>();
+    registerPass<EliminateNopPad>();
+    registerPass<EliminateNopTranspose>();
+    registerPass<ReshapeInitializer>();
+    registerPass<FuseBnIntoConv>();
 }
 
 GlobalPassRegistry& GlobalPassRegistry::Instance() {
