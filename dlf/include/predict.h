@@ -679,31 +679,18 @@ private:
         result = std::make_unique<TransposeOp>(
             std::move(perm), alloc(n->input()), alloc(n->output()));
     }
-
-    // TODO: eliminate Identity by optimizer
-    struct IdentityOp : Operator {
-        TensorT<> X, Y;
-        IdentityOp(TensorT<>&& X, TensorT<>&& Y)
-            : X(std::move(X)), Y(std::move(Y)) {}
-        void evaluate() override {
-            assert(X.shape() == Y.shape());
-            flat_copy(X, Y);
-        }
-    };
-
-    void visit(model::Identity* n) override {
-        result = std::make_unique<IdentityOp>(alloc(n->input()), alloc(n->output()));
-    }
-
-    void visit(model::Dropout* n) override {
-        result = std::make_unique<IdentityOp>(alloc(n->input()), alloc(n->output()));
-    }
 };
 
 template <typename Context, typename T>
 Predictor<Context, T>::Predictor(model::Graph& graph) {
     OperatorFactory<Context, T> factory(m_dataset);
+
+    // do shape inference
     model::ShapeInference::Instance().infer(graph);
+
+    // do optimizer
+    model::Optimizer optimizer;
+    optimizer.optimize(graph);
 
     for (auto v : graph.inputs()) {
         if (!v->has_initializer())

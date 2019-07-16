@@ -583,7 +583,7 @@ public:
             output_shape.push_back(input_shape[1]);
         } else {
             output_shape.push_back(input_shape[0]);
-            output_shape.push_back(W->dims()[0]);
+            output_shape.push_back(W->dim(0));
         }
 
         for (size_t i = 0; i < n_axes; i++) {

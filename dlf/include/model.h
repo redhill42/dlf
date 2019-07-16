@@ -3,3 +3,4 @@
 #include "model/graph.h"
 #include "model/operators.h"
 #include "model/serialize.h"
+#include "model/optimize.h"
