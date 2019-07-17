@@ -13,6 +13,46 @@
 
 #include "synset.txt"
 
+static std::string ImageLabel(size_t i) {
+    std::string label = synset[i];
+    label = label.substr(label.find(' ')+1);
+    label = label.substr(0, label.find(','));
+    return label;
+}
+
+struct Score {
+    size_t index;
+    float  score;
+};
+
+struct ImageClass {
+    cv::Mat image;          // The original image
+    size_t  original;       // The original image class
+    Score   inferred[5];    // The top-5 inferred image class and score
+
+    ImageClass(cv::Mat&& image, size_t original)
+        : image(std::move(image)), original(original) {}
+
+    void setResult(const std::vector<Score> scores) {
+        std::copy(scores.begin(), scores.begin()+5, inferred);
+    }
+
+    bool hit() const {
+        return original == inferred[0].index;
+    }
+
+    bool hitTop5() const {
+        for (int i = 0; i < 5; i++)
+            if (original == inferred[i].index)
+                return true;
+        return false;
+    }
+
+    std::string label() const {
+        return ImageLabel(inferred[0].index);
+    }
+};
+
 template <typename Context = dlf::predict::GPU, typename T = float>
 dlf::predict::Predictor<Context, T> create_predictor(const char* path) {
     std::fstream fs(path, std::ios::in | std::ios::binary);
@@ -24,7 +64,7 @@ dlf::predict::Predictor<Context, T> create_predictor(const char* path) {
     return dlf::predict::Predictor<Context, T>(std::move(g));
 }
 
-cv::Mat prepare(const char* path) {
+cv::Mat prepare(const std::string& path) {
     cv::Mat img;
     cv::resize(cv::imread(path), img, cv::Size(256, 256));
     return img(cv::Rect(16, 16, 224, 224));
@@ -44,25 +84,26 @@ dlf::Tensor<float> preprocess(const cv::Mat& img) {
     return (dst / 255 - mean) / stdev;
 }
 
-std::string postprocess(dlf::Tensor<float>&& scores) {
+std::vector<Score> postprocess(dlf::Tensor<float>&& scores) {
     scores.reshape({1000});
     dlf::softmax(scores, scores, 0);
 
-    std::vector<size_t> indexes(scores.size());
-    std::iota(indexes.begin(), indexes.end(), 0);
-    std::sort(indexes.begin(), indexes.end(), [&](auto i, auto j) {
-        return scores(i) > scores(j);
+    std::vector<Score> result(scores.size());
+    for (int i = 0; i < 1000; i++) {
+        result[i].index = i;
+        result[i].score = scores(i);
+    }
+
+    std::sort(result.begin(), result.end(), [](auto x, auto y) {
+        return x.score > y.score;
     });
 
-    std::string label = synset[indexes[0]];
-    label = label.substr(label.find(' ')+1);
-    label = label.substr(0, label.find(','));
-    return label;
+    return result;
 }
 
 template <class RandomGenerator>
-std::vector<cv::Mat> load_images(std::string dir, RandomGenerator& g, size_t n) {
-    std::vector<cv::Mat> images;
+std::vector<ImageClass> load_images(std::string dir, RandomGenerator& g, size_t n) {
+    std::vector<ImageClass> images;
 
     std::vector<size_t> indexes(cxx::size(synset));
     std::iota(indexes.begin(), indexes.end(), 0);
@@ -86,34 +127,32 @@ std::vector<cv::Mat> load_images(std::string dir, RandomGenerator& g, size_t n) 
         closedir(d);
 
         std::shuffle(files.begin(), files.end(), g);
-        images.push_back(prepare(files[0].c_str()));
+        images.emplace_back(prepare(files[0]), indexes[i]);
     }
 
     return images;
 }
 
 template <typename Context, typename T>
-std::vector<std::string> predict_images(
+void predict_images(
     dlf::predict::Predictor<Context, T>& predictor,
-    const std::vector<cv::Mat>& images)
+    std::vector<ImageClass>& images)
 {
-    std::vector<std::string> result;
-    for (auto& image : images) {
-        predictor.set(0, preprocess(image));
+    for (auto& img : images) {
+        predictor.set(0, preprocess(img.image));
         predictor.predict();
-        result.push_back(postprocess(predictor.get(0)));
+        img.setResult(postprocess(predictor.get(0)));
     }
-    return result;
 }
 
-cv::Mat create_image_grid(const std::vector<cv::Mat>& images,
-                          const std::vector<std::string>& labels,
-                          size_t size, size_t w, size_t h)
+cv::Mat create_image_grid(
+    const std::vector<ImageClass>& images,
+    size_t size, size_t w, size_t h)
 {
-    cv::Mat canvas = cv::Mat::zeros(cv::Size(20 + (20 + size) * w, 20 + (60 + size) * h), CV_8UC3);
+    cv::Mat canvas = cv::Mat::zeros(cv::Size(20 + (20+size)*w, 20 + (60+size)*h), CV_8UC3);
 
-    for (int i = 0, x = 20, y = 20; i < images.size(); i++, x += (20 + size)) {
-        auto& img = images[i];
+    for (int i = 0, x = 20, y = 20; i < images.size(); i++, x += (20+size)) {
+        auto& img = images[i].image;
 
         if (i % w == 0 && x != 20) {
             x = 20;
@@ -125,13 +164,32 @@ cv::Mat create_image_grid(const std::vector<cv::Mat>& images,
         img.copyTo(canvas(ROI));
 
         // Show label
+        auto& result = images[i];
+        cv::Scalar color;
+        if (result.hit()) {
+            color = cv::Scalar(255, 255, 255);
+        } else if (result.hitTop5()) {
+            color = cv::Scalar(0, 255, 255);
+        } else {
+            color = cv::Scalar(0, 0, 255);
+        }
+
         auto font = cv::FONT_HERSHEY_COMPLEX;
-        auto color = cv::Scalar(255, 255, 255);
-        cv::putText(canvas, labels[i], cv::Point(x, y+size+30), font, 0.65, color, 1
+        cv::putText(canvas, result.label(), cv::Point(x, y+size+22), font, 0.5, color, 1
         #if CV_MAJOR_VERSION >= 3
             , cv::LINE_AA
         #endif
         );
+
+        if (!result.hit()) {
+            cv::putText(canvas, ImageLabel(result.original),
+                        cv::Point(x, y+size+47), font, 0.5,
+                        cv::Scalar(255, 255, 255), 1
+            #if CV_MAJOR_VERSION >= 3
+                      , cv::LINE_AA
+            #endif
+            );
+        }
     }
 
     return canvas;
@@ -158,8 +216,8 @@ int main(int argc, char** argv) {
         cv::namedWindow("Images");
         do {
             auto images = load_images(argv[2], rng, 15);
-            auto labels = predict_images(predictor, images);
-            auto canvas = create_image_grid(images, labels, 224, 5, 3);
+            predict_images(predictor, images);
+            auto canvas = create_image_grid(images, 224, 5, 3);
             cv::imshow("Images", canvas);
         } while (cv::waitKey(0) != 'q');
     } else {
@@ -167,8 +225,13 @@ int main(int argc, char** argv) {
         auto image = prepare(argv[2]);
         predictor.set(0, preprocess(image));
         predictor.predict();
-        auto label = postprocess(predictor.get(0));
-        std::cout << label << std::endl;
+        auto result = postprocess(predictor.get(0));
+
+        for (int i = 0; i < 5; i++) {
+            auto x = result[i];
+            std::cout << ImageLabel(x.index) << ": "
+                      << static_cast<int>(x.score*100) << "%\n";
+        }
     }
 
     return 0;
