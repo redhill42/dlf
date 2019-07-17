@@ -597,7 +597,7 @@ inline void transpose(const DevTensor<T>& src, const Shape& shape, DevTensor<T>&
 
 template <typename TensorT>
 enable_if_tensor<TensorT, void>
-transpose(const TensorT& src, const std::vector<size_t> perm, TensorT& dst) {
+transpose(const TensorT& src, TensorT& dst, const std::vector<size_t> perm) {
     Shape shape = src.shape().transpose(perm);
     if (shape != dst.shape())
         throw shape_error("transpose: invalid output shape");

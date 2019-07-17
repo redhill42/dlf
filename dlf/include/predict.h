@@ -21,15 +21,16 @@ template <> struct Datum<CPU> {
     const Shape shape;
 
     Datum(model::DataType dtype, Shape shape)
-        : dtype(dtype), shape(std::move(shape))
-    {}
+        : dtype(dtype), shape(std::move(shape)) {}
 
     template <typename T>
     Tensor<T> get() {
         assert(dtype == model::DataTypeTrait<T>);
-        if (data.empty())
-            data.resize(shape.size() * sizeof(T));
-        return Tensor<T>::wrap(shape, reinterpret_cast<T*>(&data[0]));
+        if (data == nullptr) {
+            data.reset(new char[shape.size() * sizeof(T)],
+                       std::default_delete<char[]>());
+        }
+        return Tensor<T>::wrap(shape, reinterpret_cast<T*>(data.get()));
     }
 
     template <typename T>
@@ -45,8 +46,17 @@ template <> struct Datum<CPU> {
         flat_copy(val, dst);
     }
 
+    std::shared_ptr<Datum<CPU>> makeShared(Shape dims) {
+        assert(dims.size() == this->shape.size());
+        return std::shared_ptr<Datum<CPU>>(
+            new Datum<CPU>(this->dtype, std::move(dims), this->data));
+    }
+
 private:
-    std::vector<char> data;
+    std::shared_ptr<char> data;
+
+    Datum(model::DataType dtype, Shape&& shape, std::shared_ptr<char> data)
+        : dtype(dtype), shape(std::move(shape)), data(std::move(data)) {}
 };
 
 template <> struct Datum<GPU> {
@@ -54,8 +64,7 @@ template <> struct Datum<GPU> {
     const Shape shape;
 
     Datum(model::DataType dtype, Shape shape)
-        : dtype(dtype), shape(std::move(shape))
-    {}
+        : dtype(dtype), shape(std::move(shape)) {}
 
     template <typename T>
     DevTensor<T> get() {
@@ -78,8 +87,17 @@ template <> struct Datum<GPU> {
         dst.write(val);
     }
 
+    std::shared_ptr<Datum<GPU>> makeShared(Shape dims) {
+        assert(dims.size() == this->shape.size());
+        return std::shared_ptr<Datum<GPU>>(
+            new Datum(this->dtype, std::move(dims), this->handle));
+    }
+
 private:
     std::shared_ptr<gpgpu::raw::Buffer> handle;
+
+    Datum(model::DataType dtype, Shape&& shape, std::shared_ptr<gpgpu::raw::Buffer> handle)
+        : dtype(dtype), shape(std::move(shape)), handle(std::move(handle)) {}
 };
 
 class Operator {
@@ -157,11 +175,24 @@ public:
     }
 
     template <typename U = T>
-    std::list<TensorT<U>> alloc_all(cxx::array_ref<model::Value*> values) {
+    std::list<TensorT<U>> allocAll(cxx::array_ref<model::Value*> values) {
         std::list<TensorT<U>> inputs;
         for (auto v : values)
             inputs.push_back(alloc<U>(v));
         return inputs;
+    }
+
+    template <typename U = T>
+    TensorT<U> allocInplace(const model::Value* input, const model::Value* output) {
+        if (input->uses().size() > 1 || input->has_initializer())
+            return alloc(output);
+
+        assert(m_datamap.find(output) == m_datamap.end());
+        auto input_datum = allocDatum<U>(input);
+        auto output_datum = input_datum->makeShared(Shape(output->dims()));
+        m_dataset.push_back(output_datum);
+        m_datamap.emplace(output, output_datum);
+        return output_datum->template get<U>();
     }
 
     std::unique_ptr<Operator> createOperator(model::Node* node) {
@@ -177,15 +208,15 @@ private:
     template <typename Fn>
     struct UnaryOp : Operator {
         TensorT<> X, Y;
-        UnaryOp(TensorT<>&& X, TensorT<>&& Y)
-            : X(std::move(X)), Y(std::move(Y)) {}
+        UnaryOp(OperatorFactory* of, model::Node* n)
+            : X(of->alloc(n->input())),
+              Y(of->allocInplace(n->input(), n->output())) {}
         void evaluate() override { transformTo(X, Y, Fn{}); }
     };
 
     #define DEFINE_UNARY_OPERATOR(Name, fn) \
     void visit(model::Name* n) override { \
-        result = std::make_unique<UnaryOp<xfn::fn<T>>>( \
-            alloc(n->input()), alloc(n->output())); \
+        result = std::make_unique<UnaryOp<xfn::fn<T>>>(this, n); \
     }
 
     DEFINE_UNARY_OPERATOR(Abs, abs)
@@ -216,161 +247,183 @@ private:
 
     struct ClipOp : Operator {
         xfn::clip<T> op; TensorT<> X, Y;
-        ClipOp(const T& min, const T& max, TensorT<>&& X, TensorT<>&& Y)
-            : op(min, max), X(std::move(X)), Y(std::move(Y)) {}
+        ClipOp(OperatorFactory* of, model::Clip* n)
+            : op(n->min(), n->max()),
+              X(of->alloc(n->input())),
+              Y(of->allocInplace(n->input(), n->output())) {}
         void evaluate() override {
             dlf::transformTo(X, Y, op);
         }
     };
 
     void visit(model::Clip* n) override {
-        result = std::make_unique<ClipOp>(
-            n->min(), n->max(), alloc(n->input()), alloc(n->output()));
+        result = std::make_unique<ClipOp>(this, n);
     }
 
     struct ReluOp : Operator {
         TensorT<> X, Y;
-        ReluOp(TensorT<>&& X, TensorT<>&& Y)
-            : X(std::move(X)), Y(std::move(Y)) {}
+        ReluOp(OperatorFactory* of, model::Relu* n)
+            : X(of->alloc(n->input())),
+              Y(of->allocInplace(n->input(), n->output())) {}
         void evaluate() override {
             dlf::transformTo(X, Y, xfn::relu<T>());
         }
     };
 
     void visit(model::Relu* n) override {
-        result = std::make_unique<ReluOp>(alloc(n->input()), alloc(n->output()));
+        result = std::make_unique<ReluOp>(this, n);
     }
 
     struct PReluOp : Operator {
         TensorT<> X, slope, Y;
-        PReluOp(TensorT<>&& X, TensorT<>&& slope, TensorT<>&& Y)
-            : X(std::move(X)), slope(std::move(slope)), Y(std::move(Y)) {}
-        void evaluate() override { dlf::transformTo(X, slope, Y, xfn::prelu<T>()); }
+        PReluOp(OperatorFactory* of, model::PRelu* n)
+            : X(of->alloc(n->input())),
+              slope(of->alloc(n->slope())),
+              Y(of->allocInplace(n->input(), n->output())) {}
+        void evaluate() override {
+            dlf::transformTo(X, slope, Y, xfn::prelu<T>());
+        }
     };
 
     void visit(model::PRelu* n) override {
-        result = std::make_unique<PReluOp>(
-            alloc(n->input()), alloc(n->slope()), alloc(n->output()));
+        result = std::make_unique<PReluOp>(this, n);
     }
 
     struct LeakyReluOp : Operator {
         xfn::leaky_relu<T> op; TensorT<> X, Y;
-        LeakyReluOp(float alpha, TensorT<>&& X, TensorT<>&& Y)
-            : op(alpha), X(std::move(X)), Y(std::move(Y)) {}
+        LeakyReluOp(OperatorFactory* of, model::LeakyRelu* n)
+            : op(n->alpha()),
+              X(of->alloc(n->input())),
+              Y(of->allocInplace(n->input(), n->output())) {}
         void evaluate() override { dlf::transformTo(X, Y, op); }
     };
 
     void visit(model::LeakyRelu* n) override {
-        result = std::make_unique<LeakyReluOp>(
-            n->alpha(), alloc(n->input()), alloc(n->output()));
+        result = std::make_unique<LeakyReluOp>(this, n);
     }
 
     struct ThresholdedReluOp : Operator {
         xfn::thresholded_relu<T> op; TensorT<> X, Y;
-        ThresholdedReluOp(float alpha, TensorT<>&& X, TensorT<>&& Y)
-            : op(alpha), X(std::move(X)), Y(std::move(Y)) {}
+        ThresholdedReluOp(OperatorFactory* of, model::ThresholdedRelu* n)
+            : op(n->alpha()),
+              X(of->alloc(n->input())),
+              Y(of->allocInplace(n->input(), n->output())) {}
         void evaluate() override { dlf::transformTo(X, Y, op); }
     };
 
     void visit(model::ThresholdedRelu* n) override {
-        result = std::make_unique<ThresholdedReluOp>(
-            n->alpha(), alloc(n->input()), alloc(n->output()));
+        result = std::make_unique<ThresholdedReluOp>(this, n);
     }
 
     struct SeluOp : Operator {
         xfn::selu<T> op; TensorT<> X, Y;
-        SeluOp(float alpha, float gamma, TensorT<>&& X, TensorT<>&& Y)
-            : op(alpha, gamma), X(std::move(X)), Y(std::move(Y)) {}
+        SeluOp(OperatorFactory* of, model::Selu* n)
+            : op(n->alpha(), n->gamma()),
+              X(of->alloc(n->input())),
+              Y(of->allocInplace(n->input(), n->output())) {}
         void evaluate() override { dlf::transformTo(X, Y, op); }
     };
 
     void visit(model::Selu* n) override {
-        result = std::make_unique<SeluOp>(
-            n->alpha(), n->gamma(), alloc(n->input()), alloc(n->output()));
+        result = std::make_unique<SeluOp>(this, n);
     }
 
     struct EluOp : Operator {
         xfn::elu<T> op; TensorT<> X, Y;
-        EluOp(float alpha, TensorT<>&& X, TensorT<>&& Y)
-            : op(alpha), X(std::move(X)), Y(std::move(Y)) {}
+        EluOp(OperatorFactory* of, model::Elu* n)
+            : op(n->alpha()),
+              X(of->alloc(n->input())),
+              Y(of->allocInplace(n->input(), n->output())) {}
         void evaluate() override { dlf::transformTo(X, Y, op); }
     };
 
     void visit(model::Elu* n) override {
-        result = std::make_unique<EluOp>(
-            n->alpha(), alloc(n->input()), alloc(n->output()));
+        result = std::make_unique<EluOp>(this, n);
     }
 
     struct HardSigmoidOp : Operator {
         xfn::hard_sigmoid<T> op; TensorT<> X, Y;
-        HardSigmoidOp(T alpha, T beta, TensorT<>&& X, TensorT<>&& Y)
-            : op(alpha, beta), X(std::move(X)), Y(std::move(Y)) {}
+        HardSigmoidOp(OperatorFactory* of, model::HardSigmoid* n)
+            : op(n->alpha(), n->beta()),
+              X(of->alloc(n->input())),
+              Y(of->allocInplace(n->input(), n->output())) {}
         void evaluate() override { dlf::transformTo(X, Y, op); }
     };
 
     void visit(model::HardSigmoid* n) override {
-        result = std::make_unique<HardSigmoidOp>(
-            n->alpha(), n->beta(), alloc(n->input()), alloc(n->output()));
+        result = std::make_unique<HardSigmoidOp>(this, n);
     }
 
     struct SoftsignOp : Operator {
         TensorT<> X, Y;
-        SoftsignOp(TensorT<>&& X, TensorT<>&& Y)
-            : X(std::move(X)), Y(std::move(Y)) {}
+        SoftsignOp(OperatorFactory* of, model::Softsign* n)
+            : X(of->alloc(n->input())),
+              Y(of->allocInplace(n->input(), n->output())) {}
         void evaluate() override { dlf::transformTo(X, Y, xfn::softsign<T>()); }
     };
 
     void visit(model::Softsign* n) override {
-        result = std::make_unique<SoftsignOp>(alloc(n->input()), alloc(n->output()));
+        result = std::make_unique<SoftsignOp>(this, n);
     }
 
     struct SoftplusOp : Operator {
         TensorT<> X, Y;
-        SoftplusOp(TensorT<>&& X, TensorT<>&& Y)
-            : X(std::move(X)), Y(std::move(Y)) {}
+        SoftplusOp(OperatorFactory* of, model::Softplus* n)
+            : X(of->alloc(n->input())),
+              Y(of->allocInplace(n->input(), n->output())) {}
         void evaluate() override { dlf::transformTo(X, Y, xfn::softplus<T>()); }
     };
 
     void visit(model::Softplus* n) override {
-        result = std::make_unique<SoftplusOp>(alloc(n->input()), alloc(n->output()));
+        result = std::make_unique<SoftplusOp>(this, n);
     }
 
     template <typename Fn>
     struct BinaryOp : Operator {
         TensorT<> A, B, C;
-        BinaryOp(TensorT<>&& A, TensorT<>&& B, TensorT<>&& C)
-            : A(std::move(A)), B(std::move(B)), C(std::move(C)) {}
+
+        BinaryOp(OperatorFactory* of, model::Node* n)
+            : A(of->alloc(n->input(0))), B(of->alloc(n->input(1)))
+        {
+            Shape shape(n->output()->dims());
+            if (A.shape() == shape &&
+                    n->input(0)->uses().size() == 1 &&
+                   !n->input(0)->has_initializer()) {
+                C = of->allocInplace(n->input(0), n->output());
+            } else if (B.shape() == shape &&
+                    n->input(1)->uses().size() == 1 &&
+                   !n->input(1)->has_initializer()) {
+                C = of->allocInplace(n->input(1), n->output());
+            } else {
+                C = of->alloc(n->output());
+            }
+        }
+
         void evaluate() override { transformTo(A, B, C, Fn{}); }
     };
 
     void visit(model::Add* n) override {
-        result = std::make_unique<BinaryOp<xfn::plus<T>>>(
-            alloc(n->A()), alloc(n->B()), alloc(n->C()));
+        result = std::make_unique<BinaryOp<xfn::plus<T>>>(this, n);
     }
 
     void visit(model::Sub* n) override {
-        result = std::make_unique<BinaryOp<xfn::minus<T>>>(
-            alloc(n->A()), alloc(n->B()), alloc(n->C()));
+        result = std::make_unique<BinaryOp<xfn::minus<T>>>(this, n);
     }
 
     void visit(model::Mul* n) override {
-        result = std::make_unique<BinaryOp<xfn::multiplies<T>>>(
-            alloc(n->A()), alloc(n->B()), alloc(n->C()));
+        result = std::make_unique<BinaryOp<xfn::multiplies<T>>>(this, n);
     }
 
     void visit(model::Div* n) override {
-        result = std::make_unique<BinaryOp<xfn::divides<T>>>(
-            alloc(n->A()), alloc(n->B()), alloc(n->C()));
+        result = std::make_unique<BinaryOp<xfn::divides<T>>>(this, n);
     }
 
     void visit(model::Mod* n) override {
-        result = std::make_unique<BinaryOp<xfn::modulus<T>>>(
-            alloc(n->A()), alloc(n->B()), alloc(n->C()));
+        result = std::make_unique<BinaryOp<xfn::modulus<T>>>(this, n);
     }
 
     void visit(model::Pow* n) override {
-        result = std::make_unique<BinaryOp<xfn::power<T>>>(
-            alloc(n->A()), alloc(n->B()), alloc(n->C()));
+        result = std::make_unique<BinaryOp<xfn::power<T>>>(this, n);
     }
 
     template <typename Fn>
@@ -378,8 +431,9 @@ private:
         std::list<TensorT<>> inputs;
         TensorT<> output;
 
-        AggregateOp(std::list<TensorT<>>&& inputs, TensorT<>&& output)
-            : inputs(std::move(inputs)), output(std::move(output)) {}
+        AggregateOp(OperatorFactory* of, model::Node* n)
+            : inputs(of->allocAll(n->inputs())),
+              output(of->alloc(n->output())) {}
 
         void evaluate() override {
             if (inputs.size() == 0)
@@ -402,25 +456,22 @@ private:
     };
 
     void visit(model::Max* n) override {
-        result = std::make_unique<AggregateOp<xfn::max<T>>>(
-            alloc_all(n->inputs()), alloc(n->output()));
+        result = std::make_unique<AggregateOp<xfn::max<T>>>(this, n);
     }
 
     void visit(model::Min* n) override {
-        result = std::make_unique<AggregateOp<xfn::min<T>>>(
-            alloc_all(n->inputs()), alloc(n->output()));
+        result = std::make_unique<AggregateOp<xfn::min<T>>>(this, n);
     }
 
     void visit(model::Sum* n) override {
-        result = std::make_unique<AggregateOp<xfn::plus<T>>>(
-            alloc_all(n->inputs()), alloc(n->output()));
+        result = std::make_unique<AggregateOp<xfn::plus<T>>>(this, n);
     }
 
     struct MeanOp : AggregateOp<xfn::plus<T>> {
         TensorT<> count;
 
-        MeanOp(std::list<TensorT<>>&& inputs, TensorT<>&& output)
-            : AggregateOp<xfn::plus<T>>(std::move(inputs), std::move(output))
+        MeanOp(OperatorFactory* of, model::Node* n)
+            : AggregateOp<xfn::plus<T>>(of, n)
         {
             count = TensorT<>::scalar(static_cast<T>(this->inputs.size()));
         }
@@ -432,8 +483,7 @@ private:
     };
 
     void visit(model::Mean* n) override {
-        result = std::make_unique<MeanOp>(
-            alloc_all(n->inputs()), alloc(n->output()));
+        result = std::make_unique<MeanOp>(this, n);
     }
 
     struct GemmOp : Operator {
@@ -441,25 +491,38 @@ private:
         bool transA, transB;
         TensorT<> A, B, C, Y;
 
-        GemmOp(T alpha, T beta, bool transA, bool transB,
-               TensorT<>&& A, TensorT<>&& B, TensorT<>&& C, TensorT<>&& Y)
-            : alpha(alpha), beta(beta), transA(transA), transB(transB),
-              A(std::move(A)), B(std::move(B)), C(std::move(C)),
-              Y(std::move(Y)) {}
+        GemmOp(OperatorFactory* of, model::Gemm* n)
+            : alpha(n->alpha()), beta(n->beta()),
+              transA(n->transA()), transB(n->transB()),
+              A(of->alloc(n->A())),
+              B(of->alloc(n->B())),
+              C(of->alloc(n->C())),
+              Y(of->alloc(n->Y())) {}
 
         void evaluate() override {
             gemm(alpha, A, B, beta, C, Y, transA, transB);
         }
     };
 
+    void visit(model::Gemm* n) override {
+        result = std::make_unique<GemmOp>(this, n);
+    }
+
     struct ConvOp : Operator {
         TensorT<> X, W, B, Y;
         FilterShape2D filter;
 
-        ConvOp(TensorT<>&& X, TensorT<>&& W, TensorT<>&& B, TensorT<>&& Y, const FilterShape2D& filter)
-            : X(std::move(X)), W(std::move(W)), B(std::move(B)), Y(std::move(Y)), filter(filter) {
-            if (!this->B.empty()) {
-                this->B.reshape({0, 1, 1});
+        ConvOp(OperatorFactory* of, model::Conv* n)
+            : X(of->alloc(n->X())),
+              W(of->alloc(n->W())),
+              B(n->B() ? of->alloc(n->B()) : TensorT<>()),
+              Y(of->alloc(n->Y())),
+              filter(FilterShape2D(X.shape(), W.shape())
+                .pads(n->pads())
+                .strides(n->strides())
+                .dilations(n->dilations())) {
+            if (n->B() != nullptr) {
+                B.reshape({0, 1, 1});
             }
         }
 
@@ -472,157 +535,129 @@ private:
     };
 
     void visit(model::Conv* n) override {
-        // attributes should set by shape inference
-        result = std::make_unique<ConvOp>(
-            alloc(n->X()), alloc(n->W()),
-            n->B() ? alloc(n->B()) : TensorT<>(),
-            alloc(n->Y()),
-            FilterShape2D(Shape(n->X()->dims()), Shape(n->W()->dims()))
-                .pads(n->pads())
-                .strides(n->strides())
-                .dilations(n->dilations()));
+        result = std::make_unique<ConvOp>(this, n);
     }
 
     struct MaxPoolOp : Operator {
         TensorT<> X, Y; FilterShape2D filter;
-        MaxPoolOp(TensorT<>&& X, TensorT<>&& Y, const FilterShape2D& filter)
-            : X(std::move(X)), Y(std::move(Y)), filter(filter) {}
-        void evaluate() override {
-            maxpool(X, Y, filter);
-        }
+        MaxPoolOp(OperatorFactory* of, model::MaxPool* n)
+            : X(of->alloc(n->input())),
+              Y(of->alloc(n->output())),
+              filter(FilterShape2D(X.shape(), n->kernel_shape()[0], n->kernel_shape()[1])
+                .pads(n->pads())
+                .strides(n->strides())
+                .dilations(n->dilations())) {}
+        void evaluate() override { maxpool(X, Y, filter); }
     };
 
     void visit(model::MaxPool* n) override {
-        assert(n->has_kernel_shape() && n->kernel_shape().size() == 2);
-        const auto& kernel_shape = n->kernel_shape();
-        result = std::make_unique<MaxPoolOp>(
-            alloc(n->input()), alloc(n->output()),
-            FilterShape2D(Shape(n->input()->dims()), kernel_shape[0], kernel_shape[1])
-                .pads(n->pads())
-                .strides(n->strides())
-                .dilations(n->dilations()));
+        result = std::make_unique<MaxPoolOp>(this, n);
     }
 
     struct AveragePoolOp : Operator {
         TensorT<> X, Y; FilterShape2D filter;
         const bool count_include_pad;
-        AveragePoolOp(TensorT<>&& X, TensorT<>&& Y, const FilterShape2D& filter, bool count_include_pad)
-            : X(std::move(X)), Y(std::move(Y)), filter(filter), count_include_pad(count_include_pad) {}
-        void evaluate() override {
-            avgpool(X, Y, filter, count_include_pad);
-        }
+        AveragePoolOp(OperatorFactory* of, model::AveragePool* n)
+            : X(of->alloc(n->input())),
+              Y(of->alloc(n->output())),
+              filter(FilterShape2D(X.shape(), n->kernel_shape()[0], n->kernel_shape()[1])
+                .pads(n->pads())
+                .strides(n->strides())),
+              count_include_pad(n->count_include_pad()) {}
+        void evaluate() override { avgpool(X, Y, filter, count_include_pad); }
     };
 
     void visit(model::AveragePool* n) override {
-        assert(n->has_kernel_shape() && n->kernel_shape().size() == 2);
-        const auto& kernel_shape = n->kernel_shape();
-        result = std::make_unique<AveragePoolOp>(
-            alloc(n->input()), alloc(n->output()),
-            FilterShape2D(Shape(n->input()->dims()), kernel_shape[0], kernel_shape[1])
-                .pads(n->pads())
-                .strides(n->strides()),
-            n->count_include_pad());
+        result = std::make_unique<AveragePoolOp>(this, n);
     }
 
     struct GlobalMaxPoolOp : Operator {
         TensorT<> X, Y;
-        GlobalMaxPoolOp(TensorT<>&& X, TensorT<>&& Y)
-            : X(std::move(X)), Y(std::move(Y)) {}
-        void evaluate() override {
-            global_maxpool(X, Y);
-        }
+        GlobalMaxPoolOp(OperatorFactory* of, model::GlobalMaxPool* n)
+            : X(of->alloc(n->input())), Y(of->alloc(n->output())) {}
+        void evaluate() override { global_maxpool(X, Y); }
     };
 
     void visit(model::GlobalMaxPool* n) override {
-        result = std::make_unique<GlobalMaxPoolOp>(alloc(n->input()), alloc(n->output()));
+        result = std::make_unique<GlobalMaxPoolOp>(this, n);
     }
 
     struct GlobalAveragePoolOp : Operator {
         TensorT<> X, Y;
-        GlobalAveragePoolOp(TensorT<>&& X, TensorT<>&& Y)
-            : X(std::move(X)), Y(std::move(Y)) {}
-        void evaluate() override {
-            global_avgpool(X, Y);
-        }
+        GlobalAveragePoolOp(OperatorFactory* of, model::GlobalAveragePool* n)
+            : X(of->alloc(n->input())), Y(of->alloc(n->output())) {}
+        void evaluate() override { global_avgpool(X, Y); }
     };
 
     void visit(model::GlobalAveragePool* n) override {
-        result = std::make_unique<GlobalAveragePoolOp>(alloc(n->input()), alloc(n->output()));
+        result = std::make_unique<GlobalAveragePoolOp>(this, n);
     }
 
     struct SoftmaxOp : Operator {
-        TensorT<> X, Y;
-        int axis;
-        SoftmaxOp(TensorT<>&& X, TensorT<>&& Y, int axis)
-            : X(std::move(X)), Y(std::move(Y)), axis(axis) {}
-        void evaluate() override {
-            softmax(X, Y, axis);
-        }
+        TensorT<> X, Y; int axis;
+        SoftmaxOp(OperatorFactory* of, model::Softmax* n)
+            : X(of->alloc(n->input())), Y(of->alloc(n->output())), axis(n->axis()) {}
+        void evaluate() override { softmax(X, Y, axis); }
     };
 
     void visit(model::Softmax* n) override {
-        result = std::make_unique<SoftmaxOp>(alloc(n->input()), alloc(n->output()), n->axis());
+        result = std::make_unique<SoftmaxOp>(this, n);
     }
 
     struct BatchNormalizationOp : Operator {
-        T epsilon;
         TensorT<> X, Y, S, B, M, V;
-        BatchNormalizationOp(TensorT<>&& X, TensorT<>&& Y,
-                             TensorT<>&& S, TensorT<>&& B,
-                             TensorT<>&& M, TensorT<>&& V,
-                             T epsilon)
-            : X(std::move(X)), Y(std::move(Y)),
-              S(std::move(S)), B(std::move(B)),
-              M(std::move(M)), V(std::move(V)),
-              epsilon(epsilon) {}
+        T epsilon;
+        BatchNormalizationOp(OperatorFactory* of, model::BatchNormalization* n)
+            : X(of->alloc(n->X())),
+              Y(of->allocInplace(n->X(), n->Y())),
+              S(of->alloc(n->scale())),
+              B(of->alloc(n->B())),
+              M(of->alloc(n->mean())),
+              V(of->alloc(n->var())),
+              epsilon(n->epsilon()) {}
         void evaluate() override {
             batch_norm(X, Y, S, B, M, V, epsilon);
         }
     };
 
     void visit(model::BatchNormalization* n) override {
-        result = std::make_unique<BatchNormalizationOp>(
-            alloc(n->X()), alloc(n->Y()),
-            alloc(n->scale()), alloc(n->B()),
-            alloc(n->mean()), alloc(n->var()),
-            n->epsilon());
-    }
-
-    void visit(model::Gemm* n) override {
-        result = std::make_unique<GemmOp>(
-            T(n->alpha()), T(n->beta()), n->transA(), n->transB(),
-            alloc(n->A()), alloc(n->B()), alloc(n->C()), alloc(n->Y()));
+        result = std::make_unique<BatchNormalizationOp>(this, n);
     }
 
     struct ReshapeOp : Operator {
         TensorT<> X, Y;
-        ReshapeOp(TensorT<>&& X, TensorT<>&& Y)
-            : X(std::move(X)), Y(std::move(Y)) {}
+        ReshapeOp(OperatorFactory* of, model::Node* n)
+            : X(of->alloc(n->input())),
+              Y(of->allocInplace(n->input(), n->output())) {}
         void evaluate() override { reshape(X, Y); }
     };
 
     void visit(model::Reshape* n) override {
-        result = std::make_unique<ReshapeOp>(alloc(n->input()), alloc(n->output()));
+        result = std::make_unique<ReshapeOp>(this, n);
     }
 
     void visit(model::Flatten* n) override {
-        result = std::make_unique<ReshapeOp>(alloc(n->input()), alloc(n->output()));
+        result = std::make_unique<ReshapeOp>(this, n);
     }
 
     void visit(model::Squeeze* n) override {
-        result = std::make_unique<ReshapeOp>(alloc(n->input()), alloc(n->output()));
+        result = std::make_unique<ReshapeOp>(this, n);
     }
 
     void visit(model::Unsqueeze* n) override {
-        result = std::make_unique<ReshapeOp>(alloc(n->input()), alloc(n->output()));
+        result = std::make_unique<ReshapeOp>(this, n);
     }
 
     struct ConcatOp : Operator {
-        const int axis;
         std::list<TensorT<>> inputs;
         TensorT<> output;
-        ConcatOp(int axis, std::list<TensorT<>>&& inputs, TensorT<>&& output)
-            : axis(axis), inputs(std::move(inputs)), output(std::move(output)) {}
+        int axis;
+
+        ConcatOp(OperatorFactory* of, model::Concat* n)
+            : inputs(of->allocAll(n->inputs())),
+              output(of->alloc(n->output())),
+              axis(n->axis()) {}
+
         void evaluate() override {
             std::vector<const TensorT<>*> tmp;
             for (const auto& t : inputs)
@@ -632,16 +667,19 @@ private:
     };
 
     void visit(model::Concat* n) override {
-        result = std::make_unique<ConcatOp>(
-            n->axis(), alloc_all(n->inputs()), alloc(n->output()));
+        result = std::make_unique<ConcatOp>(this, n);
     }
 
     struct SplitOp : Operator {
-        const int axis;
         TensorT<> input;
         std::list<TensorT<>> outputs;
-        SplitOp(int axis, TensorT<>&& input, std::list<TensorT<>>&& outputs)
-            : axis(axis), input(std::move(input)), outputs(std::move(outputs)) {}
+        int axis;
+
+        SplitOp(OperatorFactory* of, model::Split* n)
+            : input(of->alloc(n->input())),
+              outputs(of->allocAll(n->outputs())),
+              axis(n->axis()) {}
+
         void evaluate() override {
             std::vector<TensorT<>*> tmp;
             for (auto& t : outputs)
@@ -651,33 +689,31 @@ private:
     };
 
     void visit(model::Split* n) override {
-        result = std::make_unique<SplitOp>(
-            n->axis(), alloc(n->input()), alloc_all(n->outputs()));
+        result = std::make_unique<SplitOp>(this, n);
     }
 
     struct TransposeOp : Operator {
-        std::vector<size_t> perm;
         TensorT<> X, Y;
-        TransposeOp(std::vector<size_t>&& perm, TensorT<>&& X, TensorT<>&& Y)
-            : perm(std::move(perm)), X(std::move(X)), Y(std::move(Y)) {}
-        void evaluate() override {
-            transpose(X, perm, Y);
+        std::vector<size_t> perm;
+
+        TransposeOp(OperatorFactory* of, model::Transpose* n)
+            : X(of->alloc(n->input())), Y(of->alloc(n->output()))
+        {
+            if (n->has_perm()) {
+                auto& x_perm = n->perm();
+                perm.assign(x_perm.begin(), x_perm.end());
+            } else {
+                perm.resize(X.rank());
+                std::iota(perm.begin(), perm.end(), 0);
+                std::reverse(perm.begin(), perm.end());
+            }
         }
+
+        void evaluate() override { transpose(X, Y, perm); }
     };
 
     void visit(model::Transpose* n) override {
-        std::vector<size_t> perm;
-        if (n->has_perm()) {
-            auto& x_perm = n->perm();
-            perm.resize(x_perm.size());
-            std::copy(x_perm.begin(), x_perm.end(), perm.begin());
-        } else {
-            perm.resize(n->input()->dims().size());
-            std::iota(perm.begin(), perm.end(), 0);
-            std::reverse(perm.begin(), perm.end());
-        }
-        result = std::make_unique<TransposeOp>(
-            std::move(perm), alloc(n->input()), alloc(n->output()));
+        result = std::make_unique<TransposeOp>(this, n);
     }
 };
 
