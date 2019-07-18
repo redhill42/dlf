@@ -64,10 +64,18 @@ dlf::predict::Predictor<Context, T> create_predictor(const char* path) {
     return dlf::predict::Predictor<Context, T>(std::move(g));
 }
 
-cv::Mat prepare(const std::string& path) {
+cv::Mat prepare(const std::string& path, int size = 224) {
+    cv::Mat src_img = cv::imread(path);
+
+    auto ratio = static_cast<double>(size) / std::min(src_img.rows, src_img.cols);
+    auto dx = std::max(size, static_cast<int>(std::round(src_img.cols*ratio)));
+    auto dy = std::max(size, static_cast<int>(std::round(src_img.rows*ratio)));
+    auto x = (dx - size) / 2;
+    auto y = (dy - size) / 2;
+
     cv::Mat img;
-    cv::resize(cv::imread(path), img, cv::Size(256, 256));
-    return img(cv::Rect(16, 16, 224, 224));
+    cv::resize(src_img, img, cv::Size(dx, dy));
+    return img(cv::Rect(x, y, size, size));
 }
 
 dlf::Tensor<float> preprocess(const cv::Mat& img) {
