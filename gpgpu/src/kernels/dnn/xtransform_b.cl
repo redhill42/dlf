@@ -171,7 +171,7 @@ DEFINE_BINARY_V(Xsub_v, Subtract)
 DEFINE_BINARY_V(Xmul_v, Multiply)
 DEFINE_BINARY_V(Xdiv_v, Divide)
 
-#if PRECISION !=3232 && PRECISION != 6464
+#if PRECISION != 3232 && PRECISION != 6464
 
 #if INTEGER_PRECISION
   #define xpow(x,y) pow((float)x,(float)y)

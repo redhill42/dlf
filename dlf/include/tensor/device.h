@@ -196,20 +196,43 @@ inline void broadcast(const DevTensor<T>& src, DevTensor<T>& dst) {
 //==-------------------------------------------------------------------------
 
 template <typename T, typename Fn>
-DevTensor<T>& transformTo(const DevTensor<T>& A, const DevTensor<T>& B, DevTensor<T>& C, Fn) {
+DevTensor<T>& transformTo(const DevTensor<T>& A, const DevTensor<T>& B, DevTensor<T>& C, Fn fn) {
     Shape final_shape = Shape::broadcast(A, B);
     if (C.shape() != final_shape) {
         throw shape_error("incompatible shape");
     }
+
     if (A.shape().is_tail(B.shape()) || B.shape().is_tail(A.shape())) {
         gpgpu::dnn::transform(Fn::name, A.size(), A.data(), B.size(), B.data(), C.data());
-    } else {
-        gpgpu::dnn::transform(Fn::name, final_shape.size(), A.data(), B.data(), C.data(),
-                              A.shape().broadcast(final_shape).strides(),
-                              B.shape().broadcast(final_shape).strides(),
-                              final_shape.extents());
+        return C;
     }
+
+    int axis = Shape::axis(A.shape(), B.shape());
+    if (axis != -1) {
+        transformChannel(A, B, C, axis, fn);
+        return C;
+    }
+
+    auto shape_A = A.shape().broadcast(final_shape);
+    auto shape_B = B.shape().broadcast(final_shape);
+    gpgpu::dnn::transform(Fn::name, final_shape.size(), A.data(), B.data(), C.data(),
+                          shape_A.strides(), shape_B.strides(), final_shape.extents());
     return C;
+}
+
+template <typename T, typename Fn>
+void transformChannel(const DevTensor<T>& A, const DevTensor<T>& B, DevTensor<T>& C, size_t axis, Fn) {
+    assert(B.is_vector() || Shape::axis(A.shape(), B.shape()) == axis);
+    assert(axis < A.rank());
+    assert(A.extent(axis) == B.size());
+    assert(C.shape() == A.shape());
+
+    size_t m = 1;
+    for (int i = 0; i <= axis; i++)
+        m *= A.extent(i);
+    size_t n = A.size() / m;
+
+    gpgpu::dnn::transform(Fn::name, m, n, B.size(), A.data(), B.data(), C.data());
 }
 
 template <typename T, typename Fn>

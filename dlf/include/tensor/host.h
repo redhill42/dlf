@@ -502,6 +502,7 @@ Tensor<W>& transformTo(const Tensor<T>& A, const Tensor<U>& B, Tensor<W>& C, F f
     Shape final_shape = Shape::broadcast(A, B);
     Shape sA = A.shape().broadcast(final_shape);
     Shape sB = B.shape().broadcast(final_shape);
+    int   axis;
 
     if (C.shape() != final_shape) {
         throw shape_error("incompatible shape");
@@ -513,6 +514,8 @@ Tensor<W>& transformTo(const Tensor<T>& A, const Tensor<U>& B, Tensor<W>& C, F f
         par::transform(B.begin(), B.end(), C.begin(), [x=*A.data(),f](auto& y){ return f(x, y); });
     } else if (B.size() == 1) {
         par::transform(A.begin(), A.end(), C.begin(), [y=*B.data(),f](auto& x){ return f(x, y); });
+    } else if ((axis = Shape::axis(A.shape(), B.shape())) != -1) {
+        transformChannel(A, B, C, axis, f);
     } else if (sA.is_contiguous()) {
         par::transform(A.begin(), A.end(), B.begin(sB), C.begin(), f);
     } else if (sB.is_contiguous()) {
@@ -522,6 +525,31 @@ Tensor<W>& transformTo(const Tensor<T>& A, const Tensor<U>& B, Tensor<W>& C, F f
     }
 
     return C;
+}
+
+template <typename T, typename U, typename W, typename F>
+void transformChannel(const Tensor<T>& A, const Tensor<U>& B, Tensor<W>& C, size_t axis, F fn) {
+    assert(B.is_vector() || Shape::axis(A.shape(), B.shape()) == axis);
+    assert(axis < A.rank());
+    assert(A.extent(axis) == B.size());
+    assert(C.shape() == A.shape());
+
+    size_t m = 1;
+    for (int i = 0; i <= axis; i++)
+        m *= A.extent(i);
+    size_t n = A.size() / m;
+
+    tbb::parallel_for(tbb::blocked_range2d<int>(0, m, 32, 0, n, 32), [&](auto r) {
+        auto offset = r.rows().begin()*n + r.cols().begin();
+        auto px = A.data() + offset;
+        auto py = B.data();
+        auto pz = C.data() + offset;
+        for (int id = r.rows().begin(); id < r.rows().end(); id++) {
+            auto y = py[id % B.size()];
+            std::transform(px, px+r.cols().size(), pz, [=](auto x){ return fn(x, y); });
+            px += n, pz += n;
+        }
+    });
 }
 
 /**

@@ -50,6 +50,12 @@ void transform(const std::string& name, const size_t n,
                const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 template <typename T>
+void transform(const std::string& name,
+               const size_t m, const size_t n, const size_t channels,
+               const Buffer<T>& x_buffer, const Buffer<T>& y_buffer, Buffer<T>& z_buffer,
+               const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
+
+template <typename T>
 void batch_norm(const std::vector<size_t>& dims,
                 const Buffer<T>& x_buffer,
                       Buffer<T>& y_buffer,

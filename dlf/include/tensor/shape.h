@@ -174,6 +174,8 @@ public:
 
     static Shape broadcast(const std::vector<Shape>& shapes);
 
+    static int axis(const Shape& A, const Shape& B);
+
 private:
     template <typename ShapeT>
     static size_t do_broadcast(size_t rank, size_t i, size_t dim, const ShapeT& shape) {

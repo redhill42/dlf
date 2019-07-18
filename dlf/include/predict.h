@@ -520,16 +520,12 @@ private:
               filter(FilterShape2D(X.shape(), W.shape())
                 .pads(n->pads())
                 .strides(n->strides())
-                .dilations(n->dilations())) {
-            if (n->B() != nullptr) {
-                B.reshape({0, 1, 1});
-            }
-        }
+                .dilations(n->dilations())) {}
 
         void evaluate() override {
             dnn::conv2d(X, W, Y, filter);
             if (!B.empty()) {
-                transformTo(Y, B, Y, xfn::plus<T>());
+                transformChannel(Y, B, Y, 1, xfn::plus<T>());
             }
         }
     };
@@ -732,11 +728,11 @@ Predictor<Context, T>::Predictor(model::Graph& graph) {
         if (!v->has_initializer())
             m_inputs.push_back(factory.allocDatum(v));
     }
-    for (auto v : graph.outputs()) {
-        m_outputs.push_back(factory.allocDatum(v));
-    }
     for (auto n : graph.nodes()) {
         m_operators.push_back(factory.createOperator(n));
+    }
+    for (auto v : graph.outputs()) {
+        m_outputs.push_back(factory.allocDatum(v));
     }
 }
 

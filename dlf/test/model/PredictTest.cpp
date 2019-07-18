@@ -124,6 +124,7 @@ TYPED_TEST(PredictTest, Conv) {
     }));
 }
 
+#ifdef NDEBUG
 TYPED_TEST(PredictTest, Performance) {
     std::fstream fs("data/resnet18v1.onnx", std::ios::in | std::ios::binary);
     auto g = importModel<ONNX>(fs);
@@ -143,3 +144,4 @@ TYPED_TEST(PredictTest, Performance) {
         pred.get(0);
     });
 }
+#endif

@@ -217,15 +217,15 @@ TEST(Shape, CPUTransposePerformance) {
 
     for (int i = 0; i < 3; i++) {
         timing("CPU 2D transpose", 100, [&]() {
-            transpose(A1, {1, 0}, B1);
+            transpose(A1, B1, {1, 0});
         });
 
         timing("CPU 3D transpose", 100, [&]() {
-            transpose(A2, {2, 1, 0}, B2);
+            transpose(A2, B2, {2, 1, 0});
         });
 
         timing("CPU no transpose", 100, [&]() {
-            transpose(A2, {0, 1, 2}, B3);
+            transpose(A2, B3, {0, 1, 2});
         });
 
         std::cout << std::endl;
@@ -240,21 +240,21 @@ TEST(Shape, GPUTransposePerformance) {
         timing("GPU 2D transpose", 1, [&]() {
             auto B1 = DevTensor<float>({1024, 1024});
             for (int i = 0; i < 100; i++)
-                transpose(A1, {1, 0}, B1);
+                transpose(A1, B1, {1, 0});
             B1.read();
         });
 
         timing("GPU 3D transpose", 1, [&]() {
             auto B2 = DevTensor<float>({4, 256, 1024});
             for (int i = 0; i < 100; i++)
-                transpose(A2, {2, 1, 0}, B2);
+                transpose(A2, B2, {2, 1, 0});
             B2.read();
         });
 
         timing("GPU no transpose", 1, [&]() {
             auto B2 = DevTensor<float>({1024, 256, 4});
             for (int i = 0; i < 100; i++)
-                transpose(A2, {0, 1, 2}, B2);
+                transpose(A2, B2, {0, 1, 2});
             B2.read();
         });
 

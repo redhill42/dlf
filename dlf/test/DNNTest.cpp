@@ -308,6 +308,31 @@ TEST(BinaryTest, ShapeBroadcastArthimetic) {
     }
 }
 
+
+TEST(DNNTest, TransformChannel_CPU) {
+    auto A = Tensor<int>::range({2, 64, 32, 32}, 1);
+    auto B = Tensor<int>::range({64, 1, 1}, 1);
+    auto C = Tensor<int>(A.shape());
+    auto D = Tensor<int>(A.shape());
+
+    transformChannel(A, B, C, 1, xfn::plus<>());
+    transformTo(A, broadcast(B, A.shape()), D, xfn::plus<>());
+    EXPECT_EQ(C, D);
+}
+
+TEST(DNNTest, TransformChannel_GPU) {
+    auto A = dev(Tensor<int>::range({2, 64, 32, 32}, 1));
+    auto B = dev(Tensor<int>::range({64, 1, 1}, 1));
+    auto C = DevTensor<int>(A.shape());
+    auto D = DevTensor<int>(A.shape());
+
+    transformChannel(A, B, C, 1, xfn::plus<>());
+
+    B = broadcast(B, A.shape());
+    transformTo(A, broadcast(B, A.shape()), D, xfn::plus<>());
+    EXPECT_EQ(C.read(), D.read());
+}
+
 TEST(DNNTest, ShapeBroadcastCopy) {
     auto A = Tensor<int>({3, 1}, {1, 2, 3});
     auto B = Tensor<int>({2, 3, 4}, {
@@ -417,6 +442,7 @@ TEST(DNNTest, BatchNormalizationGPU) {
     }
 }
 
+#ifdef NDEBUG
 TEST(DNNTest, BatchNormalizationPerformanceCPU) {
     auto x = Tensor<float>::random({2, 3, 1024, 1024}, -10, 10);
     auto s = Tensor<float>::random({3}, 0.5, 1.5);
@@ -450,6 +476,7 @@ TEST(DNNTest, BatchNormalizationPerformanceGPU) {
         });
     std::cout << std::endl;
 }
+#endif
 
 TEST(Conv2D, basic_conv_with_padding) {
     auto X = Tensor<float>::range({1, 1, 5, 5}, 0);
@@ -581,6 +608,7 @@ TEST(Conv2D, conv_with_strange_padding) {
     EXPECT_EQ(Y, dev_Y.read());
 }
 
+#ifdef NDEBUG
 TEST(Conv2D, performance_test) {
     auto X = Tensor<float>::range({1, 3, 1000, 1000}, 0);
     auto W = Tensor<float>::range({8, 3, 3, 3}, 0);
@@ -602,6 +630,7 @@ TEST(Conv2D, performance_test) {
         });
     }
 }
+#endif
 
 TEST(MaxPool, basic_2d_with_padding) {
     auto X = Tensor<float>::range({1, 1, 5, 5}, 1);

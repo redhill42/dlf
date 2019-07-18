@@ -207,6 +207,22 @@ Shape Shape::broadcast(const std::vector<Shape>& shapes) {
     return Shape(result_shape);
 }
 
+int Shape::axis(const Shape& A, const Shape& B) {
+    int axis = -1;
+    if (B.rank() <= A.rank()) {
+        for (int i = B.rank(); --i >= 0; ) {
+            if (B.extent(i) != 1) {
+                if (axis != -1)
+                    return -1;
+                axis = i + A.rank() - B.rank();
+                if (B.extent(i) != A.extent(axis))
+                    return -1;
+            }
+        }
+    }
+    return axis;
+}
+
 static bool validate_perm(size_t rank, const std::vector<size_t>& perm) {
     if (perm.size() != rank)
         return false;
