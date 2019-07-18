@@ -410,20 +410,7 @@ void conv2d(const size_t batches, const size_t channels,
             const Buffer<T>& im_buffer, const Buffer<T>& kernel_buffer,
             Buffer<T>& result_buffer, const Queue& queue, Event* event)
 {
-    if (IsOpenCL(queue.context().device()) || (pad_top != pad_bottom || pad_left != pad_right)) {
-        auto routine = Xconvgemm<T>(queue, event);
-        routine.DoConvgemm(KernelMode::Convolution,
-                           batches, channels,
-                           height, width,
-                           output_h, output_w,
-                           num_kernels, kernel_h, kernel_w,
-                           pad_top, pad_left,
-                           stride_h, stride_w,
-                           dilation_h, dilation_w,
-                           im_buffer, 0,
-                           kernel_buffer, 0,
-                           result_buffer, 0);
-    } else {
+    if (IsCUDA(queue.context().device()) && pad_top == pad_bottom && pad_left == pad_right) {
         auto cudnn = cudnn_handle(queue);
 
         auto desc = ConvolutionDescriptor<T>(pad_top, pad_left, stride_h, stride_w, dilation_h, dilation_w);
@@ -452,7 +439,58 @@ void conv2d(const size_t batches, const size_t channels,
             reinterpret_cast<void*>(*cu::cuBuffer::unwrap(workspace)), workspace_size,
             &beta,
             y_desc, reinterpret_cast<void*>(*cu::cuBuffer::unwrap((result_buffer)))));
+
+        return;
     }
+
+    if (  kernel_h == 1 && kernel_w == 1
+       && stride_h == 1 && stride_w == 1
+       && dilation_h == 1 && dilation_w == 1
+       && pad_top==0 && pad_bottom==0 && pad_left==0 && pad_right==0)
+    {
+        // gemm only for 1x1 convolution
+        assert(height == output_h && width == output_w);
+        auto m = num_kernels;
+        auto k = channels;
+        auto n = height * width;
+
+        std::vector<size_t> w_offsets(batches);
+        std::vector<size_t> x_offsets(batches);
+        std::vector<size_t> y_offsets(batches);
+        std::vector<T> alpha(batches);
+        std::vector<T> beta(batches);
+
+        for (size_t i = 0 ; i < batches; i++) {
+            w_offsets[i] = 0;
+            x_offsets[i] = i * k * n;
+            y_offsets[i] = i * m * n;
+            alpha[i] = T{1};
+            beta[i] = T{0};
+        }
+
+        gemmBatched(gpgpu::blas::Layout::RowMajor,
+                    gpgpu::blas::Transpose::NoTrans,
+                    gpgpu::blas::Transpose::NoTrans,
+                    m, n, k, &alpha[0],
+                    kernel_buffer, &w_offsets[0], k,
+                    im_buffer, &x_offsets[0], n,
+                    &beta[0], result_buffer, &y_offsets[0], n,
+                    batches);
+        return;
+    }
+
+    auto routine = Xconvgemm<T>(queue, event);
+    routine.DoConvgemm(KernelMode::Convolution,
+                       batches, channels,
+                       height, width,
+                       output_h, output_w,
+                       num_kernels, kernel_h, kernel_w,
+                       pad_top, pad_left,
+                       stride_h, stride_w,
+                       dilation_h, dilation_w,
+                       im_buffer, 0,
+                       kernel_buffer, 0,
+                       result_buffer, 0);
 }
 
 template void PUBLIC_API conv2d<float> (const size_t, const size_t,
