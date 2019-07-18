@@ -527,7 +527,7 @@ private:
         }
 
         void evaluate() override {
-            conv2d(X, W, Y, filter);
+            dnn::conv2d(X, W, Y, filter);
             if (!B.empty()) {
                 transformTo(Y, B, Y, xfn::plus<T>());
             }
@@ -547,7 +547,7 @@ private:
                 .pads(n->pads())
                 .strides(n->strides())
                 .dilations(n->dilations())) {}
-        void evaluate() override { maxpool(X, Y, filter); }
+        void evaluate() override { dnn::maxpool(X, Y, filter); }
     };
 
     void visit(model::MaxPool* n) override {
@@ -564,7 +564,7 @@ private:
                 .pads(n->pads())
                 .strides(n->strides())),
               count_include_pad(n->count_include_pad()) {}
-        void evaluate() override { avgpool(X, Y, filter, count_include_pad); }
+        void evaluate() override { dnn::avgpool(X, Y, filter, count_include_pad); }
     };
 
     void visit(model::AveragePool* n) override {
@@ -575,7 +575,7 @@ private:
         TensorT<> X, Y;
         GlobalMaxPoolOp(OperatorFactory* of, model::GlobalMaxPool* n)
             : X(of->alloc(n->input())), Y(of->alloc(n->output())) {}
-        void evaluate() override { global_maxpool(X, Y); }
+        void evaluate() override { dnn::global_maxpool(X, Y); }
     };
 
     void visit(model::GlobalMaxPool* n) override {
@@ -586,7 +586,7 @@ private:
         TensorT<> X, Y;
         GlobalAveragePoolOp(OperatorFactory* of, model::GlobalAveragePool* n)
             : X(of->alloc(n->input())), Y(of->alloc(n->output())) {}
-        void evaluate() override { global_avgpool(X, Y); }
+        void evaluate() override { dnn::global_avgpool(X, Y); }
     };
 
     void visit(model::GlobalAveragePool* n) override {
@@ -597,7 +597,7 @@ private:
         TensorT<> X, Y; int axis;
         SoftmaxOp(OperatorFactory* of, model::Softmax* n)
             : X(of->alloc(n->input())), Y(of->alloc(n->output())), axis(n->axis()) {}
-        void evaluate() override { softmax(X, Y, axis); }
+        void evaluate() override { dnn::softmax(X, Y, axis); }
     };
 
     void visit(model::Softmax* n) override {
@@ -616,7 +616,7 @@ private:
               V(of->alloc(n->var())),
               epsilon(n->epsilon()) {}
         void evaluate() override {
-            batch_norm(X, Y, S, B, M, V, epsilon);
+            dnn::batch_norm(X, Y, S, B, M, V, epsilon);
         }
     };
 

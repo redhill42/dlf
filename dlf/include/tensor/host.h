@@ -893,6 +893,7 @@ inline Tensor<W> outer(const Tensor<T>& A, const Tensor<U>& B) {
 // Tensor DNN operations
 //==-------------------------------------------------------------------------
 
+namespace dnn {
 template <typename T>
 void batch_norm(const Tensor<T>& X, Tensor<T>& Y,
                 const Tensor<T>& scale, const Tensor<T>& bias,
@@ -1248,4 +1249,5 @@ Tensor<T> softmax(Tensor<T>&& X, int axis = 1) {
     return std::move(X);
 }
 
+} // namespace dnn
 } // namespace dlf

@@ -371,7 +371,7 @@ TEST(DNNTest, BatchNormalizationCPU) {
         auto t = batch_norm_test(x, s, b, m, v);
 
         auto y = Tensor<float>({1, 2, 1, 3});
-        batch_norm(x, y, s, b, m, v);
+        dnn::batch_norm(x, y, s, b, m, v);
         ExpectElementsEQ(t, y);
     }
 
@@ -384,7 +384,7 @@ TEST(DNNTest, BatchNormalizationCPU) {
         auto t = batch_norm_test(x, s, b, m, v);
 
         auto y = Tensor<float>({2, 3, 4, 5});
-        batch_norm(x, y, s, b, m, v);
+        dnn::batch_norm(x, y, s, b, m, v);
         ExpectElementsEQ(t, y);
     }
 }
@@ -399,7 +399,7 @@ TEST(DNNTest, BatchNormalizationGPU) {
         auto t = batch_norm_test(x, s, b, m, v);
 
         auto y = DevTensor<float>({1, 2, 1, 3});
-        batch_norm(dev(x), y, dev(s), dev(b), dev(m), dev(v));
+        dnn::batch_norm(dev(x), y, dev(s), dev(b), dev(m), dev(v));
         ExpectElementsEQ(t, y.read());
     }
 
@@ -412,7 +412,7 @@ TEST(DNNTest, BatchNormalizationGPU) {
         auto t = batch_norm_test(x, s, b, m, v);
 
         auto y = DevTensor<float>({2, 3, 4, 5});
-        batch_norm(dev(x), y, dev(s), dev(b), dev(m), dev(v));
+        dnn::batch_norm(dev(x), y, dev(s), dev(b), dev(m), dev(v));
         ExpectElementsEQ(t, y.read());
     }
 }
@@ -428,7 +428,7 @@ TEST(DNNTest, BatchNormalizationPerformanceCPU) {
     for (int i = 0; i < 3; i++) {
         timing("Batch normalization CPU", 1, [&]() {
             for (int j = 0; j < 100; j++)
-                batch_norm(x, y, s, b, m, v);
+                dnn::batch_norm(x, y, s, b, m, v);
         });
     }
     std::cout << std::endl;
@@ -445,7 +445,7 @@ TEST(DNNTest, BatchNormalizationPerformanceGPU) {
     for (int i = 0; i < 3; i++)
         timing("Batch normalization GPU", 1, [&]() {
             for (int j = 0; j < 100; j++)
-                batch_norm(x, y, s, b, m, v);
+                dnn::batch_norm(x, y, s, b, m, v);
             y.read();
         });
     std::cout << std::endl;
@@ -465,11 +465,11 @@ TEST(Conv2D, basic_conv_with_padding) {
         72, 111, 117, 123, 84
     });
 
-    conv2d(X, W, Y, filter);
+    dnn::conv2d(X, W, Y, filter);
     EXPECT_EQ(Y, R);
 
     auto dev_Y = DevTensor<float>({1, 1, 5, 5});
-    conv2d(dev(X), dev(W), dev_Y, filter);
+    dnn::conv2d(dev(X), dev(W), dev_Y, filter);
     EXPECT_EQ(dev_Y.read(), R);
 }
 
@@ -485,11 +485,11 @@ TEST(Conv2D, basic_conv_without_padding) {
         144, 153, 162
     });
 
-    conv2d(X, W, Y, filter);
+    dnn::conv2d(X, W, Y, filter);
     EXPECT_EQ(Y, R);
 
     auto dev_Y = DevTensor<float>({1, 1, 3, 3});
-    conv2d(dev(X), dev(W), dev_Y, filter);
+    dnn::conv2d(dev(X), dev(W), dev_Y, filter);
     EXPECT_EQ(dev_Y.read(), R);
 }
 
@@ -506,11 +506,11 @@ TEST(Conv2D, conv_with_strides_padding) {
         112, 177, 124
     });
 
-    conv2d(X, W, Y, filter);
+    dnn::conv2d(X, W, Y, filter);
     EXPECT_EQ(Y, R);
 
     auto dev_Y = DevTensor<float>({1, 1, 4, 3});
-    conv2d(dev(X), dev(W), dev_Y, filter);
+    dnn::conv2d(dev(X), dev(W), dev_Y, filter);
     EXPECT_EQ(dev_Y.read(), R);
 }
 
@@ -526,11 +526,11 @@ TEST(Conv2D, conv_with_strides_no_padding) {
         234, 252
     });
 
-    conv2d(X, W, Y, filter);
+    dnn::conv2d(X, W, Y, filter);
     EXPECT_EQ(Y, R);
 
     auto dev_Y = DevTensor<float>({1, 1, 3, 2});
-    conv2d(dev(X), dev(W), dev_Y, filter);
+    dnn::conv2d(dev(X), dev(W), dev_Y, filter);
     EXPECT_EQ(dev_Y.read(), R);
 }
 
@@ -547,11 +547,11 @@ TEST(Conv2D, conv_with_strides_and_asymmetric_padding) {
         171, 183
     });
 
-    conv2d(X, W, Y, filter);
+    dnn::conv2d(X, W, Y, filter);
     EXPECT_EQ(Y, R);
 
     auto dev_Y = DevTensor<float>({1, 1, 4, 2});
-    conv2d(dev(X), dev(W), dev_Y, filter);
+    dnn::conv2d(dev(X), dev(W), dev_Y, filter);
     EXPECT_EQ(dev_Y.read(), R);
 }
 
@@ -563,8 +563,8 @@ TEST(Conv2D, conv_with_multiple_channels) {
     auto filter = FilterShape2D(X.shape(), W.shape()).pads(1, 1);
     auto dev_Y = DevTensor<float>({2, 8, 5, 5});
 
-    conv2d(X, W, Y, filter);
-    conv2d(dev(X), dev(W), dev_Y, filter);
+    dnn::conv2d(X, W, Y, filter);
+    dnn::conv2d(dev(X), dev(W), dev_Y, filter);
     EXPECT_EQ(Y, dev_Y.read());
 }
 
@@ -576,8 +576,8 @@ TEST(Conv2D, conv_with_strange_padding) {
     auto Y = Tensor<float>(filter.output_shape());
     auto dev_Y = DevTensor<float>(Y.shape());
 
-    conv2d(X, W, Y, filter);
-    conv2d(dev(X), dev(W), dev_Y, filter);
+    dnn::conv2d(X, W, Y, filter);
+    dnn::conv2d(dev(X), dev(W), dev_Y, filter);
     EXPECT_EQ(Y, dev_Y.read());
 }
 
@@ -589,7 +589,7 @@ TEST(Conv2D, performance_test) {
 
     for (int i = 0; i < 3; i++) {
         timing("Conv2D CPU", 1, [&]() {
-            conv2d(X, W, Y, filter);
+            dnn::conv2d(X, W, Y, filter);
         });
     }
 
@@ -597,7 +597,7 @@ TEST(Conv2D, performance_test) {
         auto dev_X = dev(X), dev_W = dev(W);
         auto dev_Y = DevTensor<float>({1, 8, 1000, 1000});
         timing("Conv2D GPU", 1, [&]() {
-            conv2d(dev(X), dev(W), dev_Y, filter);
+            dnn::conv2d(dev(X), dev(W), dev_Y, filter);
             gpgpu::current::queue().finish();
         });
     }
@@ -608,7 +608,7 @@ TEST(MaxPool, basic_2d_with_padding) {
     auto Y = Tensor<float>({1, 1, 5, 5});
     auto filter = FilterShape2D(X.shape(), 3, 3).pads(1, 1);
 
-    maxpool(X, Y, filter);
+    dnn::maxpool(X, Y, filter);
     EXPECT_EQ(Y, Tensor<float>({1, 1, 5, 5}, {
          7,  8,  9, 10, 10,
         12, 13, 14, 15, 15,
@@ -618,7 +618,7 @@ TEST(MaxPool, basic_2d_with_padding) {
     }));
 
     auto dev_Y = DevTensor<float>({1, 1, 5, 5});
-    maxpool(dev(X), dev_Y, filter);
+    dnn::maxpool(dev(X), dev_Y, filter);
     EXPECT_EQ(dev_Y.read(), Y);
 }
 
@@ -627,7 +627,7 @@ TEST(MaxPool, basic_2d_without_padding) {
     auto Y = Tensor<float>({1, 1, 3, 3});
     auto filter = FilterShape2D(X.shape(), 3, 3);
 
-    maxpool(X, Y, filter);
+    dnn::maxpool(X, Y, filter);
     EXPECT_EQ(Y, Tensor<float>({1, 1, 3, 3}, {
         13, 14, 15,
         18, 19, 20,
@@ -635,7 +635,7 @@ TEST(MaxPool, basic_2d_without_padding) {
     }));
 
     auto dev_Y = DevTensor<float>({1, 1, 3, 3});
-    maxpool(dev(X), dev_Y, filter);
+    dnn::maxpool(dev(X), dev_Y, filter);
     EXPECT_EQ(dev_Y.read(), Y);
 }
 
@@ -645,8 +645,8 @@ TEST(MaxPool, basic_2d_with_multiple_channels) {
     auto dev_Y = DevTensor<float>({2, 3, 100, 100});
     auto filter = FilterShape2D(X.shape(), 3, 3).pads(1, 1);
 
-    maxpool(X, Y, filter);
-    maxpool(dev(X), dev_Y, filter);
+    dnn::maxpool(X, Y, filter);
+    dnn::maxpool(dev(X), dev_Y, filter);
     EXPECT_EQ(dev_Y.read(), Y);
 }
 
@@ -656,8 +656,8 @@ TEST(AveragePool, basic_2d_with_multiple_channels) {
     auto dev_Y = DevTensor<float>({2, 3, 100, 100});
     auto filter = FilterShape2D(X.shape(), 3, 3).pads(1, 1);
 
-    avgpool(X, Y, filter, false);
-    avgpool(dev(X), dev_Y, filter, false);
+    dnn::avgpool(X, Y, filter, false);
+    dnn::avgpool(dev(X), dev_Y, filter, false);
     ExpectElementsEQ(dev_Y.read(), Y);
 }
 
@@ -668,19 +668,19 @@ TEST(DNNTest, GlobalPooling) {
     auto max_R = Tensor<float>({2, 3, 1, 1}, {4, 8, 12, 16, 20, 24});
     auto avg_R = Tensor<float>({2, 3, 1, 1}, {2.5, 6.5, 10.5, 14.5, 18.5, 22.5});
 
-    global_maxpool(X, Y);
+    dnn::global_maxpool(X, Y);
     EXPECT_EQ(Y, max_R);
 
-    global_avgpool(X, Y);
+    dnn::global_avgpool(X, Y);
     ExpectElementsEQ(Y, avg_R);
 
     auto dev_X = dev(X);
     auto dev_Y = DevTensor<float>({2, 3, 1, 1});
 
-    global_maxpool(dev_X, dev_Y);
+    dnn::global_maxpool(dev_X, dev_Y);
     EXPECT_EQ(dev_Y.read(), max_R);
 
-    global_avgpool(dev_X, dev_Y);
+    dnn::global_avgpool(dev_X, dev_Y);
     ExpectElementsEQ(dev_Y.read(), avg_R);
 }
 
@@ -691,7 +691,7 @@ TEST(DNNTest, Softmax) {
         0.0320586, 0.08714432, 0.23688284, 0.64391428
     });
 
-    auto Y = softmax(X);
+    auto Y = dnn::softmax(X);
     EXPECT_EQ(Y.shape(), X.shape());
     ExpectElementsEQ(Y, R);
 }

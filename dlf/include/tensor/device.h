@@ -404,6 +404,7 @@ inline DevTensor<T> gemm(const T& alpha, const DevTensor<T>& A, const DevTensor<
 // Tensor DNN operations
 //==-------------------------------------------------------------------------
 
+namespace dnn {
 template <typename T>
 void batch_norm(const DevTensor<T>& X, DevTensor<T>& Y,
                 const DevTensor<T>& scale, const DevTensor<T>& bias,
@@ -491,4 +492,5 @@ void softmax(const DevTensor<T>& X, DevTensor<T>& Y, int axis = 1) {
     Y.write(temp);
 }
 
+} // namespace dnn
 } // namespace dlf

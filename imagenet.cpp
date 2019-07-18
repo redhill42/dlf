@@ -94,7 +94,7 @@ dlf::Tensor<float> preprocess(const cv::Mat& img) {
 
 std::vector<Score> postprocess(dlf::Tensor<float>&& scores) {
     scores.reshape({1000});
-    dlf::softmax(scores, scores, 0);
+    dlf::dnn::softmax(scores, scores, 0);
 
     std::vector<Score> result(scores.size());
     for (int i = 0; i < 1000; i++) {
