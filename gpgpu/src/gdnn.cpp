@@ -643,4 +643,51 @@ template void PUBLIC_API avgpool<double>(const size_t, const size_t, const size_
                                          const Buffer<double>&, Buffer<double>&,
                                          const Queue&, Event*);
 
+template <typename T>
+void lppool(const size_t batches, const size_t channels,
+            const size_t height, const size_t width,
+            const size_t output_h, const size_t output_w,
+            const size_t kernel_h, const size_t kernel_w,
+            const size_t pad_top, const size_t pad_left,
+            const size_t /*pad_bottom*/, const size_t /*pad_right*/,
+            const size_t stride_h, const size_t stride_w,
+            const size_t dilation_h, const size_t dilation_w,
+            const int p,
+            const Buffer<T>& x_buffer, Buffer<T>& y_buffer,
+            const Queue& queue, Event* event)
+{
+    auto routine = Xpool<T>(queue, event);
+    routine.DoLpPool(batches, channels,
+                     height, width,
+                     output_h, output_w,
+                     kernel_h, kernel_w,
+                     pad_top, pad_left,
+                     stride_h, stride_w,
+                     dilation_h, dilation_w,
+                     p,
+                     x_buffer, 0, y_buffer, 0);
+}
+
+template void PUBLIC_API lppool<half>  (const size_t, const size_t, const size_t, const size_t,
+                                        const size_t, const size_t, const size_t, const size_t,
+                                        const size_t, const size_t, const size_t, const size_t,
+                                        const size_t, const size_t, const size_t, const size_t,
+                                        const int,
+                                        const Buffer<half>&, Buffer<half>&,
+                                        const Queue&, Event*);
+template void PUBLIC_API lppool<float> (const size_t, const size_t, const size_t, const size_t,
+                                        const size_t, const size_t, const size_t, const size_t,
+                                        const size_t, const size_t, const size_t, const size_t,
+                                        const size_t, const size_t, const size_t, const size_t,
+                                        const int,
+                                        const Buffer<float>&, Buffer<float>&,
+                                        const Queue&, Event*);
+template void PUBLIC_API lppool<double>(const size_t, const size_t, const size_t, const size_t,
+                                        const size_t, const size_t, const size_t, const size_t,
+                                        const size_t, const size_t, const size_t, const size_t,
+                                        const size_t, const size_t, const size_t, const size_t,
+                                        const int,
+                                        const Buffer<double>&, Buffer<double>&,
+                                        const Queue&, Event*);
+
 }} // namespace gpgpu::dnn

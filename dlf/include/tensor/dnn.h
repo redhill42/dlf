@@ -165,7 +165,7 @@ void pooling(const T* input, T* output,
             0, filter.batches(), 1,
             0, filter.output_w(), 32,
             0, filter.output_h()*filter.channels(), 32
-        ), [=](auto r) {
+        ), [=, &filter](auto r) {
         auto channels   = filter.channels();
         auto input_h    = filter.height();
         auto input_w    = filter.width();
@@ -207,6 +207,37 @@ void pooling(const T* input, T* output,
                     output[output_index] = reduce(acc, count);
                 }
             }
+        }
+    });
+}
+
+template <typename T, typename Accum, typename Join, typename Reduce>
+void global_pooling(const Tensor<T>& X, Tensor<T>& Y, const T identity,
+                    Accum accum, Join join, Reduce reduce)
+{
+    assert(X.rank() >= 3);
+    assert(X.rank() == Y.rank());
+    auto M = X.extent(0) * X.extent(1);
+    auto N = X.size() / M;
+    assert(Y.size() == M);
+
+    size_t grainsize = std::max(size_t(1), GRAINSIZE / N);
+    auto x_buffer = X.data();
+    auto y_buffer = Y.data();
+
+    tbb::parallel_for(tbb::blocked_range<int>(0, M, grainsize), [=](const auto& r) {
+        for (int b = r.begin(); b < r.end(); b++) {
+            auto val = tbb::parallel_reduce(
+                tbb::blocked_range<int>(0, N, grainsize),
+                identity,
+                [=](auto r, T acc) {
+                    auto px = x_buffer + b*N + r.begin();
+                    for (size_t k = r.size(); k-- != 0; )
+                        acc = accum(acc, *px++);
+                    return acc;
+                },
+                join);
+            y_buffer[b] = reduce(val, N);
         }
     });
 }
@@ -262,31 +293,44 @@ void avgpool(const DevTensor<T>& X, DevTensor<T>& Y, const FilterShape2D& filter
 }
 
 template <typename T>
+void lppool(const Tensor<T>& X, Tensor<T>& Y, const FilterShape2D& filter, const int p) {
+    assert(X.shape() == filter.input_shape());
+    assert(Y.shape() == filter.output_shape());
+    if (p == 2) {
+        detail::pooling(X.data(), Y.data(), filter, false,
+                        T{},
+                        [](auto acc, auto x) { return acc + x*x; },
+                        [](auto acc, auto) { return std::sqrt(acc); });
+    } else {
+        detail::pooling(X.data(), Y.data(), filter, false,
+                        T{},
+                        [p](auto acc, auto x) { return acc + std::pow(std::abs(x), p); },
+                        [p](auto acc, auto) { return std::pow(acc, T{1}/p); });
+    }
+}
+
+template <typename T>
+void lppool(const DevTensor<T>& X, DevTensor<T>& Y, const FilterShape2D& filter, int p) {
+    assert(X.shape() == filter.input_shape());
+    assert(Y.shape() == filter.output_shape());
+    gpgpu::dnn::lppool(filter.batches(), filter.channels(),
+                       filter.height(), filter.width(),
+                       filter.output_h(), filter.output_w(),
+                       filter.kernel_h(), filter.kernel_w(),
+                       filter.pad_top(), filter.pad_left(),
+                       filter.pad_bottom(), filter.pad_right(),
+                       filter.stride_h(), filter.stride_w(),
+                       filter.dilation_h(), filter.dilation_w(),
+                       p,
+                       X.data(), Y.data());
+}
+template <typename T>
 void global_maxpool(const Tensor<T>& X, Tensor<T>& Y) {
-    assert(X.rank() >= 3);
-    assert(X.rank() == Y.rank());
-    auto M = X.extent(0) * X.extent(1);
-    auto N = X.size() / M;
-    assert(Y.size() == M);
-
-    size_t grainsize = std::max(size_t(1), GRAINSIZE / N);
-    auto x_buffer = X.data();
-    auto y_buffer = Y.data();
-
-    tbb::parallel_for(tbb::blocked_range<int>(0, M, grainsize), [=](const auto& r) {
-        for (int b = r.begin(); b < r.end(); b++) {
-            y_buffer[b] = tbb::parallel_reduce(
-                tbb::blocked_range<int>(0, N, GRAINSIZE),
-                std::numeric_limits<T>::lowest(),
-                [=](const auto& r, T acc) {
-                    auto px = x_buffer + b*N + r.begin();
-                    for (size_t k = r.size(); k-- != 0; )
-                        acc = std::max(acc, *px++);
-                    return acc;
-                },
-                [](auto x, auto y) { return std::max(x, y); });
-        }
-    });
+    detail::global_pooling(
+        X, Y, std::numeric_limits<T>::lowest(),
+        [](auto acc, auto x){ return std::max(acc, x); },
+        [](auto x, auto y)  { return std::max(x, y); },
+        [](auto acc, auto)  { return acc; });
 }
 
 template <typename T>
@@ -301,31 +345,11 @@ void global_maxpool(const DevTensor<T>& input, DevTensor<T>& output) {
 
 template <typename T>
 void global_avgpool(const Tensor<T>& X, Tensor<T>& Y) {
-    assert(X.rank() >= 3);
-    assert(X.rank() == Y.rank());
-    auto M = X.extent(0) * X.extent(1);
-    auto N = X.size() / M;
-    assert(Y.size() == M);
-
-    size_t grainsize = std::max(size_t(1), GRAINSIZE / N);
-    auto x_buffer = X.data();
-    auto y_buffer = Y.data();
-
-    tbb::parallel_for(tbb::blocked_range<int>(0, M, grainsize), [=](const auto& r) {
-        for (int b = r.begin(); b < r.end(); b++) {
-            auto val = tbb::parallel_reduce(
-                tbb::blocked_range<int>(0, N, grainsize),
-                T{},
-                [=](const auto& r, T acc) {
-                    auto px = x_buffer + b*N + r.begin();
-                    for (size_t k = r.size(); k-- != 0; )
-                        acc += *px++;
-                    return acc;
-                },
-                std::plus<>());
-            y_buffer[b] = val / N;
-        }
-    });
+    detail::global_pooling(
+        X, Y, T{},
+        std::plus<T>(),
+        std::plus<T>(),
+        [](auto acc, auto n){ return acc / n; });
 }
 
 template <typename T>
@@ -336,6 +360,33 @@ void global_avgpool(const DevTensor<T>& input, DevTensor<T>& output) {
     FilterShape2D filter(input.shape(), h, w);
     filter.strides(h, w);
     avgpool(input, output, filter, false);
+}
+
+template <typename T>
+void global_lppool(const Tensor<T>& X, Tensor<T>& Y, const int p) {
+    if (p == 2) {
+        detail::global_pooling(
+            X, Y, T{},
+            [](auto acc, auto x) { return acc + x*x; },
+            std::plus<T>(),
+            [](auto acc, auto) { return std::sqrt(acc); });
+    } else {
+        detail::global_pooling(
+            X, Y, T{},
+            [p](auto acc, auto x) { return acc + std::pow(std::abs(x), p); },
+            std::plus<T>(),
+            [p](auto acc, auto) { return std::pow(acc, T{1}/p); });
+    }
+}
+
+template <typename T>
+void global_lppool(const DevTensor<T>& input, DevTensor<T>& output, int p) {
+    // FIXME
+    auto h = input.extent(2);
+    auto w = input.extent(3);
+    FilterShape2D filter(input.shape(), h, w);
+    filter.strides(h, w);
+    lppool(input, output, filter, p);
 }
 
 template <typename T>

@@ -678,11 +678,24 @@ TEST(MaxPool, basic_2d_with_multiple_channels) {
 TEST(AveragePool, basic_2d_with_multiple_channels) {
     auto X = Tensor<float>::range({2, 3, 100, 100}, 0);
     auto Y = Tensor<float>({2, 3, 100, 100});
+    auto dev_X = dev(X);
     auto dev_Y = DevTensor<float>({2, 3, 100, 100});
     auto filter = FilterShape2D(X.shape(), 3, 3).pads(1, 1);
 
     dnn::avgpool(X, Y, filter, false);
-    dnn::avgpool(dev(X), dev_Y, filter, false);
+    dnn::avgpool(dev_X, dev_Y, filter, false);
+    ExpectElementsEQ(dev_Y.read(), Y);
+}
+
+TEST(LpPool, basic_2d_with_multiple_channels) {
+    auto X = Tensor<float>::range({2, 3, 100, 100}, 0);
+    auto Y = Tensor<float>({2, 3, 100, 100});
+    auto dev_X = dev(X);
+    auto dev_Y = DevTensor<float>({2, 3, 100, 100});
+    auto filter = FilterShape2D(X.shape(), 3, 3).pads(1, 1);
+
+    dnn::lppool(X, Y, filter, 2);
+    dnn::lppool(dev_X, dev_Y, filter, 2);
     ExpectElementsEQ(dev_Y.read(), Y);
 }
 
@@ -707,6 +720,10 @@ TEST(DNNTest, GlobalPooling) {
 
     dnn::global_avgpool(dev_X, dev_Y);
     ExpectElementsEQ(dev_Y.read(), avg_R);
+
+    dnn::global_lppool(X, Y, 2);
+    dnn::global_lppool(dev_X, dev_Y, 2);
+    ExpectElementsEQ(dev_Y.read(), Y);
 }
 
 TEST(DNNTest, Softmax) {

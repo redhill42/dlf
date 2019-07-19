@@ -567,6 +567,22 @@ private:
         result = std::make_unique<AveragePoolOp>(this, n);
     }
 
+    struct LpPoolOp : Operator {
+        TensorT<> X, Y; FilterShape2D filter; int p;
+        LpPoolOp(OperatorFactory* of, model::LpPool* n)
+            : X(of->alloc(n->input())),
+              Y(of->alloc(n->output())),
+              filter(FilterShape2D(X.shape(), n->kernel_shape()[0], n->kernel_shape()[1])
+                .pads(n->pads())
+                .strides(n->strides())),
+              p(n->get_i("p", 2)) {}
+        void evaluate() override { dnn::lppool(X, Y, filter, p); }
+    };
+
+    void visit(model::LpPool* n) override {
+        result = std::make_unique<LpPoolOp>(this, n);
+    }
+
     struct GlobalMaxPoolOp : Operator {
         TensorT<> X, Y;
         GlobalMaxPoolOp(OperatorFactory* of, model::GlobalMaxPool* n)
@@ -587,6 +603,19 @@ private:
 
     void visit(model::GlobalAveragePool* n) override {
         result = std::make_unique<GlobalAveragePoolOp>(this, n);
+    }
+
+    struct GlobalLpPoolOp : Operator {
+        TensorT<> X, Y; int p;
+        GlobalLpPoolOp(OperatorFactory* of, model::GlobalLpPool* n)
+            : X(of->alloc(n->input())),
+              Y(of->alloc(n->output())),
+              p(n->get_i("p", 2)) {}
+        void evaluate() override { dnn::global_lppool(X, Y, p); }
+    };
+
+    void visit(model::GlobalLpPool* n) override {
+        result = std::make_unique<GlobalLpPoolOp>(this, n);
     }
 
     struct SoftmaxOp : Operator {
