@@ -27,3 +27,13 @@ void timing(const std::string& name, int iteration, Body&& body) {
     }
     std::cout << std::endl;
 }
+
+#ifdef NDEBUG
+#define PERFORMANCE_TEST(test_case_name, test_name) TEST(test_case_name, test_name)
+#define PERFORMANCE_TEST_F(test_case_name, test_name) TEST_F(test_case_name, test_name)
+#define TYPED_PERFORMANCE_TEST(test_case_name, test_name) TYPED_TEST(test_case_name, test_name)
+#else
+#define PERFORMANCE_TEST(test_case_name, test_name) TEST(test_case_name, DISABLED_##test_name)
+#define PERFORMANCE_TEST_F(test_case_name, test_name) TEST_F(test_case_name, DISABLED_##test_name)
+#define TYPED_PERFORMANCE_TEST(test_case_name, test_name) TYPED_TEST(test_case_name, DISABLED_##test_name)
+#endif

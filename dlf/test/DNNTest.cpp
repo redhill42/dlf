@@ -442,8 +442,7 @@ TEST(DNNTest, BatchNormalizationGPU) {
     }
 }
 
-#ifdef NDEBUG
-TEST(DNNTest, BatchNormalizationPerformanceCPU) {
+PERFORMANCE_TEST(DNNTest, BatchNormalizationPerformanceCPU) {
     auto x = Tensor<float>::random({2, 3, 1024, 1024}, -10, 10);
     auto s = Tensor<float>::random({3}, 0.5, 1.5);
     auto b = Tensor<float>::random({3}, 0, 1);
@@ -460,7 +459,7 @@ TEST(DNNTest, BatchNormalizationPerformanceCPU) {
     std::cout << std::endl;
 }
 
-TEST(DNNTest, BatchNormalizationPerformanceGPU) {
+PERFORMANCE_TEST(DNNTest, BatchNormalizationPerformanceGPU) {
     auto x = dev(Tensor<float>::random({2, 3, 1024, 1024}, -10, 10));
     auto s = dev(Tensor<float>::random({3}, 0.5, 1.5));
     auto b = dev(Tensor<float>::random({3}, 0, 1));
@@ -476,7 +475,6 @@ TEST(DNNTest, BatchNormalizationPerformanceGPU) {
         });
     std::cout << std::endl;
 }
-#endif
 
 TEST(Conv2D, basic_conv_with_padding) {
     auto X = Tensor<float>::range({1, 1, 5, 5}, 0);
@@ -608,8 +606,7 @@ TEST(Conv2D, conv_with_strange_padding) {
     EXPECT_EQ(Y, dev_Y.read());
 }
 
-#ifdef NDEBUG
-TEST(Conv2D, performance_test) {
+PERFORMANCE_TEST(Conv2D, performance_test) {
     auto X = Tensor<float>::range({1, 3, 1000, 1000}, 0);
     auto W = Tensor<float>::range({8, 3, 3, 3}, 0);
     auto Y = Tensor<float>({1, 8, 1000, 1000});
@@ -630,7 +627,6 @@ TEST(Conv2D, performance_test) {
         });
     }
 }
-#endif
 
 TEST(MaxPool, basic_2d_with_padding) {
     auto X = Tensor<float>::range({1, 1, 5, 5}, 1);

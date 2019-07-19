@@ -117,8 +117,7 @@ TEST(ShapeIterator, BroadcastColumnBackward) {
     }
 }
 
-#ifdef NDEBUG
-TEST(Shape, BroadcastPerformance) {
+PERFORMANCE_TEST(Shape, BroadcastPerformance) {
     auto A1 = Tensor<int>::range({1024, 1024}, 1);
     auto A2 = Tensor<int>::range({1024, 1}, 1);
     auto B1 = Tensor<int>::range({1024, 1024}, 1);
@@ -153,7 +152,7 @@ TEST(Shape, BroadcastPerformance) {
     }
 }
 
-TEST(Shape, GPUBroadcastPerformance) {
+PERFORMANCE_TEST(Shape, GPUBroadcastPerformance) {
     auto A1 = dev(Tensor<float>::range({1024, 1024}, 1));
     auto A2 = dev(Tensor<float>::range({1024, 1}, 1));
     auto B1 = dev(Tensor<float>::range({1024, 1024}, 1));
@@ -208,7 +207,7 @@ TEST(Shape, GPUBroadcastPerformance) {
     }
 }
 
-TEST(Shape, CPUTransposePerformance) {
+PERFORMANCE_TEST(Shape, CPUTransposePerformance) {
     auto A1 = Tensor<float>::range({1024, 1024}, 1);
     auto B1 = Tensor<float>({1024, 1024});
     auto A2 = Tensor<float>::range({1024, 256, 4}, 1);
@@ -232,7 +231,7 @@ TEST(Shape, CPUTransposePerformance) {
     }
 }
 
-TEST(Shape, GPUTransposePerformance) {
+PERFORMANCE_TEST(Shape, GPUTransposePerformance) {
     auto A1 = dev(Tensor<float>::range({1024, 1024}, 1));
     auto A2 = dev(Tensor<float>::range({1024, 256, 4}, 1));
 
@@ -261,4 +260,3 @@ TEST(Shape, GPUTransposePerformance) {
         std::cout << std::endl;
     }
 }
-#endif

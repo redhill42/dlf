@@ -105,7 +105,7 @@ static long Problem210_gpu(long r) {
     return ans;
 }
 
-TEST_F(EulerTest, Problem210) {
+PERFORMANCE_TEST_F(EulerTest, Problem210) {
     constexpr auto n = 1'000'000'000L;
     constexpr auto solution = 1598174770174689458L;
 
@@ -223,7 +223,7 @@ static std::string Problem220(long steps) {
     return cxx::string_concat(v(0), ',', v(1));
 }
 
-TEST(Euler, Problem220) {
+PERFORMANCE_TEST(Euler, Problem220) {
     EXPECT_EQ(Problem220(1e12), "139776,963904");
 }
 
@@ -271,7 +271,7 @@ long solve(int n) {
 }
 } // namespace Problem577
 
-TEST(Euler, Problem577) {
+PERFORMANCE_TEST(Euler, Problem577) {
     EXPECT_EQ(Problem577::H(3), 1);
     EXPECT_EQ(Problem577::H(6), 12);
     EXPECT_EQ(Problem577::H(20), 966);
