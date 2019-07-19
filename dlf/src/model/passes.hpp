@@ -183,12 +183,7 @@ public:
         T epsilon = static_cast<T>(bn->epsilon());
         scale.apply(var, [=](auto s, auto v) { return s / std::sqrt(v + epsilon); });
         bc = (bc - mean) * scale + bbn;
-
-        // reshape to match W
-        std::vector<int> dims(W.rank(), 1);
-        dims[0] = W.extent(0);
-        scale.reshape(dims);
-        W *= scale;
+        transformChannel(W, scale, W, 0, xfn::multiplies<>());
 
         // replace inputs
         conv->W()->initializer().set_data(W.begin(), W.end());

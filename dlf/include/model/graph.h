@@ -406,10 +406,12 @@ public:
 
         switch (type()) {
         case DataType::FLOAT:
+            clear();
             float_data().assign(first, last);
             break;
 
         case DataType::DOUBLE:
+            clear();
             double_data().assign(first, last);
             break;
 
@@ -419,15 +421,18 @@ public:
         case DataType::INT16:
         case DataType::INT32:
         case DataType::BOOL:
+            clear();
             int32_data().assign(first, last);
             break;
 
         case DataType::INT64:
+            clear();
             int64_data().assign(first, last);
             break;
 
         case DataType::UINT32:
         case DataType::UINT64:
+            clear();
             uint64_data().assign(first, last);
             break;
 
@@ -443,6 +448,7 @@ public:
             throw std::invalid_argument("invalid tensor data size");
         if (type() != DataType::STRING)
             throw std::invalid_argument("invalid tensor data type");
+        clear();
         string_data().assign(first, last);
     }
 
@@ -453,6 +459,7 @@ public:
             throw std::invalid_argument("invalid tensor data size");
         if (type() != DataType::COMPLEX64)
             throw std::invalid_argument("invalid tensor data type");
+        clear();
         float_data().resize(size()*2);
         std::copy(first, last, reinterpret_cast<std::complex<float>*>(float_data().data()));
     }
@@ -464,6 +471,7 @@ public:
             throw std::invalid_argument("invalid tensor data size");
         if (type() != DataType::COMPLEX128)
             throw std::invalid_argument("invalid tensor data type");
+        clear();
         double_data().resize(size()*2);
         std::copy(first, last, reinterpret_cast<std::complex<double>*>(double_data().data()));
     }
