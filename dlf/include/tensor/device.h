@@ -207,7 +207,7 @@ DevTensor<T>& transformTo(const DevTensor<T>& A, const DevTensor<T>& B, DevTenso
         return C;
     }
 
-    int axis = Shape::axis(A.shape(), B.shape());
+    int axis = A.shape().pole(B.shape());
     if (axis != -1) {
         transformChannel(A, B, C, axis, fn);
         return C;
@@ -222,7 +222,7 @@ DevTensor<T>& transformTo(const DevTensor<T>& A, const DevTensor<T>& B, DevTenso
 
 template <typename T, typename Fn>
 void transformChannel(const DevTensor<T>& A, const DevTensor<T>& B, DevTensor<T>& C, size_t axis, Fn) {
-    assert(B.is_vector() || Shape::axis(A.shape(), B.shape()) == axis);
+    assert(B.is_vector() || A.shape().pole(B.shape()) == axis);
     assert(axis < A.rank());
     assert(A.extent(axis) == B.size());
     assert(C.shape() == A.shape());
@@ -423,97 +423,4 @@ inline DevTensor<T> gemm(const T& alpha, const DevTensor<T>& A, const DevTensor<
     return Y;
 }
 
-//==-------------------------------------------------------------------------
-// Tensor DNN operations
-//==-------------------------------------------------------------------------
-
-namespace dnn {
-template <typename T>
-void batch_norm(const DevTensor<T>& X, DevTensor<T>& Y,
-                const DevTensor<T>& scale, const DevTensor<T>& bias,
-                const DevTensor<T>& mean, const DevTensor<T>& var,
-                const T epsilon = T(1e-5))
-{
-    assert(X.shape() == Y.shape());
-    assert(scale.is_vector() && scale.extent(0) == X.extent(1));
-    assert(bias.is_vector() && bias.extent(0) == X.extent(1));
-    assert(mean.is_vector() && mean.extent(0) == X.extent(1));
-    assert(var.is_vector() && var.extent(0) == X.extent(1));
-
-    gpgpu::dnn::batch_norm(X.shape().extents(), X.data(), Y.data(),
-                           scale.data(), bias.data(), mean.data(),
-                           var.data(), epsilon);
-}
-
-template <typename T>
-void conv2d(const DevTensor<T>& X, const DevTensor<T>& W, DevTensor<T>& Y, const FilterShape2D& filter) {
-    assert(X.shape() == filter.input_shape());
-    assert(W.shape() == filter.kernel_shape());
-    assert(Y.shape() == filter.output_shape());
-    gpgpu::dnn::conv2d(filter.batches(), filter.channels(),
-                       filter.height(), filter.width(), filter.output_h(), filter.output_w(),
-                       filter.num_kernels(), filter.kernel_h(), filter.kernel_w(),
-                       filter.pad_top(), filter.pad_left(),
-                       filter.pad_bottom(), filter.pad_bottom(),
-                       filter.stride_h(), filter.stride_w(),
-                       filter.dilation_h(), filter.dilation_w(),
-                       X.data(), W.data(), Y.data());
-}
-
-template <typename T>
-void maxpool(const DevTensor<T>& X, DevTensor<T>& Y, const FilterShape2D& filter) {
-    assert(X.shape() == filter.input_shape());
-    assert(Y.shape() == filter.output_shape());
-    gpgpu::dnn::maxpool(filter.batches(), filter.channels(),
-                        filter.height(), filter.width(),
-                        filter.output_h(), filter.output_w(),
-                        filter.kernel_h(), filter.kernel_w(),
-                        filter.pad_top(), filter.pad_left(),
-                        filter.pad_bottom(), filter.pad_bottom(),
-                        filter.stride_h(), filter.stride_w(),
-                        filter.dilation_h(), filter.dilation_w(),
-                        X.data(), Y.data());
-}
-
-template <typename T>
-void avgpool(const DevTensor<T>& X, DevTensor<T>& Y, const FilterShape2D& filter, bool count_include_pad) {
-    assert(X.shape() == filter.input_shape());
-    assert(Y.shape() == filter.output_shape());
-    gpgpu::dnn::avgpool(filter.batches(), filter.channels(),
-                        filter.height(), filter.width(),
-                        filter.output_h(), filter.output_w(),
-                        filter.kernel_h(), filter.kernel_w(),
-                        filter.pad_top(), filter.pad_left(),
-                        filter.pad_bottom(), filter.pad_bottom(),
-                        filter.stride_h(), filter.stride_w(),
-                        filter.dilation_h(), filter.dilation_w(),
-                        count_include_pad,
-                        X.data(), Y.data());
-}
-
-template <typename T>
-void global_maxpool(const DevTensor<T>& input, DevTensor<T>& output) {
-    // FIXME
-    FilterShape2D filter(input.shape(), input.extent(2), input.extent(3));
-    filter.strides(input.extent(2), input.extent(3));
-    maxpool(input, output, filter);
-}
-
-template <typename T>
-void global_avgpool(const DevTensor<T>& input, DevTensor<T>& output) {
-    // FIXME
-    FilterShape2D filter(input.shape(), input.extent(2), input.extent(3));
-    filter.strides(input.extent(2), input.extent(3));
-    avgpool(input, output, filter, false);
-}
-
-template <typename T>
-void softmax(const DevTensor<T>& X, DevTensor<T>& Y, int axis = 1) {
-    // FIXME
-    auto temp = X.read();
-    softmax(temp, temp, axis);
-    Y.write(temp);
-}
-
-} // namespace dnn
 } // namespace dlf

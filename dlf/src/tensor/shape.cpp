@@ -207,15 +207,15 @@ Shape Shape::broadcast(const std::vector<Shape>& shapes) {
     return Shape(result_shape);
 }
 
-int Shape::axis(const Shape& A, const Shape& B) {
+int Shape::pole(const Shape& base) const {
     int axis = -1;
-    if (B.rank() <= A.rank()) {
-        for (int i = B.rank(); --i >= 0; ) {
-            if (B.extent(i) != 1) {
+    if (base.rank() <= rank()) {
+        for (int i = base.rank(); --i >= 0; ) {
+            if (base.extent(i) != 1) {
                 if (axis != -1)
                     return -1;
-                axis = i + A.rank() - B.rank();
-                if (B.extent(i) != A.extent(axis))
+                axis = i + rank() - base.rank();
+                if (base.extent(i) != extent(axis))
                     return -1;
             }
         }

@@ -19,8 +19,7 @@ public:
  */
 class Shape final {
     struct dim_t {
-        size_t extent;
-        size_t stride;
+        size_t extent, stride;
 
         bool operator==(const dim_t& rhs) const noexcept {
             return extent == rhs.extent;
@@ -123,6 +122,11 @@ public:
     Shape transpose(const std::vector<size_t>& perm) const;
 
     /**
+     * Returns the axis that make the give shape to be the pole of this shape.
+     */
+    int pole(const Shape& base) const;
+
+    /**
      * Return the data offset for the given index.
      */
     size_t offset(std::initializer_list<size_t> index) const noexcept;
@@ -173,8 +177,6 @@ public:
     }
 
     static Shape broadcast(const std::vector<Shape>& shapes);
-
-    static int axis(const Shape& A, const Shape& B);
 
 private:
     template <typename ShapeT>
@@ -476,7 +478,7 @@ public:
         m_dilation_h = m_dilation_w = 1;
     }
 
-    FilterShape2D& pads(size_t top, size_t left, size_t bottom, size_t right) {
+    FilterShape2D& pads(size_t top, size_t left, size_t bottom, size_t right) noexcept {
         m_pad_top = top;
         m_pad_left = left;
         m_pad_bottom = bottom;
@@ -484,14 +486,14 @@ public:
         return *this;
     }
 
-    FilterShape2D& pads(size_t h, size_t w) {
+    FilterShape2D& pads(size_t h, size_t w) noexcept {
         m_pad_top = m_pad_bottom = h;
         m_pad_left = m_pad_right = w;
         return *this;
     }
 
     template <typename I>
-    FilterShape2D& pads(const std::vector<I>& pads) {
+    FilterShape2D& pads(const std::vector<I>& pads) noexcept {
         static_assert(std::is_convertible<I, size_t>::value, "");
         assert(pads.size() == 4);
         m_pad_top = pads[0];
@@ -501,14 +503,14 @@ public:
         return *this;
     }
 
-    FilterShape2D& strides(size_t h, size_t w) {
+    FilterShape2D& strides(size_t h, size_t w) noexcept {
         m_stride_h = h;
         m_stride_w = w;
         return *this;
     }
 
     template <typename I>
-    FilterShape2D& strides(const std::vector<I>& strides) {
+    FilterShape2D& strides(const std::vector<I>& strides) noexcept {
         static_assert(std::is_convertible<I, size_t>::value, "");
         assert(strides.size() == 2);
         m_stride_h = strides[0];
@@ -516,14 +518,14 @@ public:
         return *this;
     }
 
-    FilterShape2D& dilations(size_t h, size_t w) {
+    FilterShape2D& dilations(size_t h, size_t w) noexcept {
         m_dilation_h = h;
         m_dilation_w = w;
         return *this;
     }
 
     template <typename I>
-    FilterShape2D& dilations(const std::vector<I>& dilations) {
+    FilterShape2D& dilations(const std::vector<I>& dilations) noexcept {
         static_assert(std::is_convertible<I, size_t>::value, "");
         assert(dilations.size() == 2);
         m_dilation_h = dilations[0];
@@ -562,15 +564,15 @@ public:
     }
 
     Shape input_shape() const noexcept {
-        return Shape({batches(), channels(), height(), width()});
+        return {batches(), channels(), height(), width()};
     }
 
     Shape kernel_shape() const noexcept {
-        return Shape({num_kernels(), channels(), kernel_h(), kernel_w()});
+        return {num_kernels(), channels(), kernel_h(), kernel_w()};
     }
 
     Shape output_shape() const noexcept {
-        return Shape({batches(), num_kernels(), output_h(), output_w()});
+        return {batches(), num_kernels(), output_h(), output_w()};
     }
 };
 

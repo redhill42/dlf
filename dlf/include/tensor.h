@@ -5,3 +5,4 @@
 #include "tensor/host.h"
 #include "tensor/device.h"
 #include "tensor/common.h"
+#include "tensor/dnn.h"
