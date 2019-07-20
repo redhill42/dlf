@@ -60,48 +60,51 @@ void batch_norm(const DevTensor<T>& X, DevTensor<T>& Y,
                            var.data(), epsilon);
 }
 
-namespace detail {
 template <typename T>
-void im2col(const size_t channels,
-            const size_t input_h, const size_t input_w,
-            const size_t output_h, const size_t output_w,
-            const size_t kernel_h, const size_t kernel_w,
-            const size_t pad_h, const size_t pad_w,
-            const size_t stride_h, const size_t stride_w,
-            const size_t dilation_h, const size_t dilation_w,
-            const T* im_buffer, T* col_buffer)
-{
-    tbb::parallel_for(tbb::blocked_range2d<int>(0, output_w, 32, 0, output_h*channels, 32), [&](auto& r) {
-        for (int w_id = r.rows().begin(); w_id < r.rows().end(); w_id++) {
+void im2col(const T* x_buffer, T* y_buffer, const FilterShape2D& filter) {
+    tbb::parallel_for(
+        tbb::blocked_range2d<int>(
+            0, filter.output_w(), 32,
+            0, filter.output_h()*filter.channels()/filter.group(), 32),
+        [=, &filter](auto r) {
+            const auto input_h    = filter.height();
+            const auto input_w    = filter.width();
+            const auto output_h   = filter.output_h();
+            const auto output_w   = filter.output_w();
+            const auto kernel_h   = filter.kernel_h();
+            const auto kernel_w   = filter.kernel_w();
+            const auto pad_h      = filter.pad_h();
+            const auto pad_w      = filter.pad_w();
+            const auto stride_h   = filter.stride_h();
+            const auto stride_w   = filter.stride_w();
+            const auto dilation_h = filter.dilation_h();
+            const auto dilation_w = filter.dilation_w();
+
+            for (int w_id = r.rows().begin(); w_id < r.rows().end(); w_id++)
             for (int hc_id = r.cols().begin(); hc_id < r.cols().end(); hc_id++) {
                 int c_id = hc_id / output_h;
                 int h_id = hc_id - c_id * output_h;
 
-                for (int kh_id = 0; kh_id < kernel_h; kh_id++) {
-                    for (int kw_id = 0; kw_id < kernel_w; kw_id++) {
-                        // Retrieves the input value
-                        int h_index = kh_id * dilation_h + stride_h * h_id - pad_h;
-                        int w_index = kw_id * dilation_w + stride_w * w_id - pad_w;
-                        T val{};
-                        if (h_index >= 0 && h_index < input_h &&
-                            w_index >= 0 && w_index < input_w) {
-                            int input_index = (c_id * input_h + h_index) * input_w + w_index;
-                            val = im_buffer[input_index];
-                        }
-
-                        // Sets the output value
-                        int kernel_index = kernel_h * kernel_w - kw_id - kernel_w * kh_id - 1;
-                        int output_index = c_id * output_w * output_h * kernel_h * kernel_w +
-                                           kernel_index * output_w * output_h +
-                                           h_id * output_w + w_id;
-                        col_buffer[output_index] = val;
+                for (int kh_id = 0; kh_id < kernel_h; kh_id++)
+                for (int kw_id = 0; kw_id < kernel_w; kw_id++) {
+                    // Retrieves the input value.
+                    int h_index = kh_id * dilation_h + stride_h * h_id - pad_h;
+                    int w_index = kw_id * dilation_w + stride_w * w_id - pad_w;
+                    T val{};
+                    if (h_index >= 0 && h_index < input_h &&
+                        w_index >= 0 && w_index < input_w) {
+                        int input_index = (c_id * input_h + h_index) * input_w + w_index;
+                        val = x_buffer[input_index];
                     }
-                }
+
+                    // Sets the output value
+                    int kernel_index = kernel_h*kernel_w - kw_id - kernel_w*kh_id - 1;
+                    int output_index = ((c_id*kernel_h*kernel_w + kernel_index)*output_h + h_id)*output_w + w_id;
+                    y_buffer[output_index] = val;
+                };
             }
-        }
-    });
+        });
 }
-} // namespace detail
 
 template <typename T>
 void conv2d(const Tensor<T>& X, const Tensor<T>& W, Tensor<T>& Y, const FilterShape2D& filter) {
@@ -109,8 +112,9 @@ void conv2d(const Tensor<T>& X, const Tensor<T>& W, Tensor<T>& Y, const FilterSh
     assert(W.shape() == filter.kernel_shape());
     assert(Y.shape() == filter.output_shape());
 
-    const auto m = filter.num_kernels();
-    const auto k = filter.channels() * filter.kernel_h() * filter.kernel_w();
+    const auto group = filter.group();
+    const auto m = filter.num_kernels() / group;
+    const auto k = filter.channels() * filter.kernel_h() * filter.kernel_w() / group;
     const auto n = filter.output_h() * filter.output_w();
     Tensor<T> work({k, n});
 
@@ -118,23 +122,21 @@ void conv2d(const Tensor<T>& X, const Tensor<T>& W, Tensor<T>& Y, const FilterSh
     auto y_buffer = Y.data();
 
     for (size_t b = 0; b < filter.batches(); b++) {
-        detail::im2col(filter.channels(), filter.height(), filter.width(),
-                       filter.output_h(), filter.output_w(),
-                       filter.kernel_h(), filter.kernel_w(),
-                       filter.pad_h(), filter.pad_w(),
-                       filter.stride_h(), filter.stride_w(),
-                       filter.dilation_h(), filter.dilation_w(),
-                       x_buffer, work.data());
+        auto w_buffer = W.data();
+        for (size_t c = 0; c < group; c++) {
+            im2col(x_buffer, work.data(), filter);
 
-        cblas::gemm(cblas::Layout::RowMajor,
-                    cblas::Transpose::NoTrans, cblas::Transpose::NoTrans,
-                    m, n, k, T{1},
-                    W.data(), W.stride(0),
-                    work.data(), work.stride(0), T{0},
-                    y_buffer, Y.stride(1));
+            cblas::gemm(cblas::Layout::RowMajor,
+                        cblas::Transpose::NoTrans, cblas::Transpose::NoTrans,
+                        m, n, k, T{1},
+                        w_buffer, W.stride(0),
+                        work.data(), work.stride(0), T{0},
+                        y_buffer, Y.stride(1));
 
-        x_buffer += X.stride(0);
-        y_buffer += Y.stride(0);
+            x_buffer += X.stride(0) / group;
+            y_buffer += Y.stride(0) / group;
+            w_buffer += W.size() / group;
+        }
     }
 }
 
@@ -145,7 +147,7 @@ void conv2d(const DevTensor<T>& X, const DevTensor<T>& W, DevTensor<T>& Y, const
     assert(Y.shape() == filter.output_shape());
     gpgpu::dnn::conv2d(filter.batches(), filter.channels(),
                        filter.height(), filter.width(), filter.output_h(), filter.output_w(),
-                       filter.num_kernels(), filter.kernel_h(), filter.kernel_w(),
+                       filter.num_kernels(), filter.group(), filter.kernel_h(), filter.kernel_w(),
                        filter.pad_top(), filter.pad_left(),
                        filter.pad_bottom(), filter.pad_right(),
                        filter.stride_h(), filter.stride_w(),

@@ -357,10 +357,11 @@ void shape_indexer::decrement() noexcept {
 
 //---------------------------------------------------------------------------
 
-FilterShape2D::FilterShape2D(const Shape& input_shape, const Shape& kernel_shape) {
+FilterShape2D::FilterShape2D(const Shape& input_shape, const Shape& kernel_shape, size_t group) {
     assert(input_shape.rank() == 4);
     assert(kernel_shape.rank() == 4);
-    assert(input_shape.extent(1) == kernel_shape.extent(1));
+    assert(input_shape.extent(1) == kernel_shape.extent(1)*group);
+    assert(kernel_shape.extent(0) % group == 0);
 
     m_batches = input_shape.extent(0);
     m_channels = input_shape.extent(1);
@@ -370,6 +371,7 @@ FilterShape2D::FilterShape2D(const Shape& input_shape, const Shape& kernel_shape
     m_num_kernels = kernel_shape.extent(0);
     m_kernel_h = kernel_shape.extent(2);
     m_kernel_w = kernel_shape.extent(3);
+    m_group = group;
 
     m_pad_top = m_pad_left = m_pad_bottom = m_pad_right = 0;
     m_stride_h = m_stride_w = 1;
@@ -387,6 +389,7 @@ FilterShape2D::FilterShape2D(const Shape& input_shape, size_t kernel_h, size_t k
     m_num_kernels = m_channels;
     m_kernel_h = kernel_h;
     m_kernel_w = kernel_w;
+    m_group = 1;
 
     m_pad_top = m_pad_left = m_pad_bottom = m_pad_right = 0;
     m_stride_h = m_stride_w = 1;

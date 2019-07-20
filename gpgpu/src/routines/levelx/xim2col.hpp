@@ -30,7 +30,8 @@ class Xim2col: public Routine {
 
   // Templated-precision implementation of the routine
   void DoIm2col(const KernelMode kernel_mode,
-                const size_t channels, const size_t height, const size_t width,
+                const size_t batches, const size_t channels,
+                const size_t height, const size_t width,
                 const size_t output_h, const size_t output_w,
                 const size_t kernel_h, const size_t kernel_w,
                 const size_t pad_h, const size_t pad_w,

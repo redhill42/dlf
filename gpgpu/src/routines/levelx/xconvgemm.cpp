@@ -78,22 +78,12 @@ void Xconvgemm<T>::DoConvgemm(const KernelMode kernel_mode,
     const auto col_size = (method_ == ConvGemmMethod::kWithIm2Col) ? patch_size * num_patches * batch_count : 1;
     col_buffer = context_.createBuffer<T>(col_size);
 
-    // Loops over each batch
-    for (auto batch_id = size_t{0}; batch_id < batch_count; ++batch_id) {
-
-      // im2col
-      const auto im_batch_offset = batch_id * channels * height * width + im_offset;
-      const auto col_batch_offset = batch_id * patch_size * num_patches;
-      auto im2col_event = context_.createEvent();
-      auto im2col = Xim2col<T>(queue_, &im2col_event);
-      im2col.DoIm2col(kernel_mode,
-                      channels, height, width, output_h, output_w,
-                      kernel_h, kernel_w, pad_h, pad_w,
-                      stride_h, stride_w, dilation_h, dilation_w,
-                      im_buffer, im_batch_offset,
-                      col_buffer, col_batch_offset);
-      im2col_event.waitForCompletion();
-    }
+    auto im2col = Xim2col<T>(queue_, nullptr);
+    im2col.DoIm2col(kernel_mode, batch_count, channels,
+                    height, width, output_h, output_w,
+                    kernel_h, kernel_w, pad_h, pad_w,
+                    stride_h, stride_w, dilation_h, dilation_w,
+                    im_buffer, im_offset, col_buffer, 0);
   }
 
   // Strided batched GEMM: C (result) = alpha (1) * A (col) * B (kernel) + beta (0) * C (result)

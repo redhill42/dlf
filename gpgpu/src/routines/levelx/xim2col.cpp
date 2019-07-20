@@ -32,7 +32,8 @@ Xim2col<T>::Xim2col(const Queue &queue, Event* event, const std::string &name):
 // The main routine
 template <typename T>
 void Xim2col<T>::DoIm2col(const KernelMode kernel_mode,
-                          const size_t channels, const size_t height, const size_t width,
+                          const size_t batches, const size_t channels,
+                          const size_t height, const size_t width,
                           const size_t output_h, const size_t output_w,
                           const size_t kernel_h, const size_t kernel_w,
                           const size_t pad_h, const size_t pad_w,
@@ -51,28 +52,27 @@ void Xim2col<T>::DoIm2col(const KernelMode kernel_mode,
   auto kernel = program_.getKernel(kernel_name);
 
   // Sets the kernel arguments
-  kernel.setArgument(0, static_cast<int>(height));
-  kernel.setArgument(1, static_cast<int>(width));
-  kernel.setArgument(2, static_cast<int>(channels));
-  kernel.setArgument(3, static_cast<int>(output_h));
-  kernel.setArgument(4, static_cast<int>(output_w));
-  kernel.setArgument(5, static_cast<int>(kernel_h));
-  kernel.setArgument(6, static_cast<int>(kernel_w));
-  kernel.setArgument(7, static_cast<int>(pad_h));
-  kernel.setArgument(8, static_cast<int>(pad_w));
-  kernel.setArgument(9, static_cast<int>(stride_h));
-  kernel.setArgument(10, static_cast<int>(stride_w));
-  kernel.setArgument(11, static_cast<int>(dilation_h));
-  kernel.setArgument(12, static_cast<int>(dilation_w));
-  kernel.setArgument(13, im_buffer);
-  kernel.setArgument(14, static_cast<int>(im_offset));
-  kernel.setArgument(15, col_buffer);
-  kernel.setArgument(16, static_cast<int>(col_offset));
+  kernel.setArguments(static_cast<int>(height),
+                      static_cast<int>(width),
+                      static_cast<int>(batches),
+                      static_cast<int>(channels),
+                      static_cast<int>(output_h),
+                      static_cast<int>(output_w),
+                      static_cast<int>(kernel_h),
+                      static_cast<int>(kernel_w),
+                      static_cast<int>(pad_h),
+                      static_cast<int>(pad_w),
+                      static_cast<int>(stride_h),
+                      static_cast<int>(stride_w),
+                      static_cast<int>(dilation_h),
+                      static_cast<int>(dilation_w),
+                      im_buffer, static_cast<int>(im_offset),
+                      col_buffer, static_cast<int>(col_offset));
 
   // Launches the kernel
   const auto w_ceiled = Ceil(output_w, db_["COPY_DIMX"]);
   const auto h_ceiled = Ceil(output_h, db_["COPY_DIMY"]);
-  const auto global = std::vector<size_t>{w_ceiled, h_ceiled * channels};
+  const auto global = std::vector<size_t>{w_ceiled * batches, h_ceiled * channels};
   const auto local = std::vector<size_t>{db_["COPY_DIMX"], db_["COPY_DIMY"]};
   RunKernel(kernel, queue_, device_, global, local, event_);
 }

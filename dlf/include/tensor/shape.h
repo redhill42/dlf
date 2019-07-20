@@ -436,13 +436,13 @@ public:
 
 class FilterShape2D {
     size_t m_batches, m_channels, m_height, m_width;
-    size_t m_num_kernels, m_kernel_h, m_kernel_w;
+    size_t m_num_kernels, m_kernel_h, m_kernel_w, m_group;
     size_t m_pad_top, m_pad_left, m_pad_bottom, m_pad_right;
     size_t m_stride_h, m_stride_w;
     size_t m_dilation_h, m_dilation_w;
 
 public:
-    FilterShape2D(const Shape& input_shape, const Shape& kernel_shape);
+    FilterShape2D(const Shape& input_shape, const Shape& kernel_shape, size_t group = 1);
     FilterShape2D(const Shape& input_shape, size_t kernel_h, size_t kernel_w);
 
     FilterShape2D& pads(size_t top, size_t left, size_t bottom, size_t right) noexcept {
@@ -509,6 +509,7 @@ public:
     size_t num_kernels() const noexcept { return m_num_kernels; }
     size_t kernel_h()    const noexcept { return m_kernel_h; }
     size_t kernel_w()    const noexcept { return m_kernel_w; }
+    size_t group()       const noexcept { return m_group; }
     size_t pad_top()     const noexcept { return m_pad_top; }
     size_t pad_left()    const noexcept { return m_pad_left; }
     size_t pad_bottom()  const noexcept { return m_pad_bottom; }
@@ -537,7 +538,7 @@ public:
     }
 
     Shape kernel_shape() const noexcept {
-        return {num_kernels(), channels(), kernel_h(), kernel_w()};
+        return {num_kernels(), channels()/group(), kernel_h(), kernel_w()};
     }
 
     Shape output_shape() const noexcept {

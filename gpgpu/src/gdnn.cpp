@@ -398,11 +398,124 @@ template void PUBLIC_API batch_norm<double>(const std::vector<size_t>&,
                                             const Buffer<double>&, const Buffer<double>&,
                                             const double, const Queue&, Event*);
 
+namespace {
+
+template <typename T>
+void cudnnConv(
+    const size_t batches, const size_t channels,
+    const size_t height, const size_t width,
+    const size_t output_h, const size_t output_w,
+    const size_t num_kernels, const size_t group,
+    const size_t kernel_h, const size_t kernel_w,
+    const size_t pad_top, const size_t pad_left,
+    const size_t stride_h, const size_t stride_w,
+    const size_t dilation_h, const size_t dilation_w,
+    const Buffer<T>& im_buffer, const Buffer<T>& kernel_buffer,
+    Buffer<T>& result_buffer, const Queue& queue)
+{
+    auto cudnn = cudnn_handle(queue);
+
+    auto desc = ConvolutionDescriptor<T>(pad_top, pad_left, stride_h, stride_w, dilation_h, dilation_w);
+    auto x_desc = TensorDescriptor<T>(batches, channels, height, width);
+    auto w_desc = FilterDescriptor<T>(num_kernels, channels/group, kernel_h, kernel_w);
+    auto y_desc = TensorDescriptor<T>(batches, num_kernels, output_h, output_w);
+
+    checkCUDNN(cudnnSetConvolutionGroupCount(desc, group));
+
+    cudnnConvolutionFwdAlgo_t algo;
+    checkCUDNN(cudnnGetConvolutionForwardAlgorithm(
+        cudnn, x_desc, w_desc, desc, y_desc,
+        CUDNN_CONVOLUTION_FWD_PREFER_FASTEST,
+        /*memoryLimitInBytes=*/0,
+        &algo));
+
+    size_t workspace_size = 0;
+    checkCUDNN(cudnnGetConvolutionForwardWorkspaceSize(
+        cudnn, x_desc, w_desc, desc, y_desc, algo, &workspace_size));
+    auto workspace = queue.context().createBuffer<char>(workspace_size);
+
+    const T alpha = 1, beta = 0;
+    checkCUDNN(cudnnConvolutionForward(
+        cudnn, &alpha,
+        x_desc, reinterpret_cast<void*>(*cu::cuBuffer::unwrap(im_buffer)),
+        w_desc, reinterpret_cast<void*>(*cu::cuBuffer::unwrap(kernel_buffer)),
+        desc, algo,
+        reinterpret_cast<void*>(*cu::cuBuffer::unwrap(workspace)), workspace_size,
+        &beta,
+        y_desc, reinterpret_cast<void*>(*cu::cuBuffer::unwrap((result_buffer)))));
+}
+
+template <typename T>
+void convWithIm2Col(
+    const bool is_1x1_kernel,
+    const size_t batches, const size_t channels,
+    const size_t height, const size_t width,
+    const size_t output_h, const size_t output_w,
+    const size_t num_kernels, const size_t group,
+    const size_t kernel_h, const size_t kernel_w,
+    const size_t pad_h, const size_t pad_w,
+    const size_t stride_h, const size_t stride_w,
+    const size_t dilation_h, const size_t dilation_w,
+    const Buffer<T>& im_buffer, const Buffer<T>& kernel_buffer,
+    Buffer<T>& result_buffer, const Queue& queue, Event* event)
+{
+    auto m = num_kernels / group;
+    auto k = channels * kernel_h * kernel_w / group;
+    auto n = output_h * output_w;
+
+    std::vector<size_t> w_offsets(batches*group);
+    std::vector<size_t> x_offsets(batches*group);
+    std::vector<size_t> y_offsets(batches*group);
+    std::vector<T> alpha(batches*group);
+    std::vector<T> beta(batches*group);
+
+    for (size_t i = 0; i < batches; i++) {
+        for (size_t j = 0; j < group; j++) {
+            auto b = i * group + j;
+            w_offsets[b] = j * m * k;
+            x_offsets[b] = b * k * n;
+            y_offsets[b] = b * m * n;
+            alpha[b] = T{1};
+            beta[b] = T{0};
+        }
+    }
+
+    const Buffer<T>* x_buffer;
+    Buffer<T> work;
+
+    if (is_1x1_kernel) {
+        assert(height == output_h && width == output_w);
+        x_buffer = &im_buffer;
+    } else {
+        work = queue.context().createBuffer<T>(k * n * batches * group);
+        im2col(KernelMode::Convolution,
+               batches*group, channels/group,
+               height, width, output_h, output_w,
+               kernel_h, kernel_w, pad_h, pad_w,
+               stride_h, stride_w, dilation_h, dilation_w,
+               im_buffer, 0, work, 0,
+               queue, event);
+        x_buffer = &work;
+    }
+
+    gemmBatched(gpgpu::blas::Layout::RowMajor,
+                gpgpu::blas::Transpose::NoTrans,
+                gpgpu::blas::Transpose::NoTrans,
+                m, n, k, &alpha[0],
+                kernel_buffer, &w_offsets[0], k,
+                *x_buffer, &x_offsets[0], n,
+                &beta[0], result_buffer, &y_offsets[0], n,
+                batches * group);
+}
+
+} // anonymous namespace
+
 template <typename T>
 void conv2d(const size_t batches, const size_t channels,
             const size_t height, const size_t width,
             const size_t output_h, const size_t output_w,
-            const size_t num_kernels, const size_t kernel_h, const size_t kernel_w,
+            const size_t num_kernels, const size_t group,
+            const size_t kernel_h, const size_t kernel_w,
             const size_t pad_top, const size_t pad_left,
             const size_t pad_bottom, const size_t pad_right,
             const size_t stride_h, const size_t stride_w,
@@ -411,92 +524,46 @@ void conv2d(const size_t batches, const size_t channels,
             Buffer<T>& result_buffer, const Queue& queue, Event* event)
 {
     if (IsCUDA(queue.context().device()) && pad_top == pad_bottom && pad_left == pad_right) {
-        auto cudnn = cudnn_handle(queue);
-
-        auto desc = ConvolutionDescriptor<T>(pad_top, pad_left, stride_h, stride_w, dilation_h, dilation_w);
-        auto x_desc = TensorDescriptor<T>(batches, channels, height, width);
-        auto w_desc = FilterDescriptor<T>(num_kernels, channels, kernel_h, kernel_w);
-        auto y_desc = TensorDescriptor<T>(batches, num_kernels, output_h, output_w);
-
-        cudnnConvolutionFwdAlgo_t algo;
-        checkCUDNN(cudnnGetConvolutionForwardAlgorithm(
-            cudnn, x_desc, w_desc, desc, y_desc,
-            CUDNN_CONVOLUTION_FWD_PREFER_FASTEST,
-            /*memoryLimitInBytes=*/0,
-            &algo));
-
-        size_t workspace_size = 0;
-        checkCUDNN(cudnnGetConvolutionForwardWorkspaceSize(
-            cudnn, x_desc, w_desc, desc, y_desc, algo, &workspace_size));
-        auto workspace = queue.context().createBuffer<char>(workspace_size);
-
-        const T alpha = 1, beta = 0;
-        checkCUDNN(cudnnConvolutionForward(
-            cudnn, &alpha,
-            x_desc, reinterpret_cast<void*>(*cu::cuBuffer::unwrap(im_buffer)),
-            w_desc, reinterpret_cast<void*>(*cu::cuBuffer::unwrap(kernel_buffer)),
-            desc, algo,
-            reinterpret_cast<void*>(*cu::cuBuffer::unwrap(workspace)), workspace_size,
-            &beta,
-            y_desc, reinterpret_cast<void*>(*cu::cuBuffer::unwrap((result_buffer)))));
-
+        cudnnConv(
+            batches, channels, height, width, output_h, output_w,
+            num_kernels, group, kernel_h, kernel_w,
+            pad_top, pad_left, stride_h, stride_w, dilation_h, dilation_w,
+            im_buffer, kernel_buffer, result_buffer, queue);
         return;
     }
 
-    if (  kernel_h == 1 && kernel_w == 1
-       && stride_h == 1 && stride_w == 1
-       && dilation_h == 1 && dilation_w == 1
-       && pad_top==0 && pad_bottom==0 && pad_left==0 && pad_right==0)
-    {
-        // gemm only for 1x1 convolution
-        assert(height == output_h && width == output_w);
-        auto m = num_kernels;
-        auto k = channels;
-        auto n = height * width;
+    bool is_1x1_kernel =
+        kernel_h == 1 && kernel_w == 1 &&
+        stride_h == 1 && stride_w == 1 &&
+        dilation_h == 1 && dilation_w == 1 &&
+        pad_top + pad_bottom == 0  && pad_left + pad_right == 0;
 
-        std::vector<size_t> w_offsets(batches);
-        std::vector<size_t> x_offsets(batches);
-        std::vector<size_t> y_offsets(batches);
-        std::vector<T> alpha(batches);
-        std::vector<T> beta(batches);
-
-        for (size_t i = 0 ; i < batches; i++) {
-            w_offsets[i] = 0;
-            x_offsets[i] = i * k * n;
-            y_offsets[i] = i * m * n;
-            alpha[i] = T{1};
-            beta[i] = T{0};
-        }
-
-        gemmBatched(gpgpu::blas::Layout::RowMajor,
-                    gpgpu::blas::Transpose::NoTrans,
-                    gpgpu::blas::Transpose::NoTrans,
-                    m, n, k, &alpha[0],
-                    kernel_buffer, &w_offsets[0], k,
-                    im_buffer, &x_offsets[0], n,
-                    &beta[0], result_buffer, &y_offsets[0], n,
-                    batches);
+    if (is_1x1_kernel || group != 1) {
+        convWithIm2Col(
+            is_1x1_kernel,
+            batches, channels, height, width, output_h, output_w,
+            num_kernels, group, kernel_h, kernel_w,
+            pad_top, pad_left, stride_h, stride_w, dilation_h, dilation_w,
+            im_buffer, kernel_buffer, result_buffer,
+            queue, event);
         return;
     }
 
-    auto routine = Xconvgemm<T>(queue, event);
-    routine.DoConvgemm(KernelMode::Convolution,
-                       batches, channels,
-                       height, width,
-                       output_h, output_w,
-                       num_kernels, kernel_h, kernel_w,
-                       pad_top, pad_left,
-                       stride_h, stride_w,
-                       dilation_h, dilation_w,
-                       im_buffer, 0,
-                       kernel_buffer, 0,
-                       result_buffer, 0);
+    convgemm(KernelMode::Convolution,
+             batches, channels,
+             height, width, output_h, output_w,
+             num_kernels, kernel_h, kernel_w,
+             pad_top, pad_left, stride_h, stride_w,
+             dilation_h, dilation_w,
+             im_buffer, 0, kernel_buffer, 0, result_buffer, 0,
+             queue, event);
 }
 
 template void PUBLIC_API conv2d<float> (const size_t, const size_t,
                                         const size_t, const size_t,
                                         const size_t, const size_t,
-                                        const size_t, const size_t, const size_t,
+                                        const size_t, const size_t,
+                                        const size_t, const size_t,
                                         const size_t, const size_t,
                                         const size_t, const size_t,
                                         const size_t, const size_t,
@@ -506,7 +573,8 @@ template void PUBLIC_API conv2d<float> (const size_t, const size_t,
 template void PUBLIC_API conv2d<double>(const size_t, const size_t,
                                         const size_t, const size_t,
                                         const size_t, const size_t,
-                                        const size_t, const size_t, const size_t,
+                                        const size_t, const size_t,
+                                        const size_t, const size_t,
                                         const size_t, const size_t,
                                         const size_t, const size_t,
                                         const size_t, const size_t,
@@ -516,7 +584,8 @@ template void PUBLIC_API conv2d<double>(const size_t, const size_t,
 template void PUBLIC_API conv2d<half>  (const size_t, const size_t,
                                         const size_t, const size_t,
                                         const size_t, const size_t,
-                                        const size_t, const size_t, const size_t,
+                                        const size_t, const size_t,
+                                        const size_t, const size_t,
                                         const size_t, const size_t,
                                         const size_t, const size_t,
                                         const size_t, const size_t,

@@ -517,7 +517,7 @@ private:
               W(of->alloc(n->W())),
               B(n->B() ? of->alloc(n->B()) : TensorT<>()),
               Y(of->alloc(n->Y())),
-              filter(FilterShape2D(X.shape(), W.shape())
+              filter(FilterShape2D(X.shape(), W.shape(), n->group())
                 .pads(n->pads())
                 .strides(n->strides())
                 .dilations(n->dilations())) {}
