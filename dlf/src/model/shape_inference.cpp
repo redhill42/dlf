@@ -488,7 +488,7 @@ public:
         size_t n_axes = input_shape.size() - 2;
 
         // Only MaxPool and Conv support dilation. For simplicity of the code,
-        // we just treat the reset of them as having all-1s dilation.
+        // we just treat the rest of them as having all-1s dilation.
         std::vector<int64_t> dilations;
         if (use_dilation && n->hasAttribute(kdilations)) {
             dilations = n->get_is(kdilations);
@@ -544,18 +544,17 @@ public:
             pads.assign(n_axes*2, 0);
             if (auto_pad_mode == "SAME_UPPER" || auto_pad_mode == "SAME_LOWER") {
                 for (size_t i = 0; i < n_axes; i++) {
-                    auto residual = input_shape[i+2] % strides[i];
-                    if (residual == 0)
-                        residual = strides[i];
-                    auto total_pad = kernel_shape[i] - residual;
-                    if (total_pad < 0)
-                        total_pad = 0;
-                    auto half_pad = total_pad >> 1;
+                    auto input_size = input_shape[i+2];
+                    auto output_size = (input_size - 1) / strides[i] + 1;
+                    auto padding = (output_size - 1) * strides[i] + kernel_shape[i] - input_size;
+                    if (padding < 0) padding = 0;
+                    auto half_pad = padding >> 1;
+
                     if (auto_pad_mode == "SAME_UPPER") {
                         pads[i] = half_pad;
-                        pads[i + n_axes] = total_pad - half_pad;
+                        pads[i + n_axes] = padding - half_pad;
                     } else {
-                        pads[i] = total_pad - half_pad;
+                        pads[i] = padding - half_pad;
                         pads[i + n_axes] = half_pad;
                     }
                 }

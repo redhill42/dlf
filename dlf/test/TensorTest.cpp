@@ -726,10 +726,11 @@ TEST_F(TensorTest, Relu) {
 
 TEST_F(TensorTest, Format) {
     EXPECT_EQ(format(t2),
+        "<<2, 3, 4>>"
         "["
         "[[2,3,5,7],[11,13,17,19],[23,29,31,37]],"
         "[[41,43,47,53],[57,59,61,67],[71,73,79,83]]"
         "]");
 
-    EXPECT_EQ(format(Tensor<int>()), "");
+    EXPECT_EQ(format(Tensor<int>()), "<<>>");
 }

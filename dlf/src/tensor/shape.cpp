@@ -5,6 +5,18 @@
 
 namespace dlf {
 
+Shape::Shape(Shape&& rhs)
+    : m_dims(std::move(rhs.m_dims)),
+      m_size(cxx::exchange(rhs.m_size, 0))
+{
+}
+
+Shape& Shape::operator=(Shape&& rhs) {
+    m_dims = std::move(rhs.m_dims);
+    m_size = cxx::exchange(rhs.m_size, 0);
+    return *this;
+}
+
 void Shape::init(const std::vector<size_t>& extents) noexcept {
     m_dims.resize(extents.size());
 
@@ -64,18 +76,6 @@ bool Shape::is_tail(const dlf::Shape& shape) const noexcept {
             return false;
     }
     return true;
-}
-
-Shape::Shape(Shape&& rhs)
-    : m_dims(std::move(rhs.m_dims)),
-      m_size(cxx::exchange(rhs.m_size, 0))
-{
-}
-
-Shape& Shape::operator=(Shape&& rhs) {
-    m_dims = std::move(rhs.m_dims);
-    m_size = cxx::exchange(rhs.m_size, 0);
-    return *this;
 }
 
 size_t Shape::offset(std::initializer_list<size_t> index) const noexcept {
@@ -249,14 +249,19 @@ Shape Shape::transpose(const std::vector<size_t>& perm) const {
 }
 
 std::ostream& operator<<(std::ostream& os, const Shape& shape) {
-    os << '(';
+    if (shape.rank() == 0) {
+        os << "<<>>";
+        return os;
+    }
+
+    os << "<<";
     for (auto i = 0; ; i++) {
         os << shape.extent(i);
         if (i == shape.rank()-1)
             break;
         os << ',' << ' ';
     }
-    os << ')';
+    os << ">>";
     return os;
 }
 
@@ -349,4 +354,76 @@ void shape_indexer::decrement() noexcept {
 }
 
 } // namespace detail
+
+//---------------------------------------------------------------------------
+
+FilterShape2D::FilterShape2D(const Shape& input_shape, const Shape& kernel_shape) {
+    assert(input_shape.rank() == 4);
+    assert(kernel_shape.rank() == 4);
+    assert(input_shape.extent(1) == kernel_shape.extent(1));
+
+    m_batches = input_shape.extent(0);
+    m_channels = input_shape.extent(1);
+    m_height = input_shape.extent(2);
+    m_width = input_shape.extent(3);
+
+    m_num_kernels = kernel_shape.extent(0);
+    m_kernel_h = kernel_shape.extent(2);
+    m_kernel_w = kernel_shape.extent(3);
+
+    m_pad_top = m_pad_left = m_pad_bottom = m_pad_right = 0;
+    m_stride_h = m_stride_w = 1;
+    m_dilation_h = m_dilation_w = 1;
+}
+
+FilterShape2D::FilterShape2D(const Shape& input_shape, size_t kernel_h, size_t kernel_w) {
+    assert(input_shape.rank() == 4);
+
+    m_batches = input_shape.extent(0);
+    m_channels = input_shape.extent(1);
+    m_height = input_shape.extent(2);
+    m_width = input_shape.extent(3);
+
+    m_num_kernels = m_channels;
+    m_kernel_h = kernel_h;
+    m_kernel_w = kernel_w;
+
+    m_pad_top = m_pad_left = m_pad_bottom = m_pad_right = 0;
+    m_stride_h = m_stride_w = 1;
+    m_dilation_h = m_dilation_w = 1;
+}
+
+static void pad(const std::string& mode,
+                int size, int kernel, int stride, int dilation,
+                size_t* pad_begin, size_t* pad_end)
+{
+    assert(size > 0 && kernel > 0 && stride > 0 && dilation > 0);
+
+    int kernel_size = (kernel - 1) * dilation + 1;
+    int output_size = (size - 1) / stride + 1;
+    int padding = (output_size - 1) * stride + kernel_size - size;
+    if (padding < 0) padding = 0;
+    int half_pad = padding >> 1;
+
+    if (mode == "SAME_UPPER") {
+        *pad_begin = half_pad;
+        *pad_end = padding - half_pad;
+    } else {
+        *pad_begin = padding - half_pad;
+        *pad_end = half_pad;
+    }
+}
+
+FilterShape2D& FilterShape2D::auto_pad(const std::string& mode) {
+    if (mode == "VALID") {
+        m_pad_top = m_pad_left = m_pad_bottom = m_pad_right = 0;
+        return *this;
+    }
+    if (mode == "SAME_UPPER" || mode == "SAME_LOWER") {
+        pad(mode, height(), kernel_h(), stride_h(), dilation_h(), &m_pad_top, &m_pad_bottom);
+        pad(mode, width(), kernel_w(), stride_w(), dilation_w(), &m_pad_left, &m_pad_right);
+    }
+    return *this;
+}
+
 } // namespace dlf

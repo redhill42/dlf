@@ -442,41 +442,8 @@ class FilterShape2D {
     size_t m_dilation_h, m_dilation_w;
 
 public:
-    FilterShape2D(const Shape& input_shape, const Shape& kernel_shape) {
-        assert(input_shape.rank() == 4);
-        assert(kernel_shape.rank() == 4);
-        assert(input_shape.extent(1) == kernel_shape.extent(1));
-
-        m_batches = input_shape.extent(0);
-        m_channels = input_shape.extent(1);
-        m_height = input_shape.extent(2);
-        m_width = input_shape.extent(3);
-
-        m_num_kernels = kernel_shape.extent(0);
-        m_kernel_h = kernel_shape.extent(2);
-        m_kernel_w = kernel_shape.extent(3);
-
-        m_pad_top = m_pad_left = m_pad_bottom = m_pad_right = 0;
-        m_stride_h = m_stride_w = 1;
-        m_dilation_h = m_dilation_w = 1;
-    }
-
-    FilterShape2D(const Shape& input_shape, size_t kernel_h, size_t kernel_w) {
-        assert(input_shape.rank() == 4);
-
-        m_batches = input_shape.extent(0);
-        m_channels = input_shape.extent(1);
-        m_height = input_shape.extent(2);
-        m_width = input_shape.extent(3);
-
-        m_num_kernels = m_channels;
-        m_kernel_h = kernel_h;
-        m_kernel_w = kernel_w;
-
-        m_pad_top = m_pad_left = m_pad_bottom = m_pad_right = 0;
-        m_stride_h = m_stride_w = 1;
-        m_dilation_h = m_dilation_w = 1;
-    }
+    FilterShape2D(const Shape& input_shape, const Shape& kernel_shape);
+    FilterShape2D(const Shape& input_shape, size_t kernel_h, size_t kernel_w);
 
     FilterShape2D& pads(size_t top, size_t left, size_t bottom, size_t right) noexcept {
         m_pad_top = top;
@@ -502,6 +469,8 @@ public:
         m_pad_right = pads[3];
         return *this;
     }
+
+    FilterShape2D& auto_pad(const std::string& mode);
 
     FilterShape2D& strides(size_t h, size_t w) noexcept {
         m_stride_h = h;

@@ -631,47 +631,120 @@ PERFORMANCE_TEST(Conv2D, performance_test) {
 TEST(MaxPool, basic_2d_with_padding) {
     auto X = Tensor<float>::range({1, 1, 5, 5}, 1);
     auto Y = Tensor<float>({1, 1, 5, 5});
-    auto filter = FilterShape2D(X.shape(), 3, 3).pads(1, 1);
-
-    dnn::maxpool(X, Y, filter);
-    EXPECT_EQ(Y, Tensor<float>({1, 1, 5, 5}, {
+    auto R = Tensor<float>({1, 1, 5, 5}, {
          7,  8,  9, 10, 10,
         12, 13, 14, 15, 15,
         17, 18, 19, 20, 20,
         22, 23, 24, 25, 25,
         22, 23, 24, 25, 25,
-    }));
+    });
+    auto filter = FilterShape2D(X.shape(), 3, 3).pads(1, 1);
 
+    dnn::maxpool(X, Y, filter);
+    EXPECT_EQ(Y, R);
+
+    auto dev_X = dev(X);
     auto dev_Y = DevTensor<float>({1, 1, 5, 5});
-    dnn::maxpool(dev(X), dev_Y, filter);
-    EXPECT_EQ(dev_Y.read(), Y);
+    dnn::maxpool(dev_X, dev_Y, filter);
+    EXPECT_EQ(dev_Y.read(), R);
 }
 
 TEST(MaxPool, basic_2d_without_padding) {
     auto X = Tensor<float>::range({1, 1, 5, 5}, 1);
     auto Y = Tensor<float>({1, 1, 3, 3});
-    auto filter = FilterShape2D(X.shape(), 3, 3);
-
-    dnn::maxpool(X, Y, filter);
-    EXPECT_EQ(Y, Tensor<float>({1, 1, 3, 3}, {
+    auto R = Tensor<float>({1, 1, 3, 3}, {
         13, 14, 15,
         18, 19, 20,
         23, 24, 25
-    }));
+    });
+    auto filter = FilterShape2D(X.shape(), 3, 3);
 
+    dnn::maxpool(X, Y, filter);
+    EXPECT_EQ(Y, R);
+
+    auto dev_X = dev(X);
     auto dev_Y = DevTensor<float>({1, 1, 3, 3});
-    dnn::maxpool(dev(X), dev_Y, filter);
-    EXPECT_EQ(dev_Y.read(), Y);
+    dnn::maxpool(dev_X, dev_Y, filter);
+    EXPECT_EQ(dev_Y.read(), R);
+}
+
+TEST(MaxPool, basic_2d_with_dilations) {
+    auto X = Tensor<float>::range({1, 1, 4, 4}, 1);
+    auto Y = Tensor<float>({1, 1, 2, 2});
+    auto R = Tensor<float>({1, 1, 2, 2}, {11, 12, 15, 16});
+    auto filter = FilterShape2D(X.shape(), 2, 2).dilations(2, 2);
+
+    dnn::maxpool(X, Y, filter);
+    EXPECT_EQ(Y, R);
+
+    auto dev_X = dev(X);
+    auto dev_Y = DevTensor<float>({1, 1, 2, 2});
+    dnn::maxpool(dev_X, dev_Y, filter);
+    EXPECT_EQ(dev_Y.read(), R);
+}
+
+TEST(MaxPool, basic_2d_precomputed_pads) {
+    auto X = Tensor<float>::range({1, 1, 5, 5}, 1);
+    auto Y = Tensor<float>({1, 1, 5, 5});
+    auto R = Tensor<float>({1, 1, 5, 5}, {
+        13, 14, 15, 15, 15,
+        18, 19, 20, 20, 20,
+        23, 24, 25, 25, 25,
+        23, 24, 25, 25, 25,
+        23, 24, 25, 25, 25
+    });
+    auto filter = FilterShape2D(X.shape(), 5, 5).pads(2, 2);
+
+    dnn::maxpool(X, Y, filter);
+    EXPECT_EQ(Y, R);
+
+    auto dev_X = dev(X);
+    auto dev_Y = DevTensor<float>({1, 1, 5, 5});
+    dnn::maxpool(dev_X, dev_Y, filter);
+    EXPECT_EQ(dev_Y.read(), R);
+}
+
+TEST(MaxPool, basic_2d_precomputed_same_upper) {
+    auto X = Tensor<float>::range({1, 1, 5, 5}, 1);
+    auto Y = Tensor<float>({1, 1, 3, 3});
+    auto R = Tensor<float>({1, 1, 3, 3}, {
+        7, 9, 10, 17, 19, 20, 22, 24, 25
+    });
+    auto filter = FilterShape2D(X.shape(), 3, 3).strides(2, 2).auto_pad("SAME_UPPER");
+
+    dnn::maxpool(X, Y, filter);
+    EXPECT_EQ(Y, R);
+
+    auto dev_X = dev(X);
+    auto dev_Y = DevTensor<float>({1, 1, 3, 3});
+    dnn::maxpool(dev_X, dev_Y, filter);
+    EXPECT_EQ(dev_Y.read(), R);
+}
+
+TEST(MaxPool, basic_2d_precomputed_strides) {
+    auto X = Tensor<float>::range({1, 1, 5, 5}, 1);
+    auto Y = Tensor<float>({1, 1, 2, 2});
+    auto R = Tensor<float>({1, 1, 2, 2}, {7, 9, 17, 19});
+    auto filter = FilterShape2D(X.shape(), 2, 2).strides(2, 2);
+
+    dnn::maxpool(X, Y, filter);
+    EXPECT_EQ(Y, R);
+
+    auto dev_X = dev(X);
+    auto dev_Y = DevTensor<float>({1, 1, 2, 2});
+    dnn::maxpool(dev_X, dev_Y, filter);
+    EXPECT_EQ(dev_Y.read(), R);
 }
 
 TEST(MaxPool, basic_2d_with_multiple_channels) {
     auto X = Tensor<float>::range({2, 3, 100, 100}, 0);
     auto Y = Tensor<float>({2, 3, 100, 100});
+    auto dev_X = dev(X);
     auto dev_Y = DevTensor<float>({2, 3, 100, 100});
     auto filter = FilterShape2D(X.shape(), 3, 3).pads(1, 1);
 
     dnn::maxpool(X, Y, filter);
-    dnn::maxpool(dev(X), dev_Y, filter);
+    dnn::maxpool(dev_X, dev_Y, filter);
     EXPECT_EQ(dev_Y.read(), Y);
 }
 

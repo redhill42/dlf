@@ -259,6 +259,7 @@ public: // Transformations
 
 private: // Formatting
     friend std::ostream& operator<<(std::ostream& os, const Tensor& t) {
+        os << t.shape();
         if (!t.empty())
             printRec(os, t.shape(), 0, t.data());
         return os;
