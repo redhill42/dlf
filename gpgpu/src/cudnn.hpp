@@ -110,4 +110,16 @@ struct PoolingDescriptor {
     ~PoolingDescriptor() { cudnnDestroyPoolingDescriptor(desc); }
 };
 
+struct LRNDescriptor {
+    cudnnLRNDescriptor_t desc;
+    operator const cudnnLRNDescriptor_t() { return desc; }
+
+    LRNDescriptor(unsigned nsize, double alpha, double beta, double bias) {
+        checkCUDNN(cudnnCreateLRNDescriptor(&desc));
+        checkCUDNN(cudnnSetLRNDescriptor(desc, nsize, alpha, beta, bias));
+    }
+
+    ~LRNDescriptor() { cudnnDestroyLRNDescriptor(desc); }
+};
+
 }} // namespace gpgpu::dnn

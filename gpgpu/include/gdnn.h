@@ -68,6 +68,11 @@ void batch_norm(const std::vector<size_t>& dims,
                 Event* event = nullptr);
 
 template <typename T>
+void lrn(const std::vector<size_t>& dims, const Buffer<T>& x_buffer, Buffer<T>& y_buffer,
+         const int nsize, const T alpha, const T beta, const T bias,
+         const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
+
+template <typename T>
 void conv2d(const size_t batches, const size_t channels,
             const size_t height, const size_t width,
             const size_t output_h, const size_t output_w,

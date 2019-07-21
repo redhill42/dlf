@@ -61,6 +61,50 @@ void batch_norm(const DevTensor<T>& X, DevTensor<T>& Y,
 }
 
 template <typename T>
+void lrn(const Tensor<T>& X, Tensor<T>& Y, const int n,
+         const T alpha = 0.00001, const T beta = 0.75, const T bias = 1.0)
+{
+    assert(X.shape() == Y.shape());
+    assert(n > 0);
+
+    tbb::parallel_for(tbb::blocked_range<int>(0, X.stride(1), 256), [=, &X, &Y](auto r) {
+        const int B = X.extent(0);
+        const int N = X.extent(1);
+        const int S = X.stride(1);
+
+        auto x_buffer = X.data();
+        auto y_buffer = Y.data();
+
+        for (int b = 0; b < B; b++) {
+            for (int i = 0; i < N; i++) {
+                auto offset = (b * N + i) * S + r.begin();
+                auto px = x_buffer + offset;
+                auto py = y_buffer + offset;
+                const int L = std::max(0, i - (n-1)/2);
+                const int H = std::min(N-1, i + n/2);
+                for (int count = r.size(); --count >= 0; ++px, ++py) {
+                    T val{};
+                    for (int j = L; j <= H; j++) {
+                        auto x = px[(j-i)*S];
+                        val += x*x;
+                    }
+                    *py = *px * std::pow(alpha*val/n + bias, -beta);
+                }
+            }
+        }
+    });
+}
+
+template <typename T>
+void lrn(const DevTensor<T>& X, DevTensor<T>& Y, const int nsize,
+         const T alpha = 0.00001, const T beta = 0.75, const T bias = 1.0)
+{
+    assert(X.shape() == Y.shape());
+    assert(nsize > 0);
+    gpgpu::dnn::lrn(X.shape().extents(), X.data(), Y.data(), nsize, alpha, beta, bias);
+}
+
+template <typename T>
 void im2col(const T* x_buffer, T* y_buffer, const FilterShape2D& filter) {
     tbb::parallel_for(
         tbb::blocked_range2d<int>(

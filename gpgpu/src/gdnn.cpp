@@ -358,17 +358,17 @@ void batch_norm(const std::vector<size_t>& dims,
         auto channels = dims[1];
         auto spatial = std::accumulate(dims.begin()+2, dims.end(), size_t{1}, std::multiplies<>());
 
-        auto routine = Xbatch_norm<T>(queue, event);
+        auto routine = Xnormalization<T>(queue, event);
         routine.DoBatchNorm(batches, channels, spatial, x_buffer, y_buffer,
                             scale_buffer, bias_buffer, mean_buffer, var_buffer, epsilon);
     } else {
         TensorDescriptor<T> xy_desc(dims);
         TensorDescriptor<T> sbmv_desc;
-        cudnnDeriveBNTensorDescriptor(sbmv_desc, xy_desc,
-            cudnnBatchNormMode_t::CUDNN_BATCHNORM_SPATIAL);
+        checkCUDNN(cudnnDeriveBNTensorDescriptor(sbmv_desc, xy_desc,
+            cudnnBatchNormMode_t::CUDNN_BATCHNORM_SPATIAL));
 
         const T alpha = 1, beta = 0;
-        cudnnBatchNormalizationForwardInference(
+        checkCUDNN(cudnnBatchNormalizationForwardInference(
             cudnn_handle(queue), cudnnBatchNormMode_t::CUDNN_BATCHNORM_SPATIAL,
             &alpha, &beta,
             xy_desc, reinterpret_cast<void*>(*cu::cuBuffer::unwrap(x_buffer)),
@@ -378,7 +378,7 @@ void batch_norm(const std::vector<size_t>& dims,
             reinterpret_cast<void*>(*cu::cuBuffer::unwrap(bias_buffer)),
             reinterpret_cast<void*>(*cu::cuBuffer::unwrap(mean_buffer)),
             reinterpret_cast<void*>(*cu::cuBuffer::unwrap(var_buffer)),
-            epsilon >= CUDNN_BN_MIN_EPSILON ? epsilon : 0.00001); // FIXME
+            epsilon >= CUDNN_BN_MIN_EPSILON ? epsilon : 0.00001)); // FIXME
     }
 }
 
@@ -397,6 +397,43 @@ template void PUBLIC_API batch_norm<double>(const std::vector<size_t>&,
                                             const Buffer<double>&, const Buffer<double>&,
                                             const Buffer<double>&, const Buffer<double>&,
                                             const double, const Queue&, Event*);
+
+template <typename T>
+void lrn(const std::vector<size_t>& dims, const Buffer<T>& x_buffer, Buffer<T>& y_buffer,
+         const int nsize, const T alpha, const T beta, const T bias,
+         const Queue& queue, Event* event)
+{
+    if (IsOpenCL(queue.context().device()) || (dims.size() != 4 && dims.size() != 5)) {
+        auto batches = dims[0];
+        auto channels = dims[1];
+        auto spatial = std::accumulate(dims.begin()+2, dims.end(), size_t{1}, std::multiplies<>());
+
+        auto routine = Xnormalization<T>(queue, event);
+        routine.DoLRN(batches, channels, spatial, x_buffer, y_buffer, nsize, alpha, beta, bias);
+    } else {
+        TensorDescriptor<T> xy_desc(dims);
+        LRNDescriptor desc(nsize, alpha, beta, bias);
+
+        T blend_alpha = 1, blend_beta = 0;
+        checkCUDNN(cudnnLRNCrossChannelForward(
+            cudnn_handle(queue), desc, CUDNN_LRN_CROSS_CHANNEL_DIM1,
+            &blend_alpha, xy_desc, reinterpret_cast<void*>(*cu::cuBuffer::unwrap(x_buffer)),
+            &blend_beta,  xy_desc, reinterpret_cast<void*>(*cu::cuBuffer::unwrap(y_buffer))));
+    }
+}
+
+template void PUBLIC_API lrn<half>  (const std::vector<size_t>&,
+                                     const Buffer<half>&, Buffer<half>&,
+                                     const int, const half, const half, const half,
+                                     const Queue&, Event*);
+template void PUBLIC_API lrn<float> (const std::vector<size_t>&,
+                                     const Buffer<float>&, Buffer<float>&,
+                                     const int, const float, const float, const float,
+                                     const Queue&, Event*);
+template void PUBLIC_API lrn<double>(const std::vector<size_t>&,
+                                     const Buffer<double>&, Buffer<double>&,
+                                     const int, const double, const double, const double,
+                                     const Queue&, Event*);
 
 namespace {
 

@@ -649,6 +649,22 @@ private:
         result = std::make_unique<BatchNormalizationOp>(this, n);
     }
 
+    struct LRNOp : Operator {
+        TensorT<> X, Y; int n; T alpha, beta, bias;
+        LRNOp(OperatorFactory* of, model::LRN* n)
+            : X(of->alloc(n->input())),
+              Y(of->allocInplace(n->input(), n->output())),
+              n(n->size()),
+              alpha(n->alpha()), beta(n->beta()), bias(n->bias()) {}
+        void evaluate() override {
+            dnn::lrn(X, Y, n, alpha, beta, bias);
+        }
+    };
+
+    void visit(model::LRN* n) override {
+        result = std::make_unique<LRNOp>(this, n);
+    }
+
     struct ReshapeOp : Operator {
         TensorT<> X, Y;
         ReshapeOp(OperatorFactory* of, model::Node* n)
