@@ -267,7 +267,7 @@ std::unique_ptr<Graph> decodeGraph(const GraphProto& gp, bool nested) {
 } // end of anonymous namespace
 
 template <>
-std::unique_ptr<Graph> importModel<ONNX>(std::istream& input) {
+std::unique_ptr<Graph> import_model<ONNX>(std::istream& input) {
     ModelProto mp;
     if (!mp.ParseFromIstream(&input)) {
         fail_convert("Failed to parse model protocol");
@@ -473,7 +473,7 @@ void encodeGraph(GraphProto* gp, const Graph* g) {
 } // end of anonymous namespace
 
 template <>
-void exportModel<ONNX>(std::ostream& os, const Graph& g) {
+void export_model<ONNX>(std::ostream& os, const Graph& g) {
     ModelProto mp;
     encodeGraph(mp.mutable_graph(), &g);
     if (!mp.SerializeToOstream(&os)) {

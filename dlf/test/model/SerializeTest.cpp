@@ -15,7 +15,7 @@ protected:
 
     SerializeTest() {
         std::fstream input("data/resnet18v1.onnx", std::ios::in | std::ios::binary);
-        g = importModel<ONNX>(input);
+        g = import_model(input);
     }
 };
 

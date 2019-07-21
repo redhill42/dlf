@@ -15,7 +15,7 @@ public:
 
 struct ONNX {};
 
-template <typename Format> std::unique_ptr<Graph> importModel(std::istream& input);
-template <typename Format> void exportModel(std::ostream& output, const Graph& graph);
+template <typename Format = ONNX> std::unique_ptr<Graph> import_model(std::istream& input);
+template <typename Format = ONNX> void export_model(std::ostream& output, const Graph& graph);
 
 }} // namespace dlf::model

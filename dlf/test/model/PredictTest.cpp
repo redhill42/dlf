@@ -126,7 +126,7 @@ TYPED_TEST(PredictTest, Conv) {
 
 TYPED_PERFORMANCE_TEST(PredictTest, Performance) {
     std::fstream fs("data/resnet18v1.onnx", std::ios::in | std::ios::binary);
-    auto g = importModel<ONNX>(fs);
+    auto g = import_model(fs);
     fs.close();
 
     Predictor<TypeParam, float> pred(std::move(g));

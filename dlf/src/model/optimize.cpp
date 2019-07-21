@@ -49,7 +49,8 @@ bool PredicateBasedPass::runPass(Graph& graph) {
 //==-------------------------------------------------------------------------
 
 class GlobalPassRegistryImpl : public GlobalPassRegistry {
-    std::unordered_map<std::string, std::shared_ptr<Pass>> m_passes;
+    // Use vector here to ensure the order of the passes.
+    std::vector<std::shared_ptr<Pass>> m_passes;
 
 public:
     GlobalPassRegistryImpl();
@@ -57,18 +58,19 @@ public:
     std::vector<std::string> getAvailablePasses() override {
         std::vector<std::string> names;
         for (const auto& pass : m_passes)
-            names.push_back(pass.first);
+            names.push_back(pass->getPassName());
         return names;
     }
 
     void registerPass(std::shared_ptr<Pass> pass) override {
-        m_passes[pass->getPassName()] = pass;
+        m_passes.push_back(pass);
     }
 
     std::shared_ptr<Pass> find(const std::string& name) override {
-        auto it = m_passes.find(name);
-        assert(it != m_passes.end());
-        return it->second;
+        for (const auto& pass : m_passes)
+            if (pass->getPassName() == name)
+                return pass;
+        return nullptr;
     }
 
     using GlobalPassRegistry::registerPass;

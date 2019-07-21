@@ -115,10 +115,12 @@ public:
         : Predictor(*graph) {}
 
     void predict() {
-        std::for_each(m_operators.begin(), m_operators.end(), [](auto& op){ op->evaluate(); });
+        for (auto& op : m_operators) {
+            op->evaluate();
+        }
     }
 
-    void set(size_t i, Tensor<T> data) {
+    void set(size_t i, const Tensor<T>& data) {
         m_inputs.at(i)->template set<T>(data);
     }
 

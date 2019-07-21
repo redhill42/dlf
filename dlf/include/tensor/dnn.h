@@ -145,7 +145,7 @@ void im2col(const T* x_buffer, T* y_buffer, const FilterShape2D& filter) {
                     int kernel_index = kernel_h*kernel_w - kw_id - kernel_w*kh_id - 1;
                     int output_index = ((c_id*kernel_h*kernel_w + kernel_index)*output_h + h_id)*output_w + w_id;
                     y_buffer[output_index] = val;
-                };
+                }
             }
         });
 }
@@ -172,10 +172,10 @@ void conv2d(const Tensor<T>& X, const Tensor<T>& W, Tensor<T>& Y, const FilterSh
 
             cblas::gemm(cblas::Layout::RowMajor,
                         cblas::Transpose::NoTrans, cblas::Transpose::NoTrans,
-                        m, n, k, T{1},
-                        w_buffer, W.stride(0),
-                        work.data(), work.stride(0), T{0},
-                        y_buffer, Y.stride(1));
+                        m, n, k,
+                        T{1}, w_buffer, W.stride(0),
+                        work.data(), work.stride(0),
+                        T{0}, y_buffer, Y.stride(1));
 
             x_buffer += X.stride(0) / group;
             y_buffer += Y.stride(0) / group;
@@ -190,8 +190,10 @@ void conv2d(const DevTensor<T>& X, const DevTensor<T>& W, DevTensor<T>& Y, const
     assert(W.shape() == filter.kernel_shape());
     assert(Y.shape() == filter.output_shape());
     gpgpu::dnn::conv2d(filter.batches(), filter.channels(),
-                       filter.height(), filter.width(), filter.output_h(), filter.output_w(),
-                       filter.num_kernels(), filter.group(), filter.kernel_h(), filter.kernel_w(),
+                       filter.height(), filter.width(),
+                       filter.output_h(), filter.output_w(),
+                       filter.num_kernels(), filter.group(),
+                       filter.kernel_h(), filter.kernel_w(),
                        filter.pad_top(), filter.pad_left(),
                        filter.pad_bottom(), filter.pad_right(),
                        filter.stride_h(), filter.stride_w(),
@@ -342,16 +344,40 @@ template <typename T>
 void lppool(const Tensor<T>& X, Tensor<T>& Y, const FilterShape2D& filter, const int p) {
     assert(X.shape() == filter.input_shape());
     assert(Y.shape() == filter.output_shape());
-    if (p == 2) {
-        detail::pooling(X.data(), Y.data(), filter, false,
-                        T{},
-                        [](auto acc, auto x) { return acc + x*x; },
-                        [](auto acc, auto) { return std::sqrt(acc); });
-    } else {
-        detail::pooling(X.data(), Y.data(), filter, false,
-                        T{},
-                        [p](auto acc, auto x) { return acc + std::pow(std::abs(x), p); },
-                        [p](auto acc, auto) { return std::pow(acc, T{1}/p); });
+    assert(p > 0);
+
+    switch (p) {
+    case 1:
+        detail::pooling(
+            X.data(), Y.data(), filter, false,
+            T{},
+            [](auto acc, auto x) { return acc + std::abs(x); },
+            [](auto acc, auto  ) { return acc; });
+        break;
+
+    case 2:
+        detail::pooling(
+            X.data(), Y.data(), filter, false,
+            T{},
+            [](auto acc, auto x) { return acc + x*x; },
+            [](auto acc, auto  ) { return std::sqrt(acc); });
+        break;
+
+    case 3:
+        detail::pooling(
+            X.data(), Y.data(), filter, false,
+            T{},
+            [](auto acc, auto x) { return acc + std::abs(x*x*x); },
+            [](auto acc, auto  ) { return std::cbrt(acc); });
+        break;
+
+    default:
+        detail::pooling(
+            X.data(), Y.data(), filter, false,
+            T{},
+            [p](auto acc, auto x) { return acc + std::pow(std::abs(x), p); },
+            [p](auto acc, auto  ) { return std::pow(acc, T{1}/p); });
+        break;
     }
 }
 
@@ -367,9 +393,9 @@ void lppool(const DevTensor<T>& X, DevTensor<T>& Y, const FilterShape2D& filter,
                        filter.pad_bottom(), filter.pad_right(),
                        filter.stride_h(), filter.stride_w(),
                        filter.dilation_h(), filter.dilation_w(),
-                       p,
-                       X.data(), Y.data());
+                       p, X.data(), Y.data());
 }
+
 template <typename T>
 void global_maxpool(const Tensor<T>& X, Tensor<T>& Y) {
     detail::global_pooling(
@@ -381,11 +407,8 @@ void global_maxpool(const Tensor<T>& X, Tensor<T>& Y) {
 
 template <typename T>
 void global_maxpool(const DevTensor<T>& input, DevTensor<T>& output) {
-    // FIXME
-    auto h = input.extent(2);
-    auto w = input.extent(3);
-    FilterShape2D filter(input.shape(), h, w);
-    filter.strides(h, w);
+    auto h = input.extent(2), w = input.extent(3);
+    auto filter = FilterShape2D(input.shape(), h, w).strides(h, w);
     maxpool(input, output, filter);
 }
 
@@ -400,38 +423,54 @@ void global_avgpool(const Tensor<T>& X, Tensor<T>& Y) {
 
 template <typename T>
 void global_avgpool(const DevTensor<T>& input, DevTensor<T>& output) {
-    // FIXME
-    auto h = input.extent(2);
-    auto w = input.extent(3);
-    FilterShape2D filter(input.shape(), h, w);
-    filter.strides(h, w);
+    auto h = input.extent(2), w = input.extent(3);
+    auto filter = FilterShape2D(input.shape(), h, w).strides(h, w);
     avgpool(input, output, filter, false);
 }
 
 template <typename T>
 void global_lppool(const Tensor<T>& X, Tensor<T>& Y, const int p) {
-    if (p == 2) {
+    assert(p > 0);
+
+    switch (p) {
+    case 1:
+        detail::global_pooling(
+            X, Y, T{},
+            [](auto acc, auto x) { return acc + std::abs(x); },
+            std::plus<T>(),
+            [](auto acc, auto  ) { return acc; });
+        break;
+
+    case 2:
         detail::global_pooling(
             X, Y, T{},
             [](auto acc, auto x) { return acc + x*x; },
             std::plus<T>(),
-            [](auto acc, auto) { return std::sqrt(acc); });
-    } else {
+            [](auto acc, auto  ) { return std::sqrt(acc); });
+        break;
+
+    case 3:
+        detail::global_pooling(
+            X, Y, T{},
+            [](auto acc, auto x) { return acc + std::abs(x*x*x); },
+            std::plus<T>(),
+            [](auto acc, auto  ) { return std::cbrt(acc); });
+        break;
+
+    default:
         detail::global_pooling(
             X, Y, T{},
             [p](auto acc, auto x) { return acc + std::pow(std::abs(x), p); },
             std::plus<T>(),
-            [p](auto acc, auto) { return std::pow(acc, T{1}/p); });
+            [p](auto acc, auto  ) { return std::pow(acc, T{1}/p); });
+        break;
     }
 }
 
 template <typename T>
 void global_lppool(const DevTensor<T>& input, DevTensor<T>& output, int p) {
-    // FIXME
-    auto h = input.extent(2);
-    auto w = input.extent(3);
-    FilterShape2D filter(input.shape(), h, w);
-    filter.strides(h, w);
+    auto h = input.extent(2), w = input.extent(3);
+    auto filter = FilterShape2D(input.shape(), h, w).strides(h, w);
     lppool(input, output, filter, p);
 }
 

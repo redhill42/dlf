@@ -13,6 +13,11 @@
 
 #include "synset.txt"
 
+using namespace dlf;
+using Context = predict::GPU;
+using Real = float;
+using Predictor = predict::Predictor<Context, Real>;
+
 static std::string ImageLabel(size_t i) {
     std::string label = synset[i];
     label = label.substr(label.find(' ')+1);
@@ -22,7 +27,7 @@ static std::string ImageLabel(size_t i) {
 
 struct Score {
     size_t index;
-    float  score;
+    Real   score;
 };
 
 struct ImageClass {
@@ -53,48 +58,50 @@ struct ImageClass {
     }
 };
 
-template <typename Context = dlf::predict::GPU, typename T = float>
-dlf::predict::Predictor<Context, T> create_predictor(const char* path) {
+Predictor create_predictor(const char* path) {
     std::fstream fs(path, std::ios::in | std::ios::binary);
     if (!fs.is_open()) {
         throw std::runtime_error(cxx::string_concat("failed to open ", path));
     }
 
-    auto g = dlf::model::importModel<dlf::model::ONNX>(fs);
-    return dlf::predict::Predictor<Context, T>(std::move(g));
+    auto g = model::import_model(fs);
+    return predict::Predictor<Context, Real>(std::move(g));
 }
 
+#define KEEP_RATIO 1
 cv::Mat prepare(const std::string& path, int size = 224) {
     cv::Mat src_img = cv::imread(path);
+    cv::Mat dst_img;
 
+#if KEEP_RATIO
     auto ratio = static_cast<double>(size) / std::min(src_img.rows, src_img.cols);
     auto dx = std::max(size, static_cast<int>(std::round(src_img.cols*ratio)));
     auto dy = std::max(size, static_cast<int>(std::round(src_img.rows*ratio)));
     auto x = (dx - size) / 2;
     auto y = (dy - size) / 2;
 
-    cv::Mat img;
-    cv::resize(src_img, img, cv::Size(dx, dy));
-    return img(cv::Rect(x, y, size, size));
+    cv::resize(src_img, dst_img, cv::Size(dx, dy));
+    return dst_img(cv::Rect(x, y, size, size));
+#else
+    cv::resize(src_img, dst_img, cv::Size(256, 256));
+    return dst_img(cv::Rect(16, 16, size, size));
+#endif
 }
 
-dlf::Tensor<float> preprocess(const cv::Mat& img) {
+Tensor<Real> preprocess(const cv::Mat& img) {
     size_t rows = img.rows, cols = img.cols;
 
-    auto tmp1 = dlf::Tensor<uint8_t>({1, rows, cols, 3});
-    auto tmp2 = cv::Mat(rows, cols, CV_8UC3, tmp1.data());
-    img.copyTo(tmp2);
-    cv::cvtColor(tmp2, tmp2, cv::COLOR_BGR2RGB);
+    cv::Mat tmp_img;
+    cv::cvtColor(img, tmp_img, cv::COLOR_BGR2RGB);
 
-    auto dst = dlf::transpose(tmp1.cast<float>(), {0, 3, 1, 2});
-    auto mean = dlf::Tensor<float>({1, 3, 1, 1}, {0.485, 0.456, 0.406});
-    auto stdev = dlf::Tensor<float>({1, 3, 1, 1}, {0.229, 0.224, 0.225});
-    return (dst / 255 - mean) / stdev;
+    auto tmp = Tensor<uint8_t>::wrap({1, rows, cols, 3}, tmp_img.data);
+    auto mean = Tensor<Real>({3}, {0.485, 0.456, 0.406});
+    auto stdev = Tensor<Real>({3}, {0.229, 0.224, 0.225});
+    return transpose((tmp / Real{255} - mean) / stdev, {0, 3, 1, 2});
 }
 
-std::vector<Score> postprocess(dlf::Tensor<float>&& scores) {
-    scores.reshape({1000});
-    dlf::dnn::softmax(scores, scores, 0);
+std::vector<Score> postprocess(Tensor<Real>&& scores) {
+    scores = dnn::softmax(squeeze(std::move(scores)), 0);
 
     std::vector<Score> result(scores.size());
     for (int i = 0; i < 1000; i++) {
@@ -141,11 +148,7 @@ std::vector<ImageClass> load_images(std::string dir, RandomGenerator& g, size_t 
     return images;
 }
 
-template <typename Context, typename T>
-void predict_images(
-    dlf::predict::Predictor<Context, T>& predictor,
-    std::vector<ImageClass>& images)
-{
+void predict_images(Predictor& predictor, std::vector<ImageClass>& images) {
     for (auto& img : images) {
         predictor.set(0, preprocess(img.image));
         predictor.predict();
@@ -219,14 +222,21 @@ int main(int argc, char** argv) {
     }
 
     if (is_dir(argv[2])) {
+        std::string title = argv[1];
+        auto pos = title.rfind('/');
+        if (pos != std::string::npos)
+            title = title.substr(pos+1);
+        title = "Image Classification - " + title;
+
         auto predictor = create_predictor(argv[1]);
         std::mt19937 rng(std::random_device{}());
-        cv::namedWindow("Images");
+        cv::namedWindow(title);
+
         do {
             auto images = load_images(argv[2], rng, 15);
             predict_images(predictor, images);
             auto canvas = create_image_grid(images, 224, 5, 3);
-            cv::imshow("Images", canvas);
+            cv::imshow(title, canvas);
         } while (cv::waitKey(0) != 'q');
     } else {
         auto predictor = create_predictor(argv[1]);
