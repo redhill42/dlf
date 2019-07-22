@@ -525,7 +525,7 @@ void convWithIm2Col(
         x_buffer = &im_buffer;
     } else {
         work = queue.context().createBuffer<T>(k * n * batches * group);
-        im2col(KernelMode::Convolution,
+        im2col(KernelMode::CrossCorrelation,
                batches*group, channels/group,
                height, width, output_h, output_w,
                kernel_h, kernel_w, pad_h, pad_w,
@@ -586,7 +586,7 @@ void conv2d(const size_t batches, const size_t channels,
         return;
     }
 
-    convgemm(KernelMode::Convolution,
+    convgemm(KernelMode::CrossCorrelation,
              batches, channels,
              height, width, output_h, output_w,
              num_kernels, kernel_h, kernel_w,

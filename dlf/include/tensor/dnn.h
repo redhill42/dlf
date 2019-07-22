@@ -142,7 +142,7 @@ void im2col(const T* x_buffer, T* y_buffer, const FilterShape2D& filter) {
                     }
 
                     // Sets the output value
-                    int kernel_index = kernel_h*kernel_w - kw_id - kernel_w*kh_id - 1;
+                    int kernel_index = kw_id + kernel_w * kh_id;
                     int output_index = ((c_id*kernel_h*kernel_w + kernel_index)*output_h + h_id)*output_w + w_id;
                     y_buffer[output_index] = val;
                 }

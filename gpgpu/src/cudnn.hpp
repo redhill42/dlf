@@ -88,7 +88,7 @@ struct ConvolutionDescriptor {
         checkCUDNN(cudnnCreateConvolutionDescriptor(&desc));
         checkCUDNN(cudnnSetConvolution2dDescriptor(
             desc, pad_h, pad_w, stride_h, stride_w, dilation_h, dilation_w,
-            CUDNN_CONVOLUTION, cudnnDataType<T>));
+            CUDNN_CROSS_CORRELATION, cudnnDataType<T>));
     }
 
     ~ConvolutionDescriptor() { cudnnDestroyConvolutionDescriptor(desc); }
