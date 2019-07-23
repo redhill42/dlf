@@ -26,7 +26,7 @@ END_OPERATOR()
         { return hasAttribute(k##name); } \
     const float name() const \
         { return get_f(k##name, def); } \
-    auto set_##name(float value) \
+    auto name(float value) \
         { set_f(k##name, value); return this; }
 
 #define DEFINE_INT_ATTRIBUTE(name, def) \
@@ -34,7 +34,7 @@ END_OPERATOR()
         { return hasAttribute(k##name); } \
     const int64_t name() const \
         { return get_i(k##name, def); } \
-    auto set_##name(int64_t value) \
+    auto name(int64_t value) \
         { set_i(k##name, value); return this; }
 
 #define DEFINE_BOOL_ATTRIBUTE(name, def) \
@@ -42,7 +42,7 @@ END_OPERATOR()
         { return hasAttribute(k##name); } \
     bool name() const \
         { return !!get_i(k##name, static_cast<int64_t>(def)); } \
-    auto set_##name(bool value) \
+    auto name(bool value) \
         { set_i(k##name, static_cast<int64_t>(value)); return this; }
 
 #define DEFINE_STRING_ATTRIBUTE(name, def) \
@@ -50,7 +50,7 @@ END_OPERATOR()
         { return hasAttribute(k##name); } \
     std::string name() const \
         { return get_s(k##name, def); } \
-    auto set_##name(std::string value) \
+    auto name(std::string value) \
          { set_s(k##name, std::move(value)); return this; }
 
 #define DEFINE_GRAPH_ATTRIBUTE(name) \
@@ -58,7 +58,7 @@ END_OPERATOR()
         { return hasAttribute(k##name); } \
     std::shared_ptr<Graph> name() const \
         { return get_g(k##name); } \
-    auto set_##name(std::shared_ptr<Graph> value) \
+    auto name(std::shared_ptr<Graph> value) \
         { set_g(k##name, value); return this; }
 
 #define DEFINE_TENSOR_ATTRIBUTE(name) \
@@ -66,7 +66,7 @@ END_OPERATOR()
         { return hasAttribute(k##name); } \
     const TensorData& name() const \
         { return get_t(k##name); } \
-    auto set_##name(TensorData value) \
+    auto name(TensorData value) \
         { set_t(k##name, std::move(value)); return this; }
 
 #define DEFINE_INTS_ATTRIBUTE(name) \
@@ -74,7 +74,7 @@ END_OPERATOR()
         { return hasAttribute(k##name); } \
     const std::vector<int64_t>& name() const \
         { return get_is(k##name); } \
-    auto set_##name(std::vector<int64_t> value) \
+    auto name(std::vector<int64_t> value) \
         { set_is(k##name, std::move(value)); return this; }
 
 #define DEFINE_FLOATS_ATTRIBUTE(name) \
@@ -82,7 +82,7 @@ END_OPERATOR()
         { return hasAttribute(k##name); } \
     const std::vector<float>& name() const \
         { return get_fs(k##name); } \
-    auto set_##name(std::vector<float> value) \
+    auto name(std::vector<float> value) \
         { set_fs(k##name, std::move(value)); return this; }
 
 #define DEFINE_STRINGS_ATTRIBUTE(name) \
@@ -90,7 +90,7 @@ END_OPERATOR()
         { return hasAttribute(k##name); } \
     const std::vector<std::string>& name() const \
         { return get_ss(k##name); } \
-    auto set_##name(std::vector<std::string> value) \
+    auto name(std::vector<std::string> value) \
         { set_ss(k##name, std::move(value)); return this; }
 
 #define DEFINE_DTYPE_ATTRIBUTE(name) \
@@ -98,7 +98,7 @@ END_OPERATOR()
         { return hasAttribute(k##name); } \
     DataType name() const  \
         { return has_##name() ? static_cast<DataType>(get_i(k##name)) : DataType::FLOAT; } \
-    auto set_##name(DataType dt) \
+    auto name(DataType dt) \
         { set_i(k##name, static_cast<int64_t>(dt)); return this; }
 
 #define DEFINE_SHAPE_ATTRIBUTE(name) \
@@ -107,7 +107,7 @@ END_OPERATOR()
         const auto& shape__ = get_is(k##name); \
         return Dims(shape__.begin(), shape__.end()); \
     } \
-    auto set_##name(const Dims& dims__) { \
+    auto name(const Dims& dims__) { \
         set_is(k##name, std::vector<int64_t>(dims__.begin(), dims__.end())); \
         return this; \
     }

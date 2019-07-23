@@ -44,19 +44,17 @@ TEST(ShapeInference, invalidShapeBroadcast) {
 TEST(ShapeInference, Conv) {
     Graph g;
 
-    auto node = g.create<Conv>();
+    auto node = g.create<Conv>()
+        ->kernel_shape({7, 7})
+        ->pads({3, 3, 3, 3})
+        ->strides({2, 2})
+        ->dilations({1, 1})
+        ->group(1);
     node->addInput(g.addInput("X", DataType::FLOAT, {1, 3, 224, 224}));
     node->addInput(g.addInput("W", DataType::FLOAT, {64, 3, 7, 7}));
     node->addOutput("Y");
 
-    node->set_dilations({1, 1});
-    node->set_group(1);
-    node->set_kernel_shape({7, 7});
-    node->set_pads({3, 3, 3, 3});
-    node->set_strides({2, 2});
-
     ShapeInference::Instance().infer(node);
-
     EXPECT_EQ(node->output()->type(), DataType::FLOAT);
     EXPECT_EQ(node->output()->dims(), Dims({1, 64, 112, 112}));
 }
@@ -72,16 +70,16 @@ static void max_pool_test(Dims input_shape, Dims output_shape,
     Graph g;
 
     auto node = g.create<MaxPool>();
-    node->addInput(g.addInput("input", DataType::FLOAT, input_shape));
-    node->set_kernel_shape(kernel_shape);
+    node->kernel_shape(kernel_shape);
     if (!strides.empty())
-        node->set_strides(strides);
+        node->strides(strides);
     if (!pads.empty())
-        node->set_pads(pads);
+        node->pads(pads);
     if (!dilations.empty())
-        node->set_dilations(dilations);
-    node->set_auto_pad(auto_pad);
-    node->set_ceil_mode(ceil_mode);
+        node->dilations(dilations);
+    node->auto_pad(auto_pad);
+    node->ceil_mode(ceil_mode);
+    node->addInput(g.addInput("input", DataType::FLOAT, input_shape));
     node->addOutput("output");
 
     EXPECT_NO_THROW(ShapeInference::Instance().infer(node));
@@ -120,11 +118,9 @@ TEST(ShapeInference, MaxPool) {
 TEST(ShapeInference, MaxUnpool) {
     Graph g;
 
-    auto node = g.create<MaxUnpool>();
+    auto node = g.create<MaxUnpool>()->kernel_shape({2, 2})->strides({2, 2});
     node->addInput(g.addInput("X", DataType::FLOAT, {1, 1, 2, 2}));
     node->addInput(g.addInput("I", DataType::INT64, {1, 1, 2, 2}));
-    node->set_kernel_shape({2, 2});
-    node->set_strides({2, 2});
     node->addOutput("Y");
 
     ShapeInference::Instance().infer(node);
@@ -135,14 +131,14 @@ TEST(ShapeInference, MaxUnpool) {
 TEST(ShapeInference, TfIdfVectorizer_1D) {
     Graph g;
 
-    auto n = g.create<TfIdfVectorizer>();
+    auto n = g.create<TfIdfVectorizer>()
+        ->min_gram_length(2)
+        ->max_gram_length(2)
+        ->max_skip_count(0)
+        ->ngram_counts({0, 4})
+        ->ngram_indexes({0, 1, 2, 3, 4, 5, 6})
+        ->pool_int64s({2, 3, 5, 4, 5, 6, 7, 8, 6, 7});
     n->addInput(g.addInput("input", DataType::FLOAT, {12}));
-    n->set_min_gram_length(2);
-    n->set_max_gram_length(2);
-    n->set_max_skip_count(0);
-    n->set_ngram_counts({0, 4});
-    n->set_ngram_indexes({0, 1, 2, 3, 4, 5, 6});
-    n->set_pool_int64s({2, 3, 5, 4, 5, 6, 7, 8, 6, 7});
     n->addOutput("output");
 
     ShapeInference::Instance().infer(n);
@@ -153,14 +149,14 @@ TEST(ShapeInference, TfIdfVectorizer_1D) {
 TEST(ShapeInference, TfIdfVectorizer_2D) {
     Graph g;
 
-    auto n = g.create<TfIdfVectorizer>();
+    auto n = g.create<TfIdfVectorizer>()
+        ->min_gram_length(2)
+        ->max_gram_length(2)
+        ->max_skip_count(0)
+        ->ngram_counts({0, 4})
+        ->ngram_indexes({0, 1, 2, 3, 4, 5, 6})
+        ->pool_int64s({2, 3, 5, 4, 5, 6, 7, 8, 6, 7});
     n->addInput(g.addInput("input", DataType::FLOAT, {2, 6}));
-    n->set_min_gram_length(2);
-    n->set_max_gram_length(2);
-    n->set_max_skip_count(0);
-    n->set_ngram_counts({0, 4});
-    n->set_ngram_indexes({0, 1, 2, 3, 4, 5, 6});
-    n->set_pool_int64s({2, 3, 5, 4, 5, 6, 7, 8, 6, 7});
     n->addOutput("output");
 
     ShapeInference::Instance().infer(n);
@@ -178,7 +174,6 @@ TEST(ShapeInference, Gemm) {
     node->addOutput("Y");
 
     ShapeInference::Instance().infer(node);
-
     EXPECT_EQ(node->output()->type(), DataType::FLOAT);
     EXPECT_EQ(node->output()->dims(), Dims({3, 4}));
 }
@@ -233,10 +228,9 @@ TEST(ShapeInference, MatMul) {
 TEST(ShapeInference, TopK) {
     Graph g;
 
-    auto n = g.create<TopK>();
+    auto n = g.create<TopK>()->axis(1);
     n->addInput(g.addInput("input", DataType::FLOAT, {3, 4, 5}));
     n->addInput(g.addInitializer({"K", DataType::INT64, {1}, {3}}));
-    n->set_axis(1);
     n->addOutput("output");
     n->addOutput("indices");
 
@@ -284,7 +278,7 @@ static void compress_test(Dims input_shape, int axis, std::vector<bool> conditio
 
     auto n = g.create<Compress>();
     if (axis >= 0)
-        n->set_axis(axis);
+        n->axis(axis);
     n->addInput(g.addInput("input", DataType::FLOAT, input_shape));
     n->addInput(g.addInitializer(cond_data));
     n->addOutput("output");
@@ -347,9 +341,8 @@ TEST(ShapeInference, Slice) {
 TEST(ShapeInference, Split1D) {
     Graph g;
 
-    auto node = g.create<Split>();
+    auto node = g.create<Split>()->axis(0);
     node->addInput(g.addInput("input", DataType::FLOAT, {6}));
-    node->set_axis(0);
 
     Value* o1 = node->addOutput("output_1");
     Value* o2 = node->addOutput("output_2");
@@ -367,9 +360,8 @@ TEST(ShapeInference, Split1D) {
 TEST(ShapeInference, Split2D) {
     Graph g;
 
-    auto node = g.create<Split>();
+    auto node = g.create<Split>()->axis(1);
     node->addInput(g.addInput("input", DataType::FLOAT, {2, 6}));
-    node->set_axis(1);
 
     Value* o1 = node->addOutput("output_1");
     Value* o2 = node->addOutput("output_2");
@@ -384,10 +376,8 @@ TEST(ShapeInference, Split2D) {
 TEST(ShapeInference, SplitExplicit) {
     Graph g;
 
-    auto node = g.create<Split>();
+    auto node = g.create<Split>()->axis(1)->split({2, 4});
     node->addInput(g.addInput("input", DataType::FLOAT, {2, 6}));
-    node->set_axis(1);
-    node->set_split({2, 4});
 
     Value* o1 = node->addOutput("output_1");
     Value* o2 = node->addOutput("output_2");
@@ -402,9 +392,8 @@ TEST(ShapeInference, SplitExplicit) {
 TEST(ShapeInference, SplitNonEqualSize) {
     Graph g;
 
-    auto node = g.create<Split>();
+    auto node = g.create<Split>()->axis(1);
     node->addInput(g.addInput("input", DataType::FLOAT, {2, 8}));
-    node->set_axis(1);
 
     Value* o1 = node->addOutput("output_1");
     Value* o2 = node->addOutput("output_2");
@@ -422,8 +411,7 @@ TEST(ShapeInference, SplitNonEqualSize) {
 static void concat_test(const std::vector<Dims>& shapes, int axis, const Dims& expected) {
     Graph g;
 
-    auto node = g.create<Concat>();
-    node->set_axis(axis);
+    auto node = g.create<Concat>()->axis(axis);
     for (size_t i = 0; i < shapes.size(); i++)
         node->addInput(g.addInput("input_"+std::to_string(i), DataType::FLOAT, shapes[i]));
     node->addOutput("output");
@@ -445,9 +433,8 @@ TEST(ShapeInference, Concat) {
 TEST(ShapeInference, TransposePermutation) {
     Graph g;
 
-    auto node = g.create<Transpose>();
+    auto node = g.create<Transpose>()->perm({2, 0, 1});
     node->addInput(g.addInput("input", DataType::FLOAT, {2, 3, 4}));
-    node->set_perm({2, 0, 1});
     node->addOutput("output");
 
     ShapeInference::Instance().infer(node);
@@ -474,13 +461,13 @@ TEST(ShapeInference, TransposeInvalidPerm) {
     node->addInput(g.addInput("input", DataType::FLOAT, {2, 3, 4}));
     node->addOutput("output");
 
-    node->set_perm({3, 0, 1});
+    node->perm({3, 0, 1});
     EXPECT_ANY_THROW(ShapeInference::Instance().infer(node));
 
-    node->set_perm({1, 1, 0});
+    node->perm({1, 1, 0});
     EXPECT_ANY_THROW(ShapeInference::Instance().infer(node));
 
-    node->set_perm({0, 1});
+    node->perm({0, 1});
     EXPECT_ANY_THROW(ShapeInference::Instance().infer(node));
 }
 
@@ -499,10 +486,9 @@ TEST(ShapeInference, SqueezeAll) {
 TEST(ShapeInference, SqueezeSelectedAxis) {
     Graph g;
 
-    auto node = g.create<Squeeze>();
+    auto node = g.create<Squeeze>()->axes({0, 2});
     node->addInput(g.addInput("input", DataType::FLOAT, {1, 3, 1, 5, 1, 6}));
     node->addOutput("output");
-    node->set_axes({0, 2});
 
     ShapeInference::Instance().infer(node);
     EXPECT_EQ(node->output()->type(), DataType::FLOAT);
@@ -512,10 +498,9 @@ TEST(ShapeInference, SqueezeSelectedAxis) {
 TEST(ShapeInference, SqueezeNegativeAxis) {
     Graph g;
 
-    auto node = g.create<Squeeze>();
+    auto node = g.create<Squeeze>()->axes({-2});
     node->addInput(g.addInput("input", DataType::FLOAT, {1, 3, 1, 5, 1, 6}));
     node->addOutput("output");
-    node->set_axes({-2});
 
     ShapeInference::Instance().infer(node);
     EXPECT_EQ(node->output()->type(), DataType::FLOAT);
@@ -525,20 +510,18 @@ TEST(ShapeInference, SqueezeNegativeAxis) {
 TEST(ShapeInference, SequenceNoneZeroSizeAxisMustFail) {
     Graph g;
 
-    auto node = g.create<Squeeze>();
+    auto node = g.create<Squeeze>()->axes({0, 1, 2});
     node->addInput(g.addInput("input", DataType::FLOAT, {1, 3, 1, 5}));
     node->addOutput("output");
-    node->set_axes({0, 1, 2});
     EXPECT_ANY_THROW(ShapeInference::Instance().infer(node));
 }
 
 TEST(ShapeInference, Unsqueeze) {
     Graph g;
 
-    auto node = g.create<Unsqueeze>();
+    auto node = g.create<Unsqueeze>()->axes({0, 2, 5});
     node->addInput(g.addInput("input", DataType::FLOAT, {3, 4, 5}));
     node->addOutput("output");
-    node->set_axes({0, 2, 5});
 
     ShapeInference::Instance().infer(node);
     EXPECT_EQ(node->output()->type(), DataType::FLOAT);
@@ -548,10 +531,9 @@ TEST(ShapeInference, Unsqueeze) {
 TEST(ShapeInference, UnsqueezeWithNegativeAxis) {
     Graph g;
 
-    auto node = g.create<Unsqueeze>();
+    auto node = g.create<Unsqueeze>()->axes({-1, 0, 2});
     node->addInput(g.addInput("input", DataType::FLOAT, {3, 4, 5}));
     node->addOutput("output");
-    node->set_axes({-1, 0, 2});
 
     ShapeInference::Instance().infer(node);
     EXPECT_EQ(node->output()->type(), DataType::FLOAT);
@@ -565,22 +547,22 @@ TEST(ShapeInference, UnsqueezeWithInvalidAxis) {
     node->addInput(g.addInput("input", DataType::FLOAT, {3, 4, 5}));
     node->addOutput("output");
 
-    node->set_axes({4});
+    node->axes({4});
     EXPECT_ANY_THROW(ShapeInference::Instance().infer(node));
 
-    node->set_axes({0, 0});
+    node->axes({0, 0});
     EXPECT_ANY_THROW(ShapeInference::Instance().infer(node));
 }
 
 TEST(ShapeInference, Pad) {
     Graph g;
 
-    auto node = g.create<Pad>();
+    auto node = g.create<Pad>()
+        ->pads({0, 0, 1, 3, 0, 0, 2, 4})
+        ->mode("constant")
+        ->value(1.2f);
     node->addInput(g.addInput("input", DataType::FLOAT, {1, 3, 4, 5}));
     node->addOutput("output");
-    node->set_pads({0, 0, 1, 3, 0, 0, 2, 4});
-    node->set_mode("constant");
-    node->set_value(1.2f);
 
     ShapeInference::Instance().infer(node);
     EXPECT_EQ(node->output()->type(), DataType::FLOAT);
@@ -591,9 +573,9 @@ TEST(ShapeInference, PadWithNegativeValue) {
     Graph g;
 
     auto node = g.create<Pad>();
+    node->pads({0, 0, -1, -3, 0, 0, -2, -4});
     node->addInput(g.addInput("input", DataType::FLOAT, {1, 3, 7, 12}));
     node->addOutput("output");
-    node->set_pads({0, 0, -1, -3, 0, 0, -2, -4});
 
     ShapeInference::Instance().infer(node);
     EXPECT_EQ(node->output()->type(), DataType::FLOAT);
@@ -616,9 +598,8 @@ TEST(ShapeInference, Tile) {
 TEST(ShapeInference, SpaceToDepth) {
     Graph g;
 
-    auto n = g.create<SpaceToDepth>();
+    auto n = g.create<SpaceToDepth>()->blocksize(4);
     n->addInput(g.addInput("input", DataType::FLOAT, {1, 3, 64, 64}));
-    n->set_blocksize(4);
     n->addOutput("output");
 
     ShapeInference::Instance().infer(n);
@@ -629,9 +610,8 @@ TEST(ShapeInference, SpaceToDepth) {
 TEST(ShapeInference, DepthToSpace) {
     Graph g;
 
-    auto n = g.create<DepthToSpace>();
+    auto n = g.create<DepthToSpace>()->blocksize(4);
     n->addInput(g.addInput("input", DataType::FLOAT, {1, 48, 16, 16}));
-    n->set_blocksize(4);
     n->addOutput("output");
 
     ShapeInference::Instance().infer(n);

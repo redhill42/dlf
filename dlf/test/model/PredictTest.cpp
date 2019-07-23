@@ -25,8 +25,7 @@ TYPED_TEST(PredictTest, Simple) {
     y->addInput(g.addInput("C", DataType::FLOAT, {1}));
     g.addOutput(y->addOutput("Y"));
 
-    auto o1 = g.append<Clip>();
-    o1->set_min(10)->set_max(15);
+    auto o1 = g.append<Clip>()->min(10)->max(15);
     o1->addInput(y->output());
     g.addOutput(o1->addOutput("Z"));
 
@@ -35,19 +34,16 @@ TYPED_TEST(PredictTest, Simple) {
     o2->addInput(g.addInitializer(TensorData("shape", DataType::INT64, {2}, {3, 2})));
     g.addOutput(o2->addOutput("reshaped"));
 
-    auto o3 = g.append<Flatten>();
-    o3->set_axis(0);
+    auto o3 = g.append<Flatten>()->axis(0);
     o3->addInput(y->output());
     g.addOutput(o3->addOutput("flatten"));
 
-    auto o4 = g.append<Concat>();
-    o4->set_axis(-1);
+    auto o4 = g.append<Concat>()->axis(-1);
     o4->addInput(y->output());
     o4->addInput(o1->output());
     g.addOutput(o4->addOutput("concat"));
 
-    auto o5 = g.append<Split>();
-    o5->set_axis(-1);
+    auto o5 = g.append<Split>()->axis(-1);
     o5->addInput(o4->output());
     g.addOutput(o5->addOutput("split1"));
     g.addOutput(o5->addOutput("split2"));
@@ -79,12 +75,10 @@ TYPED_TEST(PredictTest, Gemm) {
     using Context = TypeParam;
     Graph g;
 
-    auto x = g.append<Gemm>();
+    auto x = g.append<Gemm>()->alpha(1.f)->beta(1.f);
     x->addInput(g.addInput("A", DataType::FLOAT, {2, 2}));
     x->addInput(g.addInput("B", DataType::FLOAT, {2, 2}));
     x->addInput(g.addInput("C", DataType::FLOAT, {2}));
-    x->set_alpha(1.0f);
-    x->set_beta(1.0f);
     g.addOutput(x->addOutput("Y"));
 
     Predictor<Context, float> predictor(g);
@@ -99,11 +93,10 @@ TYPED_TEST(PredictTest, Conv) {
     using Context = TypeParam;
     Graph g;
 
-    auto x = g.append<Conv>();
+    auto x = g.append<Conv>()->pads({1, 1, 1, 1});
     x->addInput(g.addInput("X", DataType::FLOAT, {1, 1, 5, 5}));
     x->addInput(g.addInput("W", DataType::FLOAT, {1, 1, 3, 3}));
     x->addInput(g.addInitializer(TensorData("B", DataType::FLOAT, {1}, {1})));
-    x->set_pads({1, 1, 1, 1});
     g.addOutput(x->addOutput("Y"));
 
     auto X = Tensor<float>::range({1, 1, 5, 5}, 0);
