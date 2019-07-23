@@ -1,6 +1,5 @@
 #include <cstdio>
 #include <random>
-#include <fstream>
 #include <opencv2/opencv.hpp>
 #include <model.h>
 #include <predict.h>
@@ -57,12 +56,7 @@ cv::Mat create_image_grid(const std::vector<cv::Mat>& images,
 
 template <typename Context = predict::CPU, typename T = float>
 predict::Predictor<Context, T> create_predictor(const char* path) {
-    std::fstream fs(path, std::ios::in | std::ios::binary);
-    if (!fs.is_open()) {
-        throw std::runtime_error(cxx::string_concat("failed to open ", path));
-    }
-
-    auto g = model::import_model(fs);
+    auto g = model::import_model(path);
     return predict::Predictor<Context, T>(std::move(g));
 }
 

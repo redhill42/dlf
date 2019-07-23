@@ -10,22 +10,15 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    std::fstream is(argv[1], std::ios::in | std::ios::binary);
-    if (is.fail()) {
-        std::cerr << argv[1] << ": " << strerror(errno)  << std::endl;
+    try {
+        auto g = import_model(argv[1]);
+        ShapeInference::Instance().infer(*g);
+        Optimizer().optimize(*g);
+        export_model(argv[2], *g);
+    } catch (std::runtime_error& e) {
+        std::cerr << e.what() << std::endl;
         return 1;
     }
-
-    std::fstream os(argv[2], std::ios::out | std::ios::binary);
-    if (os.fail()) {
-        std::cerr << argv[2] << ": " << strerror(errno) << std::endl;
-        return 1;
-    }
-
-    auto g = import_model(is);
-    ShapeInference::Instance().infer(*g);
-    Optimizer().optimize(*g);
-    export_model(os, *g);
 
     return 0;
 }

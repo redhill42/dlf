@@ -1,5 +1,4 @@
 #include <cstdio>
-#include <fstream>
 #include <algorithm>
 #include <dirent.h>
 #include <sys/stat.h>
@@ -14,7 +13,7 @@
 #include "synset.txt"
 
 using namespace dlf;
-using Context = predict::GPU;
+using Context = predict::CPU;
 using Real = float;
 using Predictor = predict::Predictor<Context, Real>;
 
@@ -59,12 +58,7 @@ struct ImageClass {
 };
 
 Predictor create_predictor(const char* path) {
-    std::fstream fs(path, std::ios::in | std::ios::binary);
-    if (!fs.is_open()) {
-        throw std::runtime_error(cxx::string_concat("failed to open ", path));
-    }
-
-    auto g = model::import_model(fs);
+    auto g = model::import_model(path);
     return predict::Predictor<Context, Real>(std::move(g));
 }
 

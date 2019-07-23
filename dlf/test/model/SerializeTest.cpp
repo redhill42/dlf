@@ -14,8 +14,7 @@ protected:
     std::unique_ptr<Graph> g;
 
     SerializeTest() {
-        std::fstream input("data/resnet18v1.onnx", std::ios::in | std::ios::binary);
-        g = import_model(input);
+        g = import_model("data/resnet18v1.onnx");
     }
 };
 
