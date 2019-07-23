@@ -112,6 +112,39 @@ public:
     void reshape(const std::vector<int>& new_shape);
 
     /**
+     * Flattens the shape into a 2D matrix shape.
+     */
+    void flatten(int axis);
+
+    /**
+     * Remove single-dimensional entries from the shape of an array.
+     *
+     * @param axes Selects a subset of the single-dimensional entries
+     * in the shape. If an axis is selected with shape entry greater
+     * than one, an error is raised.
+     */
+    void squeeze(const std::vector<int> axes = {});
+
+    template <typename... Args>
+    std::enable_if_t<cxx::conjunction<std::is_convertible<Args, int>...>::value>
+    squeeze(Args... args) {
+        squeeze({static_cast<int>(args)...});
+    }
+
+    /**
+     * Insert single-dimensional entries to the shape.
+     *
+     * @param axes List of integers, indicate the dimensions to be inserted.
+     */
+    void unsqueeze(const std::vector<int> axes);
+
+    template <typename... Args>
+    std::enable_if_t<cxx::conjunction<std::is_convertible<Args, int>...>::value>
+    unsqueeze(Args... args) {
+        unsqueeze({static_cast<int>(args)...});
+    }
+
+    /**
      * Broadcast the shape to target shape.
      */
     Shape broadcast(const Shape& to) const;
@@ -231,6 +264,39 @@ public:
      */
     void reshape(const std::vector<int>& new_shape) {
         m_shape.reshape(new_shape);
+    }
+
+    /**
+     * Flattens the tensor into a 2D matrix.
+     */
+    void flatten(int axis) {
+        m_shape.flatten(axis);
+    }
+
+    /**
+     * Remove single-dimensional entries from the shape.
+     */
+    void squeeze(const std::vector<int> axes = {}) {
+        m_shape.squeeze(axes);
+    }
+
+    template <typename... Args>
+    std::enable_if_t<cxx::conjunction<std::is_convertible<Args, int>...>::value>
+    squeeze(Args... args) {
+        m_shape.squeeze(args...);
+    }
+
+    /**
+     * Insert single-dimensional entries to the shape.
+     */
+    void unsqueeze(const std::vector<int> axes) {
+        m_shape.unsqueeze(axes);
+    }
+
+    template <typename... Args>
+    std::enable_if_t<cxx::conjunction<std::is_convertible<Args, int>...>::value>
+    unsqueeze(Args... args) {
+        m_shape.unsqueeze(args...);
     }
 
     /**

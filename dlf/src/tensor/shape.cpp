@@ -1,5 +1,6 @@
 #include <unordered_set>
 #include <cstring>
+#include <numeric>
 #include "tensor/shape.h"
 #include "utility.h"
 
@@ -152,6 +153,67 @@ void Shape::reshape(const std::vector<int>& new_shape) {
     if (size() != new_size)
         throw shape_error("reshape: incompatible shape");
     init(std::move(dims));
+}
+
+void Shape::flatten(int axis) {
+    if (axis < 0) axis += rank();
+    if (axis < 0 || axis > rank())
+        throw shape_error("flatten: invalid axis");
+
+    auto dims = extents();
+    auto rows = std::accumulate(dims.begin(), dims.begin()+axis, 1, std::multiplies<>());
+    auto cols = std::accumulate(dims.begin()+axis, dims.end(), 1, std::multiplies<>());
+    reshape({rows, cols});
+}
+
+void Shape::squeeze(const std::vector<int> axes) {
+    std::unordered_set<int> norm_axes;
+    for (auto a : axes) {
+        if (a < 0) a += rank();
+        if (a < 0 || a >= rank())
+            throw shape_error("squeeze: Invalid axis");
+        norm_axes.insert(a); // duplicate is ok
+    }
+
+    std::vector<int> new_dims;
+    for (int i = 0; i < rank(); i++) {
+        if (norm_axes.find(i) != norm_axes.end()) {
+            if (extent(i) != 1)
+                throw shape_error("squeeze: cannot select an axis to squeeze out which has size not equal to one");
+            continue;
+        } else if (norm_axes.empty() && extent(i) == 1) {
+            continue;
+        } else {
+            new_dims.push_back(extent(i));
+        }
+    }
+
+    reshape(new_dims);
+}
+
+void Shape::unsqueeze(const std::vector<int> axes) {
+    const auto new_rank = rank() + axes.size();
+    std::unordered_set<int> norm_axes;
+
+    for (auto a : axes) {
+        if (a < 0) a += new_rank;
+        if (a < 0 || a >= new_rank)
+            throw shape_error("unsqueeze: Invalid axis");
+        if (norm_axes.find(a) != norm_axes.end())
+            throw shape_error("unsqueeze: Duplicate axis value");
+        norm_axes.insert(a);
+    }
+
+    std::vector<int> new_dims;
+    for (size_t i = 0, j = 0; i < new_rank; i++) {
+        if (norm_axes.find(i) != norm_axes.end()) {
+            new_dims.push_back(1);
+        } else {
+            new_dims.push_back(extent(j++));
+        }
+    }
+
+    reshape(new_dims);
 }
 
 Shape Shape::broadcast(const Shape& to) const {

@@ -510,6 +510,19 @@ private:
         result = std::make_unique<GemmOp>(this, n);
     }
 
+    struct MatMulOp : Operator {
+        TensorT<> A, B, C;
+        MatMulOp(OperatorFactory* of, model::MatMul* n)
+            : A(of->alloc(n->A())), B(of->alloc(n->B())), C(of->alloc(n->C())) {}
+        void evaluate() override {
+            matmul(A, B, C);
+        }
+    };
+
+    void visit(model::MatMul* n) override {
+        result = std::make_unique<MatMulOp>(this, n);
+    }
+
     struct ConvOp : Operator {
         TensorT<> X, W, B, Y;
         FilterShape2D filter;

@@ -3,6 +3,74 @@
 
 using namespace dlf;
 
+TEST(UniformTest, MatMul) {
+    auto A = Tensor<float>::range({2, 3, 4}, 1);
+    auto B = Tensor<float>::range({2, 4, 5}, 1);
+    auto C = Tensor<float>({2, 3, 5}, {
+         110,  120,  130,  140,  150,
+         246,  272,  298,  324,  350,
+         382,  424,  466,  508,  550,
+
+        1678, 1736, 1794, 1852, 1910,
+        2134, 2208, 2282, 2356, 2430,
+        2590, 2680, 2770, 2860, 2950
+    });
+
+    EXPECT_EQ(matmul(A, B), C);
+
+    auto dev_A = dev(A);
+    auto dev_B = dev(B);
+    auto dev_C = matmul(dev_A, dev_B);
+    EXPECT_EQ(dev_C.read(), C);
+}
+
+TEST(UniformTest, MatMulBroadcast) {
+    auto A = Tensor<float>::range({2, 3, 4}, 1);
+    auto B = Tensor<float>::range({1, 4, 5}, 1);
+    auto C = Tensor<float>({2, 3, 5}, {
+        110,  120,  130,  140,  150,
+        246,  272,  298,  324,  350,
+        382,  424,  466,  508,  550,
+
+        518,  576,  634,  692,  750,
+        654,  728,  802,  876,  950,
+        790,  880,  970, 1060, 1150
+    });
+
+    EXPECT_EQ(matmul(A, B), C);
+
+    auto dev_C = matmul(dev(A), dev(B));
+    EXPECT_EQ(dev_C.read(), C);
+}
+
+TEST(Uniform, MatMulVectorL) {
+    auto A = Tensor<float>::range({4}, 1);
+    auto B = Tensor<float>::range({2, 4, 5}, 1);
+    auto C = Tensor<float>({2, 5}, {
+        110, 120, 130, 140, 150,
+        310, 320, 330, 340, 350,
+    });
+
+    EXPECT_EQ(matmul(A, B), C);
+
+    auto dev_C = matmul(dev(A), dev(B));
+    EXPECT_EQ(dev_C.read(), C);
+}
+
+TEST(Uniform, MatMulVectorR) {
+    auto A = Tensor<float>::range({2, 3, 4}, 1);
+    auto B = Tensor<float>::range({4}, 1);
+    auto C = Tensor<float>({2, 3}, {
+         30,  70, 110,
+        150, 190, 230
+    });
+
+    EXPECT_EQ(matmul(A, B), C);
+
+    auto dev_C = matmul(dev(A), dev(B));
+    EXPECT_EQ(dev_C.read(), C);
+}
+
 TEST(UniformTest, PowCPU) {
     auto A = Tensor<float>({4}, {1, 2, 3, 4});
     auto B = pow(A, 2);

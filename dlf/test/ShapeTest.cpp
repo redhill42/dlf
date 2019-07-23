@@ -13,6 +13,9 @@ TEST(Shape, ShapeBroadcast) {
     EXPECT_EQ(Shape::broadcast(Shape({15, 3, 5}), Shape({15, 1, 5})), Shape({15, 3, 5}));
     EXPECT_EQ(Shape::broadcast(Shape({8, 1, 6, 1}), Shape({7, 1, 5})), Shape({8, 7, 6, 5}));
 
+    EXPECT_EQ(Shape::broadcast(Shape(), Shape({2, 3, 4})), Shape({2, 3, 4}));
+    EXPECT_EQ(Shape::broadcast(Shape({2, 3, 4}), Shape()), Shape({2, 3, 4}));
+    
     EXPECT_ANY_THROW(Shape::broadcast(Shape({2, 1}), Shape({8, 4, 3})));
 }
 

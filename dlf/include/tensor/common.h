@@ -187,6 +187,194 @@ pow(LHS&& lhs, RHS&& rhs) {
     return transform(std::forward<LHS>(lhs), std::forward<RHS>(rhs), xfn::power<>());
 }
 
+
+namespace detail {
+inline int matmul_broadcast(Shape& shapeA, Shape& shapeB, Shape& shapeC) {
+    if (shapeA.rank() == 0 || shapeB.rank() == 0)
+        throw shape_error("matmul: Input tensors of wrong rank (0).");
+
+    // First promote each shape to at least rank-2. This logic is
+    // specific to matmul, not generic broadcasting.
+    if (shapeA.rank() == 1)
+        shapeA.unsqueeze(0);
+    if (shapeB.rank() == 1)
+        shapeB.unsqueeze(1);
+
+    auto dimsA = shapeA.extents();
+    auto dimsB = shapeB.extents();
+
+    // Check for compatible matrix multiply dimensions
+    auto m = dimsA[dimsA.size() - 2];
+    auto k = dimsA[dimsA.size() - 1];
+    auto p = dimsB[dimsB.size() - 2];
+    auto n = dimsB[dimsB.size() - 1];
+
+    if (k != p)
+        throw shape_error("matmul: Incompatible dimensions for matrix multiplication");
+
+    // Now call out to generic multidimensional broadcasting for
+    // the broadcastable prefixes.
+    auto prefixDims = Shape::broadcast(
+        Shape({dimsA.begin(), dimsA.end() - 2}),
+        Shape({dimsB.begin(), dimsB.end() - 2})
+    ).extents();
+
+    // Back to matmul-specific. Add the trailing dimensions back in.
+    dimsA = prefixDims;
+    dimsA.push_back(m);
+    dimsA.push_back(k);
+    shapeA = shapeA.broadcast(Shape(dimsA));
+
+    dimsB = prefixDims;
+    dimsB.push_back(k);
+    dimsB.push_back(n);
+    shapeB = shapeB.broadcast(Shape(dimsB));
+
+    auto dimsC = prefixDims;
+    dimsC.push_back(m);
+    dimsC.push_back(n);
+    shapeC = Shape(dimsC);
+
+    return std::accumulate(prefixDims.begin(), prefixDims.end(), 1, std::multiplies<>());
+}
+} // namespace detail
+
+/**
+ * Matrix product of two arrays.
+ *
+ * The behavior depends on the arguments in the following way.
+ *
+ *  - If both arguments are 2-D they are multiplied like conventional matrices.
+ *  - If either argument is N-D, N > 2, it is treated as a stack of matrices
+ *    residing in the last two indexes and broadcast accordingly.
+ *  - If the first argument is 1-D, it is promoted to a matrix by prepending
+ *    a 1 to its dimensions. After matrix multiplication the prepended 1 is
+ *    removed.
+ *  - If the second argument is 1-D, it is promoted to a matrix by appending
+ *    a 1 to its dimensions. After matrix multiplication the appended 1 is
+ *    removed.
+ *
+ * Multiplication by a scalar is not allowed, use * instead. Note that
+ * multiplying a stack of matrices with a vector will result in a stack of
+ * vectors, but matmul will not recognize it as such.
+ */
+template <typename T>
+void matmul(const Tensor<T>& A, const Tensor<T>& B, Tensor<T>& C) {
+    if (A.rank() <= 2 && B.rank() <= 2) {
+        dot(A, B, &C);
+        return;
+    }
+
+    Shape shapeA = A.shape();
+    Shape shapeB = B.shape();
+    Shape shapeC;
+
+    int batch = detail::matmul_broadcast(shapeA, shapeB, shapeC);
+
+    int m = shapeA.extent(shapeA.rank() - 2);
+    int k = shapeA.extent(shapeA.rank() - 1);
+    int n = shapeB.extent(shapeB.rank() - 1);
+    int lda = std::max<int>(shapeA.stride(shapeA.rank() - 2), k);
+    int ldb = std::max<int>(shapeB.stride(shapeB.rank() - 2), n);
+    int ldc = std::max<int>(shapeC.stride(shapeC.rank() - 2), n);
+    int off_a = shapeA.stride(shapeA.rank() - 3);
+    int off_b = shapeB.stride(shapeB.rank() - 3);
+    int off_c = shapeC.stride(shapeC.rank() - 3);
+
+    if (A.rank() == 1)
+        shapeC.squeeze(-2);
+    if (B.rank() == 1)
+        shapeC.squeeze(-1);
+    assert(C.shape() == shapeC);
+
+    auto px = A.data(), py = B.data();
+    auto pz = C.data();
+
+    tbb::parallel_for(tbb::blocked_range<int>(0, batch, 16), [=](auto r) {
+        for (int i = r.begin(); i < r.end(); i++) {
+            impl::gemm(m, n, k, px + i*off_a, py + i*off_b, pz + i*off_c, lda, ldb, ldc);
+        }
+    });
+}
+
+template <typename T>
+void matmul(const DevTensor<T>& A, const DevTensor<T>& B, DevTensor<T>& C) {
+    if (A.rank() <= 2 && B.rank() <= 2) {
+        dot(A, B, &C);
+        return;
+    }
+
+    Shape shapeA = A.shape();
+    Shape shapeB = B.shape();
+    Shape shapeC;
+    int batch;
+
+    batch = detail::matmul_broadcast(shapeA, shapeB, shapeC);
+
+    int m = shapeA.extent(shapeA.rank() - 2);
+    int k = shapeA.extent(shapeA.rank() - 1);
+    int n = shapeB.extent(shapeB.rank() - 1);
+    int lda = std::max<int>(shapeA.stride(shapeA.rank() - 2), k);
+    int ldb = std::max<int>(shapeB.stride(shapeB.rank() - 2), n);
+    int ldc = std::max<int>(shapeC.stride(shapeC.rank() - 2), n);
+    int off_a = shapeA.stride(shapeA.rank() - 3);
+    int off_b = shapeB.stride(shapeB.rank() - 3);
+    int off_c = shapeC.stride(shapeC.rank() - 3);
+
+    if (A.rank() == 1)
+        shapeC.squeeze({-2});
+    if (B.rank() == 1)
+        shapeC.squeeze({-1});
+    assert(C.shape() == shapeC);
+
+    std::vector<size_t> a_offsets(batch);
+    std::vector<size_t> b_offsets(batch);
+    std::vector<size_t> c_offsets(batch);
+    std::vector<T> alpha(batch), beta(batch);
+
+    for (int i = 0; i < batch; i++) {
+        a_offsets[i] = i * off_a;
+        b_offsets[i] = i * off_b;
+        c_offsets[i] = i * off_c;
+        alpha[i] = T{1};
+        beta[i] = T{0};
+    }
+
+    gpgpu::blas::gemmBatched(
+        gpgpu::blas::Layout::RowMajor,
+        gpgpu::blas::Transpose::NoTrans,
+        gpgpu::blas::Transpose::NoTrans,
+        m, n, k,
+        &alpha[0],
+        A.data(), &a_offsets[0], lda,
+        B.data(), &b_offsets[0], ldb,
+        &beta[0],
+        C.data(), &c_offsets[0], ldc,
+        batch);
+}
+
+template <typename TensorT>
+enable_if_tensor<TensorT> matmul(const TensorT& A, const TensorT& B) {
+    if (A.rank() <= 2 && B.rank() <= 2) {
+        return dot(A, B);
+    }
+
+    Shape shapeA = A.shape();
+    Shape shapeB = B.shape();
+    Shape shapeC;
+
+    detail::matmul_broadcast(shapeA, shapeB, shapeC);
+
+    if (A.rank() == 1)
+        shapeC.squeeze({-2});
+    if (B.rank() == 1)
+        shapeC.squeeze({-1});
+
+    tensor_type<TensorT> C(shapeC);
+    matmul(A, B, C);
+    return C;
+}
+
 template <typename TensorT>
 enable_if_tensor<TensorT> matpow(TensorT&& A, long n) {
     assert(A.is_square() && n >= 0);
@@ -336,69 +524,23 @@ inline reshape(const TensorT& src, TensorT& dst) {
 
 template <typename TensorT>
 enable_if_tensor<TensorT> flatten(TensorT&& tensor, int axis) {
-    auto rank = tensor.rank();
-    if (axis < 0) axis += rank;
-    if (axis < 0 || axis > rank)
-        throw shape_error("flatten: invalid axis value");
-
-    auto dims = tensor.shape().extents();
-    auto rows = std::accumulate(dims.begin(), dims.begin()+axis, 1, std::multiplies<>());
-    auto cols = std::accumulate(dims.begin()+axis, dims.end(), 1, std::multiplies<>());
-    return reshape(std::forward<TensorT>(tensor), {rows, cols});
+    tensor_type<TensorT> ret = std::forward<TensorT>(tensor);
+    ret.flatten(axis);
+    return ret;
 }
 
 template <typename TensorT>
 enable_if_tensor<TensorT> squeeze(TensorT&& tensor, const std::vector<int>& axes = {}) {
-    auto rank = tensor.rank();
-
-    std::unordered_set<int> adjusted_axes;
-    for (auto a : axes) {
-        if (a < 0) a += rank;
-        if (a < 0 || a >= rank)
-            throw shape_error("squeeze: invalid axis value");
-        adjusted_axes.insert(a); // duplicate is ok
-    }
-
-    std::vector<int> shape;
-    for (int i = 0; i < rank; i++) {
-        auto dim = tensor.extent(i);
-        if (adjusted_axes.find(i) != adjusted_axes.end()) {
-            if (dim != 1)
-                throw shape_error("squeeze: cannot select an axis to squeeze out which has size not equal to 1");
-            continue;
-        } else if (adjusted_axes.empty() && dim == 1) {
-            continue;
-        } else {
-            shape.push_back(dim);
-        }
-    }
-
-    return reshape(std::forward<TensorT>(tensor), shape);
+    tensor_type<TensorT> ret = std::forward<TensorT>(tensor);
+    ret.squeeze(axes);
+    return ret;
 }
 
 template <typename TensorT>
 enable_if_tensor<TensorT> unsqueeze(TensorT&& tensor, const std::vector<int>& axes) {
-    auto rank = tensor.rank() + axes.size();
-    std::unordered_set<int> adjusted_axes;
-    for (auto a : axes) {
-        if (a < 0) a += rank;
-        if (a < 0 || a >= rank)
-            throw shape_error("unsqueeze: invalid axis value");
-        if (adjusted_axes.find(a) != adjusted_axes.end())
-            throw shape_error("unsqueeze: duplicate axis value");
-        adjusted_axes.insert(a);
-    }
-
-    std::vector<int> shape;
-    for (size_t i = 0, j = 0; i < rank; i++) {
-        if (adjusted_axes.find(i) != adjusted_axes.end()) {
-            shape.push_back(1);
-        } else {
-            shape.push_back(tensor.extent(j++));
-        }
-    }
-
-    return reshape(std::forward<TensorT>(tensor), shape);
+    tensor_type<TensorT> ret = std::forward<TensorT>(tensor);
+    ret.unsqueeze(axes);
+    return ret;
 }
 
 namespace detail {
