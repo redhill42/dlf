@@ -12,7 +12,7 @@ int main(int argc, char** argv) {
 
     try {
         auto g = import_model(argv[1]);
-        ShapeInference::Instance().infer(*g);
+        ShapeInference::newInstance()->infer(*g);
         Optimizer().optimize(*g);
         export_model(argv[2], *g);
     } catch (std::runtime_error& e) {

@@ -103,11 +103,11 @@ END_OPERATOR()
 
 #define DEFINE_SHAPE_ATTRIBUTE(name) \
     bool has_##name() const noexcept { return hasAttribute(k##name); } \
-    Dims name() const { \
+    std::vector<size_t> name() const { \
         const auto& shape__ = get_is(k##name); \
-        return Dims(shape__.begin(), shape__.end()); \
+        return std::vector<size_t>(shape__.begin(), shape__.end()); \
     } \
-    auto name(const Dims& dims__) { \
+    auto name(const std::vector<size_t>& dims__) { \
         set_is(k##name, std::vector<int64_t>(dims__.begin(), dims__.end())); \
         return this; \
     }

@@ -109,10 +109,12 @@ public:
 template <typename Context, typename T>
 class Predictor {
 public:
-    explicit Predictor(model::Graph& graph);
+    explicit Predictor(model::Graph& graph,
+        const std::unordered_map<std::string, size_t>& env = {});
 
-    explicit Predictor(std::unique_ptr<model::Graph> graph)
-        : Predictor(*graph) {}
+    explicit Predictor(std::unique_ptr<model::Graph> graph,
+        const std::unordered_map<std::string, size_t>& env = {})
+        : Predictor(*graph, env) {}
 
     void predict() {
         for (auto& op : m_operators) {
@@ -163,7 +165,7 @@ public:
                 value->name(), "' in node ", value->node()->kind().str()));
 
         auto datum = std::make_shared<Datum<Context>>(
-            model::DataTypeTrait<U>, Shape(value->dims()));
+            model::DataTypeTrait<U>, value->dims().shape());
         m_dataset.push_back(datum);
         m_datamap.emplace(value, datum);
         if (value->has_initializer())
@@ -191,7 +193,7 @@ public:
 
         assert(m_datamap.find(output) == m_datamap.end());
         auto input_datum = allocDatum<U>(input);
-        auto output_datum = input_datum->makeShared(Shape(output->dims()));
+        auto output_datum = input_datum->makeShared(output->dims().shape());
         m_dataset.push_back(output_datum);
         m_datamap.emplace(output, output_datum);
         return output_datum->template get<U>();
@@ -387,7 +389,7 @@ private:
         BinaryOp(OperatorFactory* of, model::Node* n)
             : A(of->alloc(n->input(0))), B(of->alloc(n->input(1)))
         {
-            Shape shape(n->output()->dims());
+            auto shape = n->output()->dims().shape();
             if (A.shape() == shape &&
                     n->input(0)->uses().size() == 1 &&
                    !n->input(0)->has_initializer()) {
@@ -774,11 +776,13 @@ private:
 };
 
 template <typename Context, typename T>
-Predictor<Context, T>::Predictor(model::Graph& graph) {
+Predictor<Context, T>::Predictor(model::Graph& graph,
+    const std::unordered_map<std::string, size_t>& env)
+{
     OperatorFactory<Context, T> factory(m_dataset);
 
     // do shape inference
-    model::ShapeInference::Instance().infer(graph);
+    model::ShapeInference::newInstance(env)->infer(graph);
 
     // do optimizer
     model::Optimizer optimizer;

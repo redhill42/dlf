@@ -63,7 +63,168 @@ enum class DataType : int32_t {
     COMPLEX128,     // complex with float64 real and imaginary components
 };
 
-using Dims = std::vector<size_t>;
+class Dimension {
+    size_t m_value{};
+    std::string m_symbol;
+
+public:
+    Dimension() = default;
+    Dimension(size_t value) : m_value(value) {}
+    Dimension(std::string symbol) : m_symbol(std::move(symbol)) {}
+
+    bool has_value() const noexcept {
+        return m_symbol.empty();
+    }
+
+    size_t value() const {
+        if (!has_value())
+            throw shape_error(cxx::string_concat(symbol(), ": missing dimension value"));
+        return m_value;
+    }
+
+    void set_value(size_t value) noexcept {
+        m_value = value;
+        m_symbol.clear();
+    }
+
+    const std::string& symbol() const noexcept {
+        return m_symbol;
+    }
+
+    operator size_t() const {
+        return value();
+    }
+
+    Dimension& operator+=(size_t val) {
+        set_value(value() + val);
+        return *this;
+    }
+
+    Dimension& operator-=(size_t val) {
+        set_value(value() - val);
+        return *this;
+    }
+
+    friend bool operator==(const Dimension& x, const Dimension& y) {
+        return x.m_value == y.m_value && x.m_symbol == y.m_symbol;
+    }
+
+    friend bool operator!=(const Dimension& x, const Dimension& y) {
+        return !(x == y);
+    }
+};
+
+class Dims {
+    std::vector<Dimension> m_dims;
+
+public:
+    Dims() = default;
+    explicit Dims(size_t n) : m_dims(n) {}
+
+    Dims(const std::vector<size_t>& dims) {
+        for (auto d : dims) {
+            m_dims.push_back(d);
+        }
+    }
+
+    Dims(std::initializer_list<size_t> il) {
+        for (auto d : il) {
+            m_dims.push_back(d);
+        }
+    }
+
+    template <typename InputIterator>
+    Dims(InputIterator first, InputIterator last)
+        : m_dims(first, last) {}
+
+    template <typename InputIterator>
+    void assign(InputIterator first, InputIterator last) {
+        m_dims.assign(first, last);
+    }
+
+    size_t rank() const noexcept {
+        return m_dims.size();
+    }
+
+    Dimension& operator[](size_t i) noexcept {
+        return m_dims[i];
+    }
+
+    const Dimension& operator[](size_t i) const noexcept {
+        return m_dims[i];
+    }
+
+    size_t size() const {
+        return std::accumulate(m_dims.begin(), m_dims.end(), 1, std::multiplies<>());
+    }
+
+    size_t partial_size(size_t start, size_t end) const {
+        return std::accumulate(m_dims.begin()+start, m_dims.begin()+end, 1, std::multiplies<>());
+    }
+
+    Shape shape() const {
+        std::vector<size_t> extents;
+        for (auto& d : m_dims)
+            extents.push_back(d.value());
+        return Shape(extents);
+    }
+
+    void append(Dimension dim) {
+        m_dims.push_back(std::move(dim));
+    }
+
+    void insert(size_t i, Dimension dim) {
+        m_dims.insert(m_dims.begin() + i, std::move(dim));
+    }
+
+    void erase(size_t i) {
+        m_dims.erase(m_dims.begin() + i);
+    }
+
+    const Dimension& back() const {
+        return m_dims.back();
+    }
+
+    Dimension& back() {
+        return m_dims.back();
+    }
+
+    friend bool operator==(const Dims& x, const Dims& y) {
+        return x.m_dims == y.m_dims;
+    }
+
+    friend bool operator!=(const Dims& x, const Dims& y) {
+        return !(x == y);
+    }
+
+public:
+    using value_type = typename std::vector<Dimension>::value_type;
+    using reference = typename std::vector<Dimension>::reference;
+    using const_reference = typename std::vector<Dimension>::const_reference;
+    using pointer = typename std::vector<Dimension>::pointer;
+    using const_pointer = typename std::vector<Dimension>::const_pointer;
+    using size_type = typename std::vector<Dimension>::size_type;
+    using difference_type = typename std::vector<Dimension>::difference_type;
+    using iterator = typename std::vector<Dimension>::iterator;
+    using const_iterator = typename std::vector<Dimension>::const_iterator;
+    using reverse_iterator = typename std::vector<Dimension>::reverse_iterator;
+    using const_reverse_iterator = typename std::vector<Dimension>::const_reverse_iterator;
+
+    iterator begin() noexcept { return m_dims.begin(); }
+    const_iterator begin() const noexcept { return m_dims.begin(); }
+    iterator end() noexcept { return m_dims.end(); }
+    const_iterator end() const noexcept { return m_dims.end(); }
+
+    reverse_iterator rbegin() noexcept { return m_dims.rbegin(); }
+    const_reverse_iterator rbegin() const noexcept { return m_dims.rbegin(); }
+    reverse_iterator rend() noexcept { return m_dims.rend(); }
+    const_reverse_iterator rend() const noexcept { return m_dims.rend(); }
+
+    const_iterator cbegin() const noexcept { return begin(); }
+    const_iterator cend() const noexcept { return end(); }
+    const_reverse_iterator crbegin() const noexcept { return rbegin(); }
+    const_reverse_iterator crend() const noexcept { return rend(); }
+};
 
 template <typename T> constexpr DataType DataTypeTrait = DataType::UNDEFINED;
 template <> constexpr DataType DataTypeTrait<float> = DataType::FLOAT;
@@ -333,7 +494,7 @@ public:
     }
 
     size_t size() const noexcept {
-        return std::accumulate(m_dims.begin(), m_dims.end(), 1, std::multiplies<>());
+        return m_dims.size();
     }
 
     std::vector<float>& float_data() noexcept {
@@ -488,7 +649,7 @@ public:
 
 template <typename T>
 Tensor<T> TensorData::decode() const {
-    Shape shape(m_dims);
+    auto shape = m_dims.shape();
 
     if (has_raw_data()) {
         void* raw = const_cast<void*>(reinterpret_cast<const void*>(raw_data().data()));
@@ -552,7 +713,7 @@ template <>
 inline Tensor<std::string> TensorData::decode() const {
     if (type() != DataType::STRING)
         throw std::logic_error("invalid tensor data type");
-    return {Shape(m_dims), string_data().begin(), string_data().end()};
+    return {m_dims.shape(), string_data().begin(), string_data().end()};
 }
 
 template <>
@@ -569,7 +730,7 @@ inline Tensor<std::complex<float>> TensorData::decode() const {
         data = reinterpret_cast<const std::complex<float>*>(float_data().data());
         size = float_data().size() / 2;
     }
-    return {Shape(m_dims), data, data+size};
+    return {m_dims.shape(), data, data+size};
 }
 
 template <>
@@ -586,7 +747,7 @@ inline Tensor<std::complex<double>> TensorData::decode() const {
         data = reinterpret_cast<const std::complex<double>*>(float_data().data());
         size = float_data().size() / 2;
     }
-    return {Shape(m_dims), data, data+size};
+    return {m_dims.shape(), data, data+size};
 }
 
 //==-------------------------------------------------------------------------
@@ -1041,8 +1202,12 @@ public:
         return m_dims;
     }
 
+    Dims& dims() noexcept {
+        return m_dims;
+    }
+
     size_t dim(size_t i) const noexcept {
-        return m_dims.at(i);
+        return m_dims[i];
     }
 
     Value* set_dims(Dims dims) noexcept {
@@ -1109,7 +1274,8 @@ public:
     virtual void infer(Graph& g) = 0;
     virtual ~ShapeInference() = default;
 
-    static ShapeInference& Instance();
+    static std::unique_ptr<ShapeInference> newInstance(
+        const std::unordered_map<std::string, size_t>& env = {});
 };
 
 class ShapeInferenceError : public std::runtime_error {

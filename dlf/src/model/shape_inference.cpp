@@ -24,32 +24,31 @@ void propagateShape(Node* n, size_t index = 0) {
 
 static Dims broadcastShape(const std::vector<Dims>& shapes) {
     // get the result shape size
-    size_t result_shape_size = 0;
+    size_t result_shape_rank = 0;
     for (auto& dim : shapes) {
-        if (dim.size() > result_shape_size) {
-            result_shape_size = dim.size();
+        if (dim.rank() > result_shape_rank) {
+            result_shape_rank = dim.rank();
         }
     }
 
     Dims result_shape;
-    result_shape.reserve(result_shape_size);
 
-    for (size_t i = 0; i < result_shape_size; i++) {
+    for (size_t i = 0; i < result_shape_rank; i++) {
         size_t current_dim = 1;
         for (size_t j = 0; j < shapes.size(); j++) {
-            if (i < result_shape_size - shapes[j].size()) {
+            if (i < result_shape_rank - shapes[j].rank()) {
                 // shape j will be filled with 1 at dimension i
                 continue;
             }
 
-            auto dim_i_j = shapes[j][i - result_shape_size + shapes[j].size()];
+            size_t dim_i_j = shapes[j][i - result_shape_rank + shapes[j].rank()];
             if (dim_i_j == 1)
                 continue;
             if (current_dim != dim_i_j && current_dim != 1)
                 fail_shape_inference("Incompatible dimensions");
             current_dim = dim_i_j;
         }
-        result_shape.push_back(current_dim);
+        result_shape.append(current_dim);
     }
 
     return result_shape;
@@ -60,7 +59,7 @@ static inline Dims broadcastShape(const Dims& shapeL, const Dims& shapeR) {
 }
 
 static std::vector<int64_t> decodeShape(Node* n, const TensorData& data, bool positive_only = true) {
-    if (data.type() != DataType::INT64 || data.dims().size() != 1)
+    if (data.type() != DataType::INT64 || data.dims().rank() != 1)
         fail_shape_inference(n->kind().str(), ": Invalid shape");
 
     std::vector<int64_t> shape;
@@ -83,14 +82,41 @@ static std::vector<int64_t> decodeShape(Node* n, const TensorData& data, bool po
 
 
 class ShapeInferenceImpl final : public ShapeInference, DefaultVisitor {
+    const std::unordered_map<std::string, size_t>& env;
+
 public:
+    ShapeInferenceImpl(const std::unordered_map<std::string, size_t>& env)
+        : env(env) {}
+
     void infer(Node* n) override {
         n->accept(*this);
     }
 
     void infer(Graph& g) override {
+        solveSymbolicDimensions(g);
         for (auto n : g.nodes()) {
             infer(n);
+        }
+    }
+
+    void solveSymbolicDimensions(Graph& g) {
+        for (auto v : g.inputs()) {
+            solveSymbolicDimension(v);
+        }
+        for (auto n : g.nodes()) {
+            for (auto v : n->outputs())
+                solveSymbolicDimension(v);
+        }
+    }
+
+    void solveSymbolicDimension(Value* value) {
+        for (auto& d : value->dims()) {
+            if (!d.has_value()) {
+                auto it = env.find(d.symbol());
+                if (it == env.end())
+                    throw shape_error(cxx::string_concat(d.symbol(), ": missing dimension value"));
+                d.set_value(it->second);
+            }
         }
     }
 
@@ -175,7 +201,7 @@ public:
     void visit(EyeLike* n) override {
         if (!hasInput(n->input()))
             return;
-        if (n->input()->dims().size() != 2)
+        if (n->input()->dims().rank() != 2)
             fail_shape_inference("EyeLike: Input tensor must be 2-dimensional");
 
         n->output()->set_type(n->has_dtype() ? n->dtype() : n->input()->type());
@@ -221,7 +247,7 @@ public:
         }
 
         auto& input_shape = n->input()->dims();
-        if (input_shape.size() != 2) {
+        if (input_shape.rank() != 2) {
             fail_shape_inference("Multinomial: Input tensor must have rank 2");
         }
 
@@ -362,7 +388,7 @@ public:
         if (!hasInput(n->A(), n->B()))
             return;
 
-        if (n->A()->dims().size() != 2 || n->B()->dims().size() != 2)
+        if (n->A()->dims().rank() != 2 || n->B()->dims().rank() != 2)
             fail_shape_inference("GEMM: Invalid input shape");
 
         size_t M = n->A()->dim(0);
@@ -388,35 +414,35 @@ public:
         auto shapeL = lhs->dims();
         auto shapeR = rhs->dims();
 
-        if (shapeL.size() == 0 || shapeR.size() == 0)
+        if (shapeL.rank() == 0 || shapeR.rank() == 0)
             fail_shape_inference(n->kind().str(), ": Input tensors of wrong rank (0).");
 
         // First promote each shape to at least rank-2. This logic is
         // specific to matmul, not generic broadcasting.
-        if (shapeL.size() == 1)
-            shapeL.insert(shapeL.begin(), 1);
-        if (shapeR.size() == 1)
-            shapeR.push_back(1);
+        if (shapeL.rank() == 1)
+            shapeL.insert(0, 1);
+        if (shapeR.rank() == 1)
+            shapeR.append(1);
 
         // Check for compatible matrix multiply dimensions
-        if (shapeL[shapeL.size() - 1] != shapeR[shapeR.size() - 2]) {
+        if (shapeL[shapeL.rank() - 1] != shapeR[shapeR.rank() - 2]) {
             fail_shape_inference(n->kind().str(), ": Incompatible dimensions for matrix multiplication");
         }
 
         // Now call out to generic multidimensional broadcasting for
         // the broadcastable prefixes.
         Dims prefixShapeL, prefixShapeR;
-        for (int i = 0; i < shapeL.size() - 2; i++)
-            prefixShapeL.push_back(shapeL[i]);
-        for (int i = 0; i < shapeR.size() - 2; i++)
-            prefixShapeR.push_back(shapeR[i]);
+        for (int i = 0; i < shapeL.rank() - 2; i++)
+            prefixShapeL.append(shapeL[i]);
+        for (int i = 0; i < shapeR.rank() - 2; i++)
+            prefixShapeR.append(shapeR[i]);
         Dims output_shape = broadcastShape(prefixShapeL, prefixShapeR);
 
         // Back to matmul-specific. Add the trailing dimensions back in.
-        if (lhs->dims().size() != 1)
-            output_shape.push_back(shapeL[shapeL.size() - 2]);
-        if (rhs->dims().size() != 1)
-            output_shape.push_back(shapeR[shapeR.size() - 1]);
+        if (lhs->dims().rank() != 1)
+            output_shape.append(shapeL[shapeL.rank() - 2]);
+        if (rhs->dims().rank() != 1)
+            output_shape.append(shapeR[shapeR.rank() - 1]);
 
         n->output()->set_type(lhs->type());
         n->output()->set_dims(output_shape);
@@ -439,11 +465,11 @@ public:
             return;
         if (!n->K()->has_initializer())
             return;
-        if (n->K()->type() != DataType::INT64 || n->K()->dims().size() != 1 || n->K()->dim(0) != 1)
+        if (n->K()->type() != DataType::INT64 || n->K()->dims().rank() != 1 || n->K()->dim(0) != 1)
             fail_shape_inference("TopK: K input must be a one-dimensional tensor of size 1");
 
         auto& input_shape = n->input()->dims();
-        auto rank = input_shape.size();
+        auto rank = input_shape.rank();
         auto axis = n->axis();
         if (axis < 0) axis += rank;
         if (axis < 0 || axis >= rank)
@@ -480,12 +506,12 @@ public:
             return false;
 
         const auto& input_shape = X->dims();
-        if (input_shape.size() < 2) {
+        if (input_shape.rank() < 2) {
             fail_shape_inference(sym, ": Input tensor must have at least 2 dimensions");
         }
 
         // first dim is the batch axis and the next is the number of channels.
-        size_t n_axes = input_shape.size() - 2;
+        size_t n_axes = input_shape.rank() - 2;
 
         // Only MaxPool and Conv support dilation. For simplicity of the code,
         // we just treat the rest of them as having all-1s dilation.
@@ -520,9 +546,9 @@ public:
         } else {
             assert(W != nullptr);
             auto& weight_shape = W->dims();
-            if (weight_shape.size() != input_shape.size())
+            if (weight_shape.rank() != input_shape.rank())
                 fail_shape_inference(sym, ": Input tensors must have same shape");
-            for (size_t i = 2; i < weight_shape.size(); i++)
+            for (size_t i = 2; i < weight_shape.rank(); i++)
                 kernel_shape.push_back(weight_shape[i]);
             n->set_is(kkernel_shape, kernel_shape);
         }
@@ -573,16 +599,16 @@ public:
             return;
 
         Dims input_shape = X->dims();
-        auto n_axes = input_shape.size() - 2;
+        auto n_axes = input_shape.rank() - 2;
         Dims output_shape;
 
         if (require_kernel_shape) {
             // add the first two dimensions from the input.
-            output_shape.push_back(input_shape[0]);
-            output_shape.push_back(input_shape[1]);
+            output_shape.append(input_shape[0]);
+            output_shape.append(input_shape[1]);
         } else {
-            output_shape.push_back(input_shape[0]);
-            output_shape.push_back(W->dim(0));
+            output_shape.append(input_shape[0]);
+            output_shape.append(W->dim(0));
         }
 
         for (size_t i = 0; i < n_axes; i++) {
@@ -600,7 +626,7 @@ public:
                 output_size = (input_size - kernel_shape[i] - 1) / strides[i] + 1;
 
             // add in the initial position
-            output_shape.push_back(output_size + 1);
+            output_shape.append(output_size + 1);
         }
 
         n->output(0)->set_type(n->input(0)->type());
@@ -620,13 +646,13 @@ public:
         auto& input_shape = n->input(0)->dims();
         auto& roi_shape = n->input(1)->dims();
 
-        if (input_shape.size() < 2)
+        if (input_shape.rank() < 2)
             fail_shape_inference("RoiPool: Input tensor must have at least 2 dimensions");
-        if (roi_shape.size() != 2)
+        if (roi_shape.rank() != 2)
             fail_shape_inference("RoiPool: RoIs tensor must have 2 dimensions");
 
         // first dim is the batch axis and the next is the number of channels.
-        size_t n_axes = input_shape.size() - 2;
+        size_t n_axes = input_shape.rank() - 2;
 
         std::vector<int64_t> pooled_shape;
         if (n->hasAttribute(kpooled_shape)) {
@@ -654,9 +680,10 @@ public:
             return;
 
         auto dims = n->input()->dims();
-        if (dims.size() < 2)
+        if (dims.rank() < 2)
             return;
-        std::fill(dims.begin()+2, dims.end(), 1);
+        for (int i = 2; i < dims.rank(); i++)
+            dims[i] = 1;
 
         n->output()->set_type(n->input()->type());
         n->output()->set_dims(dims);
@@ -679,7 +706,7 @@ public:
             return;
 
         const auto& input_shape = n->X()->dims();
-        size_t n_axes = input_shape.size() - 2;
+        size_t n_axes = input_shape.rank() - 2;
         Dims output_shape;
 
         if (n->output_shape() != nullptr) {
@@ -691,17 +718,17 @@ public:
                 return;
 
             auto shape_data = decodeShape(n, n->output_shape()->initializer());
-            if (shape_data.size() != input_shape.size())
+            if (shape_data.size() != input_shape.rank())
                 fail_shape_inference("MaxUnpool: output_shape must have same rank as the shape of input tensor X");
             output_shape.assign(shape_data.begin(), shape_data.end());
         } else {
-            output_shape.push_back(input_shape[0]); // the first dim is the batch size
-            output_shape.push_back(n->I()->dim(1)); // channels should be the second dim of second input
+            output_shape.append(input_shape[0]); // the first dim is the batch size
+            output_shape.append(n->I()->dim(1)); // channels should be the second dim of second input
             for (size_t i = 0; i < n_axes; i++) {
                 auto new_dim = strides[i] * (input_shape[i+2] - 1);
                 new_dim += kernel_shape[i];
                 new_dim -= pads[i] + pads[i + n_axes];
-                output_shape.push_back(static_cast<size_t>(new_dim));
+                output_shape.append(static_cast<size_t>(new_dim));
             }
         }
 
@@ -737,7 +764,7 @@ public:
         }
 
         const auto& input_shape = n->X()->dims();
-        auto n_axes = input_shape.size() - 2;
+        auto n_axes = input_shape.rank() - 2;
         auto group = n->get_i(kgroup, 1);
 
         std::vector<int64_t> output_padding;
@@ -752,8 +779,8 @@ public:
 
         Dims output_shape;
 
-        output_shape.push_back(input_shape[0]);
-        output_shape.push_back(n->W()->dim(1) * group); // channels should be the second dim of W
+        output_shape.append(input_shape[0]);
+        output_shape.append(n->W()->dim(1) * group); // channels should be the second dim of W
 
         if (n->has_output_shape()) {
             const auto& shape_data = n->output_shape();
@@ -763,7 +790,7 @@ public:
                 if (shape_data[i] < input_shape[i+2])
                     fail_shape_inference(
                         "ConvTranspose: output shape value cannot be smaller than the input shape value");
-                output_shape.push_back(static_cast<size_t>(shape_data[i]));
+                output_shape.append(static_cast<size_t>(shape_data[i]));
             }
         } else {
             for (int i = 0; i < n_axes; i++) {
@@ -771,7 +798,7 @@ public:
                 new_dim += output_padding[i];
                 new_dim += kernel_shape[i];
                 new_dim -= pads[i] + pads[i + n_axes];
-                output_shape.push_back(static_cast<size_t>(new_dim));
+                output_shape.append(static_cast<size_t>(new_dim));
             }
         }
 
@@ -808,13 +835,13 @@ public:
             return;
 
         auto dims = n->input()->dims();
-        auto rank = dims.size();
+        auto rank = dims.rank();
         auto axis = n->axis();
         if (axis < 0) axis += rank;
         if (axis < 0 || axis > rank)
             fail_shape_inference("Flatten: Invalid value (", axis, ") for attribute 'axis'");
-        size_t a = std::accumulate(dims.begin(), dims.begin()+axis, 1, std::multiplies<>());
-        size_t b = std::accumulate(dims.begin()+axis, dims.end(), 1, std::multiplies<>());
+        auto a = dims.partial_size(0, axis);
+        auto b = dims.partial_size(axis, dims.rank());
 
         n->output()->set_type(n->input()->type());
         n->output()->set_dims({a, b});
@@ -832,7 +859,7 @@ public:
         auto greatest_hit = *std::max_element(ngram_indexes.begin(), ngram_indexes.end()) + 1;
 
         auto shape = n->input()->dims();
-        if (shape.size() == 1 || shape.size() == 2)
+        if (shape.rank() == 1 || shape.rank() == 2)
             shape.back() = greatest_hit;
         else
             fail_shape_inference("TfIdfVectorizer: Input tensor must have rank 1 or 2");
@@ -854,7 +881,7 @@ public:
         size_t seq_length, batch_size, input_size, num_directions, hidden_size;
 
         auto& input_shape = n->input(0)->dims();
-        if (input_shape.size() != 3)
+        if (input_shape.rank() != 3)
             fail_shape_inference("RNN: The input tensor must have rank 3");
         seq_length = input_shape[0];
         batch_size = input_shape[1];
@@ -873,15 +900,19 @@ public:
             fail_shape_inference("RNN: Attribute 'hidden_size' has incorrect value");
 
         auto& weight_shape = n->input(1)->dims();
-        if (weight_shape.size() != 3)
+        if (weight_shape.rank() != 3)
             fail_shape_inference("RNN: The weight tensor must have rank 3");
-        if (weight_shape[0] != num_directions || weight_shape[1] != hidden_size || weight_shape[2] != input_size)
+        if (weight_shape[0].value() != num_directions ||
+            weight_shape[1].value() != hidden_size ||
+            weight_shape[2].value() != input_size)
             fail_shape_inference("RNN: The weight tensor has incorrect shape");
 
         auto& recur_shape = n->input(2)->dims();
-        if (recur_shape.size() != 3)
+        if (recur_shape.rank() != 3)
             fail_shape_inference("RNN: The recurrence weight tensor must have rank 3");
-        if (recur_shape[0] != num_directions || recur_shape[1] != hidden_size || recur_shape[2] != hidden_size)
+        if (recur_shape[0].value() != num_directions ||
+            recur_shape[1].value() != hidden_size ||
+            recur_shape[2].value() != hidden_size)
             fail_shape_inference("RNN: The recurrence weight tensor has incorrect shape");
 
         if (n->outputs().size() > 0) { // Y
@@ -918,7 +949,7 @@ public:
 
         auto keep_dims = n->get_i(kkeepdims, 1);
         const auto& input_shape = n->input()->dims();
-        auto rank = input_shape.size();
+        auto rank = input_shape.rank();
 
         auto axes = n->get_is(kaxes, {});
         for (auto& a : axes) {
@@ -931,9 +962,9 @@ public:
         for (size_t i = 0; i < rank; i++) {
             // axes empty means reduce all dim
             if (!axes.empty() && std::find(axes.begin(), axes.end(), i) == axes.end()) {
-                output_shape.push_back(input_shape[i]);
+                output_shape.append(input_shape[i]);
             } else if (keep_dims) {
-                output_shape.push_back(1);
+                output_shape.append(1);
             }
         }
 
@@ -946,7 +977,7 @@ public:
             return;
 
         const auto& input_shape = n->input()->dims();
-        auto rank = input_shape.size();
+        auto rank = input_shape.rank();
         auto keep_dims = n->get_i(kkeepdims, 1);
         auto axis = n->get_i(kaxis, 0);
         if (axis < 0) axis += rank;
@@ -956,9 +987,9 @@ public:
         Dims output_shape;
         for (size_t i = 0; i < rank; i++) {
             if (i != axis) {
-                output_shape.push_back(input_shape[i]);
+                output_shape.append(input_shape[i]);
             } else if (keep_dims) {
-                output_shape.push_back(1);
+                output_shape.append(1);
             }
         }
 
@@ -1032,7 +1063,7 @@ public:
             fail_shape_inference("Reshape: Invalid shape");
 
         auto input_shape = n->data()->dims();
-        auto total_size = std::accumulate(input_shape.begin(), input_shape.end(), 1, std::multiplies<>());
+        auto total_size = input_shape.size();
         auto shape = decodeShape(n, n->shape()->initializer(), false);
         auto new_size = shape.empty() ? size_t(0) : size_t(1);
         int  pending = -1;
@@ -1044,7 +1075,7 @@ public:
                 pending = i;
             } else {
                 if (shape[i] == 0) {
-                    if (i >= input_shape.size())
+                    if (i >= input_shape.rank())
                         fail_shape_inference("Reshape: Invalid shape");
                     shape[i] = input_shape[i];
                 }
@@ -1062,7 +1093,7 @@ public:
 
         Dims new_shape;
         for (auto d : shape) {
-            new_shape.push_back(static_cast<size_t>(d));
+            new_shape.append(static_cast<size_t>(d));
         }
 
         n->reshaped()->set_type(n->data()->type());
@@ -1072,7 +1103,7 @@ public:
     void visit(Shape* n) override {
         if (hasInput(n->input())) {
             n->output()->set_type(DataType::INT64);
-            n->output()->set_dims({n->input()->dims().size()});
+            n->output()->set_dims({n->input()->dims().rank()});
         }
     }
 
@@ -1089,7 +1120,7 @@ public:
         if (!n->has_axis())
             fail_shape_inference("Concat: Missing required attribute 'axis'");
 
-        auto rank = n->input(0)->dims().size();
+        auto rank = n->input(0)->dims().rank();
         auto axis = n->axis();
         if (axis < 0) axis += rank;
         if (axis < 0 || axis >= rank)
@@ -1098,7 +1129,7 @@ public:
         Dims output_shape(rank);
         for (size_t i = 0; i < n->inputs().size(); i++) {
             const auto& shape = n->input(i)->dims();
-            if (shape.size() != rank)
+            if (shape.rank() != rank)
                 fail_shape_inference("Concat: All inputs to concat must have same rank");
             if (n->input(i)->type() != n->input(0)->type())
                 fail_shape_inference("Concat: All inputs to concat must have same type");
@@ -1122,7 +1153,7 @@ public:
             return;
 
         const auto& input_shape = n->input()->dims();
-        auto rank = input_shape.size();
+        auto rank = input_shape.rank();
         auto axis = n->axis();
         if (axis < 0) axis += rank;
         if (axis < 0 || axis >= rank)
@@ -1176,7 +1207,7 @@ public:
         }
 
         const auto& input_shape = n->input()->dims();
-        auto input_rank = input_shape.size();
+        auto input_rank = input_shape.rank();
 
         Tensor<int64_t> axes({starts.size()});
         if (n->axes() == nullptr) {
@@ -1261,7 +1292,7 @@ public:
             return;
 
         const auto& input_shape = n->input()->dims();
-        auto rank = input_shape.size();
+        auto rank = input_shape.rank();
 
         std::vector<int64_t> perm;
         if (n->has_perm()) {
@@ -1290,8 +1321,8 @@ public:
 
         const auto& data_shape = n->data()->dims();
         const auto& indices_shape = n->indices()->dims();
-        int r = static_cast<int>(data_shape.size());
-        int q = static_cast<int>(indices_shape.size());
+        int r = static_cast<int>(data_shape.rank());
+        int q = static_cast<int>(indices_shape.rank());
         int axis = static_cast<int>(n->axis());
 
         if (r == 0)
@@ -1311,7 +1342,7 @@ public:
                 dim = indices_shape[i - axis];
             else
                 dim = data_shape[i - q + 1];
-            output_shape.push_back(dim);
+            output_shape.append(dim);
         }
 
         n->output()->set_type(n->input()->type());
@@ -1323,7 +1354,7 @@ public:
             return;
 
         const auto& input_shape = n->input()->dims();
-        auto input_rank = input_shape.size();
+        auto input_rank = input_shape.rank();
 
         std::unordered_set<int64_t> axes;
         if (n->has_axes()) {
@@ -1336,15 +1367,15 @@ public:
         }
 
         Dims output_shape;
-        for (int i = 0; i < input_shape.size(); i++) {
+        for (int i = 0; i < input_shape.rank(); i++) {
             if (axes.find(i) != axes.end()) {
-                if (input_shape[i] != 1)
+                if (input_shape[i].value() != 1)
                     fail_shape_inference("Squeeze: cannot select an axis to squeeze out which has size not equal to one");
                 continue;
-            } else if (axes.empty() && input_shape[i] == 1) {
+            } else if (axes.empty() && input_shape[i].value() == 1) {
                 continue;
             } else {
-                output_shape.push_back(input_shape[i]);
+                output_shape.append(input_shape[i]);
             }
         }
 
@@ -1359,7 +1390,7 @@ public:
             fail_shape_inference("Unsqueeze: Missing required attribute 'axes'");
 
         const auto& input_shape = n->input()->dims();
-        auto output_rank = input_shape.size() + n->axes().size();
+        auto output_rank = input_shape.rank() + n->axes().size();
 
         std::unordered_set<int64_t> axes;
         for (auto a : n->axes()) {
@@ -1374,9 +1405,9 @@ public:
         Dims output_shape;
         for (size_t i = 0, j = 0; i < output_rank; i++) {
             if (axes.find(i) != axes.end()) {
-                output_shape.push_back(1);
+                output_shape.append(1);
             } else {
-                output_shape.push_back(input_shape[j++]);
+                output_shape.append(input_shape[j++]);
             }
         }
 
@@ -1391,7 +1422,7 @@ public:
             fail_shape_inference("Pad: Missing required attribute 'pads'");
 
         const auto& input_shape = n->input()->dims();
-        auto rank = input_shape.size();
+        auto rank = input_shape.rank();
         const auto& pads = n->pads();
 
         if (pads.size() != rank * 2) {
@@ -1402,7 +1433,7 @@ public:
         for (size_t i = 0; i < rank; i++) {
             auto newdim = static_cast<int64_t>(input_shape[i]) + pads[i] + pads[i + rank];
             if (newdim < 0) newdim = 0;
-            output_shape.push_back(static_cast<size_t>(newdim));
+            output_shape.append(static_cast<size_t>(newdim));
         }
 
         n->output()->set_type(n->input()->type());
@@ -1420,7 +1451,7 @@ public:
             fail_shape_inference("SpaceToDepth: Attribute 'blocksize' has incorrect value");
 
         auto input_shape = n->input()->dims();
-        if (input_shape.size() != 4)
+        if (input_shape.rank() != 4)
             fail_shape_inference("SpaceToDepth: Input tensor must be 4-dimensional");
 
         Dims output_shape = {
@@ -1445,7 +1476,7 @@ public:
             fail_shape_inference("DepthToSpace: Attribute 'blocksize' has incorrect value");
 
         auto input_shape = n->input()->dims();
-        if (input_shape.size() != 4)
+        if (input_shape.rank() != 4)
             fail_shape_inference("DepthToSpace: Input tensor must be 4-dimensional");
 
         Dims output_shape = {
@@ -1464,18 +1495,18 @@ public:
             return;
         if (!n->repeats()->has_initializer())
             return;
-        if (n->repeats()->type() != DataType::INT64 || n->repeats()->dims().size() != 1)
+        if (n->repeats()->type() != DataType::INT64 || n->repeats()->dims().rank() != 1)
             fail_shape_inference("Tile: The repeats tensor has incorrect value");
 
         const auto& input_shape = n->input()->dims();
-        auto input_rank = input_shape.size();
+        auto input_rank = input_shape.rank();
         auto repeats = n->repeats()->initializer().decode<int64_t>();
         if (repeats.rank() != 1 || repeats.size() != input_rank)
             fail_shape_inference("Tile: 'Repeats' input has incorrect number of values");
 
         Dims output_shape;
         for (size_t i = 0; i < input_rank; i++) {
-            output_shape.push_back(static_cast<size_t>(input_shape[i] * repeats(i)));
+            output_shape.append(static_cast<size_t>(input_shape[i] * repeats(i)));
         }
 
         n->output()->set_type(n->input()->type());
@@ -1489,7 +1520,7 @@ public:
             return;
 
         const auto& input_shape = n->input()->dims();
-        auto rank = input_shape.size();
+        auto rank = input_shape.rank();
         auto scales = n->scales()->initializer().decode<float>();
 
         if (scales.rank() != 1 || scales.size() != rank) {
@@ -1501,7 +1532,7 @@ public:
             if (scales(i) <= 0)
                 fail_shape_inference("Resize: Scale value must be greater than 0");
             auto dim = static_cast<size_t>(std::floor(input_shape[i] * scales(i)));
-            output_shape.push_back(dim);
+            output_shape.append(dim);
         }
 
         n->output()->set_type(n->input()->type());
@@ -1513,7 +1544,7 @@ public:
             return;
         if (!n->shape()->has_initializer())
             return;
-        if (n->shape()->dims().size() != 1 || n->shape()->type() != DataType::INT64)
+        if (n->shape()->dims().rank() != 1 || n->shape()->type() != DataType::INT64)
             fail_shape_inference("Expand: 'shape' input must be 1D tensor of type INT64");
 
         auto& input_shape = n->input()->dims();
@@ -1530,7 +1561,7 @@ public:
             return;
         if (!n->condition()->has_initializer())
             return;
-        if (n->condition()->dims().size() != 1 || n->condition()->type() != DataType::BOOL)
+        if (n->condition()->dims().rank() != 1 || n->condition()->type() != DataType::BOOL)
             fail_shape_inference("Compress: 'condition' input must be 1D tensor of type BOOL");
 
         auto cond = n->condition()->initializer().decode<bool>();
@@ -1540,17 +1571,17 @@ public:
 
         if (n->has_axis()) {
             int axis = static_cast<int>(n->axis());
-            if (axis < 0) axis += input_shape.size();
-            if (axis < 0 || axis >= input_shape.size())
+            if (axis < 0) axis += input_shape.rank();
+            if (axis < 0 || axis >= input_shape.rank())
                 fail_shape_inference("Compress: The 'axis' attribute has incorrect value");
             output_shape = input_shape;
             if (num_selected < output_shape[axis])
                 output_shape[axis] = num_selected;
         } else {
-            auto total_size = std::accumulate(input_shape.begin(), input_shape.end(), 1, std::multiplies<>());
+            auto total_size = input_shape.size();
             if (num_selected > total_size)
                 num_selected = total_size;
-            output_shape.push_back(num_selected);
+            output_shape.append(num_selected);
         }
 
         n->output()->set_type(n->input()->type());
@@ -1572,9 +1603,10 @@ public:
     }
 };
 
-ShapeInference& ShapeInference::Instance() {
-    static ShapeInferenceImpl instance;
-    return instance;
+std::unique_ptr<ShapeInference> ShapeInference::newInstance(
+    const std::unordered_map<std::string, size_t>& env)
+{
+    return std::make_unique<ShapeInferenceImpl>(env);
 }
 
 }} // namespace dlf:: model

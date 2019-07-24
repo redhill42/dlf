@@ -124,12 +124,11 @@ void decodeAttribute(const AttributeProto& ap, Node* n) {
 
 Dims decodeTensorShape(const TensorShapeProto& tsp) {
     Dims dims;
-    dims.reserve(tsp.dim_size());
     for (auto& d : tsp.dim()) {
         if (d.has_dim_value()) {
-            dims.push_back(static_cast<size_t>(d.dim_value()));
+            dims.append(static_cast<size_t>(d.dim_value()));
         } else {
-            fail_convert("Symbolic dimension is not supported ", d.dim_param());
+            dims.append(d.dim_param());
         }
     }
     return dims;
@@ -407,8 +406,11 @@ void encodeValueInfo(ValueInfoProto* vp, const Value* v) {
     vp->set_name(v->name());
     tp->set_elem_type(static_cast<int32_t>(v->type()));
     TensorShapeProto* shape = tp->mutable_shape();
-    for (auto d : v->dims()) {
-        shape->add_dim()->set_dim_value(d);
+    for (auto& d : v->dims()) {
+        if (d.has_value())
+            shape->add_dim()->set_dim_value(d.value());
+        else
+            shape->add_dim()->set_dim_param(d.symbol());
     }
 }
 
