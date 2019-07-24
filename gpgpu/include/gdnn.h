@@ -124,6 +124,18 @@ void lppool (const size_t batches, const size_t channels,
              const Buffer<T>& x_buffer, Buffer<T>& y_buffer,
              const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
+template <typename T>
+void softmax(const size_t m, const size_t n, const Buffer<T>& x_buffer, Buffer<T>& y_buffer,
+             const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
+
+template <typename T>
+void logsoftmax(const size_t m, const size_t n, const Buffer<T>& x_buffer, Buffer<T>& y_buffer,
+                const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
+
+template <typename T>
+void hardmax(const size_t m, const size_t n, const Buffer<T>& x_buffer, Buffer<T>& y_buffer,
+             const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
+
 }} // namespace gpgpu::dnn
 
 #endif //GPGPU_DNN_H_

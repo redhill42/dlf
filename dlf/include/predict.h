@@ -638,12 +638,40 @@ private:
     struct SoftmaxOp : Operator {
         TensorT<> X, Y; int axis;
         SoftmaxOp(OperatorFactory* of, model::Softmax* n)
-            : X(of->alloc(n->input())), Y(of->alloc(n->output())), axis(n->axis()) {}
+            : X(of->alloc(n->input())),
+              Y(of->allocInplace(n->input(), n->output())),
+              axis(n->axis()) {}
         void evaluate() override { dnn::softmax(X, Y, axis); }
     };
 
     void visit(model::Softmax* n) override {
         result = std::make_unique<SoftmaxOp>(this, n);
+    }
+
+    struct LogSoftmaxOp : Operator {
+        TensorT<> X, Y; int axis;
+        LogSoftmaxOp(OperatorFactory* of, model::LogSoftmax* n)
+            : X(of->alloc(n->input())),
+              Y(of->allocInplace(n->input(), n->output())),
+              axis(n->axis()) {}
+        void evaluate() override { dnn::logsoftmax(X, Y, axis); }
+    };
+
+    void visit(model::LogSoftmax* n) override {
+        result = std::make_unique<LogSoftmaxOp>(this, n);
+    }
+
+    struct HardmaxOp : Operator {
+        TensorT<> X, Y; int axis;
+        HardmaxOp(OperatorFactory* of, model::Hardmax* n)
+            : X(of->alloc(n->input())),
+              Y(of->allocInplace(n->input(), n->output())),
+              axis(n->axis()) {}
+        void evaluate() override { dnn::hardmax(X, Y, axis); }
+    };
+
+    void visit(model::Hardmax* n) override {
+        result = std::make_unique<HardmaxOp>(this, n);
     }
 
     struct BatchNormalizationOp : Operator {

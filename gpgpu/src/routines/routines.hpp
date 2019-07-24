@@ -84,5 +84,6 @@
 #include "routines/dnn/xtransform_p.hpp"
 #include "routines/dnn/xnorm.hpp"
 #include "routines/dnn/xpool.hpp"
+#include "routines/dnn/xsoftmax.hpp"
 
 #endif // GPGPU_BLAS_ROUTINES_ROUTINES_H_

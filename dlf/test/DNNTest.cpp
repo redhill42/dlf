@@ -13,7 +13,7 @@ void ExpectEQ(T a, T b) {
 }
 
 template <typename T>
-bool isFloatEQ(T a, T b, T eps = T{1e-5}) {
+bool isFloatEQ(T a, T b, T eps = T{1e-4}) {
     if (std::isnan(a))
         return std::isnan(b);
     if (std::isinf(a))
@@ -854,4 +854,49 @@ TEST(DNNTest, Softmax) {
     auto Y = dnn::softmax(X);
     EXPECT_EQ(Y.shape(), X.shape());
     ExpectElementsEQ(Y, R);
+
+    auto dev_X = dev(X);
+    auto dev_Y = DevTensor<float>({2, 4});
+    dnn::softmax(dev_X, dev_Y);
+    ExpectElementsEQ(dev_Y.read(), R);
+}
+
+TEST(DNNTest, LogSoftmax) {
+    auto X = Tensor<float>({2, 4}, {0, 1, 2, 3, 10000, 10001, 10002, 10003});
+    auto R = Tensor<float>({2, 4}, {
+        -3.4401896, -2.4401896, -1.44018972, -0.44018969,
+        -3.4401896, -2.4401896, -1.44018972, -0.44018969
+    });
+
+    auto Y = dnn::logsoftmax(X);
+    EXPECT_EQ(Y.shape(), X.shape());
+    ExpectElementsEQ(Y, R);
+}
+
+TEST(DNNTest, Hardmax) {
+    auto X = Tensor<float>({4, 4}, {
+        3, 0, 1, 2, 2, 5, 1, 0, 0, 1, 3, 2, 0, 1, 2, 3
+    });
+    auto R = Tensor<float>({4, 4}, {
+        1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1
+    });
+
+    auto Y = dnn::hardmax(X);
+    EXPECT_EQ(Y, R);
+
+    auto dev_Y = dnn::hardmax(dev(X));
+    EXPECT_EQ(dev_Y.read(), R);
+}
+
+TEST(DNNTest, HardmaxOneHot) {
+    // For multiple occurrances of the maximal calues, the first
+    // occurrence is selected for one-hot output
+    auto X = Tensor<float>({1, 4}, {3, 3, 3, 1});
+    auto R = Tensor<float>({1, 4}, {1, 0, 0, 0});
+
+    auto Y = dnn::hardmax(X);
+    EXPECT_EQ(Y, R);
+
+    auto dev_Y = dnn::hardmax(dev(X));
+    EXPECT_EQ(dev_Y.read(), R);
 }

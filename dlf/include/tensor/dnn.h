@@ -476,36 +476,36 @@ void global_lppool(const DevTensor<T>& input, DevTensor<T>& output, int p) {
 
 template <typename T>
 void softmax(const Tensor<T>& X, Tensor<T>& Y, int axis = 1) {
+    assert(Y.shape() == X.shape());
+
     auto rank = X.rank();
     if (axis < 0) axis += rank;
     if (axis < 0 || axis >= rank)
         throw shape_error("softmax: invalid axis");
 
-    auto M = X.shape().partial_size(0, axis);
-    auto N = X.size() / M;
+    const auto m = X.shape().partial_size(0, axis);
+    const auto n = X.size() / m;
 
-    assert(Y.shape() == X.shape() || Y.shape() == Shape({M, N}));
-
-    size_t grainsize = std::max(size_t(1), GRAINSIZE / N);
+    size_t grainsize = std::max(size_t(1), GRAINSIZE / n);
     auto x_buffer = X.data();
     auto y_buffer = Y.data();
 
-    tbb::parallel_for(tbb::blocked_range<int>(0, M, grainsize), [=](const auto& r) {
+    tbb::parallel_for(tbb::blocked_range<int>(0, m, grainsize), [=](const auto& r) {
         for (int b = r.begin(); b < r.end(); b++) {
-            auto px = x_buffer + b*N;
-            auto py = y_buffer + b*N;
+            auto px = x_buffer + b*n;
+            auto py = y_buffer + b*n;
 
             T amax = px[0];
-            for (size_t i = 1; i < N; i++) {
+            for (size_t i = 1; i < n; i++) {
                 amax = std::max(amax, px[i]);
             }
 
             T asum = 0;
-            for (size_t i = 0; i < N; i++) {
+            for (size_t i = 0; i < n; i++) {
                 py[i] = std::exp(px[i] - amax);
                 asum += py[i];
             }
-            for (size_t i = 0; i < N; i++) {
+            for (size_t i = 0; i < n; i++) {
                 py[i] /= asum;
             }
         }
@@ -514,35 +514,153 @@ void softmax(const Tensor<T>& X, Tensor<T>& Y, int axis = 1) {
 
 template <typename T>
 void softmax(const DevTensor<T>& X, DevTensor<T>& Y, int axis = 1) {
-    // FIXME
-    auto temp = X.read();
-    softmax(temp, temp, axis);
-    Y.write(temp);
-}
-
-template <typename TensorT>
-enable_if_tensor<TensorT> softmax(TensorT&& X, int axis = 1, bool keepdims = true) {
     auto rank = X.rank();
     if (axis < 0) axis += rank;
     if (axis < 0 || axis >= rank)
         throw shape_error("softmax: invalid axis");
 
-    tensor_type<TensorT> Y;
+    auto m = X.shape().partial_size(0, axis);
+    auto n = X.size() / m;
+    assert(Y.shape() == X.shape() );
+    gpgpu::dnn::softmax(m, n, X.data(), Y.data());
+}
+
+template <typename TensorT>
+enable_if_tensor<TensorT> softmax(TensorT&& X, int axis = 1) {
     if (std::is_rvalue_reference<decltype(X)>::value) {
-        Y = std::move(X);
+        auto Y = std::move(X);
         softmax(Y, Y, axis);
+        return Y;
     } else {
-        Y = tensor_type<TensorT>(X.shape());
+        auto Y = tensor_type<TensorT>(X.shape());
         softmax(X, Y, axis);
+        return Y;
     }
+}
 
-    if (!keepdims) {
-        int m = Y.shape().partial_size(0, axis);
-        int n = Y.size() / m;
-        Y.reshape({m, n});
+template <typename T>
+void logsoftmax(const Tensor<T>& X, Tensor<T>& Y, int axis = 1) {
+    assert(Y.shape() == X.shape());
+
+    auto rank = X.rank();
+    if (axis < 0) axis += rank;
+    if (axis < 0 || axis >= rank)
+        throw shape_error("logsoftmax: invalid axis");
+
+    const auto m = X.shape().partial_size(0, axis);
+    const auto n = X.size() / m;
+
+    size_t grainsize = std::max(size_t(1), GRAINSIZE / n);
+    auto x_buffer = X.data();
+    auto y_buffer = Y.data();
+
+    tbb::parallel_for(tbb::blocked_range<int>(0, m, grainsize), [=](const auto& r) {
+        for (int b = r.begin(); b < r.end(); b++) {
+            auto px = x_buffer + b*n;
+            auto py = y_buffer + b*n;
+
+            T amax = px[0];
+            for (size_t i = 1; i < n; i++) {
+                amax = std::max(amax, px[i]);
+            }
+
+            T asum = 0;
+            for (size_t i = 0; i < n; i++)
+                asum += std::exp(px[i] - amax);
+            asum = std::log(asum);
+
+            for (size_t i = 0; i < n; i++) {
+                py[i] = px[i] - amax - asum;
+            }
+        }
+    });
+}
+
+template <typename T>
+void logsoftmax(const DevTensor<T>& X, DevTensor<T>& Y, int axis = 1) {
+    auto rank = X.rank();
+    if (axis < 0) axis += rank;
+    if (axis < 0 || axis >= rank)
+        throw shape_error("logsoftmax: invalid axis");
+
+    auto m = X.shape().partial_size(0, axis);
+    auto n = X.size() / m;
+    assert(Y.shape() == X.shape());
+    gpgpu::dnn::logsoftmax(m, n, X.data(), Y.data());
+}
+
+template <typename TensorT>
+enable_if_tensor<TensorT> logsoftmax(TensorT&& X, int axis = 1) {
+    if (std::is_rvalue_reference<decltype(X)>::value) {
+        auto Y = std::move(X);
+        logsoftmax(Y, Y, axis);
+        return Y;
+    } else {
+        auto Y = tensor_type<TensorT>(X.shape());
+        logsoftmax(X, Y, axis);
+        return Y;
     }
+}
 
-    return Y;
+template <typename T>
+void hardmax(const Tensor<T>& X, Tensor<T>& Y, int axis = 1) {
+    assert(Y.shape() == X.shape());
+
+    auto rank = X.rank();
+    if (axis < 0) axis += rank;
+    if (axis < 0 || axis >= rank)
+        throw shape_error("hardmax: invalid axis");
+
+    const auto m = X.shape().partial_size(0, axis);
+    const auto n = X.size() / m;
+
+    size_t grainsize = std::max(size_t(1), GRAINSIZE / n);
+    auto x_buffer = X.data();
+    auto y_buffer = Y.data();
+
+    tbb::parallel_for(tbb::blocked_range<int>(0, m, grainsize), [=](const auto& r) {
+        for (int b = r.begin(); b < r.end(); b++) {
+            auto px = x_buffer + b*n;
+            auto py = y_buffer + b*n;
+
+            T amax = px[0];
+            int imax = 0;
+            for (size_t i = 0; i < n; i++) {
+                if (px[i] > amax) {
+                    amax = px[i];
+                    imax = i;
+                }
+                py[i] = 0;
+            }
+            py[imax] = 1;
+        }
+    });
+}
+
+template <typename T>
+void hardmax(const DevTensor<T>& X, DevTensor<T>& Y, int axis = 1) {
+    auto rank = X.rank();
+    if (axis < 0) axis += rank;
+    if (axis < 0 || axis >= rank)
+        throw shape_error("softmax: invalid axis");
+
+    auto m = X.shape().partial_size(0, axis);
+    auto n = X.size() / m;
+    assert(Y.shape() == X.shape());
+    gpgpu::dnn::hardmax(m, n, X.data(), Y.data());
+}
+
+template <typename TensorT>
+enable_if_tensor<TensorT> hardmax(TensorT&& X, int axis = 1) {
+    if (std::is_rvalue_reference<decltype(X)>::value) {
+        auto Y = std::move(X);
+        hardmax(Y, Y, axis);
+        return Y;
+    } else {
+        auto Y = tensor_type<TensorT>(X.shape());
+        hardmax(X, Y, axis);
+        return Y;
+    }
 }
 
 }} // namespace dlf::dnn

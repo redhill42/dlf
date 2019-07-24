@@ -796,4 +796,80 @@ template void PUBLIC_API lppool<double>(const size_t, const size_t, const size_t
                                         const Buffer<double>&, Buffer<double>&,
                                         const Queue&, Event*);
 
+template <typename T>
+void softmax(const size_t m, const size_t n, const Buffer<T>& x_buffer, Buffer<T>& y_buffer,
+             const Queue& queue, Event* event)
+{
+    if (IsOpenCL(queue.context().device())) {
+        auto routine = Xsoftmax<T>(queue, event);
+        routine.DoSoftmax(m, n, x_buffer, y_buffer);
+    } else {
+        TensorDescriptor<T> xy_desc(m, 1, 1, n);
+        T alpha = 1, beta = 0;
+        checkCUDNN(cudnnSoftmaxForward(
+            cudnn_handle(queue),
+            cudnnSoftmaxAlgorithm_t::CUDNN_SOFTMAX_ACCURATE,
+            cudnnSoftmaxMode_t::CUDNN_SOFTMAX_MODE_INSTANCE,
+            &alpha, xy_desc, reinterpret_cast<void*>(*cu::cuBuffer::unwrap(x_buffer)),
+            &beta,  xy_desc, reinterpret_cast<void*>(*cu::cuBuffer::unwrap(y_buffer))));
+    }
+}
+
+template void PUBLIC_API softmax<half>  (const size_t, const size_t,
+                                         const Buffer<half>&, Buffer<half>&,
+                                         const Queue& queue, Event*);
+template void PUBLIC_API softmax<float> (const size_t, const size_t,
+                                         const Buffer<float>&, Buffer<float>&,
+                                         const Queue& queue, Event*);
+template void PUBLIC_API softmax<double>(const size_t, const size_t,
+                                         const Buffer<double>&, Buffer<double>&,
+                                         const Queue& queue, Event*);
+
+template <typename T>
+void logsoftmax(const size_t m, const size_t n, const Buffer<T>& x_buffer, Buffer<T>& y_buffer,
+             const Queue& queue, Event* event)
+{
+    if (IsOpenCL(queue.context().device())) {
+        auto routine = Xsoftmax<T>(queue, event);
+        routine.DoLogSoftmax(m, n, x_buffer, y_buffer);
+    } else {
+        TensorDescriptor<T> xy_desc(m, 1, 1, n);
+        T alpha = 1, beta = 0;
+        checkCUDNN(cudnnSoftmaxForward(
+            cudnn_handle(queue),
+            cudnnSoftmaxAlgorithm_t::CUDNN_SOFTMAX_LOG,
+            cudnnSoftmaxMode_t::CUDNN_SOFTMAX_MODE_INSTANCE,
+            &alpha, xy_desc, reinterpret_cast<void*>(*cu::cuBuffer::unwrap(x_buffer)),
+            &beta,  xy_desc, reinterpret_cast<void*>(*cu::cuBuffer::unwrap(y_buffer))));
+    }
+}
+
+template void PUBLIC_API logsoftmax<half>  (const size_t, const size_t,
+                                            const Buffer<half>&, Buffer<half>&,
+                                            const Queue& queue, Event*);
+template void PUBLIC_API logsoftmax<float> (const size_t, const size_t,
+                                            const Buffer<float>&, Buffer<float>&,
+                                            const Queue& queue, Event*);
+template void PUBLIC_API logsoftmax<double>(const size_t, const size_t,
+                                            const Buffer<double>&, Buffer<double>&,
+                                            const Queue& queue, Event*);
+
+template <typename T>
+void hardmax(const size_t m, const size_t n, const Buffer<T>& x_buffer, Buffer<T>& y_buffer,
+             const Queue& queue, Event* event)
+{
+    auto routine = Xsoftmax<T>(queue, event);
+    routine.DoHardmax(m, n, x_buffer, y_buffer);
+}
+
+template void PUBLIC_API hardmax<half>  (const size_t, const size_t,
+                                         const Buffer<half>&, Buffer<half>&,
+                                         const Queue& queue, Event*);
+template void PUBLIC_API hardmax<float> (const size_t, const size_t,
+                                         const Buffer<float>&, Buffer<float>&,
+                                         const Queue& queue, Event*);
+template void PUBLIC_API hardmax<double>(const size_t, const size_t,
+                                         const Buffer<double>&, Buffer<double>&,
+                                         const Queue& queue, Event*);
+
 }} // namespace gpgpu::dnn
