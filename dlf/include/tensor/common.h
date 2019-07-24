@@ -214,28 +214,28 @@ inline int matmul_broadcast(Shape& shapeA, Shape& shapeB, Shape& shapeC) {
 
     // Now call out to generic multidimensional broadcasting for
     // the broadcastable prefixes.
-    auto prefixDims = Shape::broadcast(
+    auto prefixShape = Shape::broadcast(
         Shape({dimsA.begin(), dimsA.end() - 2}),
         Shape({dimsB.begin(), dimsB.end() - 2})
-    ).extents();
+    );
 
     // Back to matmul-specific. Add the trailing dimensions back in.
-    dimsA = prefixDims;
+    dimsA = prefixShape.extents();
     dimsA.push_back(m);
     dimsA.push_back(k);
     shapeA = shapeA.broadcast(Shape(dimsA));
 
-    dimsB = prefixDims;
+    dimsB = prefixShape.extents();
     dimsB.push_back(k);
     dimsB.push_back(n);
     shapeB = shapeB.broadcast(Shape(dimsB));
 
-    auto dimsC = prefixDims;
+    auto dimsC = prefixShape.extents();
     dimsC.push_back(m);
     dimsC.push_back(n);
     shapeC = Shape(dimsC);
 
-    return std::accumulate(prefixDims.begin(), prefixDims.end(), 1, std::multiplies<>());
+    return prefixShape.size();
 }
 } // namespace detail
 
@@ -633,15 +633,13 @@ concat(int axis, const std::vector<const tensor_type<TensorT>*>& inputs, TensorT
         throw shape_error("concat: incompatible input tensor shape");
     }
 
-    auto dims = output.shape().extents();
-    const size_t batch = std::accumulate(dims.begin(), dims.begin()+axis, 1, std::multiplies<>());
-    const size_t stride = std::accumulate(dims.begin()+axis, dims.end(), 1, std::multiplies<>());
+    const size_t batch = output.shape().partial_size(0, axis);
+    const size_t stride = output.shape().partial_size(axis, output.rank());
     std::vector<size_t> offsets, blocks;
 
     size_t offset = 0;
     for (auto t : inputs) {
-        auto d = t->shape().extents();
-        size_t block = std::accumulate(d.begin()+axis, d.end(), 1, std::multiplies<>());
+        size_t block = t->shape().partial_size(axis, t->rank());
         offsets.push_back(offset);
         blocks.push_back(block);
         offset += block;
@@ -700,15 +698,13 @@ split(int axis, const TensorT& input, const std::vector<tensor_type<TensorT>*>& 
         throw shape_error("split: incompatible output tensor shape");
     }
 
-    auto dims = input.shape().extents();
-    const size_t batch = std::accumulate(dims.begin(), dims.begin()+axis, 1, std::multiplies<>());
-    const size_t stride = std::accumulate(dims.begin()+axis, dims.end(), 1, std::multiplies<>());
+    const size_t batch = input.shape().partial_size(0, axis);
+    const size_t stride = input.shape().partial_size(axis, input.rank());
     std::vector<size_t> offsets, blocks;
 
     size_t offset = 0;
     for (auto t : outputs) {
-        auto d = t->shape().extents();
-        size_t block = std::accumulate(d.begin()+axis, d.end(), 1, std::multiplies<>());
+        size_t block = t->shape().partial_size(axis, t->rank());
         offsets.push_back(offset);
         blocks.push_back(block);
         offset += block;

@@ -95,6 +95,11 @@ public:
     }
 
     /**
+     * Returns the partial size for the given axis range.
+     */
+    size_t partial_size(size_t start, size_t end) const noexcept;
+
+    /**
      * Returns true if the shape represents a contiguous addressing,
      * false otherwise.
      */

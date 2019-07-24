@@ -43,6 +43,15 @@ void Shape::init() noexcept {
     }
 }
 
+size_t Shape::partial_size(size_t start, size_t end) const noexcept {
+    assert(start >= 0 && start <= rank());
+    assert(end >= start && end <= rank());
+    size_t res = 1;
+    for (size_t i = start; i < end; i++)
+        res *= extent(i);
+    return res;
+}
+
 bool Shape::is_contiguous() const noexcept {
     if (rank() != 0) {
         size_t size = 1;
@@ -160,9 +169,8 @@ void Shape::flatten(int axis) {
     if (axis < 0 || axis > rank())
         throw shape_error("flatten: invalid axis");
 
-    auto dims = extents();
-    auto rows = std::accumulate(dims.begin(), dims.begin()+axis, 1, std::multiplies<>());
-    auto cols = std::accumulate(dims.begin()+axis, dims.end(), 1, std::multiplies<>());
+    int rows = partial_size(0, axis);
+    int cols = partial_size(axis, rank());
     reshape({rows, cols});
 }
 

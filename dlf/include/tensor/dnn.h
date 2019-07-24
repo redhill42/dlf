@@ -481,8 +481,7 @@ void softmax(const Tensor<T>& X, Tensor<T>& Y, int axis = 1) {
     if (axis < 0 || axis >= rank)
         throw shape_error("softmax: invalid axis");
 
-    auto dims = X.shape().extents();
-    auto M = std::accumulate(dims.begin(), dims.begin()+axis, size_t(1), std::multiplies<>());
+    auto M = X.shape().partial_size(0, axis);
     auto N = X.size() / M;
 
     assert(Y.shape() == X.shape() || Y.shape() == Shape({M, N}));
@@ -538,8 +537,7 @@ enable_if_tensor<TensorT> softmax(TensorT&& X, int axis = 1, bool keepdims = tru
     }
 
     if (!keepdims) {
-        auto dims = Y.shape().extents();
-        int m = std::accumulate(dims.begin(), dims.begin()+axis, 1, std::multiplies<>());
+        int m = Y.shape().partial_size(0, axis);
         int n = Y.size() / m;
         Y.reshape({m, n});
     }
