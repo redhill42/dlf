@@ -90,13 +90,32 @@ GlobalPassRegistry& GlobalPassRegistry::Instance() {
     return TheInstance;
 }
 
-Optimizer::Optimizer(const std::vector<std::string>& names) {
+class OptimizerImpl final : public Optimizer {
+    // Use vector here to ensure the order of the passes.
+    std::vector<std::shared_ptr<Pass>> m_passes;
+
+public:
+    OptimizerImpl(const std::vector<std::string>& names);
+    void optimize(Graph& graph) override;
+};
+
+OptimizerImpl::OptimizerImpl(const std::vector<std::string>& names) {
     for (const auto& name : names) {
         m_passes.push_back(GlobalPassRegistry::Instance().find(name));
     }
 }
 
-void Optimizer::optimize(Graph& graph) {
+std::unique_ptr<Optimizer> Optimizer::newInstance(
+    const std::vector<std::string>& names)
+{
+    return std::make_unique<OptimizerImpl>(names);
+}
+
+std::unique_ptr<Optimizer> Optimizer::newInstance() {
+    return newInstance(GlobalPassRegistry::Instance().getAvailablePasses());
+}
+
+void OptimizerImpl::optimize(Graph& graph) {
     bool done;
     do {
         done = true;

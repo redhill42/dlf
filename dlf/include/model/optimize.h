@@ -79,13 +79,14 @@ public:
 };
 
 class Optimizer {
-    // Use vector here to ensure the order of the passes.
-    std::vector<std::shared_ptr<Pass>> m_passes;
-
 public:
-    Optimizer(const std::vector<std::string>& names);
-    Optimizer() : Optimizer(GlobalPassRegistry::Instance().getAvailablePasses()) {}
-    void optimize(Graph& graph);
+    virtual ~Optimizer() = default;
+
+    static std::unique_ptr<Optimizer> newInstance(
+        const std::vector<std::string>& names);
+    static std::unique_ptr<Optimizer> newInstance();
+
+    virtual void optimize(Graph& graph) = 0;
 };
 
 }} // namespace dlf::model

@@ -781,12 +781,8 @@ Predictor<Context, T>::Predictor(model::Graph& graph,
 {
     OperatorFactory<Context, T> factory(m_dataset);
 
-    // do shape inference
     model::ShapeInference::newInstance(env)->infer(graph);
-
-    // do optimizer
-    model::Optimizer optimizer;
-    optimizer.optimize(graph);
+    model::Optimizer::newInstance()->optimize(graph);
 
     for (auto v : graph.inputs()) {
         if (!v->has_initializer())
