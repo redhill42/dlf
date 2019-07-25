@@ -1,6 +1,9 @@
 #include "model.h"
 #include "onnx.pb.h"
 
+#include <google/protobuf/io/coded_stream.h>
+#include <google/protobuf/io/zero_copy_stream_impl.h>
+
 namespace dlf { namespace model {
 namespace {
 
@@ -267,8 +270,12 @@ std::unique_ptr<Graph> decodeGraph(const GraphProto& gp, bool nested) {
 
 template <>
 std::unique_ptr<Graph> import_model<ONNX>(std::istream& input) {
+    ::google::protobuf::io::IstreamInputStream stream(&input);
+    ::google::protobuf::io::CodedInputStream decoder(&stream);
+    decoder.SetTotalBytesLimit(500*1024*1024, 64*1024*1024);
+
     ModelProto mp;
-    if (!mp.ParseFromIstream(&input)) {
+    if (!mp.ParseFromCodedStream(&decoder)) {
         fail_convert("Failed to parse model protocol");
     }
 

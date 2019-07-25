@@ -42,7 +42,12 @@ class Xconvgemm: public Routine {
                   const size_t dilation_h, const size_t dilation_w,
                   const Buffer<T> &im_buffer, const size_t im_offset,
                   const Buffer<T> &kernel_buffer, const size_t kernel_offset,
-                  Buffer<T> &result_buffer, const size_t result_offset);
+                  Buffer<T> &result_buffer, const size_t result_offset,
+                  Buffer<T>* temp_buffer);
+
+  size_t GetTempBufferSize(const size_t batch_count, const size_t channels,
+                           const size_t output_h, const size_t output_w,
+                           const size_t kernel_h, const size_t kernel_w);
 
  private:
   const ConvGemmMethod method_;

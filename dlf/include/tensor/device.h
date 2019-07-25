@@ -371,7 +371,8 @@ DevTensor<T> dot(const DevTensor<T>& A, const DevTensor<T>& B) {
 template <typename T>
 void gemm(const T& alpha, const DevTensor<T>& A, const DevTensor<T>& B,
           const T& beta, DevTensor<T>* C,
-          bool transA = false, bool transB = false)
+          bool transA = false, bool transB = false,
+          DevTensor<T>* work = nullptr)
 {
     assert(A.is_matrix() && B.is_matrix() && C->is_matrix());
     auto m = A.extent(0), k = A.extent(1);
@@ -392,22 +393,25 @@ void gemm(const T& alpha, const DevTensor<T>& A, const DevTensor<T>& B,
                 A.data(), A.stride(0),
                 B.data(), B.stride(0),
                 beta,
-                C->data(), C->stride(0));
+                C->data(), C->stride(0),
+                work == nullptr ? nullptr : &work->data());
 }
 
 template <typename T>
 void gemm(const T& alpha, const DevTensor<T>& A, const DevTensor<T>& B,
           const T& beta, const DevTensor<T>& C, DevTensor<T>& Y,
-          bool transA = false, bool transB = false)
+          bool transA = false, bool transB = false,
+          DevTensor<T>* work = nullptr)
 {
     broadcast(C, Y);
-    gemm(alpha, A, B, beta, &Y, transA, transB);
+    gemm(alpha, A, B, beta, &Y, transA, transB, work);
 }
 
 template <typename T>
 inline DevTensor<T> gemm(const T& alpha, const DevTensor<T>& A, const DevTensor<T>& B,
                          const T& beta, const DevTensor<T>& C,
-                         bool transA = false, bool transB = false)
+                         bool transA = false, bool transB = false,
+                         DevTensor<T>* work = nullptr)
 {
     assert(A.is_matrix() && B.is_matrix());
     auto m = A.extent(0), k = A.extent(1);
@@ -419,8 +423,30 @@ inline DevTensor<T> gemm(const T& alpha, const DevTensor<T>& A, const DevTensor<
         std::swap(p, n);
 
     auto Y = broadcast(C, {m, n});
-    gemm(alpha, A, B, beta, &Y, transA, transB);
+    gemm(alpha, A, B, beta, &Y, transA, transB, work);
     return Y;
+}
+
+template <typename T>
+inline size_t gemmWorkspaceSize(
+    const DevTensor<T>& A, const DevTensor<T>& B, const DevTensor<T>& C,
+    bool transA = false, bool transB = false)
+{
+    auto m = A.extent(0), k = A.extent(1);
+    auto p = B.extent(0), n = B.extent(1);
+
+    if (transA)
+        std::swap(m, k);
+    if (transB)
+        std::swap(p, n);
+    if (k != p || m != C.extent(0) || n != C.extent(1))
+        throw shape_error("gemm: incompatible shape");
+
+    return gblas::gemmTempBufferSize<T>(
+        gblas::Layout::RowMajor,
+        transA ? gblas::Transpose::Trans : gblas::Transpose::NoTrans,
+        transB ? gblas::Transpose::Trans : gblas::Transpose::NoTrans,
+        m, n, k, 0, A.stride(0), 0, B.stride(0), 0, C.stride(0));
 }
 
 } // namespace dlf

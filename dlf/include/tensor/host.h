@@ -792,7 +792,8 @@ template <typename T>
 std::enable_if_t<!cblas::RequireBlasType<T>>
 gemm(const T& alpha, const Tensor<T>& A, const Tensor<T>& B,
      const T& beta, Tensor<T>* C,
-     bool transA = false, bool transB = false)
+     bool transA = false, bool transB = false,
+     Tensor<T>* = nullptr)
 {
     assert(A.is_matrix() && B.is_matrix() && C->is_matrix());
     auto m = A.extent(0), k = A.extent(1);
@@ -835,7 +836,8 @@ template <typename T>
 std::enable_if_t<cblas::RequireBlasType<T>>
 gemm(const T& alpha, const Tensor<T>& A, const Tensor<T>& B,
      const T& beta, Tensor<T>* C,
-     bool transA = false, bool transB = false)
+     bool transA = false, bool transB = false,
+     Tensor<T>* = nullptr)
 {
     assert(A.is_matrix() && B.is_matrix() && C->is_matrix());
     auto m = A.extent(0), k = A.extent(1);
@@ -858,7 +860,8 @@ gemm(const T& alpha, const Tensor<T>& A, const Tensor<T>& B,
 template <typename T>
 void gemm(const T& alpha, const Tensor<T>& A, const Tensor<T>& B,
           const T& beta, const Tensor<T>& C, Tensor<T>& Y,
-          bool transA = false, bool transB = false)
+          bool transA = false, bool transB = false,
+          Tensor<T>* = nullptr)
 {
     broadcast(C, Y);
     gemm(alpha, A, B, beta, &Y, transA, transB);
@@ -867,7 +870,8 @@ void gemm(const T& alpha, const Tensor<T>& A, const Tensor<T>& B,
 template <typename T>
 Tensor<T> gemm(const T& alpha, const Tensor<T>& A, const Tensor<T>& B,
                const T& beta, const Tensor<T>& C,
-               bool transA = false, bool transB = false)
+               bool transA = false, bool transB = false,
+               Tensor<T>* = nullptr)
 {
     assert(A.is_matrix() && B.is_matrix());
     auto m = A.extent(0), k = A.extent(1);
@@ -881,6 +885,15 @@ Tensor<T> gemm(const T& alpha, const Tensor<T>& A, const Tensor<T>& B,
     auto Y = broadcast(C, {m, n});
     gemm(alpha, A, B, beta, &Y, transA, transB);
     return Y;
+}
+
+template <typename T>
+inline size_t gemmWorkspaceSize(
+    const Tensor<T>&, const Tensor<T>&, const Tensor<T>&,
+    bool = false, bool = false)
+{
+    // API compatible to DevTensor
+    return 0;
 }
 
 /**

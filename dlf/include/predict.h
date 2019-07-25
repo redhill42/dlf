@@ -15,6 +15,7 @@ struct GPU {
 };
 
 template <class Context> struct Datum {};
+template <class Context> class Workspace;
 
 template <> struct Datum<CPU> {
     const model::DataType dtype;
@@ -57,6 +58,16 @@ private:
 
     Datum(model::DataType dtype, Shape&& shape, std::shared_ptr<char> data)
         : dtype(dtype), shape(std::move(shape)), data(std::move(data)) {}
+
+    friend class Workspace<CPU>;
+    template <typename T>
+    Tensor<T> get(size_t size, size_t max_size) {
+        if (size == 0)
+            return Tensor<T>();
+        if (data == nullptr)
+            data.reset(new char[max_size], std::default_delete<char[]>());
+        return Tensor<T>::wrap({size}, reinterpret_cast<T*>(data.get()));
+    }
 };
 
 template <> struct Datum<GPU> {
@@ -98,6 +109,37 @@ private:
 
     Datum(model::DataType dtype, Shape&& shape, std::shared_ptr<gpgpu::raw::Buffer> handle)
         : dtype(dtype), shape(std::move(shape)), handle(std::move(handle)) {}
+
+    friend class Workspace<GPU>;
+    template <typename T>
+    DevTensor<T> get(size_t size, size_t max_size) {
+        if (size == 0)
+            return DevTensor<T>();
+        if (handle == nullptr)
+            handle = gpgpu::current::context().createBuffer<uint8_t>(max_size).handle();
+        return DevTensor<T>({size}, gpgpu::Buffer<T>(handle, size));
+    }
+};
+
+template <typename Context>
+class Workspace {
+    Datum<Context> m_datum;
+    size_t m_reservation = 0;
+
+public:
+    Workspace() : m_datum(model::DataType::UNDEFINED, Shape()), m_reservation(0) {}
+
+    template <typename T>
+    Workspace& reserve(size_t amount) {
+        m_reservation = std::max(m_reservation, amount * sizeof(T));
+        return *this;
+    }
+
+    template <typename T>
+    typename Context::template TensorT<T> get(size_t size) {
+        assert(size * sizeof(T) <= m_reservation);
+        return m_datum.template get<T>(size, m_reservation);
+    }
 };
 
 class Operator {
@@ -135,6 +177,7 @@ private:
     std::vector<std::shared_ptr<Datum<Context>>> m_inputs;
     std::vector<std::shared_ptr<Datum<Context>>> m_outputs;
     std::vector<std::unique_ptr<Operator>> m_operators;
+    Workspace<Context> m_workspace;
 };
 
 template <typename Context, typename T>
@@ -144,14 +187,15 @@ private:
 
     std::vector<DatumPtr>& m_dataset;
     std::unordered_map<const model::Value*, DatumPtr> m_datamap;
+    Workspace<Context>& m_workspace;
     std::unique_ptr<Operator> result;
 
     template <typename U = T>
     using TensorT = typename Context::template TensorT<U>;
 
 public:
-    OperatorFactory(std::vector<DatumPtr>& dataset)
-        : m_dataset(dataset) {}
+    OperatorFactory(std::vector<DatumPtr>& dataset, Workspace<Context>& workspace)
+        : m_dataset(dataset), m_workspace(workspace) {}
 
     template <typename U = T>
     DatumPtr allocDatum(const model::Value* value) {
@@ -197,6 +241,11 @@ public:
         m_dataset.push_back(output_datum);
         m_datamap.emplace(output, output_datum);
         return output_datum->template get<U>();
+    }
+
+    template <typename U = T>
+    Workspace<Context>& reserve(size_t amount) {
+        return m_workspace.template reserve<U>(amount);
     }
 
     std::unique_ptr<Operator> createOperator(model::Node* node) {
@@ -534,6 +583,7 @@ private:
         T alpha, beta;
         bool transA, transB;
         TensorT<> A, B, C, Y;
+        Workspace<Context>& workspace;
 
         GemmOp(OperatorFactory* of, model::Gemm* n)
             : alpha(n->alpha()), beta(n->beta()),
@@ -541,10 +591,16 @@ private:
               A(of->alloc(n->A())),
               B(of->alloc(n->B())),
               C(of->alloc(n->C())),
-              Y(of->alloc(n->Y())) {}
+              Y(of->alloc(n->Y())),
+              workspace(of->reserve(workspace_size())) {}
 
         void evaluate() override {
-            gemm(alpha, A, B, beta, C, Y, transA, transB);
+            auto work = workspace.template get<T>(workspace_size());
+            gemm(alpha, A, B, beta, C, Y, transA, transB, &work);
+        }
+
+        size_t workspace_size() {
+            return gemmWorkspaceSize(A, B, Y, transA, transB);
         }
     };
 
@@ -568,6 +624,7 @@ private:
     struct ConvOp : Operator {
         TensorT<> X, W, B, Y;
         dnn::Filter2D filter;
+        Workspace<Context>& workspace;
 
         ConvOp(OperatorFactory* of, model::Conv* n)
             : X(of->alloc(n->X())),
@@ -577,13 +634,19 @@ private:
               filter(dnn::Filter2D(X.shape(), W.shape(), n->group())
                 .pads(n->pads())
                 .strides(n->strides())
-                .dilations(n->dilations())) {}
+                .dilations(n->dilations())),
+              workspace(of->reserve(workspace_size())){}
 
         void evaluate() override {
-            dnn::conv2d(X, W, Y, filter);
+            auto work = workspace.template get<T>(workspace_size());
+            dnn::conv2d(X, W, Y, filter, &work);
             if (!B.empty()) {
                 transformChannel(Y, B, Y, 1, xfn::plus<T>());
             }
+        }
+
+        size_t workspace_size() const {
+            return conv2dWorkspaceSize(X, W, filter);
         }
     };
 
@@ -848,7 +911,7 @@ template <typename Context, typename T>
 Predictor<Context, T>::Predictor(model::Graph& graph,
     const std::unordered_map<std::string, size_t>& env)
 {
-    OperatorFactory<Context, T> factory(m_dataset);
+    OperatorFactory<Context, T> factory(m_dataset, m_workspace);
 
     model::ShapeInference::newInstance(env)->infer(graph);
     model::Optimizer::newInstance()->optimize(graph);

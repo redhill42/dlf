@@ -53,7 +53,8 @@ void Xconvgemm<T>::DoConvgemm(const KernelMode kernel_mode,
                               const size_t dilation_h, const size_t dilation_w,
                               const Buffer<T> &im_buffer, const size_t im_offset,
                               const Buffer<T> &kernel_buffer, const size_t kernel_offset,
-                              Buffer<T> &result_buffer, const size_t result_offset) {
+                              Buffer<T> &result_buffer, const size_t result_offset,
+                              Buffer<T>* temp_buffer) {
 
   // Tests for a valid batch count
   if (batch_count == 0) {
@@ -76,7 +77,11 @@ void Xconvgemm<T>::DoConvgemm(const KernelMode kernel_mode,
 
     // Temporary col matrix
     const auto col_size = (method_ == ConvGemmMethod::kWithIm2Col) ? patch_size * num_patches * batch_count : 1;
-    col_buffer = context_.createBuffer<T>(col_size);
+    col_buffer = temp_buffer ? *temp_buffer : context_.createBuffer<T>(col_size);
+    if (temp_buffer) {
+        if (temp_buffer->size() < col_size)
+            throw BLASError(StatusCode::kInsufficientMemoryTemp);
+    }
 
     auto im2col = Xim2col<T>(queue_, nullptr);
     im2col.DoIm2col(kernel_mode, batch_count, channels,
@@ -154,6 +159,19 @@ void Xconvgemm<T>::DoConvgemm(const KernelMode kernel_mode,
 
   // Launches the kernel
   RunKernel(kernel, queue_, device_, global, local, event_);
+}
+
+template <typename T>
+size_t Xconvgemm<T>::GetTempBufferSize(const size_t batch_count, const size_t channels,
+                                       const size_t output_h, const size_t output_w,
+                                       const size_t kernel_h, const size_t kernel_w)
+{
+    if (method_ != ConvGemmMethod::kWithIm2Col)
+        return 0;
+
+    const auto patch_size = kernel_h * kernel_w * channels;
+    const auto num_patches = output_h * output_w;
+    return patch_size * num_patches * batch_count;
 }
 
 // =================================================================================================
