@@ -187,6 +187,135 @@ pow(LHS&& lhs, RHS&& rhs) {
     return transform(std::forward<LHS>(lhs), std::forward<RHS>(rhs), xfn::power<>());
 }
 
+// vector or matrix dot product.
+
+template <typename TensorT>
+enable_if_tensor<TensorT> dot(const TensorT& A, const TensorT& B) {
+    if (A.is_vector() && B.is_vector()) {
+        assert(A.shape() == B.shape());
+        TensorT C({1});
+        dot(A, B, &C);
+        return C;
+    } else if (A.is_matrix() && B.is_vector()) {
+        assert(A.extent(1) == B.extent(0));
+        TensorT C({A.extent(0)});
+        dot(A, B, &C);
+        return C;
+    } else if (A.is_vector() && B.is_matrix()) {
+        assert(A.extent(0) == B.extent(0));
+        TensorT C({B.extent(1)});
+        dot(A, B, &C);
+        return C;
+    } else if (A.is_matrix() && B.is_matrix()) {
+        auto m = A.extent(0), k = A.extent(1);
+        auto p = B.extent(0), n = B.extent(1);
+        assert(k == p);
+        TensorT C({m, n});
+        dot(A, B, &C);
+        return C;
+    } else {
+        throw std::runtime_error("dot unsupported on tensors");
+    }
+}
+
+namespace dot_product {
+/**
+ * We use comma operator to represent dot product, because C++ doesn't have dot
+ * operator yet, and comma and dot are looks similar. To use the comma operator
+ * be sure to enclose the expression in parentheses to avoid ambiguity. That is,
+ * use
+ *     auto z = (x , y)
+ * instead of
+ *     auto z = x, y
+ */
+template <typename T>
+inline Tensor<T> operator,(const Tensor<T>& lhs, const Tensor<T>& rhs) {
+    return dot(lhs, rhs);
+}
+
+template <typename T>
+inline DevTensor<T> operator,(const DevTensor<T>& lhs, const DevTensor<T>& rhs) {
+    return dot(lhs, rhs);
+}
+} // namespace dot_product
+
+/**
+ * The cross product on tensors is typically referred to as the tensor product.
+ * Given a tensor a of order q with dimensions (i1, ..., iq), and a tensor b
+ * of order r with dimensions (j1, ..., jr), their cross product c is of order
+ * q + r with dimensions (k1, ..., kq+r) which are the i dimensions followed
+ * by the j dimensions.
+ */
+template <typename T, typename U, typename F, typename W = cxx::invoke_result_t<F,T,U>>
+Tensor<W> cross(const Tensor<T>& A, const Tensor<U>& B, F f) {
+    std::vector<size_t> dimsA, dimsB;
+    for (size_t i = 0; i < A.rank(); i++) {
+        dimsA.push_back(A.extent(i));
+        dimsB.push_back(1);
+    }
+    for (size_t i = 0; i < B.rank(); i++) {
+        dimsA.push_back(1);
+        dimsB.push_back(B.extent(i));
+    }
+    return transform(Tensor<const T>::wrap(Shape(dimsA), A.data()),
+                     Tensor<const T>::wrap(Shape(dimsB), B.data()),
+                     f);
+}
+
+template <typename T, typename F>
+DevTensor<T> cross(const DevTensor<T>& A, const DevTensor<T>& B, F f) {
+    std::vector<size_t> dimsA, dimsB;
+    for (size_t i = 0; i < A.rank(); i++) {
+        dimsA.push_back(A.extent(i));
+        dimsB.push_back(1);
+    }
+    for (size_t i = 0; i < B.rank(); i++) {
+        dimsA.push_back(1);
+        dimsB.push_back(B.extent(i));
+    }
+    return transform(DevTensor<T>(Shape(dimsA), A.data()),
+                     DevTensor<T>(Shape(dimsB), B.data()),
+                     f);
+}
+
+template <typename LHS, typename RHS>
+enable_if_tensors<LHS, RHS, xfn::multiplies<>>
+cross(const LHS& lhs, const RHS& rhs) {
+    return cross(lhs, rhs, xfn::multiplies<>());
+}
+
+// General matrix multiplication
+
+template <typename TensorT>
+inline enable_if_tensor<TensorT, void> gemm(
+    const tensor_value_type<TensorT>& alpha, const TensorT& A, const TensorT& B,
+    const tensor_value_type<TensorT>& beta, const TensorT& C, TensorT& Y,
+    bool transA = false, bool transB = false, TensorT* work = nullptr)
+{
+    broadcast(C, Y);
+    gemm(alpha, A, B, beta, &Y, transA, transB, work);
+}
+
+template <typename TensorT>
+enable_if_tensor<TensorT> gemm(
+    const tensor_value_type<TensorT>& alpha, const TensorT& A, const TensorT& B,
+    const tensor_value_type<TensorT>& beta, const TensorT& C,
+    bool transA = false, bool transB = false, TensorT* work = nullptr)
+{
+    assert(A.is_matrix() && B.is_matrix());
+    auto m = A.extent(0), k = A.extent(1);
+    auto p = B.extent(0), n = B.extent(1);
+
+    if (transA)
+        std::swap(m, k);
+    if (transB)
+        std::swap(p, n);
+    assert(k == p);
+
+    auto Y = broadcast(C, {m, n});
+    gemm(alpha, A, B, beta, &Y, transA, transB, work);
+    return Y;
+}
 
 namespace detail {
 inline int matmul_broadcast(Shape& shapeA, Shape& shapeB, Shape& shapeC) {
@@ -395,27 +524,6 @@ enable_if_tensor<TensorT> matpow(TensorT&& A, long n) {
     return y;
 }
 
-namespace dot_product {
-/**
- * We use comma operator to represent dot product, because C++ doesn't have dot
- * operator yet, and comma and dot are looks similar. To use the comma operator
- * be sure to enclose the expression in parentheses to avoid ambiguity. That is,
- * use
- *     auto z = (x , y)
- * instead of
- *     auto z = x, y
- */
-template <typename T>
-inline Tensor<T> operator,(const Tensor<T>& lhs, const Tensor<T>& rhs) {
-    return dot(lhs, rhs);
-}
-
-template <typename T>
-inline DevTensor<T> operator,(const DevTensor<T>& lhs, const DevTensor<T>& rhs) {
-    return dot(lhs, rhs);
-}
-} // namespace dot_product
-
 //==-------------------------------------------------------------------------
 // Tensor aggregate operations
 //==-------------------------------------------------------------------------
@@ -495,6 +603,11 @@ inline auto product(First&& first, Rest&&... rest) {
 //==-------------------------------------------------------------------------
 // Tensor shape operations
 //==-------------------------------------------------------------------------
+
+template <typename TensorT>
+inline enable_if_tensor<TensorT, void> broadcast(const TensorT& src, TensorT& dst) {
+    reorder(src, src.shape().broadcast(dst.shape()), dst);
+}
 
 template <typename TensorT>
 inline enable_if_tensor<TensorT> broadcast(TensorT&& src, const Shape& shape) {
@@ -716,7 +829,7 @@ split(int axis, const TensorT& input, const std::vector<tensor_type<TensorT>*>& 
 namespace detail {
 template <typename T>
 inline void transpose(const Tensor<T>& src, const Shape& shape, Tensor<T>& dst) {
-    copy(src, shape, dst);
+    reorder(src, shape, dst);
 }
 
 template <typename T>
@@ -728,7 +841,7 @@ inline void transpose(const DevTensor<T>& src, const Shape& shape, DevTensor<T>&
                               T(1), src.data(), src.stride(0),
                               dst.data(), dst.stride(0));
     } else {
-        copy(src, shape, dst);
+        reorder(src, shape, dst);
     }
 }
 } // namespace detail

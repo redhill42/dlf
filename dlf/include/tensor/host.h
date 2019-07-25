@@ -609,7 +609,7 @@ inline Tensor<U> Tensor<T>::cast() const {
 }
 
 template <typename T>
-void copy(const Tensor<T>& src, const Shape& shape, Tensor<T>& dst) {
+void reorder(const Tensor<T>& src, const Shape& shape, Tensor<T>& dst) {
     assert(dst.shape() == shape);
     if (src.data() == dst.data())
         return;
@@ -630,11 +630,6 @@ inline void flat_copy(const Tensor<T>& src, Tensor<T>& dst) {
     }
 }
 
-template <typename T>
-inline void broadcast(const Tensor<T>& src, Tensor<T>& dst) {
-    copy(src, src.shape().broadcast(dst.shape()), dst);
-}
-
 //==-------------------------------------------------------------------------
 // Tensor operations
 //==-------------------------------------------------------------------------
@@ -653,7 +648,7 @@ dot(size_t n, const T* A, const T* B) {
     return tbb::parallel_reduce(
         tbb::blocked_range<size_t>(0, n, GRAINSIZE),
         T{},
-        [&](auto&& r, T sum) {
+        [&](auto r, T sum) {
             auto px = A + r.begin();
             auto py = B + r.begin();
             for (size_t k = r.size(); k-- != 0; )
@@ -672,7 +667,7 @@ gemv(size_t m, size_t n, const T* A, const T* B, T* C, size_t lda) {
 template <typename T>
 std::enable_if_t<!cblas::RequireBlasType<T>>
 gemv(size_t m, size_t n, const T* A, const T* B, T* C, size_t lda) {
-    tbb::parallel_for(tbb::blocked_range<size_t>(0, m, GRAINSIZE), [&](auto&& r) {
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, m, GRAINSIZE), [&](auto r) {
         auto px = A + r.begin() * lda;
         auto pz = C + r.begin();
         for (size_t k = r.size(); k-- != 0; ) {
@@ -695,7 +690,7 @@ gemm(size_t m, size_t n, size_t k, const T* A, const T* B, T* C, size_t lda, siz
 template <typename T>
 std::enable_if_t<!cblas::RequireBlasType<T>>
 gemm(size_t m, size_t n, size_t k, const T* A, const T* B, T* C, size_t lda, size_t ldb, size_t ldc) {
-    tbb::parallel_for(tbb::blocked_range2d<size_t>(0, m, 32, 0, n, 32), [&](auto &&r) {
+    tbb::parallel_for(tbb::blocked_range2d<size_t>(0, m, 32, 0, n, 32), [&](auto r) {
         for (size_t i = r.rows().begin(); i != r.rows().end(); i++) {
             for (size_t j = r.cols().begin(); j != r.cols().end(); j++) {
                 T v{};
@@ -715,19 +710,25 @@ gemm(size_t m, size_t n, size_t k, const T* A, const T* B, T* C, size_t lda, siz
  */
 template <typename T>
 Tensor<T>& dot(const Tensor<T>& A, const Tensor<T>& B, Tensor<T>* C) {
-    assert(C != &A && C != &B);
+    assert(C->data() != A.data() && C->data() != B.data());
 
     if (A.is_vector() && B.is_vector()) {
         auto n = A.extent(0);
         assert(n == B.extent(0));
         assert(C->is_vector() && 1 == C->extent(0));
         *C->data() = impl::dot(n, A.data(), B.data());
-    } else if (A.is_matrix() && B.is_vector()) {
+        return *C;
+    }
+
+    if (A.is_matrix() && B.is_vector()) {
         auto m = A.extent(0), n = A.extent(1);
         assert(n == B.extent(0));
         assert(C->is_vector() && m == C->extent(0));
         impl::gemv(m, n, A.data(), B.data(), C->data(), A.stride(0));
-    } else if ((A.is_vector() || A.is_matrix()) && B.is_matrix()) {
+        return *C;
+    }
+
+    if ((A.is_vector() || A.is_matrix()) && B.is_matrix()) {
         Shape A_shape, B_shape, C_shape;
 
         if (A.is_vector()) {
@@ -749,40 +750,10 @@ Tensor<T>& dot(const Tensor<T>& A, const Tensor<T>& B, Tensor<T>* C) {
         impl::gemm(C_shape.extent(0), C_shape.extent(1), A_shape.extent(1),
                    A.data(), B.data(), C->data(),
                    A_shape.stride(0), B_shape.stride(0), C_shape.stride(0));
-    } else {
-        assert(false);
+        return *C;
     }
-    return *C;
-}
 
-template <typename T>
-Tensor<T> dot(const Tensor<T>& A, const Tensor<T>& B) {
-    if (A.is_vector() && B.is_vector()) {
-        assert(A.shape() == B.shape());
-        Tensor<T> C({1});
-        dot(A, B, &C);
-        return C;
-    } else if (A.is_matrix() && B.is_vector()) {
-        assert(A.extent(1) == B.extent(0));
-        Tensor<T> C({A.extent(0)});
-        dot(A, B, &C);
-        return C;
-    } else if (A.is_vector() && B.is_matrix()) {
-        assert(A.extent(0) == B.extent(0));
-        Tensor<T> C({B.extent(1)});
-        dot(A, B, &C);
-        return C;
-    } else if (A.is_matrix() && B.is_matrix()) {
-        auto m = A.extent(0), k = A.extent(1);
-        auto p = B.extent(0), n = B.extent(1);
-        assert(k == p);
-        Tensor<T> C({m, n});
-        dot(A, B, &C);
-        return C;
-    } else {
-        assert(false);
-        return {};
-    }
+    throw std::logic_error("dot: unsupported tensor shape");
 }
 
 /**
@@ -858,77 +829,12 @@ gemm(const T& alpha, const Tensor<T>& A, const Tensor<T>& B,
 }
 
 template <typename T>
-void gemm(const T& alpha, const Tensor<T>& A, const Tensor<T>& B,
-          const T& beta, const Tensor<T>& C, Tensor<T>& Y,
-          bool transA = false, bool transB = false,
-          Tensor<T>* = nullptr)
-{
-    broadcast(C, Y);
-    gemm(alpha, A, B, beta, &Y, transA, transB);
-}
-
-template <typename T>
-Tensor<T> gemm(const T& alpha, const Tensor<T>& A, const Tensor<T>& B,
-               const T& beta, const Tensor<T>& C,
-               bool transA = false, bool transB = false,
-               Tensor<T>* = nullptr)
-{
-    assert(A.is_matrix() && B.is_matrix());
-    auto m = A.extent(0), k = A.extent(1);
-    auto p = B.extent(0), n = B.extent(1);
-    if (transA)
-        std::swap(m, k);
-    if (transB)
-        std::swap(p, n);
-    assert(k == p);
-
-    auto Y = broadcast(C, {m, n});
-    gemm(alpha, A, B, beta, &Y, transA, transB);
-    return Y;
-}
-
-template <typename T>
 inline size_t gemmWorkspaceSize(
     const Tensor<T>&, const Tensor<T>&, const Tensor<T>&,
     bool = false, bool = false)
 {
     // API compatible to DevTensor
     return 0;
-}
-
-/**
- * The outer product on tensors is typically referred to as the tensor product.
- * Given a tensor a of order q with dimensions (i1, ..., iq), and a tensor b
- * of order r with dimensions (j1, ..., jr), their outer product c is of order
- * q + r with dimensions (k1, ..., kq+r) which are the i dimensions followed
- * by the j dimensions.
- */
-template <typename T, typename U, typename F, typename W = cxx::invoke_result_t<F,T,U>>
-Tensor<W> outer(const Tensor<T>& A, const Tensor<U>& B, F f) {
-    std::vector<size_t> dimA, dimB, dimC;
-    for (size_t i = 0; i < A.rank(); i++) {
-        dimA.push_back(A.extent(i));
-        dimB.push_back(1);
-        dimC.push_back(A.extent(i));
-    }
-    for (size_t i = 0; i < B.rank(); i++) {
-        dimA.push_back(1);
-        dimB.push_back(B.extent(i));
-        dimC.push_back(B.extent(i));
-    }
-
-    auto sC = Shape(dimC);
-    auto sA = Shape(dimA).broadcast(sC);
-    auto sB = Shape(dimB).broadcast(sC);
-
-    Tensor<W> C(sC);
-    par::transform(A.begin(sA), A.end(sA), B.begin(sB), C.begin(), f);
-    return C;
-}
-
-template <typename T, typename U, typename W = std::common_type_t<T,U>>
-inline Tensor<W> outer(const Tensor<T>& A, const Tensor<U>& B) {
-    return outer(A, B, [](const T& a, const U& b) -> W { return a * b; });
 }
 
 } // namespace dlf

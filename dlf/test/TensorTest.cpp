@@ -496,7 +496,7 @@ TEST_F(TensorTest, VectorOuter) {
         2, 4, 6, 8,
         3, 6, 9, 12
     });
-    EXPECT_EQ(outer(A, B), C);
+    EXPECT_EQ(cross(A, B), C);
 }
 
 TEST_F(TensorTest, MatrixOuter) {
@@ -508,7 +508,7 @@ TEST_F(TensorTest, MatrixOuter) {
         15, 18, 21, 24, 27, 30,
         20, 24, 28, 32, 36, 40
     });
-    EXPECT_EQ(outer(A, B), C);
+    EXPECT_EQ(cross(A, B), C);
 }
 
 template <typename T>

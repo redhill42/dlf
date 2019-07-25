@@ -167,7 +167,7 @@ inline DevTensor<T> transform(DevTensor<T>&& x, Fn fn) {
 }
 
 template <typename T>
-void copy(const DevTensor<T>& src, const Shape& shape, DevTensor<T>& dst) {
+void reorder(const DevTensor<T>& src, const Shape& shape, DevTensor<T>& dst) {
     assert(dst.shape() == shape);
     if (src.data() == dst.data())
         return;
@@ -184,11 +184,6 @@ template <typename T>
 inline void flat_copy(const DevTensor<T>& src, DevTensor<T>& dst) {
     assert(src.size() == dst.size());
     src.copyToAsync(dst);
-}
-
-template <typename T>
-inline void broadcast(const DevTensor<T>& src, DevTensor<T>& dst) {
-    copy(src, src.shape().broadcast(dst.shape()), dst);
 }
 
 //==-------------------------------------------------------------------------
@@ -331,38 +326,7 @@ DevTensor<T>& dot(const DevTensor<T>& A, const DevTensor<T>& B, DevTensor<T>* C)
         return *C;
     }
 
-    assert(false);
-    return *C;
-}
-
-template <typename T>
-DevTensor<T> dot(const DevTensor<T>& A, const DevTensor<T>& B) {
-    if (A.is_vector() && B.is_vector()) {
-        assert(A.shape() == B.shape());
-        DevTensor<T> C({1});
-        dot(A, B, &C);
-        return C;
-    } else if (A.is_matrix() && B.is_vector()) {
-        assert(A.extent(1) == B.extent(0));
-        DevTensor<T> C({A.extent(0)});
-        dot(A, B, &C);
-        return C;
-    } else if (A.is_vector() && B.is_matrix()) {
-        assert(A.extent(0) == B.extent(0));
-        DevTensor<T> C({B.extent(1)});
-        dot(A, B, &C);
-        return C;
-    } else if (A.is_matrix() && B.is_matrix()) {
-        auto m = A.extent(0), k = A.extent(1);
-        auto p = B.extent(0), n = B.extent(1);
-        assert(k == p);
-        DevTensor<T> C({m, n});
-        dot(A, B, &C);
-        return C;
-    } else {
-        assert(false);
-        return {};
-    }
+    throw std::logic_error("dot: unsupported tensor shape");
 }
 
 /**
@@ -395,36 +359,6 @@ void gemm(const T& alpha, const DevTensor<T>& A, const DevTensor<T>& B,
                 beta,
                 C->data(), C->stride(0),
                 work == nullptr ? nullptr : &work->data());
-}
-
-template <typename T>
-void gemm(const T& alpha, const DevTensor<T>& A, const DevTensor<T>& B,
-          const T& beta, const DevTensor<T>& C, DevTensor<T>& Y,
-          bool transA = false, bool transB = false,
-          DevTensor<T>* work = nullptr)
-{
-    broadcast(C, Y);
-    gemm(alpha, A, B, beta, &Y, transA, transB, work);
-}
-
-template <typename T>
-inline DevTensor<T> gemm(const T& alpha, const DevTensor<T>& A, const DevTensor<T>& B,
-                         const T& beta, const DevTensor<T>& C,
-                         bool transA = false, bool transB = false,
-                         DevTensor<T>* work = nullptr)
-{
-    assert(A.is_matrix() && B.is_matrix());
-    auto m = A.extent(0), k = A.extent(1);
-    auto p = B.extent(0), n = B.extent(1);
-
-    if (transA)
-        std::swap(m, k);
-    if (transB)
-        std::swap(p, n);
-
-    auto Y = broadcast(C, {m, n});
-    gemm(alpha, A, B, beta, &Y, transA, transB, work);
-    return Y;
 }
 
 template <typename T>
