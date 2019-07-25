@@ -264,12 +264,12 @@ PERFORMANCE_TEST(Shape, GPUTransposePerformance) {
     }
 }
 
-TEST(FilterShape2D, AutoPad) {
+TEST(Filter2D, AutoPad) {
     for (size_t n = 3; n < 20; n++)
     for (size_t k = 1; k <= std::min<size_t>(7, n); k++)
     for (size_t s = 1; s <= 3; s++)
     for (size_t d = 1; d <= 3; d++) {
-        auto filter = FilterShape2D({1, 1, n, n}, k, k)
+        auto filter = dnn::Filter2D({1, 1, n, n}, k, k)
             .strides(s, s)
             .dilations(d, d);
         filter.auto_pad("SAME_UPPER");

@@ -526,7 +526,7 @@ TEST(Conv2D, basic_conv_with_padding) {
     auto W = Tensor<float>({1, 1, 3, 3});
     std::fill(W.begin(), W.end(), 1);
     auto Y = Tensor<float>({1, 1, 5, 5});
-    auto filter = FilterShape2D(X.shape(), W.shape()).pads(1, 1);
+    auto filter = dnn::Filter2D(X.shape(), W.shape()).pads(1, 1);
     auto R = Tensor<float>({1, 1, 5, 5}, {
         12, 21, 27, 33, 24,
         33, 54, 63, 72, 51,
@@ -548,7 +548,7 @@ TEST(Conv2D, basic_conv_without_padding) {
     auto W = Tensor<float>({1, 1, 3, 3});
     std::fill(W.begin(), W.end(), 1);
     auto Y = Tensor<float>({1, 1, 3, 3});
-    auto filter = FilterShape2D(X.shape(), W.shape());
+    auto filter = dnn::Filter2D(X.shape(), W.shape());
     auto R = Tensor<float>({1, 1, 3, 3}, {
         54, 63, 72,
         99, 108, 117,
@@ -568,7 +568,7 @@ TEST(Conv2D, conv_with_strides_padding) {
     auto W = Tensor<float>({1, 1, 3, 3});
     std::fill(W.begin(), W.end(), 1);
     auto Y = Tensor<float>({1, 1, 4, 3});
-    auto filter = FilterShape2D(X.shape(), W.shape()).pads(1, 1).strides(2, 2);
+    auto filter = dnn::Filter2D(X.shape(), W.shape()).pads(1, 1).strides(2, 2);
     auto R = Tensor<float>({1, 1, 4, 3}, {
         12, 27, 24,
         63, 108, 81,
@@ -589,7 +589,7 @@ TEST(Conv2D, conv_with_strides_no_padding) {
     auto W = Tensor<float>({1, 1, 3, 3});
     std::fill(W.begin(), W.end(), 1);
     auto Y = Tensor<float>({1, 1, 3, 2});
-    auto filter = FilterShape2D(X.shape(), W.shape()).strides(2, 2);
+    auto filter = dnn::Filter2D(X.shape(), W.shape()).strides(2, 2);
     auto R = Tensor<float>({1, 1, 3, 2}, {
         54, 72,
         144, 162,
@@ -609,7 +609,7 @@ TEST(Conv2D, conv_with_strides_and_asymmetric_padding) {
     auto W = Tensor<float>({1, 1, 3, 3});
     std::fill(W.begin(), W.end(), 1);
     auto Y = Tensor<float>({1, 1, 4, 2});
-    auto filter = FilterShape2D(X.shape(), W.shape()).pads(1, 0).strides(2, 2);
+    auto filter = dnn::Filter2D(X.shape(), W.shape()).pads(1, 0).strides(2, 2);
     auto R = Tensor<float>({1, 1, 4, 2}, {
         21, 33,
         99, 117,
@@ -630,7 +630,7 @@ TEST(Conv2D, conv_with_multiple_channels) {
     auto W = Tensor<float>({8, 3, 3, 3});
     std::fill(W.begin(), W.end(), 1);
     auto Y = Tensor<float>({2, 8, 5, 5});
-    auto filter = FilterShape2D(X.shape(), W.shape()).pads(1, 1);
+    auto filter = dnn::Filter2D(X.shape(), W.shape()).pads(1, 1);
     auto dev_Y = DevTensor<float>({2, 8, 5, 5});
 
     dnn::conv2d(X, W, Y, filter);
@@ -642,7 +642,7 @@ TEST(Conv2D, conv_with_strange_padding) {
     auto X = Tensor<float>::range({2, 3, 10, 10}, 0);
     auto W = Tensor<float>({8, 3, 3, 3});
     std::fill(W.begin(), W.end(), 1);
-    auto filter = FilterShape2D(X.shape(), W.shape()).pads(1, 2, 2, 1);
+    auto filter = dnn::Filter2D(X.shape(), W.shape()).pads(1, 2, 2, 1);
     auto Y = Tensor<float>(filter.output_shape());
     auto dev_Y = DevTensor<float>(Y.shape());
 
@@ -655,7 +655,7 @@ PERFORMANCE_TEST(Conv2D, performance_test) {
     auto X = Tensor<float>::range({1, 3, 1000, 1000}, 0);
     auto W = Tensor<float>::range({8, 3, 3, 3}, 0);
     auto Y = Tensor<float>({1, 8, 1000, 1000});
-    auto filter = FilterShape2D(X.shape(), W.shape()).pads(1, 1);
+    auto filter = dnn::Filter2D(X.shape(), W.shape()).pads(1, 1);
 
     for (int i = 0; i < 3; i++) {
         timing("Conv2D CPU", 1, [&]() {
@@ -683,7 +683,7 @@ TEST(MaxPool, basic_2d_with_padding) {
         22, 23, 24, 25, 25,
         22, 23, 24, 25, 25,
     });
-    auto filter = FilterShape2D(X.shape(), 3, 3).pads(1, 1);
+    auto filter = dnn::Filter2D(X.shape(), 3, 3).pads(1, 1);
 
     dnn::maxpool(X, Y, filter);
     EXPECT_EQ(Y, R);
@@ -702,7 +702,7 @@ TEST(MaxPool, basic_2d_without_padding) {
         18, 19, 20,
         23, 24, 25
     });
-    auto filter = FilterShape2D(X.shape(), 3, 3);
+    auto filter = dnn::Filter2D(X.shape(), 3, 3);
 
     dnn::maxpool(X, Y, filter);
     EXPECT_EQ(Y, R);
@@ -717,7 +717,7 @@ TEST(MaxPool, basic_2d_with_dilations) {
     auto X = Tensor<float>::range({1, 1, 4, 4}, 1);
     auto Y = Tensor<float>({1, 1, 2, 2});
     auto R = Tensor<float>({1, 1, 2, 2}, {11, 12, 15, 16});
-    auto filter = FilterShape2D(X.shape(), 2, 2).dilations(2, 2);
+    auto filter = dnn::Filter2D(X.shape(), 2, 2).dilations(2, 2);
 
     dnn::maxpool(X, Y, filter);
     EXPECT_EQ(Y, R);
@@ -738,7 +738,7 @@ TEST(MaxPool, basic_2d_precomputed_pads) {
         23, 24, 25, 25, 25,
         23, 24, 25, 25, 25
     });
-    auto filter = FilterShape2D(X.shape(), 5, 5).pads(2, 2);
+    auto filter = dnn::Filter2D(X.shape(), 5, 5).pads(2, 2);
 
     dnn::maxpool(X, Y, filter);
     EXPECT_EQ(Y, R);
@@ -755,7 +755,7 @@ TEST(MaxPool, basic_2d_precomputed_same_upper) {
     auto R = Tensor<float>({1, 1, 3, 3}, {
         7, 9, 10, 17, 19, 20, 22, 24, 25
     });
-    auto filter = FilterShape2D(X.shape(), 3, 3).strides(2, 2).auto_pad("SAME_UPPER");
+    auto filter = dnn::Filter2D(X.shape(), 3, 3).strides(2, 2).auto_pad("SAME_UPPER");
 
     dnn::maxpool(X, Y, filter);
     EXPECT_EQ(Y, R);
@@ -770,7 +770,7 @@ TEST(MaxPool, basic_2d_precomputed_strides) {
     auto X = Tensor<float>::range({1, 1, 5, 5}, 1);
     auto Y = Tensor<float>({1, 1, 2, 2});
     auto R = Tensor<float>({1, 1, 2, 2}, {7, 9, 17, 19});
-    auto filter = FilterShape2D(X.shape(), 2, 2).strides(2, 2);
+    auto filter = dnn::Filter2D(X.shape(), 2, 2).strides(2, 2);
 
     dnn::maxpool(X, Y, filter);
     EXPECT_EQ(Y, R);
@@ -786,7 +786,7 @@ TEST(MaxPool, basic_2d_with_multiple_channels) {
     auto Y = Tensor<float>({2, 3, 100, 100});
     auto dev_X = dev(X);
     auto dev_Y = DevTensor<float>({2, 3, 100, 100});
-    auto filter = FilterShape2D(X.shape(), 3, 3).pads(1, 1);
+    auto filter = dnn::Filter2D(X.shape(), 3, 3).pads(1, 1);
 
     dnn::maxpool(X, Y, filter);
     dnn::maxpool(dev_X, dev_Y, filter);
@@ -798,7 +798,7 @@ TEST(AveragePool, basic_2d_with_multiple_channels) {
     auto Y = Tensor<float>({2, 3, 100, 100});
     auto dev_X = dev(X);
     auto dev_Y = DevTensor<float>({2, 3, 100, 100});
-    auto filter = FilterShape2D(X.shape(), 3, 3).pads(1, 1);
+    auto filter = dnn::Filter2D(X.shape(), 3, 3).pads(1, 1);
 
     dnn::avgpool(X, Y, filter, false);
     dnn::avgpool(dev_X, dev_Y, filter, false);
@@ -810,7 +810,7 @@ TEST(LpPool, basic_2d_with_multiple_channels) {
     auto Y = Tensor<float>({2, 3, 100, 100});
     auto dev_X = dev(X);
     auto dev_Y = DevTensor<float>({2, 3, 100, 100});
-    auto filter = FilterShape2D(X.shape(), 3, 3).pads(1, 1);
+    auto filter = dnn::Filter2D(X.shape(), 3, 3).pads(1, 1);
 
     dnn::lppool(X, Y, filter, 2);
     dnn::lppool(dev_X, dev_Y, filter, 2);

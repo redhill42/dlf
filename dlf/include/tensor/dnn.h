@@ -2,6 +2,121 @@
 
 namespace dlf { namespace dnn {
 
+//---------------------------------------------------------------------------
+// Filter shape used by convolution and pooling
+
+class Filter2D {
+    size_t m_batches, m_channels, m_height, m_width;
+    size_t m_num_kernels, m_kernel_h, m_kernel_w, m_group;
+    size_t m_pad_top, m_pad_left, m_pad_bottom, m_pad_right;
+    size_t m_stride_h, m_stride_w;
+    size_t m_dilation_h, m_dilation_w;
+
+public:
+    Filter2D(const Shape& input_shape, const Shape& kernel_shape, size_t group = 1);
+    Filter2D(const Shape& input_shape, size_t kernel_h, size_t kernel_w);
+
+    Filter2D& pads(size_t top, size_t left, size_t bottom, size_t right) noexcept {
+        m_pad_top = top;
+        m_pad_left = left;
+        m_pad_bottom = bottom;
+        m_pad_right = right;
+        return *this;
+    }
+
+    Filter2D& pads(size_t h, size_t w) noexcept {
+        m_pad_top = m_pad_bottom = h;
+        m_pad_left = m_pad_right = w;
+        return *this;
+    }
+
+    template <typename I>
+    Filter2D& pads(const std::vector<I>& pads) noexcept {
+        static_assert(std::is_convertible<I, size_t>::value, "");
+        assert(pads.size() == 4);
+        m_pad_top = pads[0];
+        m_pad_left = pads[1];
+        m_pad_bottom = pads[2];
+        m_pad_right = pads[3];
+        return *this;
+    }
+
+    Filter2D& auto_pad(const std::string& mode);
+
+    Filter2D& strides(size_t h, size_t w) noexcept {
+        m_stride_h = h;
+        m_stride_w = w;
+        return *this;
+    }
+
+    template <typename I>
+    Filter2D& strides(const std::vector<I>& strides) noexcept {
+        static_assert(std::is_convertible<I, size_t>::value, "");
+        assert(strides.size() == 2);
+        m_stride_h = strides[0];
+        m_stride_w = strides[1];
+        return *this;
+    }
+
+    Filter2D& dilations(size_t h, size_t w) noexcept {
+        m_dilation_h = h;
+        m_dilation_w = w;
+        return *this;
+    }
+
+    template <typename I>
+    Filter2D& dilations(const std::vector<I>& dilations) noexcept {
+        static_assert(std::is_convertible<I, size_t>::value, "");
+        assert(dilations.size() == 2);
+        m_dilation_h = dilations[0];
+        m_dilation_w = dilations[1];
+        return *this;
+    }
+
+    size_t batches()     const noexcept { return m_batches; }
+    size_t channels()    const noexcept { return m_channels; }
+    size_t height()      const noexcept { return m_height; }
+    size_t width()       const noexcept { return m_width; }
+    size_t num_kernels() const noexcept { return m_num_kernels; }
+    size_t kernel_h()    const noexcept { return m_kernel_h; }
+    size_t kernel_w()    const noexcept { return m_kernel_w; }
+    size_t group()       const noexcept { return m_group; }
+    size_t pad_top()     const noexcept { return m_pad_top; }
+    size_t pad_left()    const noexcept { return m_pad_left; }
+    size_t pad_bottom()  const noexcept { return m_pad_bottom; }
+    size_t pad_right()   const noexcept { return m_pad_right; }
+    size_t pad_h()       const noexcept { return m_pad_top; }
+    size_t pad_w()       const noexcept { return m_pad_left; }
+    size_t stride_h()    const noexcept { return m_stride_h; }
+    size_t stride_w()    const noexcept { return m_stride_w; }
+    size_t dilation_h()  const noexcept { return m_dilation_h; }
+    size_t dilation_w()  const noexcept { return m_dilation_w; }
+
+    size_t output_h() const noexcept {
+        auto size_h = height() + pad_top() + pad_bottom();
+        auto padding_h = dilation_h() * (kernel_h() - 1) + 1;
+        return (size_h >= padding_h) ? (size_h - padding_h) / stride_h() + 1 : 1;
+    }
+
+    size_t output_w() const noexcept {
+        auto size_w = width() + pad_left() + pad_right();
+        auto padding_w = dilation_w() * (kernel_w() - 1) + 1;
+        return (size_w >= padding_w) ? (size_w - padding_w) / stride_w() + 1 : 1;
+    }
+
+    Shape input_shape() const noexcept {
+        return {batches(), channels(), height(), width()};
+    }
+
+    Shape kernel_shape() const noexcept {
+        return {num_kernels(), channels()/group(), kernel_h(), kernel_w()};
+    }
+
+    Shape output_shape() const noexcept {
+        return {batches(), num_kernels(), output_h(), output_w()};
+    }
+};
+
 template <typename T>
 void batch_norm(const Tensor<T>& X, Tensor<T>& Y,
                 const Tensor<T>& scale, const Tensor<T>& bias,
@@ -105,7 +220,7 @@ void lrn(const DevTensor<T>& X, DevTensor<T>& Y, const int nsize,
 }
 
 template <typename T>
-void im2col(const T* x_buffer, T* y_buffer, const FilterShape2D& filter) {
+void im2col(const T* x_buffer, T* y_buffer, const Filter2D& filter) {
     tbb::parallel_for(
         tbb::blocked_range2d<int>(
             0, filter.output_w(), 32,
@@ -151,7 +266,7 @@ void im2col(const T* x_buffer, T* y_buffer, const FilterShape2D& filter) {
 }
 
 template <typename T>
-void conv2d(const Tensor<T>& X, const Tensor<T>& W, Tensor<T>& Y, const FilterShape2D& filter) {
+void conv2d(const Tensor<T>& X, const Tensor<T>& W, Tensor<T>& Y, const Filter2D& filter) {
     assert(X.shape() == filter.input_shape());
     assert(W.shape() == filter.kernel_shape());
     assert(Y.shape() == filter.output_shape());
@@ -185,7 +300,7 @@ void conv2d(const Tensor<T>& X, const Tensor<T>& W, Tensor<T>& Y, const FilterSh
 }
 
 template <typename T>
-void conv2d(const DevTensor<T>& X, const DevTensor<T>& W, DevTensor<T>& Y, const FilterShape2D& filter) {
+void conv2d(const DevTensor<T>& X, const DevTensor<T>& W, DevTensor<T>& Y, const Filter2D& filter) {
     assert(X.shape() == filter.input_shape());
     assert(W.shape() == filter.kernel_shape());
     assert(Y.shape() == filter.output_shape());
@@ -204,7 +319,7 @@ void conv2d(const DevTensor<T>& X, const DevTensor<T>& W, DevTensor<T>& Y, const
 namespace detail {
 template <typename T, typename Accum, typename Reduce>
 void pooling(const T* input, T* output,
-             const FilterShape2D& filter,
+             const Filter2D& filter,
              const bool count_include_pad,
              const T identity, Accum accum, Reduce reduce)
 {
@@ -292,7 +407,7 @@ void global_pooling(const Tensor<T>& X, Tensor<T>& Y, const T identity,
 } // namespace detail
 
 template <typename T>
-void maxpool(const Tensor<T>& X, Tensor<T>& Y, const FilterShape2D& filter) {
+void maxpool(const Tensor<T>& X, Tensor<T>& Y, const Filter2D& filter) {
     assert(X.shape() == filter.input_shape());
     assert(Y.shape() == filter.output_shape());
     detail::pooling(X.data(), Y.data(), filter, false,
@@ -302,7 +417,7 @@ void maxpool(const Tensor<T>& X, Tensor<T>& Y, const FilterShape2D& filter) {
 }
 
 template <typename T>
-void maxpool(const DevTensor<T>& X, DevTensor<T>& Y, const FilterShape2D& filter) {
+void maxpool(const DevTensor<T>& X, DevTensor<T>& Y, const Filter2D& filter) {
     assert(X.shape() == filter.input_shape());
     assert(Y.shape() == filter.output_shape());
     gpgpu::dnn::maxpool(filter.batches(), filter.channels(),
@@ -317,7 +432,7 @@ void maxpool(const DevTensor<T>& X, DevTensor<T>& Y, const FilterShape2D& filter
 }
 
 template <typename T>
-void avgpool(const Tensor<T>& X, Tensor<T>& Y, const FilterShape2D& filter, bool count_include_pad) {
+void avgpool(const Tensor<T>& X, Tensor<T>& Y, const Filter2D& filter, bool count_include_pad) {
     assert(X.shape() == filter.input_shape());
     assert(Y.shape() == filter.output_shape());
     detail::pooling(X.data(), Y.data(), filter, count_include_pad,
@@ -325,7 +440,7 @@ void avgpool(const Tensor<T>& X, Tensor<T>& Y, const FilterShape2D& filter, bool
 }
 
 template <typename T>
-void avgpool(const DevTensor<T>& X, DevTensor<T>& Y, const FilterShape2D& filter, bool count_include_pad) {
+void avgpool(const DevTensor<T>& X, DevTensor<T>& Y, const Filter2D& filter, bool count_include_pad) {
     assert(X.shape() == filter.input_shape());
     assert(Y.shape() == filter.output_shape());
     gpgpu::dnn::avgpool(filter.batches(), filter.channels(),
@@ -341,7 +456,7 @@ void avgpool(const DevTensor<T>& X, DevTensor<T>& Y, const FilterShape2D& filter
 }
 
 template <typename T>
-void lppool(const Tensor<T>& X, Tensor<T>& Y, const FilterShape2D& filter, const int p) {
+void lppool(const Tensor<T>& X, Tensor<T>& Y, const Filter2D& filter, const int p) {
     assert(X.shape() == filter.input_shape());
     assert(Y.shape() == filter.output_shape());
     assert(p > 0);
@@ -382,7 +497,7 @@ void lppool(const Tensor<T>& X, Tensor<T>& Y, const FilterShape2D& filter, const
 }
 
 template <typename T>
-void lppool(const DevTensor<T>& X, DevTensor<T>& Y, const FilterShape2D& filter, int p) {
+void lppool(const DevTensor<T>& X, DevTensor<T>& Y, const Filter2D& filter, int p) {
     assert(X.shape() == filter.input_shape());
     assert(Y.shape() == filter.output_shape());
     gpgpu::dnn::lppool(filter.batches(), filter.channels(),
@@ -408,7 +523,7 @@ void global_maxpool(const Tensor<T>& X, Tensor<T>& Y) {
 template <typename T>
 void global_maxpool(const DevTensor<T>& input, DevTensor<T>& output) {
     auto h = input.extent(2), w = input.extent(3);
-    auto filter = FilterShape2D(input.shape(), h, w).strides(h, w);
+    auto filter = Filter2D(input.shape(), h, w).strides(h, w);
     maxpool(input, output, filter);
 }
 
@@ -424,7 +539,7 @@ void global_avgpool(const Tensor<T>& X, Tensor<T>& Y) {
 template <typename T>
 void global_avgpool(const DevTensor<T>& input, DevTensor<T>& output) {
     auto h = input.extent(2), w = input.extent(3);
-    auto filter = FilterShape2D(input.shape(), h, w).strides(h, w);
+    auto filter = Filter2D(input.shape(), h, w).strides(h, w);
     avgpool(input, output, filter, false);
 }
 
@@ -470,7 +585,7 @@ void global_lppool(const Tensor<T>& X, Tensor<T>& Y, const int p) {
 template <typename T>
 void global_lppool(const DevTensor<T>& input, DevTensor<T>& output, int p) {
     auto h = input.extent(2), w = input.extent(3);
-    auto filter = FilterShape2D(input.shape(), h, w).strides(h, w);
+    auto filter = Filter2D(input.shape(), h, w).strides(h, w);
     lppool(input, output, filter, p);
 }
 

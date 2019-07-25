@@ -567,14 +567,14 @@ private:
 
     struct ConvOp : Operator {
         TensorT<> X, W, B, Y;
-        FilterShape2D filter;
+        dnn::Filter2D filter;
 
         ConvOp(OperatorFactory* of, model::Conv* n)
             : X(of->alloc(n->X())),
               W(of->alloc(n->W())),
               B(n->B() ? of->alloc(n->B()) : TensorT<>()),
               Y(of->alloc(n->Y())),
-              filter(FilterShape2D(X.shape(), W.shape(), n->group())
+              filter(dnn::Filter2D(X.shape(), W.shape(), n->group())
                 .pads(n->pads())
                 .strides(n->strides())
                 .dilations(n->dilations())) {}
@@ -592,11 +592,11 @@ private:
     }
 
     struct MaxPoolOp : Operator {
-        TensorT<> X, Y; FilterShape2D filter;
+        TensorT<> X, Y; dnn::Filter2D filter;
         MaxPoolOp(OperatorFactory* of, model::MaxPool* n)
             : X(of->alloc(n->input())),
               Y(of->alloc(n->output())),
-              filter(FilterShape2D(X.shape(), n->kernel_shape()[0], n->kernel_shape()[1])
+              filter(dnn::Filter2D(X.shape(), n->kernel_shape()[0], n->kernel_shape()[1])
                 .pads(n->pads())
                 .strides(n->strides())
                 .dilations(n->dilations())) {}
@@ -608,12 +608,12 @@ private:
     }
 
     struct AveragePoolOp : Operator {
-        TensorT<> X, Y; FilterShape2D filter;
+        TensorT<> X, Y; dnn::Filter2D filter;
         const bool count_include_pad;
         AveragePoolOp(OperatorFactory* of, model::AveragePool* n)
             : X(of->alloc(n->input())),
               Y(of->alloc(n->output())),
-              filter(FilterShape2D(X.shape(), n->kernel_shape()[0], n->kernel_shape()[1])
+              filter(dnn::Filter2D(X.shape(), n->kernel_shape()[0], n->kernel_shape()[1])
                 .pads(n->pads())
                 .strides(n->strides())),
               count_include_pad(n->count_include_pad()) {}
@@ -625,11 +625,11 @@ private:
     }
 
     struct LpPoolOp : Operator {
-        TensorT<> X, Y; FilterShape2D filter; int p;
+        TensorT<> X, Y; dnn::Filter2D filter; int p;
         LpPoolOp(OperatorFactory* of, model::LpPool* n)
             : X(of->alloc(n->input())),
               Y(of->alloc(n->output())),
-              filter(FilterShape2D(X.shape(), n->kernel_shape()[0], n->kernel_shape()[1])
+              filter(dnn::Filter2D(X.shape(), n->kernel_shape()[0], n->kernel_shape()[1])
                 .pads(n->pads())
                 .strides(n->strides())),
               p(n->get_i("p", 2)) {}
