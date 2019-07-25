@@ -136,6 +136,16 @@ template <typename T>
 void hardmax(const size_t m, const size_t n, const Buffer<T>& x_buffer, Buffer<T>& y_buffer,
              const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
+template <typename T>
+void argmax(const size_t m, const size_t k, const size_t n,
+            const Buffer<T>& x_buffer, Buffer<int>& y_buffer,
+            const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
+
+template <typename T>
+void argmin(const size_t m, const size_t k, const size_t n,
+            const Buffer<T>& x_buffer, Buffer<int>& y_buffer,
+            const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
+
 }} // namespace gpgpu::dnn
 
 #endif //GPGPU_DNN_H_

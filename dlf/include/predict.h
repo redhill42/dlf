@@ -358,6 +358,46 @@ private:
         result = std::make_unique<HardSigmoidOp>(this, n);
     }
 
+    struct SoftmaxOp : Operator {
+        TensorT<> X, Y; int axis;
+        SoftmaxOp(OperatorFactory* of, model::Softmax* n)
+            : X(of->alloc(n->input())),
+              Y(of->allocInplace(n->input(), n->output())),
+              axis(n->axis()) {}
+        void evaluate() override { dnn::softmax(X, Y, axis); }
+    };
+
+    void visit(model::Softmax* n) override {
+        result = std::make_unique<SoftmaxOp>(this, n);
+    }
+
+    struct LogSoftmaxOp : Operator {
+        TensorT<> X, Y; int axis;
+        LogSoftmaxOp(OperatorFactory* of, model::LogSoftmax* n)
+            : X(of->alloc(n->input())),
+              Y(of->allocInplace(n->input(), n->output())),
+              axis(n->axis()) {}
+        void evaluate() override { dnn::logsoftmax(X, Y, axis); }
+    };
+
+    void visit(model::LogSoftmax* n) override {
+        result = std::make_unique<LogSoftmaxOp>(this, n);
+    }
+
+    struct HardmaxOp : Operator {
+        TensorT<> X, Y; int axis;
+        HardmaxOp(OperatorFactory* of, model::Hardmax* n)
+            : X(of->alloc(n->input())),
+              Y(of->allocInplace(n->input(), n->output())),
+              axis(n->axis()) {}
+        void evaluate() override { dnn::hardmax(X, Y, axis); }
+    };
+
+    void visit(model::Hardmax* n) override {
+        result = std::make_unique<HardmaxOp>(this, n);
+    }
+
+
     struct SoftsignOp : Operator {
         TensorT<> X, Y;
         SoftsignOp(OperatorFactory* of, model::Softsign* n)
@@ -635,45 +675,6 @@ private:
         result = std::make_unique<GlobalLpPoolOp>(this, n);
     }
 
-    struct SoftmaxOp : Operator {
-        TensorT<> X, Y; int axis;
-        SoftmaxOp(OperatorFactory* of, model::Softmax* n)
-            : X(of->alloc(n->input())),
-              Y(of->allocInplace(n->input(), n->output())),
-              axis(n->axis()) {}
-        void evaluate() override { dnn::softmax(X, Y, axis); }
-    };
-
-    void visit(model::Softmax* n) override {
-        result = std::make_unique<SoftmaxOp>(this, n);
-    }
-
-    struct LogSoftmaxOp : Operator {
-        TensorT<> X, Y; int axis;
-        LogSoftmaxOp(OperatorFactory* of, model::LogSoftmax* n)
-            : X(of->alloc(n->input())),
-              Y(of->allocInplace(n->input(), n->output())),
-              axis(n->axis()) {}
-        void evaluate() override { dnn::logsoftmax(X, Y, axis); }
-    };
-
-    void visit(model::LogSoftmax* n) override {
-        result = std::make_unique<LogSoftmaxOp>(this, n);
-    }
-
-    struct HardmaxOp : Operator {
-        TensorT<> X, Y; int axis;
-        HardmaxOp(OperatorFactory* of, model::Hardmax* n)
-            : X(of->alloc(n->input())),
-              Y(of->allocInplace(n->input(), n->output())),
-              axis(n->axis()) {}
-        void evaluate() override { dnn::hardmax(X, Y, axis); }
-    };
-
-    void visit(model::Hardmax* n) override {
-        result = std::make_unique<HardmaxOp>(this, n);
-    }
-
     struct BatchNormalizationOp : Operator {
         TensorT<> X, Y, S, B, M, V;
         T epsilon;
@@ -708,6 +709,46 @@ private:
 
     void visit(model::LRN* n) override {
         result = std::make_unique<LRNOp>(this, n);
+    }
+
+    struct ArgMaxOp : Operator {
+        TensorT<> X;
+        TensorT<int> Y;
+        int axis;
+        bool keepdims;
+
+        ArgMaxOp(OperatorFactory* of, model::ArgMax* n)
+            : X(of->alloc(n->input())),
+              Y(of->alloc<int>(n->output())),
+              axis(n->axis()), keepdims(n->keepdims()) {}
+
+        void evaluate() override {
+            dnn::argmax(X, Y, axis, keepdims);
+        }
+    };
+
+    void visit(model::ArgMax* n) override {
+        result = std::make_unique<ArgMaxOp>(this, n);
+    }
+
+    struct ArgMinOp : Operator {
+        TensorT<> X;
+        TensorT<int> Y;
+        int axis;
+        bool keepdims;
+
+        ArgMinOp(OperatorFactory* of, model::ArgMin* n)
+            : X(of->alloc(n->input())),
+              Y(of->alloc<int>(n->output())),
+              axis(n->axis()), keepdims(n->keepdims()) {}
+
+        void evaluate() override {
+            dnn::argmin(X, Y, axis, keepdims);
+        }
+    };
+
+    void visit(model::ArgMin* n) override {
+        result = std::make_unique<ArgMinOp>(this, n);
     }
 
     struct ReshapeOp : Operator {

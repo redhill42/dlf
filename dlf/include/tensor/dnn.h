@@ -663,4 +663,135 @@ enable_if_tensor<TensorT> hardmax(TensorT&& X, int axis = 1) {
     }
 }
 
+namespace detail {
+inline int norm_axis(const char* name, int axis, size_t rank) {
+    if (axis < 0) axis += rank;
+    if (axis < 0 || axis >= rank)
+        throw shape_error(cxx::string_concat(name, ": invalid axis"));
+    return axis;
+}
+
+inline bool check_reduced_shape(int axis, bool keepdims,
+    const Shape& x_shape, const Shape& y_shape)
+{
+    auto x_dims = x_shape.extents();
+    auto y_dims = y_shape.extents();
+
+    if (keepdims) {
+        if (x_dims.size() != y_dims.size())
+            return false;
+        if (y_dims[axis] != 1)
+            return false;
+        y_dims[axis] = x_dims[axis];
+    } else {
+        if (x_dims.size() != y_dims.size() + 1)
+            return false;
+        y_dims.insert(y_dims.begin()+axis, x_dims[axis]);
+    }
+    return x_dims == y_dims;
+}
+
+template <typename T, typename Compare>
+void arg_reduce(
+    const char* name, const Tensor<T>& X, Tensor<int>& Y,
+    int axis, bool keepdims, Compare compare)
+{
+    axis = norm_axis(name, axis, X.rank());
+    if (!check_reduced_shape(axis, keepdims, X.shape(), Y.shape()))
+        throw shape_error(cxx::string_concat(name, ": incompatible output shape"));
+
+    auto m = X.shape().partial_size(0, axis);
+    auto k = X.extent(axis);
+    auto n = X.shape().partial_size(axis+1, X.rank());
+
+    auto x_buffer = X.data();
+    auto y_buffer = Y.data();
+
+    tbb::parallel_for(tbb::blocked_range2d<int>(0, m, 16, 0, n, 64), [=](auto r) {
+        for (int i = r.rows().begin(); i < r.rows().end(); i++) {
+            for (int j = r.cols().begin(); j < r.cols().end(); j++) {
+                auto px = x_buffer + i * k * n + j;
+                T acc = *px;
+                int index = 0;
+                for (int ik = 1; ik < k; ik++) {
+                    if (compare(px[ik*n], acc)) {
+                        acc = px[ik*n];
+                        index = ik;
+                    }
+                }
+                y_buffer[i * n + j] = index;
+            }
+        }
+    });
+}
+} // namespace detail
+
+template <typename T>
+void argmax(const Tensor<T>& X, Tensor<int>& Y, int axis, bool keepdims = true) {
+    detail::arg_reduce("argmax", X, Y, axis, keepdims, std::greater<>());
+}
+
+template <typename T>
+void argmin(const Tensor<T>& X, Tensor<int>& Y, int axis,bool keepdims = true) {
+    detail:: arg_reduce("argmin", X, Y, axis, keepdims, std::less<>());
+}
+
+template <typename T>
+void argmax(const DevTensor<T>& X, DevTensor<int>& Y, int axis, bool keepdims = true) {
+    axis = detail::norm_axis("argmax", axis, X.rank());
+    if (!detail::check_reduced_shape(axis, keepdims, X.shape(), Y.shape()))
+        throw shape_error("argmax: incompatible output shape");
+
+    auto m = X.shape().partial_size(0, axis);
+    auto k = X.extent(axis);
+    auto n = X.shape().partial_size(axis+1, X.rank());
+    gpgpu::dnn::argmax(m, k, n, X.data(), Y.data());
+}
+
+template <typename T>
+void argmin(const DevTensor<T>& X, DevTensor<int>& Y, int axis, bool keepdims = true) {
+    axis = detail::norm_axis("argmin", axis, X.rank());
+    if (!detail::check_reduced_shape(axis, keepdims, X.shape(), Y.shape()))
+        throw shape_error("argmin: incompatible output shape");
+
+    auto m = X.shape().partial_size(0, axis);
+    auto k = X.extent(axis);
+    auto n = X.shape().partial_size(axis+1, X.rank());
+    gpgpu::dnn::argmin(m, k, n, X.data(), Y.data());
+}
+
+template <typename TensorT>
+enable_if_tensor<TensorT, tensor_type<TensorT, int>>
+argmax(const TensorT& X, int axis, bool keepdims = true) {
+    axis = detail::norm_axis("argmax", axis, X.rank());
+
+    auto dims = X.shape().extents();
+    if (keepdims) {
+        dims[axis] = 1;
+    } else {
+        dims.erase(dims.begin() + axis);
+    }
+
+    auto Y = tensor_type<TensorT, int>(Shape(dims));
+    argmax(X, Y, axis, keepdims);
+    return Y;
+}
+
+template <typename TensorT>
+enable_if_tensor<TensorT, tensor_type<TensorT, int>>
+argmin(const TensorT& X, int axis, bool keepdims = true) {
+    axis = detail::norm_axis("argmin", axis, X.rank());
+
+    auto dims = X.shape().extents();
+    if (keepdims) {
+        dims[axis] = 1;
+    } else {
+        dims.erase(dims.begin() + axis);
+    }
+
+    auto Y = tensor_type<TensorT, int>(Shape(dims));
+    argmin(X, Y, axis, keepdims);
+    return Y;
+}
+
 }} // namespace dlf::dnn
