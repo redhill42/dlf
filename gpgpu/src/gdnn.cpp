@@ -7,68 +7,78 @@ namespace gpgpu { namespace dnn {
 using namespace gpgpu::blas;
 
 template <typename T>
-void copy(const size_t x_size, const Buffer<T>& x_buffer,
-          const size_t y_size, Buffer<T>& y_buffer,
+void copy(const size_t x_size, const Buffer<T>& x_buffer, const size_t x_offset,
+          const size_t y_size, Buffer<T>& y_buffer, const size_t y_offset,
           const Queue& queue, Event* event) {
     auto routine = Xcopy<T>(queue, event);
-    routine.DoCopy(x_size, x_buffer, y_size, y_buffer);
+    routine.DoCopy(x_size, x_buffer, x_offset, y_size, y_buffer, y_offset);
 }
 
-template void PUBLIC_API copy<int16_t>(const size_t, const Buffer<int16_t>&,
-                                       const size_t, Buffer<int16_t>&,
+template void PUBLIC_API copy<int16_t>(const size_t, const Buffer<int16_t>&, const size_t,
+                                       const size_t, Buffer<int16_t>&, const size_t,
                                        const Queue&, Event*);
-template void PUBLIC_API copy<int32_t>(const size_t, const Buffer<int32_t>&,
-                                       const size_t, Buffer<int32_t>&,
+template void PUBLIC_API copy<int32_t>(const size_t, const Buffer<int32_t>&, const size_t,
+                                       const size_t, Buffer<int32_t>&, const size_t,
                                        const Queue&, Event*);
-template void PUBLIC_API copy<int64_t>(const size_t, const Buffer<int64_t>&,
-                                       const size_t, Buffer<int64_t>&,
+template void PUBLIC_API copy<int64_t>(const size_t, const Buffer<int64_t>&, const size_t,
+                                       const size_t, Buffer<int64_t>&, const size_t,
                                        const Queue&, Event*);
-template void PUBLIC_API copy<float>  (const size_t, const Buffer<float>&,
-                                       const size_t, Buffer<float>&,
+template void PUBLIC_API copy<float>  (const size_t, const Buffer<float>&, const size_t,
+                                       const size_t, Buffer<float>&, const size_t,
                                        const Queue&, Event*);
-template void PUBLIC_API copy<double> (const size_t, const Buffer<double>&,
-                                       const size_t, Buffer<double>&,
+template void PUBLIC_API copy<double> (const size_t, const Buffer<double>&, const size_t,
+                                       const size_t, Buffer<double>&, const size_t,
                                        const Queue&, Event*);
-template void PUBLIC_API copy<float2> (const size_t, const Buffer<float2>&,
-                                       const size_t, Buffer<float2>&,
+template void PUBLIC_API copy<float2> (const size_t, const Buffer<float2>&, const size_t,
+                                       const size_t, Buffer<float2>&, const size_t,
                                        const Queue&, Event*);
-template void PUBLIC_API copy<double2>(const size_t, const Buffer<double2>&,
-                                       const size_t, Buffer<double2>&,
+template void PUBLIC_API copy<double2>(const size_t, const Buffer<double2>&, const size_t,
+                                       const size_t, Buffer<double2>&, const size_t,
                                        const Queue&, Event*);
-template void PUBLIC_API copy<half>   (const size_t, const Buffer<half>&,
-                                       const size_t, Buffer<half>&,
+template void PUBLIC_API copy<half>   (const size_t, const Buffer<half>&, const size_t,
+                                       const size_t, Buffer<half>&, const size_t,
                                        const Queue&, Event*);
 
 template <typename T>
-void copy(const size_t n, const Buffer<T>& x_buffer, Buffer<T>& y_buffer,
+void copy(const size_t n,
+          const Buffer<T>& x_buffer, const size_t x_offset,
+          Buffer<T>& y_buffer, const size_t y_offset,
           const std::vector<size_t>& stride, const std::vector<size_t>& shape,
           const Queue& queue, Event* event) {
     auto routine = Xcopy<T>(queue, event);
-    routine.DoCopyStrided(n, x_buffer, y_buffer, stride, shape);
+    routine.DoCopyStrided(n, x_buffer, x_offset, y_buffer, y_offset, stride, shape);
 }
 
-template void PUBLIC_API copy<int16_t>(const size_t, const Buffer<int16_t>&, Buffer<int16_t>&,
+template void PUBLIC_API copy<int16_t>(const size_t, const Buffer<int16_t>&, const size_t,
+                                       Buffer<int16_t>&, const size_t,
                                        const std::vector<size_t>&, const std::vector<size_t>&,
                                        const Queue&, Event*);
-template void PUBLIC_API copy<int32_t>(const size_t, const Buffer<int32_t>&, Buffer<int32_t>&,
+template void PUBLIC_API copy<int32_t>(const size_t, const Buffer<int32_t>&, const size_t,
+                                       Buffer<int32_t>&, const size_t,
                                        const std::vector<size_t>&, const std::vector<size_t>&,
                                        const Queue&, Event*);
-template void PUBLIC_API copy<int64_t>(const size_t, const Buffer<int64_t>&, Buffer<int64_t>&,
+template void PUBLIC_API copy<int64_t>(const size_t, const Buffer<int64_t>&, const size_t,
+                                       Buffer<int64_t>&, const size_t,
                                        const std::vector<size_t>&, const std::vector<size_t>&,
                                        const Queue&, Event*);
-template void PUBLIC_API copy<half>   (const size_t, const Buffer<half>&, Buffer<half>&,
+template void PUBLIC_API copy<half>   (const size_t, const Buffer<half>&, const size_t,
+                                       Buffer<half>&, const size_t,
                                        const std::vector<size_t>&, const std::vector<size_t>&,
                                        const Queue&, Event*);
-template void PUBLIC_API copy<float>  (const size_t, const Buffer<float>&, Buffer<float>&,
+template void PUBLIC_API copy<float>  (const size_t, const Buffer<float>&, const size_t,
+                                       Buffer<float>&, const size_t,
                                        const std::vector<size_t>&, const std::vector<size_t>&,
                                        const Queue&, Event*);
-template void PUBLIC_API copy<double> (const size_t, const Buffer<double>&, Buffer<double>&,
+template void PUBLIC_API copy<double> (const size_t, const Buffer<double>&, const size_t,
+                                       Buffer<double>&, const size_t,
                                        const std::vector<size_t>&, const std::vector<size_t>&,
                                        const Queue&, Event*);
-template void PUBLIC_API copy<float2> (const size_t, const Buffer<float2>&, Buffer<float2>&,
+template void PUBLIC_API copy<float2> (const size_t, const Buffer<float2>&, const size_t,
+                                       Buffer<float2>&, const size_t,
                                        const std::vector<size_t>&, const std::vector<size_t>&,
                                        const Queue&, Event*);
-template void PUBLIC_API copy<double2>(const size_t, const Buffer<double2>&, Buffer<double2>&,
+template void PUBLIC_API copy<double2>(const size_t, const Buffer<double2>&, const size_t,
+                                       Buffer<double2>&, const size_t,
                                        const std::vector<size_t>&, const std::vector<size_t>&,
                                        const Queue&, Event*);
 

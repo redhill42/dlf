@@ -28,9 +28,10 @@ class Shape final {
 
     std::vector<dim_t> m_dims;
     size_t m_size = 0;
+    size_t m_offset = 0;
 
-    Shape(std::vector<dim_t>&& dims, size_t size)
-        : m_dims(std::move(dims)), m_size(size) {}
+    Shape(std::vector<dim_t>&& dims, size_t size, size_t offset = 0)
+        : m_dims(std::move(dims)), m_size(size), m_offset(offset) {}
     void init(const std::vector<size_t>& extents) noexcept;
     void init() noexcept;
     friend class Shaped;
@@ -100,6 +101,13 @@ public:
     size_t partial_size(size_t start, size_t end) const noexcept;
 
     /**
+     * Returns the data offset.
+     */
+    size_t offset() const noexcept {
+        return m_offset;
+    }
+
+    /**
      * Returns true if the shape represents a contiguous addressing,
      * false otherwise.
      */
@@ -158,6 +166,12 @@ public:
      * Create a transposed shape.
      */
     Shape transpose(const std::vector<size_t>& perm) const;
+
+    /**
+     * Produces a slice of the shape along multiple axes.
+     */
+    Shape slice(const std::vector<int>& starts, const std::vector<int>& ends,
+                const std::vector<int>& axes, const std::vector<int>& steps) const;
 
     /**
      * Returns the axis that make the give shape to be the pole of this shape.

@@ -8,13 +8,15 @@ namespace dlf {
 
 Shape::Shape(Shape&& rhs)
     : m_dims(std::move(rhs.m_dims)),
-      m_size(cxx::exchange(rhs.m_size, 0))
+      m_size(cxx::exchange(rhs.m_size, 0)),
+      m_offset(cxx::exchange(rhs.m_offset, 0))
 {
 }
 
 Shape& Shape::operator=(Shape&& rhs) {
     m_dims = std::move(rhs.m_dims);
     m_size = cxx::exchange(rhs.m_size, 0);
+    m_offset = cxx::exchange(rhs.m_offset, 0);
     return *this;
 }
 
@@ -90,7 +92,7 @@ bool Shape::is_tail(const dlf::Shape& shape) const noexcept {
 
 size_t Shape::offset(std::initializer_list<size_t> index) const noexcept {
     assert(index.size() == m_dims.size());
-    size_t offset = 0, i = 0;
+    size_t offset = m_offset, i = 0;
     for (auto a : index) {
         offset += a * m_dims[i].stride;
         ++i;
@@ -100,7 +102,7 @@ size_t Shape::offset(std::initializer_list<size_t> index) const noexcept {
 
 size_t Shape::offset(const std::vector<size_t>& index) const noexcept {
     assert(index.size() == m_dims.size());
-    size_t offset = 0, i = 0;
+    size_t offset = m_offset, i = 0;
     for (auto a : index) {
         offset += a * m_dims[i].stride;
         ++i;
@@ -126,6 +128,22 @@ bool Shape::previous(std::vector<size_t>& index) const noexcept {
         index[i] = m_dims[i].extent - 1;
     }
     return false;
+}
+
+int Shape::pole(const Shape& base) const {
+    int axis = -1;
+    if (base.rank() <= rank()) {
+        for (int i = base.rank(); --i >= 0; ) {
+            if (base.extent(i) != 1) {
+                if (axis != -1)
+                    return -1;
+                axis = i + rank() - base.rank();
+                if (base.extent(i) != extent(axis))
+                    return -1;
+            }
+        }
+    }
+    return axis;
 }
 
 void Shape::reshape(const std::vector<int>& new_shape) {
@@ -277,22 +295,6 @@ Shape Shape::broadcast(const std::vector<Shape>& shapes) {
     return Shape(result_shape);
 }
 
-int Shape::pole(const Shape& base) const {
-    int axis = -1;
-    if (base.rank() <= rank()) {
-        for (int i = base.rank(); --i >= 0; ) {
-            if (base.extent(i) != 1) {
-                if (axis != -1)
-                    return -1;
-                axis = i + rank() - base.rank();
-                if (base.extent(i) != extent(axis))
-                    return -1;
-            }
-        }
-    }
-    return axis;
-}
-
 static bool validate_perm(size_t rank, const std::vector<size_t>& perm) {
     if (perm.size() != rank)
         return false;
@@ -316,6 +318,67 @@ Shape Shape::transpose(const std::vector<size_t>& perm) const {
         dims[i] = m_dims[perm[i]];
     }
     return Shape(std::move(dims), size());
+}
+
+Shape Shape::slice(
+    const std::vector<int>& starts, const std::vector<int>& ends,
+    const std::vector<int>& axes_opt, const std::vector<int>& steps) const
+{
+    if (starts.size() != ends.size() || starts.size() > rank())
+        throw shape_error("slice: incorrect value for starts and ends");
+
+    std::vector<int> axes;
+    if (axes_opt.empty()) {
+        axes.resize(starts.size());
+        std::iota(axes.begin(), axes.end(), 0);
+    } else {
+        if (axes_opt.size() != starts.size())
+            throw shape_error("slice: axes has incorrect length");
+        axes = axes_opt;
+    }
+
+    if (!steps.empty()) {
+        if (axes.size() != starts.size())
+            throw shape_error("slice: steps has incorrect length");
+        if (std::any_of(steps.begin(), steps.end(), [](auto x){ return x != 1; }))
+            throw shape_error("slice: currently only step 1 is supported"); // FIXME
+    }
+
+    std::vector<dim_t> dims = m_dims;
+    std::vector<size_t> start_index(rank(), 0);
+    std::unordered_set<int> unique_axes;
+
+    for (int i = 0; i < axes.size(); ++i) {
+        auto axis = axes[i];
+        if (axis < 0) axis += rank();
+        if (axis < 0 || axis >= rank())
+            throw shape_error("slice: axes has invalid value");
+        if (unique_axes.find(axis) != unique_axes.end())
+            throw shape_error("slice: axes has duplicates");
+        unique_axes.insert(axis);
+
+        auto input_dim = static_cast<int>(extent(axis));
+
+        int start = starts[i];
+        if (start < 0)
+            start += input_dim;
+        start = cxx::clamp(start, 0, input_dim);
+
+        int end = ends[i];
+        if (end < 0)
+            end += input_dim;
+        end = cxx::clamp(end, 0, input_dim);
+
+        if (start >= end)
+            throw shape_error("slice: incorrect start and end value");
+        dims[axis].extent = end - start;
+        start_index[axis] = start;
+    }
+
+    size_t size = 1;
+    for (int i = 0; i < rank(); i++)
+        size *= dims[i].extent;
+    return Shape(std::move(dims), size, offset(start_index));
 }
 
 std::ostream& operator<<(std::ostream& os, const Shape& shape) {
@@ -350,7 +413,7 @@ ptrdiff_t shape_indexer::update(int i, ptrdiff_t& linear_idx) noexcept {
 void shape_indexer::reset(ptrdiff_t linear_idx) noexcept {
     m_linear_idx = linear_idx;
     m_last_idx = 0;
-    m_offset = 0;
+    m_offset = m_shape.offset();
 
     if (linear_idx > 0) {
         auto i = static_cast<int>(m_shape.rank()) - 1;

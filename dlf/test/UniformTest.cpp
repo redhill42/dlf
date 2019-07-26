@@ -597,6 +597,51 @@ TEST(UniformTest, SplitGPU) {
     }
 }
 
+TEST(UniformTest, Slice) {
+    auto X = Tensor<float>::range({10, 10, 5}, 0);
+    auto Y = Tensor<float>({3, 4, 5}, {
+        115, 116, 117, 118, 119,
+        120, 121, 122, 123, 124,
+        125, 126, 127, 128, 129,
+        130, 131, 132, 133, 134,
+
+        165, 166, 167, 168, 169,
+        170, 171, 172, 173, 174,
+        175, 176, 177, 178, 179,
+        180, 181, 182, 183, 184,
+
+        215, 216, 217, 218, 219,
+        220, 221, 222, 223, 224,
+        225, 226, 227, 228, 229,
+        230, 231, 232, 233, 234,
+    });
+
+    EXPECT_EQ(slice(X, {2, 3}, {5, 7}), Y);
+    EXPECT_EQ(slice(dev(X), {2, 3}, {5, 7}).read(), Y);
+}
+
+TEST(UniformTest, SliceOfSlice) {
+    auto X = Tensor<float>::range({10, 10, 5}, 0);
+
+    auto shape = X.shape().slice({2, 3}, {5, 7}, {0, 1}, {1, 1});
+    shape = shape.slice({1, 1}, {3, 3}, {0, 1}, {1, 1});
+
+    auto Y = Tensor<float>({2, 2, 5});
+    reorder(X, shape, Y);
+
+    EXPECT_EQ(Y, Tensor<float>({2, 2, 5}, {
+        170, 171, 172, 173, 174,
+        175, 176, 177, 178, 179,
+        220, 221, 222, 223, 224,
+        225, 226, 227, 228, 229
+    }));
+
+    auto dev_X = dev(X);
+    auto dev_Y = DevTensor<float>({2, 2, 5});
+    reorder(dev_X, shape, dev_Y);
+    EXPECT_EQ(dev_Y.read(), Y);
+}
+
 template <typename T> struct TransposeTest : public testing::Test {};
 using TransposeTestTypes = testing::Types<int, float>;
 TYPED_TEST_CASE(TransposeTest, TransposeTestTypes);

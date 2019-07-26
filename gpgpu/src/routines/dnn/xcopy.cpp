@@ -14,19 +14,19 @@ Xcopy<T>::Xcopy(const Queue& queue, Event* event, const std::string& name):
 
 // The main routine
 template <typename T>
-void Xcopy<T>::DoCopy(const size_t x_size, const Buffer<T>& x_buffer,
-                      const size_t y_size, Buffer<T>& y_buffer)
+void Xcopy<T>::DoCopy(const size_t x_size, const Buffer<T>& x_buffer, const size_t x_offset,
+                      const size_t y_size, Buffer<T>& y_buffer, const size_t y_offset)
 {
   // Makes sure all dimensions are larger than zero
   if (x_size == 0 || y_size == 0)
       throw BLASError(StatusCode::kInvalidDimension);
 
   // Tests the vectors for validity
-  TestVectorX(x_size, x_buffer, 0, 1);
-  TestVectorY(y_size, y_buffer, 0, 1);
+  TestVectorX(x_size, x_buffer, x_offset, 1);
+  TestVectorY(y_size, y_buffer, y_offset, 1);
 
   // Determines whether or not the fast-version can be used
-  bool use_fast_kernel = (x_size == y_size) &&
+  bool use_fast_kernel = (x_size == y_size) && (x_offset == 0) && (y_offset == 0) &&
                          IsMultiple(y_size, db_["WGS"]*db_["WPT"]*db_["VW"]);
 
   // If possible, run the fast-version of the kernel
@@ -39,7 +39,8 @@ void Xcopy<T>::DoCopy(const size_t x_size, const Buffer<T>& x_buffer,
   if (use_fast_kernel) {
     kernel.setArguments(static_cast<int>(y_size), x_buffer, y_buffer);
   } else {
-    kernel.setArguments(static_cast<int>(x_size), x_buffer, static_cast<int>(y_size), y_buffer);
+    kernel.setArguments(static_cast<int>(x_size), x_buffer, static_cast<int>(x_offset),
+                        static_cast<int>(y_size), y_buffer, static_cast<int>(y_offset));
   }
 
   // Launches the kernel
@@ -59,7 +60,8 @@ void Xcopy<T>::DoCopy(const size_t x_size, const Buffer<T>& x_buffer,
 // The main routine
 template <typename T>
 void Xcopy<T>::DoCopyStrided(const size_t n,
-    const Buffer<T>& x_buffer, Buffer<T>& y_buffer,
+    const Buffer<T>& x_buffer, const size_t x_offset,
+    Buffer<T>& y_buffer, const size_t y_offset,
     const std::vector<size_t>& stride, const std::vector<size_t>& shape)
 {
     // Makes sure all dimensions are larger than zero
@@ -80,7 +82,9 @@ void Xcopy<T>::DoCopyStrided(const size_t n,
 
     // Sets the kernel arguments
     kernel.setArguments(static_cast<int>(n), static_cast<int>(rank),
-                        shape_buffer, x_buffer, y_buffer);
+                        shape_buffer,
+                        x_buffer, static_cast<int>(x_offset),
+                        y_buffer, static_cast<int>(y_offset));
 
     // Launches the kernel
     auto n_ceiled = Ceil(n, db_["WGS"]*db_["WPT"]);

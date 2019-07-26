@@ -882,6 +882,37 @@ private:
         result = std::make_unique<SplitOp>(this, n);
     }
 
+    struct SliceOp : Operator {
+        TensorT<> X, Y;
+        DatumPtr starts, ends, axes, steps;
+
+        SliceOp(OperatorFactory* of, model::Slice* n)
+            : X(of->alloc(n->input())),
+              Y(of->alloc(n->output())),
+              starts(of->allocDatum<int>(n->starts())),
+              ends(of->allocDatum<int>(n->ends())),
+              axes(n->axes()==nullptr ? nullptr : of->allocDatum<int>(n->axes())),
+              steps(n->steps()==nullptr ? nullptr : of->allocDatum<int>(n->steps())) {}
+
+        void evaluate() override {
+            slice(X, Y, read(starts), read(ends), read(axes), read(steps));
+        }
+
+        std::vector<int> read(DatumPtr datum) {
+            if (datum == nullptr) {
+                return {};
+            } else {
+                auto v = datum->template read<int>();
+                assert(v.rank() == 1);
+                return {v.begin(), v.end()};
+            }
+        }
+    };
+
+    void visit(model::Slice* n) override {
+        result = std::make_unique<SliceOp>(this, n);
+    }
+
     struct TransposeOp : Operator {
         TensorT<> X, Y;
         std::vector<size_t> perm;

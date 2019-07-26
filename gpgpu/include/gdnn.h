@@ -6,12 +6,13 @@
 namespace gpgpu { namespace dnn {
 
 template <typename T>
-void copy(const size_t x_size, const Buffer<T>& x_buffer,
-          const size_t y_size, Buffer<T>& y_buffer,
+void copy(const size_t x_size, const Buffer<T>& x_buffer, const size_t x_offset,
+          const size_t y_size, Buffer<T>& y_buffer, const size_t y_offset,
           const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 template <typename T>
-void copy(const size_t n, const Buffer<T>& x_buffer, Buffer<T>& y_buffer,
+void copy(const size_t n, const Buffer<T>& x_buffer, const size_t x_offset,
+          Buffer<T>& y_buffer, const size_t y_offset,
           const std::vector<size_t>& stride, const std::vector<size_t>& shape,
           const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 

@@ -117,6 +117,40 @@ TYPED_TEST(PredictTest, Conv) {
     }));
 }
 
+TYPED_TEST(PredictTest, Slice) {
+    using Context = TypeParam;
+    Graph g;
+
+    auto x = g.append<Slice>();
+    x->addInput(g.addInput("X", DataType::FLOAT, {10, 10, 5}));
+    x->addInput(g.addInitializer(TensorData("starts", DataType::INT32, {2}, {2, 3})));
+    x->addInput(g.addInitializer(TensorData("ends", DataType::INT32, {2}, {5, 7})));
+    g.addOutput(x->addOutput("Y"));
+
+    auto X = Tensor<float>::range({10, 10, 5}, 0);
+
+    Predictor<Context, float> predictor(g);
+    predictor.set(0, X);
+    predictor.predict();
+
+    EXPECT_EQ(predictor.get(0), Tensor<float>({3, 4, 5}, {
+        115, 116, 117, 118, 119,
+        120, 121, 122, 123, 124,
+        125, 126, 127, 128, 129,
+        130, 131, 132, 133, 134,
+
+        165, 166, 167, 168, 169,
+        170, 171, 172, 173, 174,
+        175, 176, 177, 178, 179,
+        180, 181, 182, 183, 184,
+
+        215, 216, 217, 218, 219,
+        220, 221, 222, 223, 224,
+        225, 226, 227, 228, 229,
+        230, 231, 232, 233, 234,
+    }));
+}
+
 TYPED_PERFORMANCE_TEST(PredictTest, Performance) {
     std::fstream fs("data/resnet18v1.onnx", std::ios::in | std::ios::binary);
     auto g = import_model(fs);

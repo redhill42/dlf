@@ -6,21 +6,21 @@ R"(
 
 // Full version of the kernel with offsets and strided accesses
 __kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
-void Xcopy(const int x_size, const __global real* restrict xgm,
-           const int y_size, __global real* ygm)
+void Xcopy(const int x_size, const __global real* restrict xgm, const int x_offset,
+           const int y_size, __global real* ygm, const int y_offset)
 {
   if (x_size == 1) {
-    real x_value = xgm[0];
+    real x_value = xgm[x_offset];
     for (int id = get_global_id(0); id < y_size; id += get_global_size(0)) {
-      ygm[id] = x_value;
+      ygm[id + y_offset] = x_value;
     }
   } else if (x_size < y_size) {
     for (int id = get_global_id(0); id < y_size; id += get_global_size(0)) {
-      ygm[id] = xgm[id % x_size];
+      ygm[id + y_offset] = xgm[id % x_size + x_offset];
     }
   } else {
     for (int id = get_global_id(0); id < y_size; id += get_global_size(0)) {
-      ygm[id] = xgm[id];
+      ygm[id + y_offset] = xgm[id + x_offset];
     }
   }
 }
@@ -39,10 +39,11 @@ void XcopyFast(const int n, const __global realV* restrict xgm, __global realV* 
 // Strided version of the kernel with offsets and non-standard stride access
 __kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
 void XcopyStrided(const int n, const int rank, __constant int* shape,
-                  const __global real* restrict xgm, __global real* ygm)
+                  const __global real* restrict xgm, const int x_offset,
+                  __global real* ygm, const int y_offset)
 {
   for (int id = get_global_id(0); id < n; id += get_global_size(0)) {
-    ygm[id] = xgm[unravel(id, rank, &shape[rank], shape)];
+    ygm[id + y_offset] = xgm[unravel(id, rank, &shape[rank], shape) + x_offset];
   }
 }
 

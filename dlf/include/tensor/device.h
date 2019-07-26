@@ -174,9 +174,13 @@ void reorder(const DevTensor<T>& src, const Shape& shape, DevTensor<T>& dst) {
     if (src.size() == shape.size() && shape.is_contiguous()) {
         src.copyToAsync(dst);
     } else if (src.shape().is_tail(shape)) {
-        gpgpu::dnn::copy(src.size(), src.data(), dst.size(), dst.data());
+        gpgpu::dnn::copy(src.size(), src.data(), shape.offset(),
+                         dst.size(), dst.data(), 0);
     } else {
-        gpgpu::dnn::copy(shape.size(), src.data(), dst.data(), shape.strides(), shape.extents());
+        gpgpu::dnn::copy(shape.size(),
+                         src.data(), shape.offset(),
+                         dst.data(), 0,
+                         shape.strides(), shape.extents());
     }
 }
 

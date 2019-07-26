@@ -611,15 +611,22 @@ inline Tensor<U> Tensor<T>::cast() const {
 template <typename T>
 void reorder(const Tensor<T>& src, const Shape& shape, Tensor<T>& dst) {
     assert(dst.shape() == shape);
-    if (src.data() == dst.data())
-        return;
+
     if (src.size() == 1) {
         std::fill(dst.begin(), dst.end(), *src.data());
-    } if (src.size() == shape.size() && shape.is_contiguous()) {
-        par::copy(src.begin(), src.end(), dst.begin());
-    } else {
-        par::copy(src.begin(shape), src.end(shape), dst.begin());
+        return;
     }
+
+    if (shape.is_contiguous()) {
+        if (src.data() + shape.offset() != dst.data()) {
+            par::copy(src.data() + shape.offset(),
+                      src.data() + shape.offset() + shape.size(),
+                      dst.data());
+        }
+        return;
+    }
+
+    par::copy(src.begin(shape), src.end(shape), dst.begin());
 }
 
 template <typename T>
