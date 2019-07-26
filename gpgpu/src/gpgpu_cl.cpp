@@ -29,8 +29,8 @@ static std::string trimCallString(const char* where) {
 #define CheckError(call) check(call, trimCallString(#call))
 #define CheckErrorDtor(call) checkDtor(call, trimCallString(#call))
 
-std::shared_ptr<raw::Platform> probe() {
-    static std::shared_ptr<raw::Platform> platform;
+std::shared_ptr<rawPlatform> probe() {
+    static std::shared_ptr<rawPlatform> platform;
 
     if (platform == nullptr) {
         cl_int status;
@@ -46,7 +46,7 @@ std::shared_ptr<raw::Platform> probe() {
     return platform;
 }
 
-std::vector<std::shared_ptr<raw::Device>> clPlatform::devices(DeviceType type) const {
+std::vector<std::shared_ptr<rawDevice>> clPlatform::devices(DeviceType type) const {
     cl_device_type cl_type;
     switch (type) {
     case DeviceType::Default:
@@ -71,7 +71,7 @@ std::vector<std::shared_ptr<raw::Device>> clPlatform::devices(DeviceType type) c
     std::vector<cl_device_id > device_ids(static_cast<size_t>(num_devices));
     CheckError(clGetDeviceIDs(m_platform, cl_type, num_devices, device_ids.data(), nullptr));
 
-    std::vector<std::shared_ptr<raw::Device>> devices;
+    std::vector<std::shared_ptr<rawDevice>> devices;
     auto filter = parseDeviceFilter(num_devices);
     for (size_t i = 0; i < device_ids.size(); i++) {
         if (filter[i]) {
@@ -92,7 +92,7 @@ std::string clPlatform::getInfo(cl_device_info info) const {
     return result;
 }
 
-std::shared_ptr<raw::Context> clDevice::createContext() const {
+std::shared_ptr<rawContext> clDevice::createContext() const {
     auto status = CL_SUCCESS;
     auto context = clCreateContext(nullptr, 1, &m_device, nullptr, nullptr, &status);
     check(status, "clCreateContext");
@@ -130,18 +130,18 @@ clDevice::~clDevice() {
         CheckErrorDtor(clReleaseDevice(m_device));
 }
 
-std::shared_ptr<raw::Queue> clContext::createQueue() const {
+std::shared_ptr<rawQueue> clContext::createQueue() const {
     auto status = CL_SUCCESS;
     auto queue = clCreateCommandQueue(m_context, m_device, CL_QUEUE_PROFILING_ENABLE, &status);
     check(status, "clCreateCommandQueue");
     return std::make_shared<clQueue>(queue);
 }
 
-std::shared_ptr<raw::Event> clContext::createEvent() const {
+std::shared_ptr<rawEvent> clContext::createEvent() const {
     return std::make_shared<clEvent>();
 }
 
-std::shared_ptr<raw::Buffer> clContext::createBuffer(size_t size, BufferAccess access) const {
+std::shared_ptr<rawBuffer> clContext::createBuffer(size_t size, BufferAccess access) const {
     auto flags = CL_MEM_READ_WRITE;
     if (access == BufferAccess::ReadOnly)
         flags = CL_MEM_READ_ONLY;
@@ -165,7 +165,7 @@ static std::string getBuildInfo(cl_program program, cl_device_id device) {
     return result;
 }
 
-std::shared_ptr<raw::Program> clContext::compileProgram(
+std::shared_ptr<rawProgram> clContext::compileProgram(
     const char* source, const std::vector<std::string>& options) const
 {
     auto status = CL_SUCCESS;
@@ -183,7 +183,7 @@ std::shared_ptr<raw::Program> clContext::compileProgram(
     return std::make_shared<clProgram>(program);
 }
 
-std::shared_ptr<raw::Program> clContext::loadProgram(const std::string& binary) const {
+std::shared_ptr<rawProgram> clContext::loadProgram(const std::string& binary) const {
     auto binary_ptr = reinterpret_cast<const unsigned char*>(binary.data());
     auto length = binary.length();
     auto status1 = CL_SUCCESS;
@@ -210,7 +210,7 @@ clContext::~clContext() {
         CheckErrorDtor(clReleaseContext(m_context));
 }
 
-void clQueue::finish(raw::Event&) const {
+void clQueue::finish(rawEvent&) const {
     finish();
 }
 
@@ -242,7 +242,7 @@ clEvent::~clEvent() {
         CheckErrorDtor(clReleaseEvent(m_event));
 }
 
-void clBuffer::read(const raw::Queue& queue, void* host, size_t size, size_t offset, raw::Event* event) const {
+void clBuffer::read(const rawQueue& queue, void* host, size_t size, size_t offset, rawEvent* event) const {
     if (m_access == BufferAccess::WriteOnly)
         throw LogicError("Buffer: reading from a write-only buffer");
     CheckError(clEnqueueReadBuffer(
@@ -250,7 +250,7 @@ void clBuffer::read(const raw::Queue& queue, void* host, size_t size, size_t off
         offset, size, host, 0, nullptr, clEvent::unwrap(event)));
 }
 
-void clBuffer::write(const raw::Queue& queue, const void* host, size_t size, size_t offset, raw::Event* event) {
+void clBuffer::write(const rawQueue& queue, const void* host, size_t size, size_t offset, rawEvent* event) {
     if (m_access == BufferAccess::ReadOnly)
         throw LogicError("Buffer: writing to a read-only buffer");
     CheckError(clEnqueueWriteBuffer(
@@ -258,7 +258,7 @@ void clBuffer::write(const raw::Queue& queue, const void* host, size_t size, siz
         offset, size, host, 0, nullptr, clEvent::unwrap(event)));
 }
 
-void clBuffer::copyTo(const raw::Queue& queue, gpgpu::raw::Buffer& dest, size_t size, raw::Event* event) const {
+void clBuffer::copyTo(const rawQueue& queue, gpgpu::rawBuffer& dest, size_t size, rawEvent* event) const {
     CheckError(clEnqueueCopyBuffer(
         *clQueue::unwrap(queue),
         m_buffer, *clBuffer::unwrap(dest),
@@ -280,7 +280,7 @@ std::string clProgram::getIR() const {
     return binary;
 }
 
-std::shared_ptr<raw::Kernel> clProgram::getKernel(const char* name) const {
+std::shared_ptr<rawKernel> clProgram::getKernel(const char* name) const {
     auto status = CL_SUCCESS;
     auto kernel = clCreateKernel(m_program, name, &status);
     check(status, "clCreateKernel");
@@ -292,7 +292,7 @@ clProgram::~clProgram() {
         CheckErrorDtor(clReleaseProgram(m_program));
 }
 
-uint64_t clKernel::localMemoryUsage(const raw::Device& device) const {
+uint64_t clKernel::localMemoryUsage(const rawDevice& device) const {
     auto device_id = reinterpret_cast<cl_device_id>(device.id());
     cl_ulong result = 0;
     CheckError(clGetKernelWorkGroupInfo(
@@ -306,14 +306,14 @@ void clKernel::setArgument(size_t index, const void* value, size_t size) const {
     CheckError(clSetKernelArg(m_kernel, index, size, value));
 }
 
-void clKernel::setArgument(size_t index, const raw::Buffer& buffer) const {
+void clKernel::setArgument(size_t index, const rawBuffer& buffer) const {
     setArgument(index, clBuffer::unwrap(buffer), sizeof(cl_mem));
 }
 
-void clKernel::launch(const raw::Queue& queue,
+void clKernel::launch(const rawQueue& queue,
                       const std::vector<size_t>& global,
                       const std::vector<size_t>& local,
-                      raw::Event* event) const
+                      rawEvent* event) const
 {
     CheckError(clEnqueueNDRangeKernel(
         *clQueue::unwrap(queue), m_kernel,

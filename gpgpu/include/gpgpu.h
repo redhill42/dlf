@@ -137,41 +137,29 @@ using DeviceID = intptr_t;
 using ContextID = intptr_t;
 using QueueID = intptr_t;
 
-// forward declaration
-class Platform;
-class Device;
-class Context;
-class Queue;
-class Event;
-template <typename T> class Buffer;
-class Program;
-class Kernel;
-
 //==-------------------------------------------------------------------------
 // Raw Interface
 //==-------------------------------------------------------------------------
 
-namespace raw {
-
 // forward declaration
-class Platform;
-class Device;
-class Context;
-class Queue;
-class Event;
-class Buffer;
-class Program;
-class Kernel;
+class rawPlatform;
+class rawDevice;
+class rawContext;
+class rawQueue;
+class rawEvent;
+class rawBuffer;
+class rawProgram;
+class rawKernel;
 
-class Platform {
+class rawPlatform {
 public:
-    Platform() = default;
-    virtual ~Platform() = default;
+    rawPlatform() = default;
+    virtual ~rawPlatform() = default;
 
-    Platform(const Platform&) = delete;
-    Platform(Platform&&) = delete;
-    Platform& operator=(const Platform&) = delete;
-    Platform& operator=(Platform&&) = delete;
+    rawPlatform(const rawPlatform&) = delete;
+    rawPlatform(rawPlatform&&) = delete;
+    rawPlatform& operator=(const rawPlatform&) = delete;
+    rawPlatform& operator=(rawPlatform&&) = delete;
 
     virtual PlatformID  id() const noexcept = 0;
     virtual APIType     api() const noexcept = 0;
@@ -182,18 +170,18 @@ public:
     /**
      * Get all devices in this platform.
      */
-    virtual std::vector<std::shared_ptr<Device>> devices(DeviceType type) const = 0;
+    virtual std::vector<std::shared_ptr<rawDevice>> devices(DeviceType type) const = 0;
 };
 
-class Device {
+class rawDevice {
 public:
-    Device() = default;
-    virtual ~Device() = default;
+    rawDevice() = default;
+    virtual ~rawDevice() = default;
 
-    Device(const Device&) = delete;
-    Device(Device&&) = delete;
-    Device& operator=(const Device&) = delete;
-    Device& operator=(Device&&) = delete;
+    rawDevice(const rawDevice&) = delete;
+    rawDevice(rawDevice&&) = delete;
+    rawDevice& operator=(const rawDevice&) = delete;
+    rawDevice& operator=(rawDevice&&) = delete;
 
     // Information
     virtual DeviceID    id() const noexcept = 0;
@@ -220,122 +208,130 @@ public:
     /**
      * Create a new context.
      */
-    virtual std::shared_ptr<Context> createContext() const = 0;
+    virtual std::shared_ptr<rawContext> createContext() const = 0;
 };
 
-class Context {
+class rawContext {
 public:
-    Context() = default;
-    virtual ~Context() = default;
+    rawContext() = default;
+    virtual ~rawContext() = default;
 
-    Context(const Context&) = delete;
-    Context(Context&&) = delete;
-    Context& operator=(const Context&) = delete;
-    Context& operator=(Context&&) = delete;
+    rawContext(const rawContext&) = delete;
+    rawContext(rawContext&&) = delete;
+    rawContext& operator=(const rawContext&) = delete;
+    rawContext& operator=(rawContext&&) = delete;
 
     virtual ContextID id() const noexcept = 0;
 
     virtual void activate() const = 0;
     virtual void deactivate() const = 0;
 
-    virtual std::shared_ptr<Queue> createQueue() const = 0;
-    virtual std::shared_ptr<Event> createEvent() const = 0;
-    virtual std::shared_ptr<Buffer> createBuffer(size_t size, BufferAccess access) const = 0;
+    virtual std::shared_ptr<rawQueue> createQueue() const = 0;
+    virtual std::shared_ptr<rawEvent> createEvent() const = 0;
+    virtual std::shared_ptr<rawBuffer> createBuffer(size_t size, BufferAccess access) const = 0;
 
-    virtual std::shared_ptr<Program> compileProgram(
+    virtual std::shared_ptr<rawProgram> compileProgram(
         const char* source, const std::vector<std::string>& options) const = 0;
-    virtual std::shared_ptr<Program> loadProgram(const std::string& binary) const = 0;
+    virtual std::shared_ptr<rawProgram> loadProgram(const std::string& binary) const = 0;
 };
 
-class Queue {
+class rawQueue {
 public:
-    Queue() = default;
-    virtual ~Queue() = default;
+    rawQueue() = default;
+    virtual ~rawQueue() = default;
 
-    Queue(const Queue&) = delete;
-    Queue(Queue&&) = delete;
-    Queue& operator=(const Queue&) = delete;
-    Queue& operator=(Queue&&) = delete;
+    rawQueue(const rawQueue&) = delete;
+    rawQueue(rawQueue&&) = delete;
+    rawQueue& operator=(const rawQueue&) = delete;
+    rawQueue& operator=(rawQueue&&) = delete;
 
     virtual QueueID id() const noexcept = 0;
-    virtual void finish(Event& event) const = 0;
+    virtual void finish(rawEvent& event) const = 0;
     virtual void finish() const = 0;
 };
 
-class Event {
+class rawEvent {
 public:
-    Event() = default;
-    virtual ~Event() = default;
+    rawEvent() = default;
+    virtual ~rawEvent() = default;
 
-    Event(const Event&) = delete;
-    Event(Event&&) = delete;
-    Event& operator=(const Event&) = delete;
-    Event& operator=(Event&&) = delete;
+    rawEvent(const rawEvent&) = delete;
+    rawEvent(rawEvent&&) = delete;
+    rawEvent& operator=(const rawEvent&) = delete;
+    rawEvent& operator=(rawEvent&&) = delete;
 
     virtual void waitForCompletion() const = 0;
     virtual float getElapsedTime() const = 0;
 };
 
-class Buffer {
+class rawBuffer {
 public:
-    Buffer() = default;
-    virtual ~Buffer() = default;
+    rawBuffer() = default;
+    virtual ~rawBuffer() = default;
 
-    Buffer(const Buffer&) = delete;
-    Buffer(Buffer&&) = delete;
-    Buffer& operator=(const Buffer&) = delete;
-    Buffer& operator=(Buffer&&) = delete;
+    rawBuffer(const rawBuffer&) = delete;
+    rawBuffer(rawBuffer&&) = delete;
+    rawBuffer& operator=(const rawBuffer&) = delete;
+    rawBuffer& operator=(rawBuffer&&) = delete;
 
-    virtual void read(const Queue& queue, void* host, size_t size, size_t offset, Event* event) const = 0;
-    virtual void write(const Queue& queue, const void* host, size_t size, size_t offset, Event* event) = 0;
-    virtual void copyTo(const Queue& queue, Buffer& dest, size_t size, Event* event) const = 0;
+    virtual void read(const rawQueue& queue, void* host, size_t size, size_t offset, rawEvent* event) const = 0;
+    virtual void write(const rawQueue& queue, const void* host, size_t size, size_t offset, rawEvent* event) = 0;
+    virtual void copyTo(const rawQueue& queue, rawBuffer& dest, size_t size, rawEvent* event) const = 0;
 };
 
-class Program {
+class rawProgram {
 public:
-    Program() = default;
-    virtual ~Program() = default;
+    rawProgram() = default;
+    virtual ~rawProgram() = default;
 
-    Program(const Program&) = delete;
-    Program(Program&&) = delete;
-    Program& operator=(const Program&) = delete;
-    Program& operator=(Program&&) = delete;
+    rawProgram(const rawProgram&) = delete;
+    rawProgram(rawProgram&&) = delete;
+    rawProgram& operator=(const rawProgram&) = delete;
+    rawProgram& operator=(rawProgram&&) = delete;
 
     virtual std::string getIR() const = 0;
-    virtual std::shared_ptr<Kernel> getKernel(const char* name) const = 0;
+    virtual std::shared_ptr<rawKernel> getKernel(const char* name) const = 0;
 };
 
-class Kernel {
+class rawKernel {
 public:
-    Kernel() = default;
-    virtual ~Kernel() = default;
+    rawKernel() = default;
+    virtual ~rawKernel() = default;
 
-    Kernel(const Kernel&) = delete;
-    Kernel(Kernel&&) = delete;
-    Kernel& operator=(const Kernel&) = delete;
-    Kernel& operator=(Kernel&&) = delete;
+    rawKernel(const rawKernel&) = delete;
+    rawKernel(rawKernel&&) = delete;
+    rawKernel& operator=(const rawKernel&) = delete;
+    rawKernel& operator=(rawKernel&&) = delete;
 
-    virtual uint64_t localMemoryUsage(const Device& device) const = 0;
+    virtual uint64_t localMemoryUsage(const rawDevice& device) const = 0;
 
     virtual void setArgument(size_t index, const void* value, size_t size) const = 0;
-    virtual void setArgument(size_t index, const Buffer& buffer) const = 0;
+    virtual void setArgument(size_t index, const rawBuffer& buffer) const = 0;
 
-    virtual void launch(const Queue& queue,
+    virtual void launch(const rawQueue& queue,
                         const std::vector<size_t>& global,
                         const std::vector<size_t>& local,
-                        Event* event) const = 0;
+                        rawEvent* event) const = 0;
 };
-
-} // namespace raw
 
 //==-------------------------------------------------------------------------
 // Public Interface
 //==-------------------------------------------------------------------------
 
-class Platform {
-    std::shared_ptr<raw::Platform> m_raw;
+// forward declaration
+class Platform;
+class Device;
+class Context;
+class Queue;
+class Event;
+template <typename T> class Buffer;
+class Program;
+class Kernel;
 
-    explicit Platform(std::shared_ptr<raw::Platform> raw)
+class Platform {
+    std::shared_ptr<rawPlatform> m_raw;
+
+    explicit Platform(std::shared_ptr<rawPlatform> raw)
         : m_raw(std::move(raw)) {}
 
     friend Platform probe();
@@ -380,13 +376,13 @@ public:
 
 class Device {
     Platform m_platform;
-    std::shared_ptr<raw::Device> m_raw;
+    std::shared_ptr<rawDevice> m_raw;
 
 public:
     Device() = default;
-    const raw::Device& raw() const noexcept { return *m_raw; }
+    const rawDevice& raw() const noexcept { return *m_raw; }
 
-    Device(Platform platform, std::shared_ptr<raw::Device> device)
+    Device(Platform platform, std::shared_ptr<rawDevice> device)
         : m_platform(std::move(platform)), m_raw(std::move(device)) {}
 
     const Platform& platform() const noexcept {
@@ -491,10 +487,10 @@ public:
 
 class Context {
     Device m_device;
-    std::shared_ptr<raw::Context> m_raw;
+    std::shared_ptr<rawContext> m_raw;
 
     friend class Device;
-    Context(Device device, std::shared_ptr<raw::Context> context)
+    Context(Device device, std::shared_ptr<rawContext> context)
         : m_device(std::move(device)), m_raw(std::move(context)) {}
 
 public:
@@ -564,15 +560,15 @@ public:
 
 class Queue {
     Context m_context;
-    std::shared_ptr<raw::Queue> m_raw;
+    std::shared_ptr<rawQueue> m_raw;
 
     friend class Context;
-    Queue(Context context, std::shared_ptr<raw::Queue> queue)
+    Queue(Context context, std::shared_ptr<rawQueue> queue)
         : m_context(std::move(context)), m_raw(std::move(queue)) {}
 
 public:
     Queue() = default;
-    const raw::Queue& raw() const noexcept { return *m_raw; }
+    const rawQueue& raw() const noexcept { return *m_raw; }
 
     QueueID id() const noexcept {
         return m_raw == nullptr ? 0 : m_raw->id();
@@ -595,14 +591,14 @@ public:
 };
 
 class Event {
-    std::shared_ptr<raw::Event> m_raw;
+    std::shared_ptr<rawEvent> m_raw;
 
     friend class Context;
-    explicit Event(std::shared_ptr<raw::Event> event)
+    explicit Event(std::shared_ptr<rawEvent> event)
         : m_raw(std::move(event)) {}
 
 public:
-    raw::Event* raw() const noexcept { return m_raw.get(); }
+    rawEvent* raw() const noexcept { return m_raw.get(); }
 
     void waitForCompletion() const;
     float getElapsedTime() const;
@@ -610,18 +606,18 @@ public:
 
 template <typename T>
 class Buffer {
-    std::shared_ptr<raw::Buffer> m_raw;
+    std::shared_ptr<rawBuffer> m_raw;
     size_t m_size;
 
     friend class Context;
 
 public:
     Buffer() = default;
-    explicit Buffer(std::shared_ptr<raw::Buffer> buffer, size_t size)
+    explicit Buffer(std::shared_ptr<rawBuffer> buffer, size_t size)
         : m_raw(std::move(buffer)), m_size(size) {}
 
-    raw::Buffer& raw() const noexcept { return *m_raw; }
-    std::shared_ptr<raw::Buffer> handle() const noexcept { return m_raw; }
+    rawBuffer& raw() const noexcept { return *m_raw; }
+    std::shared_ptr<rawBuffer> handle() const noexcept { return m_raw; }
 
     size_t size() const noexcept { return m_size; }
     size_t data_size() const noexcept { return m_size * sizeof(T); }
@@ -668,10 +664,10 @@ bool operator!=(const Buffer<T>& lhs, const Buffer<T>& rhs) {
 }
 
 class Program {
-    std::shared_ptr<raw::Program> m_raw;
+    std::shared_ptr<rawProgram> m_raw;
 
     friend class Context;
-    Program(std::shared_ptr<raw::Program> program)
+    Program(std::shared_ptr<rawProgram> program)
         : m_raw(std::move(program)) {}
 
 public:
@@ -684,10 +680,10 @@ public:
 
 class Kernel {
     Program m_program;
-    std::shared_ptr<raw::Kernel> m_raw;
+    std::shared_ptr<rawKernel> m_raw;
 
     friend class Program;
-    explicit Kernel(Program program, std::shared_ptr<raw::Kernel> kernel)
+    explicit Kernel(Program program, std::shared_ptr<rawKernel> kernel)
         : m_program(std::move(program)), m_raw(std::move(kernel)) {}
 
 public:

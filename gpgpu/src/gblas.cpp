@@ -199,8 +199,8 @@ void swap(const size_t n,
                            y_buffer, y_offset, y_inc);
         },
         [&](auto h, auto) {
-            auto x = reinterpret_cast<T*>(*cuBuffer::unwrap(x_buffer)) + x_offset;
-            auto y = reinterpret_cast<T*>(*cuBuffer::unwrap(y_buffer)) + y_offset;
+            auto x = cuBuffer::unwrap(x_buffer) + x_offset;
+            auto y = cuBuffer::unwrap(y_buffer) + y_offset;
             cublasSwapEx(h, n, x, x_inc, y, y_inc);
         });
 }
@@ -247,7 +247,7 @@ void scal(const size_t n, const T alpha,
             routine.DoScal(n, alpha, x_buffer, x_offset, x_inc);
         },
         [&](auto h, auto t) {
-            auto x = reinterpret_cast<T*>(*cuBuffer::unwrap(x_buffer)) + x_offset;
+            auto x = cuBuffer::unwrap(x_buffer) + x_offset;
             cublasScalEx(h, n, &alpha, t, x, t, x_inc, t);
         });
 }
@@ -306,8 +306,8 @@ void copy(const size_t n,
                            y_buffer, y_offset, y_inc);
         },
         [&](auto h, auto) {
-            auto x = reinterpret_cast<T*>(*cuBuffer::unwrap(x_buffer)) + x_offset;
-            auto y = reinterpret_cast<T*>(*cuBuffer::unwrap(y_buffer)) + y_offset;
+            auto x = cuBuffer::unwrap(x_buffer) + x_offset;
+            auto y = cuBuffer::unwrap(y_buffer) + y_offset;
             cublasCopyEx(h, n, x, x_inc, y, y_inc);
         });
 }
@@ -349,8 +349,8 @@ void axpy(const size_t n, const T alpha,
                            y_buffer, y_offset, y_inc);
         },
         [&](auto h, auto t) {
-            auto x = reinterpret_cast<T*>(*cuBuffer::unwrap(x_buffer)) + x_offset;
-            auto y = reinterpret_cast<T*>(*cuBuffer::unwrap(y_buffer)) + y_offset;
+            auto x = cuBuffer::unwrap(x_buffer) + x_offset;
+            auto y = cuBuffer::unwrap(y_buffer) + y_offset;
             cublasAxpyEx(h, n, &alpha, t, x, t, x_inc, y, t, y_inc, t);
         });
 }
@@ -402,9 +402,9 @@ void dot(const size_t n,
                           r_buffer, r_offset);
         },
         [&](auto h, auto t) {
-            auto x = reinterpret_cast<T*>(*cuBuffer::unwrap(x_buffer)) + x_offset;
-            auto y = reinterpret_cast<T*>(*cuBuffer::unwrap(y_buffer)) + y_offset;
-            auto r = reinterpret_cast<T*>(*cuBuffer::unwrap(r_buffer)) + r_offset;
+            auto x = cuBuffer::unwrap(x_buffer) + x_offset;
+            auto y = cuBuffer::unwrap(y_buffer) + y_offset;
+            auto r = cuBuffer::unwrap(r_buffer) + r_offset;
 
             cublasPointerMode_t mode;
             cublasGetPointerMode(h, &mode);
@@ -485,9 +485,9 @@ void dotc(const size_t n,
                            r_buffer, r_offset);
         },
         [&](auto h, auto t) {
-            auto x = reinterpret_cast<T*>(*cuBuffer::unwrap(x_buffer)) + x_offset;
-            auto y = reinterpret_cast<T*>(*cuBuffer::unwrap(y_buffer)) + y_offset;
-            auto r = reinterpret_cast<T*>(*cuBuffer::unwrap(r_buffer)) + r_offset;
+            auto x = cuBuffer::unwrap(x_buffer) + x_offset;
+            auto y = cuBuffer::unwrap(y_buffer) + y_offset;
+            auto r = cuBuffer::unwrap(r_buffer) + r_offset;
             cublasDotcEx(h, n, x, t, x_inc, y, t, y_inc, r, t, t);
         });
 }
@@ -519,8 +519,8 @@ void nrm2(const size_t n,
                            r_buffer, r_offset);
         },
         [&](auto h, auto t) {
-            auto x = reinterpret_cast<T*>(*cuBuffer::unwrap(x_buffer)) + x_offset;
-            auto r = reinterpret_cast<T*>(*cuBuffer::unwrap(r_buffer)) + r_offset;
+            auto x = cuBuffer::unwrap(x_buffer) + x_offset;
+            auto r = cuBuffer::unwrap(r_buffer) + r_offset;
 
             cublasPointerMode_t mode;
             cublasGetPointerMode(h, &mode);
@@ -669,13 +669,13 @@ void amax(const size_t n,
                            r_buffer, r_offset);
         },
         [&](auto h, auto) {
-            auto x = reinterpret_cast<T*>(*cuBuffer::unwrap(x_buffer)) + x_offset;
-            auto r = reinterpret_cast<int*>(*cuBuffer::unwrap(r_buffer)) + r_offset;
+            auto x = cuBuffer::unwrap(x_buffer) + x_offset;
+            auto r = cuBuffer::unwrap(r_buffer) + r_offset;
 
             cublasPointerMode_t mode;
             cublasGetPointerMode(h, &mode);
             cublasSetPointerMode(h, cublasPointerMode_t::CUBLAS_POINTER_MODE_DEVICE);
-            cublasAmaxEx(h, n, x, x_inc, r);
+            cublasAmaxEx(h, n, x, x_inc, reinterpret_cast<int*>(r));
             cublasSetPointerMode(h, mode);
         });
 }
@@ -741,13 +741,13 @@ void amin(const size_t n,
                            r_buffer, r_offset);
         },
         [&](auto h, auto) {
-            auto x = reinterpret_cast<T*>(*cuBuffer::unwrap(x_buffer)) + x_offset;
-            auto r = reinterpret_cast<int*>(*cuBuffer::unwrap(r_buffer)) + r_offset;
+            auto x = cuBuffer::unwrap(x_buffer) + x_offset;
+            auto r = cuBuffer::unwrap(r_buffer) + r_offset;
 
             cublasPointerMode_t mode;
             cublasGetPointerMode(h, &mode);
             cublasSetPointerMode(h, cublasPointerMode_t::CUBLAS_POINTER_MODE_DEVICE);
-            cublasAminEx(h, n, x, x_inc, r);
+            cublasAminEx(h, n, x, x_inc, reinterpret_cast<int*>(r));
             cublasSetPointerMode(h, mode);
         });
 }
@@ -933,9 +933,9 @@ void gemv(const Layout layout, const Transpose a_transpose,
                            y_buffer, y_offset, y_inc);
         },
         [&](auto h, auto) {
-            auto a = reinterpret_cast<T*>(*cuBuffer::unwrap(a_buffer)) + a_offset;
-            auto x = reinterpret_cast<T*>(*cuBuffer::unwrap(x_buffer)) + x_offset;
-            auto y = reinterpret_cast<T*>(*cuBuffer::unwrap(y_buffer)) + y_offset;
+            auto a = cuBuffer::unwrap(a_buffer) + a_offset;
+            auto x = cuBuffer::unwrap(x_buffer) + x_offset;
+            auto y = cuBuffer::unwrap(y_buffer) + y_offset;
 
             if (layout == Layout::RowMajor) {
                 auto transA = (a_transpose==Transpose::NoTrans) ? Transpose::Trans : Transpose::NoTrans;
@@ -1868,9 +1868,9 @@ void gemm(const Layout layout, const Transpose a_transpose, const Transpose b_tr
                            temp_buffer);
         },
         [&](auto h, auto t) {
-            auto a = reinterpret_cast<T*>(*cuBuffer::unwrap(a_buffer)) + a_offset;
-            auto b = reinterpret_cast<T*>(*cuBuffer::unwrap(b_buffer)) + b_offset;
-            auto c = reinterpret_cast<T*>(*cuBuffer::unwrap(c_buffer)) + c_offset;
+            auto a = cuBuffer::unwrap(a_buffer) + a_offset;
+            auto b = cuBuffer::unwrap(b_buffer) + b_offset;
+            auto c = cuBuffer::unwrap(c_buffer) + c_offset;
 
             if (layout == Layout::RowMajor) {
                 cublasGemmEx(h, CudaOp(b_transpose), CudaOp(a_transpose),

@@ -105,9 +105,9 @@ template <> struct Datum<GPU> {
     }
 
 private:
-    std::shared_ptr<gpgpu::raw::Buffer> handle;
+    std::shared_ptr<gpgpu::rawBuffer> handle;
 
-    Datum(model::DataType dtype, Shape&& shape, std::shared_ptr<gpgpu::raw::Buffer> handle)
+    Datum(model::DataType dtype, Shape&& shape, std::shared_ptr<gpgpu::rawBuffer> handle)
         : dtype(dtype), shape(std::move(shape)), handle(std::move(handle)) {}
 
     friend class Workspace<GPU>;

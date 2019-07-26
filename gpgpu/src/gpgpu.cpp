@@ -104,15 +104,25 @@ std::vector<bool> parseDeviceFilter(int num_devices) {
 }
 
 Platform probe() {
-    auto cu = gpgpu::cu::probe();
-    if (cu != nullptr)
-        return Platform(std::move(cu));
+    auto env = getenv("GPGPU");
 
-    auto cl = gpgpu::cl::probe();
-    if (cl != nullptr)
-        return Platform(std::move(cl));
+    if (env == nullptr || strcmp(env, "CUDA") == 0) {
+        auto cu = gpgpu::cu::probe();
+        if (cu != nullptr)
+            return Platform(std::move(cu));
+    }
 
-    throw RuntimeError("No OpenCL or CUDA platform available");
+    if (env == nullptr || strcmp(env, "OpenCL") == 0) {
+        auto cl = gpgpu::cl::probe();
+        if (cl != nullptr)
+            return Platform(std::move(cl));
+    }
+
+    if (env == nullptr) {
+        throw RuntimeError("No OpenCL or CUDA platform available");
+    } else {
+        throw RuntimeError("No " + std::string(env) + " platform available");
+    }
 }
 
 std::vector<Device> Platform::devices(DeviceType type) const {

@@ -21,7 +21,7 @@ class clEvent;
 class clProgram;
 class clKernel;
 
-class clPlatform final : public raw::Platform {
+class clPlatform final : public rawPlatform {
     cl_platform_id m_platform;
 public:
     explicit clPlatform(cl_platform_id id) : m_platform(id) {}
@@ -46,13 +46,13 @@ public:
         return getInfo(CL_PLATFORM_VERSION);
     }
 
-    std::vector<std::shared_ptr<raw::Device>> devices(DeviceType type) const override;
+    std::vector<std::shared_ptr<rawDevice>> devices(DeviceType type) const override;
 
 private:
     std::string getInfo(cl_device_info info) const;
 };
 
-class clDevice final : public raw::Device {
+class clDevice final : public rawDevice {
     cl_device_id m_device;
 public:
     explicit clDevice(cl_device_id id) : m_device(id) {}
@@ -134,7 +134,7 @@ public:
         return getInfo<cl_ulong>(CL_DEVICE_MAX_MEM_ALLOC_SIZE);
     }
 
-    std::shared_ptr<raw::Context> createContext() const override;
+    std::shared_ptr<rawContext> createContext() const override;
 
 private:
     template <typename T>
@@ -146,7 +146,7 @@ private:
     std::vector<T> getInfoVec(cl_device_info info) const;
 };
 
-class clContext final : public raw::Context {
+class clContext final : public rawContext {
     cl_device_id m_device;
     cl_context m_context;
 public:
@@ -162,16 +162,16 @@ public:
     void activate() const override {}
     void deactivate() const override {}
 
-    std::shared_ptr<raw::Program> compileProgram(
+    std::shared_ptr<rawProgram> compileProgram(
         const char* source, const std::vector<std::string>& options) const override;
-    std::shared_ptr<raw::Program> loadProgram(const std::string& binary) const override;
+    std::shared_ptr<rawProgram> loadProgram(const std::string& binary) const override;
 
-    std::shared_ptr<raw::Queue> createQueue() const override;
-    std::shared_ptr<raw::Event> createEvent() const override;
-    std::shared_ptr<raw::Buffer> createBuffer(size_t size, BufferAccess access) const override;
+    std::shared_ptr<rawQueue> createQueue() const override;
+    std::shared_ptr<rawEvent> createEvent() const override;
+    std::shared_ptr<rawBuffer> createBuffer(size_t size, BufferAccess access) const override;
 };
 
-class clQueue final : public raw::Queue {
+class clQueue final : public rawQueue {
     cl_command_queue m_queue;
 public:
     explicit clQueue(cl_command_queue queue)
@@ -183,19 +183,19 @@ public:
         return reinterpret_cast<QueueID>(m_queue);
     }
 
-    void finish(raw::Event&) const override;
+    void finish(rawEvent&) const override;
     void finish() const override;
 
-    static cl_command_queue* unwrap(raw::Queue& queue) {
+    static cl_command_queue* unwrap(rawQueue& queue) {
         return &reinterpret_cast<clQueue&>(queue).m_queue;
     }
 
-    static const cl_command_queue* unwrap(const raw::Queue& queue) {
+    static const cl_command_queue* unwrap(const rawQueue& queue) {
         return &reinterpret_cast<const clQueue&>(queue).m_queue;
     }
 };
 
-class clEvent final : public raw::Event {
+class clEvent final : public rawEvent {
     cl_event m_event = nullptr;
 public:
     ~clEvent() override;
@@ -203,16 +203,16 @@ public:
     void waitForCompletion() const override;
     float getElapsedTime() const override;
 
-    static cl_event* unwrap(raw::Event* event) {
+    static cl_event* unwrap(rawEvent* event) {
         return event== nullptr ? nullptr : &reinterpret_cast<clEvent*>(event)->m_event;
     }
 
-    static const cl_event* unwrap(const raw::Event* event) {
+    static const cl_event* unwrap(const rawEvent* event) {
         return event==nullptr ? nullptr : &reinterpret_cast<const clEvent*>(event)->m_event;
     }
 };
 
-class clBuffer final : public raw::Buffer {
+class clBuffer final : public rawBuffer {
     BufferAccess m_access;
     cl_mem m_buffer;
 public:
@@ -221,15 +221,15 @@ public:
 
     ~clBuffer() override;
 
-    void read(const raw::Queue& queue, void* host, size_t size, size_t offset, raw::Event* event) const override;
-    void write(const raw::Queue& queue, const void* host, size_t size, size_t offset, raw::Event* event) override;
-    void copyTo(const raw::Queue& queue, raw::Buffer& dest, size_t size, raw::Event* event) const override;
+    void read(const rawQueue& queue, void* host, size_t size, size_t offset, rawEvent* event) const override;
+    void write(const rawQueue& queue, const void* host, size_t size, size_t offset, rawEvent* event) override;
+    void copyTo(const rawQueue& queue, rawBuffer& dest, size_t size, rawEvent* event) const override;
 
-    static cl_mem* unwrap(raw::Buffer& raw) {
+    static cl_mem* unwrap(rawBuffer& raw) {
         return &reinterpret_cast<clBuffer&>(raw).m_buffer;
     }
 
-    static const cl_mem* unwrap(const raw::Buffer& raw) {
+    static const cl_mem* unwrap(const rawBuffer& raw) {
         return &reinterpret_cast<const clBuffer&>(raw).m_buffer;
     }
 
@@ -244,7 +244,7 @@ public:
     }
 };
 
-class clProgram final : public raw::Program {
+class clProgram final : public rawProgram {
     cl_program m_program;
 public:
     explicit clProgram(cl_program program) : m_program(program) {}
@@ -252,10 +252,10 @@ public:
     ~clProgram() override;
 
     std::string getIR() const override;
-    std::shared_ptr<raw::Kernel> getKernel(const char* name) const override;
+    std::shared_ptr<rawKernel> getKernel(const char* name) const override;
 };
 
-class clKernel final : public raw::Kernel {
+class clKernel final : public rawKernel {
     cl_kernel m_kernel;
 public:
     explicit clKernel(cl_kernel kernel)
@@ -263,18 +263,18 @@ public:
 
     ~clKernel() override;
 
-    uint64_t localMemoryUsage(const raw::Device& device) const override;
+    uint64_t localMemoryUsage(const rawDevice& device) const override;
 
     void setArgument(size_t index, const void* value, size_t size) const override;
-    void setArgument(size_t index, const raw::Buffer& buffer) const override;
+    void setArgument(size_t index, const rawBuffer& buffer) const override;
 
-    void launch(const raw::Queue& queue,
+    void launch(const rawQueue& queue,
                 const std::vector<size_t>& global,
                 const std::vector<size_t>& local,
-                raw::Event* event) const override;
+                rawEvent* event) const override;
 };
 
-std::shared_ptr<raw::Platform> probe();
+std::shared_ptr<rawPlatform> probe();
 
 }} // namespace gpgpu::cl
 

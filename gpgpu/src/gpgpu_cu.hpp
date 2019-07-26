@@ -17,7 +17,7 @@ class cuEvent;
 class cuProgram;
 class cuKernel;
 
-class cuPlatform final : public raw::Platform {
+class cuPlatform final : public rawPlatform {
 public:
     APIType api() const noexcept override {
         return APIType::CUDA;
@@ -37,11 +37,12 @@ public:
 
     std::string version() const override;
 
-    std::vector<std::shared_ptr<raw::Device>> devices(DeviceType type) const override;
+    std::vector<std::shared_ptr<rawDevice>> devices(DeviceType type) const override;
 };
 
-class cuDevice final : public raw::Device {
+class cuDevice final : public rawDevice {
     CUdevice m_device;
+
 public:
     explicit cuDevice(CUdevice device)
         : m_device(device) {}
@@ -105,15 +106,16 @@ public:
         return memorySize();
     }
 
-    std::shared_ptr<raw::Context> createContext() const override;
+    std::shared_ptr<rawContext> createContext() const override;
 
 private:
     size_t getInfo(CUdevice_attribute info) const;
 };
 
-class cuContext final : public raw::Context {
+class cuContext final : public rawContext {
     CUcontext m_context;
     CUdevice m_device;
+
 public:
     explicit cuContext(CUcontext context, CUdevice device)
         : m_context(context), m_device(device) {}
@@ -127,17 +129,18 @@ public:
     void activate() const override;
     void deactivate() const override;
 
-    std::shared_ptr<raw::Program> compileProgram(
+    std::shared_ptr<rawProgram> compileProgram(
         const char *source, const std::vector<std::string> &options) const override;
-    std::shared_ptr<raw::Program> loadProgram(const std::string& binary) const override ;
+    std::shared_ptr<rawProgram> loadProgram(const std::string& binary) const override ;
 
-    std::shared_ptr<raw::Queue> createQueue() const override;
-    std::shared_ptr<raw::Event> createEvent() const override;
-    std::shared_ptr<raw::Buffer> createBuffer(size_t size, BufferAccess access) const override;
+    std::shared_ptr<rawQueue> createQueue() const override;
+    std::shared_ptr<rawEvent> createEvent() const override;
+    std::shared_ptr<rawBuffer> createBuffer(size_t size, BufferAccess access) const override;
 };
 
-class cuEvent final : public raw::Event {
+class cuEvent final : public rawEvent {
     CUevent m_start, m_end;
+
 public:
     cuEvent(CUevent start, CUevent end)
         : m_start(start), m_end(end) {}
@@ -156,19 +159,20 @@ public:
     CUevent start() const noexcept { return m_start; }
     CUevent end() const noexcept { return m_end; }
 
-    static CUevent start(const raw::Event& event) {
+    static CUevent start(const rawEvent& event) {
         return reinterpret_cast<const cuEvent&>(event).start();
     }
 
-    static CUevent end(const raw::Event& event) {
+    static CUevent end(const rawEvent& event) {
         return reinterpret_cast<const cuEvent&>(event).end();
     }
 };
 
-class cuQueue final : public raw::Queue {
+class cuQueue final : public rawQueue {
     CUstream m_queue;
     mutable cublasHandle_t m_cublas;
     mutable cudnnHandle_t m_cudnn;
+
 public:
     explicit cuQueue(CUstream queue)
         : m_queue(queue), m_cublas(nullptr), m_cudnn(nullptr) {}
@@ -182,53 +186,51 @@ public:
     cublasHandle_t getCublasHandle() const;
     cudnnHandle_t getCudnnHandle() const;
 
-    void finish(raw::Event& event) const override;
+    void finish(rawEvent& event) const override;
     void finish() const override;
 
-    static CUstream* unwrap(raw::Queue& queue) {
+    static CUstream* unwrap(rawQueue& queue) {
         return &reinterpret_cast<cuQueue&>(queue).m_queue;
     }
 
-    static const CUstream* unwrap(const raw::Queue& queue) {
+    static const CUstream* unwrap(const rawQueue& queue) {
         return &reinterpret_cast<const cuQueue&>(queue).m_queue;
     }
 };
 
-class cuBuffer final : public raw::Buffer {
+class cuBuffer final : public rawBuffer {
     BufferAccess m_access;
     CUdeviceptr m_buffer;
+
 public:
     explicit cuBuffer(BufferAccess access, CUdeviceptr buffer)
         : m_access(access), m_buffer(buffer) {}
 
     ~cuBuffer() override;
 
-    void read(const raw::Queue& queue, void* host, size_t size, size_t offset, raw::Event* event) const override;
-    void write(const raw::Queue& queue, const void* host, size_t size, size_t offset, raw::Event* event) override;
-    void copyTo(const raw::Queue& queue, raw::Buffer& dest, size_t size, raw::Event* event) const override;
+    void read(const rawQueue& queue, void* host, size_t size, size_t offset, rawEvent* event) const override;
+    void write(const rawQueue& queue, const void* host, size_t size, size_t offset, rawEvent* event) override;
+    void copyTo(const rawQueue& queue, rawBuffer& dest, size_t size, rawEvent* event) const override;
 
-    static CUdeviceptr* unwrap(raw::Buffer& buffer) {
-        return &reinterpret_cast<cuBuffer&>(buffer).m_buffer;
-    }
-
-    static const CUdeviceptr* unwrap(const raw::Buffer& buffer) {
-        return &reinterpret_cast<const cuBuffer&>(buffer).m_buffer;
+    static CUdeviceptr unwrap(const rawBuffer& buffer) {
+        return reinterpret_cast<const cuBuffer&>(buffer).m_buffer;
     }
 
     template <typename T>
-    static CUdeviceptr* unwrap(gpgpu::Buffer<T>& buffer) {
-        return unwrap(buffer.raw());
+    static T* unwrap(gpgpu::Buffer<T>& buffer) {
+        return reinterpret_cast<T*>(unwrap(buffer.raw()));
     }
 
     template <typename T>
-    static const CUdeviceptr* unwrap(const gpgpu::Buffer<T>& buffer) {
-        return unwrap(buffer.raw());
+    static const T* unwrap(const gpgpu::Buffer<T>& buffer) {
+        return reinterpret_cast<T*>(unwrap(buffer.raw()));
     }
 };
 
-class cuProgram final : public raw::Program {
+class cuProgram final : public rawProgram {
     CUmodule m_module;
     std::string m_ir;
+
 public:
     explicit cuProgram(CUmodule module, std::string ir)
         : m_module(module), m_ir(std::move(ir)) {}
@@ -236,10 +238,10 @@ public:
     ~cuProgram() override;
 
     std::string getIR() const override { return m_ir; }
-    std::shared_ptr<raw::Kernel> getKernel(const char* name) const override;
+    std::shared_ptr<rawKernel> getKernel(const char* name) const override;
 };
 
-class cuKernel final : public raw::Kernel {
+class cuKernel final : public rawKernel {
     CUfunction m_kernel;
     mutable std::vector<size_t> m_arguments_indices;
     mutable std::vector<char> m_arguments_data;
@@ -247,18 +249,18 @@ class cuKernel final : public raw::Kernel {
 public:
     explicit cuKernel(CUfunction kernel) : m_kernel(kernel) {}
 
-    uint64_t localMemoryUsage(const raw::Device& device) const override;
+    uint64_t localMemoryUsage(const rawDevice& device) const override;
 
     void setArgument(size_t index, const void* value, size_t size) const override;
-    void setArgument(size_t index, const raw::Buffer& buffer) const override;
+    void setArgument(size_t index, const rawBuffer& buffer) const override;
 
-    void launch(const raw::Queue& queue,
+    void launch(const rawQueue& queue,
                 const std::vector<size_t>& global,
                 const std::vector<size_t>& local,
-                raw::Event* event) const override;
+                rawEvent* event) const override;
 };
 
-std::shared_ptr<raw::Platform> probe();
+std::shared_ptr<rawPlatform> probe();
 
 }} // namespace gpgpu::cu
 

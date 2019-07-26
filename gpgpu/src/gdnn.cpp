@@ -371,13 +371,13 @@ void batch_norm(const std::vector<size_t>& dims,
         checkCUDNN(cudnnBatchNormalizationForwardInference(
             cudnn_handle(queue), cudnnBatchNormMode_t::CUDNN_BATCHNORM_SPATIAL,
             &alpha, &beta,
-            xy_desc, reinterpret_cast<void*>(*cu::cuBuffer::unwrap(x_buffer)),
-            xy_desc, reinterpret_cast<void*>(*cu::cuBuffer::unwrap(y_buffer)),
+            xy_desc, cu::cuBuffer::unwrap(x_buffer),
+            xy_desc, cu::cuBuffer::unwrap(y_buffer),
             sbmv_desc,
-            reinterpret_cast<void*>(*cu::cuBuffer::unwrap(scale_buffer)),
-            reinterpret_cast<void*>(*cu::cuBuffer::unwrap(bias_buffer)),
-            reinterpret_cast<void*>(*cu::cuBuffer::unwrap(mean_buffer)),
-            reinterpret_cast<void*>(*cu::cuBuffer::unwrap(var_buffer)),
+            cu::cuBuffer::unwrap(scale_buffer),
+            cu::cuBuffer::unwrap(bias_buffer),
+            cu::cuBuffer::unwrap(mean_buffer),
+            cu::cuBuffer::unwrap(var_buffer),
             0.00001)); // FIXME
     }
 }
@@ -417,8 +417,8 @@ void lrn(const std::vector<size_t>& dims, const Buffer<T>& x_buffer, Buffer<T>& 
         T blend_alpha = 1, blend_beta = 0;
         checkCUDNN(cudnnLRNCrossChannelForward(
             cudnn_handle(queue), desc, CUDNN_LRN_CROSS_CHANNEL_DIM1,
-            &blend_alpha, xy_desc, reinterpret_cast<void*>(*cu::cuBuffer::unwrap(x_buffer)),
-            &blend_beta,  xy_desc, reinterpret_cast<void*>(*cu::cuBuffer::unwrap(y_buffer))));
+            &blend_alpha, xy_desc, cu::cuBuffer::unwrap(x_buffer),
+            &blend_beta,  xy_desc, cu::cuBuffer::unwrap(y_buffer)));
     }
 }
 
@@ -481,12 +481,12 @@ void cudnnConv(
     const T alpha = 1, beta = 0;
     checkCUDNN(cudnnConvolutionForward(
         cudnn, &alpha,
-        x_desc, reinterpret_cast<void*>(*cu::cuBuffer::unwrap(im_buffer)),
-        w_desc, reinterpret_cast<void*>(*cu::cuBuffer::unwrap(kernel_buffer)),
+        x_desc, cu::cuBuffer::unwrap(im_buffer),
+        w_desc, cu::cuBuffer::unwrap(kernel_buffer),
         desc, algo,
-        reinterpret_cast<void*>(*cu::cuBuffer::unwrap(*work)), workspace_size,
+        cu::cuBuffer::unwrap(*work), workspace_size,
         &beta,
-        y_desc, reinterpret_cast<void*>(*cu::cuBuffer::unwrap((result_buffer)))));
+        y_desc, cu::cuBuffer::unwrap((result_buffer))));
 }
 
 template <typename T>
@@ -786,8 +786,8 @@ void maxpool(const size_t batches, const size_t channels,
         T alpha = 1, beta = 0;
         cudnnPoolingForward(
             cudnn_handle(queue), desc,
-            &alpha, x_desc, reinterpret_cast<void*>(*cu::cuBuffer::unwrap(x_buffer)),
-            &beta, y_desc, reinterpret_cast<void*>(*cu::cuBuffer::unwrap(y_buffer)));
+            &alpha, x_desc, cu::cuBuffer::unwrap(x_buffer),
+            &beta, y_desc, cu::cuBuffer::unwrap(y_buffer));
     }
 }
 
@@ -846,8 +846,8 @@ void avgpool(const size_t batches, const size_t channels,
         T alpha = 1, beta = 0;
         cudnnPoolingForward(
             cudnn_handle(queue), desc,
-            &alpha, x_desc, reinterpret_cast<void*>(*cu::cuBuffer::unwrap(x_buffer)),
-            &beta, y_desc, reinterpret_cast<void*>(*cu::cuBuffer::unwrap(y_buffer)));
+            &alpha, x_desc, cu::cuBuffer::unwrap(x_buffer),
+            &beta, y_desc, cu::cuBuffer::unwrap(y_buffer));
     }
 }
 
@@ -934,8 +934,8 @@ void softmax(const size_t m, const size_t n, const Buffer<T>& x_buffer, Buffer<T
             cudnn_handle(queue),
             cudnnSoftmaxAlgorithm_t::CUDNN_SOFTMAX_ACCURATE,
             cudnnSoftmaxMode_t::CUDNN_SOFTMAX_MODE_INSTANCE,
-            &alpha, xy_desc, reinterpret_cast<void*>(*cu::cuBuffer::unwrap(x_buffer)),
-            &beta,  xy_desc, reinterpret_cast<void*>(*cu::cuBuffer::unwrap(y_buffer))));
+            &alpha, xy_desc, cu::cuBuffer::unwrap(x_buffer),
+            &beta,  xy_desc, cu::cuBuffer::unwrap(y_buffer)));
     }
 }
 
@@ -963,8 +963,8 @@ void logsoftmax(const size_t m, const size_t n, const Buffer<T>& x_buffer, Buffe
             cudnn_handle(queue),
             cudnnSoftmaxAlgorithm_t::CUDNN_SOFTMAX_LOG,
             cudnnSoftmaxMode_t::CUDNN_SOFTMAX_MODE_INSTANCE,
-            &alpha, xy_desc, reinterpret_cast<void*>(*cu::cuBuffer::unwrap(x_buffer)),
-            &beta,  xy_desc, reinterpret_cast<void*>(*cu::cuBuffer::unwrap(y_buffer))));
+            &alpha, xy_desc, cu::cuBuffer::unwrap(x_buffer),
+            &beta,  xy_desc, cu::cuBuffer::unwrap(y_buffer)));
     }
 }
 

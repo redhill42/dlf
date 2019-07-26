@@ -47,8 +47,8 @@ static std::string trimCallString(const char* where) {
 #define CheckErrorDtor(call) checkDtor(call, trimCallString(#call))
 #define CheckNVRTC(call) checkNVRTC(call, trimCallString(#call))
 
-std::shared_ptr<raw::Platform> probe() {
-    static std::shared_ptr<raw::Platform> platform;
+std::shared_ptr<rawPlatform> probe() {
+    static std::shared_ptr<rawPlatform> platform;
 
     if (platform == nullptr) {
         if (cuInit(0) != CUDA_SUCCESS)
@@ -65,14 +65,14 @@ std::shared_ptr<raw::Platform> probe() {
     return platform;
 }
 
-std::vector<std::shared_ptr<raw::Device>> cuPlatform::devices(DeviceType type) const {
+std::vector<std::shared_ptr<rawDevice>> cuPlatform::devices(DeviceType type) const {
     if (type != DeviceType::GPU && type != DeviceType::All && type != DeviceType::Default)
         return {};
 
     int num_devices = 0;
     CheckError(cuDeviceGetCount(&num_devices));
 
-    std::vector<std::shared_ptr<raw::Device>> devices;
+    std::vector<std::shared_ptr<rawDevice>> devices;
     auto filter = parseDeviceFilter(num_devices);
     for (int id = 0; id < num_devices; id++) {
         if (filter[id]) {
@@ -123,7 +123,7 @@ size_t cuDevice::getInfo(CUdevice_attribute info) const {
     return result;
 }
 
-std::shared_ptr<raw::Context> cuDevice::createContext() const {
+std::shared_ptr<rawContext> cuDevice::createContext() const {
     CUcontext context = nullptr;
     CheckError(cuDevicePrimaryCtxRetain(&context, m_device));
     CheckError(cuCtxSetCurrent(context));
@@ -145,20 +145,20 @@ cuContext::~cuContext() {
     }
 }
 
-std::shared_ptr<raw::Queue> cuContext::createQueue() const {
+std::shared_ptr<rawQueue> cuContext::createQueue() const {
     CUstream queue = nullptr;
     CheckError(cuStreamCreate(&queue, CU_STREAM_NON_BLOCKING));
     return std::make_shared<cuQueue>(queue);
 }
 
-std::shared_ptr<raw::Event> cuContext::createEvent() const {
+std::shared_ptr<rawEvent> cuContext::createEvent() const {
     CUevent start = nullptr, end = nullptr;
     CheckError(cuEventCreate(&start, CU_EVENT_DEFAULT));
     CheckError(cuEventCreate(&end, CU_EVENT_DEFAULT));
     return std::make_shared<cuEvent>(start, end);
 }
 
-std::shared_ptr<raw::Buffer> cuContext::createBuffer(size_t size, BufferAccess access) const {
+std::shared_ptr<rawBuffer> cuContext::createBuffer(size_t size, BufferAccess access) const {
     CUdeviceptr buffer = 0;
     CheckError(cuMemAlloc(&buffer, size));
     return std::make_shared<cuBuffer>(access, buffer);
@@ -174,7 +174,7 @@ static std::string getBuildInfo(nvrtcProgram program) {
     return log;
 }
 
-std::shared_ptr<raw::Program> cuContext::compileProgram(
+std::shared_ptr<rawProgram> cuContext::compileProgram(
     const char* source, const std::vector<std::string>& options) const
 {
     nvrtcProgram program = nullptr;
@@ -203,7 +203,7 @@ std::shared_ptr<raw::Program> cuContext::compileProgram(
     return loadProgram(ir);
 }
 
-std::shared_ptr<raw::Program> cuContext::loadProgram(const std::string& ir) const {
+std::shared_ptr<rawProgram> cuContext::loadProgram(const std::string& ir) const {
     CUmodule module;
     CheckError(cuModuleLoadDataEx(&module, ir.data(), 0, nullptr, nullptr));
     return std::make_shared<cuProgram>(module, ir);
@@ -234,7 +234,7 @@ cudnnHandle_t cuQueue::getCudnnHandle() const {
     return m_cudnn;
 }
 
-void cuQueue::finish(raw::Event& event) const {
+void cuQueue::finish(rawEvent& event) const {
     CheckError(cuEventSynchronize(cuEvent::end(event)));
     finish();
 }
@@ -252,20 +252,20 @@ cuQueue::~cuQueue() {
         cudnnDestroy(m_cudnn);
 }
 
-void cuBuffer::read(const raw::Queue& queue, void* host, size_t size, size_t offset, raw::Event*) const {
+void cuBuffer::read(const rawQueue& queue, void* host, size_t size, size_t offset, rawEvent*) const {
     if (m_access == BufferAccess::WriteOnly)
         throw LogicError("Buffer: reading from a write-only buffer");
     CheckError(cuMemcpyDtoHAsync(host, m_buffer+offset, size, *cuQueue::unwrap(queue)));
 }
 
-void cuBuffer::write(const raw::Queue& queue, const void* host, size_t size, size_t offset, raw::Event*) {
+void cuBuffer::write(const rawQueue& queue, const void* host, size_t size, size_t offset, rawEvent*) {
     if (m_access == BufferAccess::ReadOnly)
         throw LogicError("Buffer: writing to a read-only buffer");
     CheckError(cuMemcpyHtoDAsync(m_buffer+offset, host, size, *cuQueue::unwrap(queue)));
 }
 
-void cuBuffer::copyTo(const raw::Queue& queue, raw::Buffer& dest, size_t size, raw::Event*) const {
-    CheckError(cuMemcpyDtoDAsync(*cuBuffer::unwrap(dest), m_buffer, size, *cuQueue::unwrap(queue)));
+void cuBuffer::copyTo(const rawQueue& queue, rawBuffer& dest, size_t size, rawEvent*) const {
+    CheckError(cuMemcpyDtoDAsync(cuBuffer::unwrap(dest), m_buffer, size, *cuQueue::unwrap(queue)));
 }
 
 cuBuffer::~cuBuffer() {
@@ -273,7 +273,7 @@ cuBuffer::~cuBuffer() {
         CheckErrorDtor(cuMemFree(m_buffer));
 }
 
-std::shared_ptr<raw::Kernel> cuProgram::getKernel(const char *name) const {
+std::shared_ptr<rawKernel> cuProgram::getKernel(const char *name) const {
     CUfunction kernel = nullptr;
     CheckError(cuModuleGetFunction(&kernel, m_module, name));
     return std::make_shared<cuKernel>(kernel);
@@ -284,7 +284,7 @@ cuProgram::~cuProgram() {
         CheckErrorDtor(cuModuleUnload(m_module));
 }
 
-uint64_t cuKernel::localMemoryUsage(const raw::Device&) const {
+uint64_t cuKernel::localMemoryUsage(const rawDevice&) const {
     auto result = 0;
     CheckError(cuFuncGetAttribute(&result, CU_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES, m_kernel));
     return static_cast<uint64_t>(result);
@@ -305,14 +305,15 @@ void cuKernel::setArgument(size_t index, const void* value, size_t size) const {
     memcpy(&m_arguments_data[end], value, size);
 }
 
-void cuKernel::setArgument(size_t index, const raw::Buffer& buffer) const {
-    setArgument(index, cuBuffer::unwrap(buffer), sizeof(CUdeviceptr));
+void cuKernel::setArgument(size_t index, const rawBuffer& buffer) const {
+    CUdeviceptr ptr = cuBuffer::unwrap(buffer);
+    setArgument(index, &ptr, sizeof(CUdeviceptr));
 }
 
-void cuKernel::launch(const raw::Queue& queue,
+void cuKernel::launch(const rawQueue& queue,
                       const std::vector<size_t>& global,
                       const std::vector<size_t>& local,
-                      raw::Event* event) const
+                      rawEvent* event) const
 {
     size_t grid[]{1, 1, 1};
     size_t block[]{1, 1, 1};
