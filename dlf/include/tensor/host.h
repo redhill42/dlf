@@ -186,6 +186,14 @@ public: // Constructors
     static Tensor range(Shape shape, T n, T step = T{1});
 
     /**
+     * Create a tensor that fill with constant value.
+     *
+     * @param shape the tensor dimension
+     * @param value the constant value
+     */
+    static Tensor fill(Shape shape, const T& value);
+
+    /**
      * Create a tensor filled with random data.
      *
      * @param shape the tensor dimension
@@ -347,6 +355,13 @@ Tensor<T> Tensor<T>::range(Shape shape, T n, T step) {
     T* p = res.data();
     for (size_t k = res.size(); k-- != 0; n += step)
         *p++ = n;
+    return res;
+}
+
+template <typename T>
+Tensor<T> Tensor<T>::fill(Shape shape, const T& value) {
+    Tensor<T> res(std::move(shape));
+    std::fill(res.begin(), res.end(), value);
     return res;
 }
 

@@ -100,8 +100,7 @@ TYPED_TEST(PredictTest, Conv) {
     g.addOutput(x->addOutput("Y"));
 
     auto X = Tensor<float>::range({1, 1, 5, 5}, 0);
-    auto W = Tensor<float>({1, 1, 3, 3});
-    std::fill(W.begin(), W.end(), 1);
+    auto W = Tensor<float>::fill({1, 1, 3, 3}, 1);
 
     Predictor<Context, float> predictor(g);
     predictor.set(0, X);

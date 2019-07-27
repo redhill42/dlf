@@ -523,8 +523,7 @@ TEST(DNNTest, LRN) {
 
 TEST(Conv2D, basic_conv_with_padding) {
     auto X = Tensor<float>::range({1, 1, 5, 5}, 0);
-    auto W = Tensor<float>({1, 1, 3, 3});
-    std::fill(W.begin(), W.end(), 1);
+    auto W = Tensor<float>::fill({1, 1, 3, 3}, 1);
     auto Y = Tensor<float>({1, 1, 5, 5});
     auto filter = dnn::Filter2D(X.shape(), W.shape()).pads(1, 1);
     auto R = Tensor<float>({1, 1, 5, 5}, {
@@ -545,8 +544,7 @@ TEST(Conv2D, basic_conv_with_padding) {
 
 TEST(Conv2D, basic_conv_without_padding) {
     auto X = Tensor<float>::range({1, 1, 5, 5}, 0);
-    auto W = Tensor<float>({1, 1, 3, 3});
-    std::fill(W.begin(), W.end(), 1);
+    auto W = Tensor<float>::fill({1, 1, 3, 3}, 1);
     auto Y = Tensor<float>({1, 1, 3, 3});
     auto filter = dnn::Filter2D(X.shape(), W.shape());
     auto R = Tensor<float>({1, 1, 3, 3}, {
@@ -565,8 +563,7 @@ TEST(Conv2D, basic_conv_without_padding) {
 
 TEST(Conv2D, conv_with_strides_padding) {
     auto X = Tensor<float>::range({1, 1, 7, 5}, 0);
-    auto W = Tensor<float>({1, 1, 3, 3});
-    std::fill(W.begin(), W.end(), 1);
+    auto W = Tensor<float>::fill({1, 1, 3, 3}, 1);
     auto Y = Tensor<float>({1, 1, 4, 3});
     auto filter = dnn::Filter2D(X.shape(), W.shape()).pads(1, 1).strides(2, 2);
     auto R = Tensor<float>({1, 1, 4, 3}, {
@@ -586,8 +583,7 @@ TEST(Conv2D, conv_with_strides_padding) {
 
 TEST(Conv2D, conv_with_strides_no_padding) {
     auto X = Tensor<float>::range({1, 1, 7, 5}, 0);
-    auto W = Tensor<float>({1, 1, 3, 3});
-    std::fill(W.begin(), W.end(), 1);
+    auto W = Tensor<float>::fill({1, 1, 3, 3}, 1);
     auto Y = Tensor<float>({1, 1, 3, 2});
     auto filter = dnn::Filter2D(X.shape(), W.shape()).strides(2, 2);
     auto R = Tensor<float>({1, 1, 3, 2}, {
@@ -606,8 +602,7 @@ TEST(Conv2D, conv_with_strides_no_padding) {
 
 TEST(Conv2D, conv_with_strides_and_asymmetric_padding) {
     auto X = Tensor<float>::range({1, 1, 7, 5}, 0);
-    auto W = Tensor<float>({1, 1, 3, 3});
-    std::fill(W.begin(), W.end(), 1);
+    auto W = Tensor<float>::fill({1, 1, 3, 3}, 1);
     auto Y = Tensor<float>({1, 1, 4, 2});
     auto filter = dnn::Filter2D(X.shape(), W.shape()).pads(1, 0).strides(2, 2);
     auto R = Tensor<float>({1, 1, 4, 2}, {
@@ -627,8 +622,7 @@ TEST(Conv2D, conv_with_strides_and_asymmetric_padding) {
 
 TEST(Conv2D, conv_with_multiple_channels) {
     auto X = Tensor<float>::range({2, 3, 5, 5}, 0);
-    auto W = Tensor<float>({8, 3, 3, 3});
-    std::fill(W.begin(), W.end(), 1);
+    auto W = Tensor<float>::fill({8, 3, 3, 3}, 1);
     auto Y = Tensor<float>({2, 8, 5, 5});
     auto filter = dnn::Filter2D(X.shape(), W.shape()).pads(1, 1);
     auto dev_Y = DevTensor<float>({2, 8, 5, 5});
@@ -640,8 +634,7 @@ TEST(Conv2D, conv_with_multiple_channels) {
 
 TEST(Conv2D, conv_with_strange_padding) {
     auto X = Tensor<float>::range({2, 3, 10, 10}, 0);
-    auto W = Tensor<float>({8, 3, 3, 3});
-    std::fill(W.begin(), W.end(), 1);
+    auto W = Tensor<float>::fill({8, 3, 3, 3}, 1);
     auto filter = dnn::Filter2D(X.shape(), W.shape()).pads(1, 2, 2, 1);
     auto Y = Tensor<float>(filter.output_shape());
     auto dev_Y = DevTensor<float>(Y.shape());
