@@ -421,7 +421,7 @@ void matmul(const Tensor<T>& A, const Tensor<T>& B, Tensor<T>& C) {
 
     tbb::parallel_for(tbb::blocked_range<int>(0, batch, 16), [=](auto r) {
         for (int i = r.begin(); i < r.end(); i++) {
-            impl::gemm(m, n, k, px + i*off_a, py + i*off_b, pz + i*off_c, lda, ldb, ldc);
+            impl::gemm(m, n, k, px + i*off_a, lda, py + i*off_b, ldb, pz + i*off_c, ldc);
         }
     });
 }
@@ -451,9 +451,9 @@ void matmul(const DevTensor<T>& A, const DevTensor<T>& B, DevTensor<T>& C) {
     int off_c = shapeC.stride(shapeC.rank() - 3);
 
     if (A.rank() == 1)
-        shapeC.squeeze({-2});
+        shapeC.squeeze(-2);
     if (B.rank() == 1)
-        shapeC.squeeze({-1});
+        shapeC.squeeze(-1);
     assert(C.shape() == shapeC);
 
     std::vector<size_t> a_offsets(batch);
@@ -495,9 +495,9 @@ enable_if_tensor<TensorT> matmul(const TensorT& A, const TensorT& B) {
     detail::matmul_broadcast(shapeA, shapeB, shapeC);
 
     if (A.rank() == 1)
-        shapeC.squeeze({-2});
+        shapeC.squeeze(-2);
     if (B.rank() == 1)
-        shapeC.squeeze({-1});
+        shapeC.squeeze(-1);
 
     tensor_type<TensorT> C(shapeC);
     matmul(A, B, C);

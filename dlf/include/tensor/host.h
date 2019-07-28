@@ -705,13 +705,13 @@ dot(size_t n, const T* A, const T* B) {
 
 template <typename T>
 inline std::enable_if_t<cblas::RequireBlasType<T>>
-gemv(size_t m, size_t n, const T* A, const T* B, T* C, size_t lda) {
+gemv(size_t m, size_t n, const T* A, size_t lda, const T* B, T* C) {
     cblas::gemv(cblas::Layout::RowMajor, cblas::Transpose::NoTrans, m, n, T(1), A, lda, B, 1, T(0), C, 1);
 }
 
 template <typename T>
 std::enable_if_t<!cblas::RequireBlasType<T>>
-gemv(size_t m, size_t n, const T* A, const T* B, T* C, size_t lda) {
+gemv(size_t m, size_t n, const T* A, size_t lda, const T* B, T* C) {
     tbb::parallel_for(tbb::blocked_range<size_t>(0, m, GRAINSIZE), [&](auto r) {
         auto px = A + r.begin() * lda;
         auto pz = C + r.begin();
@@ -727,14 +727,14 @@ gemv(size_t m, size_t n, const T* A, const T* B, T* C, size_t lda) {
 
 template <typename T>
 inline std::enable_if_t<cblas::RequireBlasType<T>>
-gemm(size_t m, size_t n, size_t k, const T* A, const T* B, T* C, size_t lda, size_t ldb, size_t ldc) {
+gemm(size_t m, size_t n, size_t k, const T* A, size_t lda, const T* B, size_t ldb, T* C, size_t ldc) {
     cblas::gemm(cblas::Layout::RowMajor, cblas::Transpose::NoTrans, cblas::Transpose::NoTrans,
                 m, n, k, T(1), A, lda, B, ldb, T(0), C, ldc);
 }
 
 template <typename T>
 std::enable_if_t<!cblas::RequireBlasType<T>>
-gemm(size_t m, size_t n, size_t k, const T* A, const T* B, T* C, size_t lda, size_t ldb, size_t ldc) {
+gemm(size_t m, size_t n, size_t k, const T* A, size_t lda, const T* B, size_t ldb, T* C, size_t ldc) {
     tbb::parallel_for(tbb::blocked_range2d<size_t>(0, m, 32, 0, n, 32), [&](auto r) {
         for (size_t i = r.rows().begin(); i != r.rows().end(); i++) {
             for (size_t j = r.cols().begin(); j != r.cols().end(); j++) {
@@ -769,7 +769,7 @@ Tensor<T>& dot(const Tensor<T>& A, const Tensor<T>& B, Tensor<T>* C) {
         auto m = A.extent(0), n = A.extent(1);
         assert(n == B.extent(0));
         assert(C->is_vector() && m == C->extent(0));
-        impl::gemv(m, n, A.data(), B.data(), C->data(), A.stride(0));
+        impl::gemv(m, n, A.data(), A.stride(0), B.data(), C->data());
         return *C;
     }
 
@@ -793,8 +793,9 @@ Tensor<T>& dot(const Tensor<T>& A, const Tensor<T>& B, Tensor<T>* C) {
         assert(C_shape.extent(1) == B_shape.extent(1));
 
         impl::gemm(C_shape.extent(0), C_shape.extent(1), A_shape.extent(1),
-                   A.data(), B.data(), C->data(),
-                   A_shape.stride(0), B_shape.stride(0), C_shape.stride(0));
+                   A.data(),  A_shape.stride(0),
+                   B.data(),  B_shape.stride(0),
+                   C->data(), C_shape.stride(0));
         return *C;
     }
 
