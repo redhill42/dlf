@@ -12,8 +12,9 @@ void copy(const size_t x_size, const Buffer<T>& x_buffer, const size_t x_offset,
 
 template <typename T>
 void copy(const size_t n, const Buffer<T>& x_buffer, const size_t x_offset,
+          const std::vector<size_t>& x_dim, const std::vector<size_t>& x_stride,
           Buffer<T>& y_buffer, const size_t y_offset,
-          const std::vector<size_t>& stride, const std::vector<size_t>& shape,
+          const std::vector<size_t>& y_dim, const std::vector<size_t>& y_stride,
           const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 template <typename T>

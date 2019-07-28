@@ -42,42 +42,52 @@ template void PUBLIC_API copy<half>   (const size_t, const Buffer<half>&, const 
 template <typename T>
 void copy(const size_t n,
           const Buffer<T>& x_buffer, const size_t x_offset,
+          const std::vector<size_t>& x_dim, const std::vector<size_t>& x_stride,
           Buffer<T>& y_buffer, const size_t y_offset,
-          const std::vector<size_t>& stride, const std::vector<size_t>& shape,
+          const std::vector<size_t>& y_dim, const std::vector<size_t>& y_stride,
           const Queue& queue, Event* event) {
     auto routine = Xcopy<T>(queue, event);
-    routine.DoCopyStrided(n, x_buffer, x_offset, y_buffer, y_offset, stride, shape);
+    routine.DoCopyStrided(n, x_buffer, x_offset, x_dim, x_stride,
+                             y_buffer, y_offset, y_dim, y_stride);
 }
 
 template void PUBLIC_API copy<int16_t>(const size_t, const Buffer<int16_t>&, const size_t,
+                                       const std::vector<size_t>&, const std::vector<size_t>&,
                                        Buffer<int16_t>&, const size_t,
                                        const std::vector<size_t>&, const std::vector<size_t>&,
                                        const Queue&, Event*);
 template void PUBLIC_API copy<int32_t>(const size_t, const Buffer<int32_t>&, const size_t,
+                                       const std::vector<size_t>&, const std::vector<size_t>&,
                                        Buffer<int32_t>&, const size_t,
                                        const std::vector<size_t>&, const std::vector<size_t>&,
                                        const Queue&, Event*);
 template void PUBLIC_API copy<int64_t>(const size_t, const Buffer<int64_t>&, const size_t,
+                                       const std::vector<size_t>&, const std::vector<size_t>&,
                                        Buffer<int64_t>&, const size_t,
                                        const std::vector<size_t>&, const std::vector<size_t>&,
                                        const Queue&, Event*);
 template void PUBLIC_API copy<half>   (const size_t, const Buffer<half>&, const size_t,
+                                       const std::vector<size_t>&, const std::vector<size_t>&,
                                        Buffer<half>&, const size_t,
                                        const std::vector<size_t>&, const std::vector<size_t>&,
                                        const Queue&, Event*);
 template void PUBLIC_API copy<float>  (const size_t, const Buffer<float>&, const size_t,
+                                       const std::vector<size_t>&, const std::vector<size_t>&,
                                        Buffer<float>&, const size_t,
                                        const std::vector<size_t>&, const std::vector<size_t>&,
                                        const Queue&, Event*);
 template void PUBLIC_API copy<double> (const size_t, const Buffer<double>&, const size_t,
+                                       const std::vector<size_t>&, const std::vector<size_t>&,
                                        Buffer<double>&, const size_t,
                                        const std::vector<size_t>&, const std::vector<size_t>&,
                                        const Queue&, Event*);
 template void PUBLIC_API copy<float2> (const size_t, const Buffer<float2>&, const size_t,
+                                       const std::vector<size_t>&, const std::vector<size_t>&,
                                        Buffer<float2>&, const size_t,
                                        const std::vector<size_t>&, const std::vector<size_t>&,
                                        const Queue&, Event*);
 template void PUBLIC_API copy<double2>(const size_t, const Buffer<double2>&, const size_t,
+                                       const std::vector<size_t>&, const std::vector<size_t>&,
                                        Buffer<double2>&, const size_t,
                                        const std::vector<size_t>&, const std::vector<size_t>&,
                                        const Queue&, Event*);

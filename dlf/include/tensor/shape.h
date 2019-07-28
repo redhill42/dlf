@@ -30,7 +30,7 @@ class Shape final {
     size_t m_size = 0;
     size_t m_offset = 0;
 
-    Shape(std::vector<dim_t>&& dims, size_t size, size_t offset = 0)
+    Shape(std::vector<dim_t>&& dims, size_t size, size_t offset)
         : m_dims(std::move(dims)), m_size(size), m_offset(offset) {}
     void init(const std::vector<size_t>& extents) noexcept;
     void init() noexcept;
@@ -174,9 +174,9 @@ public:
                 const std::vector<int>& axes, const std::vector<int>& steps) const;
 
     /**
-     * Returns the axis that make the give shape to be the pole of this shape.
+     * Returns the axis that make the give shape to be the channel of this shape.
      */
-    int pole(const Shape& base) const;
+    int find_channel_axis(const Shape& base) const;
 
     /**
      * Return the data offset for the given index.

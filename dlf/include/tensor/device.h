@@ -167,21 +167,29 @@ inline DevTensor<T> transform(DevTensor<T>&& x, Fn fn) {
 }
 
 template <typename T>
-void reorder(const DevTensor<T>& src, const Shape& shape, DevTensor<T>& dst) {
-    assert(dst.shape() == shape);
-    if (src.data() == dst.data())
+void reorder(const DevTensor<T>& src, const Shape& src_shape, DevTensor<T>& dst, const Shape& dst_shape) {
+    assert(src_shape == dst_shape);
+
+    if (src_shape.is_contiguous() && dst_shape.is_contiguous() &&
+        src.data() == dst.data() && src_shape.offset() == dst_shape.offset())
         return;
-    if (src.size() == shape.size() && shape.is_contiguous()) {
-        src.copyToAsync(dst);
-    } else if (src.shape().is_tail(shape)) {
-        gpgpu::dnn::copy(src.size(), src.data(), shape.offset(),
-                         dst.size(), dst.data(), 0);
-    } else {
-        gpgpu::dnn::copy(shape.size(),
-                         src.data(), shape.offset(),
-                         dst.data(), 0,
-                         shape.strides(), shape.extents());
+
+    if (src.shape().is_tail(src_shape) && dst_shape.is_contiguous()) {
+        gpgpu::dnn::copy(src.size(), src.data(), src_shape.offset(),
+                         dst_shape.size(), dst.data(), dst_shape.offset());
+        return;
     }
+
+    gpgpu::dnn::copy(src_shape.size(),
+                     src.data(), src_shape.offset(),
+                     src_shape.extents(), src_shape.strides(),
+                     dst.data(), dst_shape.offset(),
+                     dst_shape.extents(), dst_shape.strides());
+}
+
+template <typename T>
+void reorder(const DevTensor<T>& src, const Shape& src_shape, DevTensor<T>& dst) {
+    reorder(src, src_shape, dst, dst.shape());
 }
 
 template <typename T>
@@ -206,7 +214,7 @@ DevTensor<T>& transformTo(const DevTensor<T>& A, const DevTensor<T>& B, DevTenso
         return C;
     }
 
-    int axis = A.shape().pole(B.shape());
+    int axis = A.shape().find_channel_axis(B.shape());
     if (axis != -1) {
         transformChannel(A, B, C, axis, fn);
         return C;
@@ -221,7 +229,7 @@ DevTensor<T>& transformTo(const DevTensor<T>& A, const DevTensor<T>& B, DevTenso
 
 template <typename T, typename Fn>
 void transformChannel(const DevTensor<T>& A, const DevTensor<T>& B, DevTensor<T>& C, size_t axis, Fn) {
-    assert(B.is_vector() || A.shape().pole(B.shape()) == axis);
+    assert(B.is_vector() || A.shape().find_channel_axis(B.shape()) == axis);
     assert(axis < A.rank());
     assert(A.extent(axis) == B.size());
     assert(C.shape() == A.shape());

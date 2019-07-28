@@ -623,8 +623,8 @@ TEST(UniformTest, Slice) {
 TEST(UniformTest, SliceOfSlice) {
     auto X = Tensor<float>::range({10, 10, 5}, 0);
 
-    auto shape = X.shape().slice({2, 3}, {5, 7}, {0, 1}, {1, 1});
-    shape = shape.slice({1, 1}, {3, 3}, {0, 1}, {1, 1});
+    auto shape = X.shape().slice({2, 3}, {5, 7}, {0, 1}, {1, 1})
+                          .slice({1, 1}, {3, 3}, {0, 1}, {1, 1});
 
     auto Y = Tensor<float>({2, 2, 5});
     reorder(X, shape, Y);
@@ -638,6 +638,202 @@ TEST(UniformTest, SliceOfSlice) {
 
     auto dev_X = dev(X);
     auto dev_Y = DevTensor<float>({2, 2, 5});
+    reorder(dev_X, shape, dev_Y);
+    EXPECT_EQ(dev_Y.read(), Y);
+}
+
+TEST(UniformTest, SliceAndTranspose) {
+    auto X = Tensor<float>::range({10, 10, 5}, 0);
+
+    auto shape = X.shape().slice({2, 3}, {5, 7}, {0, 1}, {1, 1}).transpose({2, 1, 0});
+    auto Y = Tensor<float>(shape);
+    reorder(X, shape, Y);
+
+    EXPECT_EQ(Y, Tensor<float>({5, 4, 3}, {
+        115, 165, 215,
+        120, 170, 220,
+        125, 175, 225,
+        130, 180, 230,
+
+        116, 166, 216,
+        121, 171, 221,
+        126, 176, 226,
+        131, 181, 231,
+
+        117, 167, 217,
+        122, 172, 222,
+        127, 177, 227,
+        132, 182, 232,
+
+        118, 168, 218,
+        123, 173, 223,
+        128, 178, 228,
+        133, 183, 233,
+
+        119, 169, 219,
+        124, 174, 224,
+        129, 179, 229,
+        134, 184, 234,
+    }));
+
+    auto dev_X = dev(X);
+    auto dev_Y = DevTensor<float>({5, 4, 3});
+    reorder(dev_X, shape, dev_Y);
+    EXPECT_EQ(dev_Y.read(), Y);
+}
+
+TEST(UniformTest, CopyNonContiguousSlice) {
+    auto X = Tensor<float>::range({2, 2, 10}, 0);
+    auto dev_X = dev(X);
+
+    auto src_shape = X.shape().slice({1}, {4}, {2}, {1});
+    auto dst_shape = X.shape().slice({5}, {8}, {2}, {1});
+    reorder(X, src_shape, X, dst_shape);
+
+    EXPECT_EQ(X, Tensor<float>({2, 2, 10}, {
+         0,  1,  2,  3,  4,  1,  2,  3,  8,  9,
+        10, 11, 12, 13, 14, 11, 12, 13, 18, 19,
+
+        20, 21, 22, 23, 24, 21, 22, 23, 28, 29,
+        30, 31, 32, 33, 34, 31, 32, 33, 38, 39
+    }));
+
+    reorder(dev_X, src_shape, dev_X, dst_shape);
+    EXPECT_EQ(dev_X.read(), X);
+}
+
+TEST(UniformTest, CopyContiguousSlice) {
+    auto X = Tensor<float>::range({3, 2, 10}, 0);
+    auto dev_X = dev(X);
+
+    auto src_shape = X.shape().slice({1}, {2}, {0}, {1});
+    auto dst_shape = X.shape().slice({2}, {3}, {0}, {1});
+    reorder(X, src_shape, X, dst_shape);
+
+    EXPECT_EQ(X, Tensor<float>({3, 2, 10}, {
+         0,  1,  2,  3,  4,  5,  6,  7,  8,  9,
+        10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+
+        20, 21, 22, 23, 24, 25, 26, 27, 28, 29,
+        30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
+
+        20, 21, 22, 23, 24, 25, 26, 27, 28, 29,
+        30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
+    }));
+
+    reorder(dev_X, src_shape, dev_X, dst_shape);
+    EXPECT_EQ(dev_X.read(), X);
+}
+
+TEST(UniformTest, CopyToSlice) {
+    auto X = Tensor<float>::range({3, 3, 5}, 0);
+    auto Y = Tensor<float>({2, 2, 2}, {1, 4, 2, 8, 5, 7, 6, 9});
+
+    auto dev_X = dev(X);
+    auto dev_Y = dev(Y);
+
+    auto R = Tensor<float>({3, 3, 5}, {
+         0,  1,  2,  3,  4,
+         5,  6,  7,  8,  9,
+        10, 11, 12, 13, 14,
+
+        15, 16, 17, 18, 19,
+        20,  1,  4, 23, 24,
+        25,  2,  8, 28, 29,
+
+        30, 31, 32, 33, 34,
+        35,  5,  7, 38, 39,
+        40,  6,  9, 43, 44
+    });
+
+    auto shape = X.shape().slice({1, 1, 1}, {3, 3, 3}, {0, 1, 2}, {1, 1, 1});
+    reorder(Y, Y.shape(), X, shape);
+    EXPECT_EQ(X, R);
+
+    reorder(dev_Y, dev_Y.shape(), dev_X, shape);
+    EXPECT_EQ(dev_X.read(), R);
+}
+
+TEST(UniformTest, BroadcastCopyToSlice) {
+    auto X = Tensor<float>({5}, {-1, -2, -3, -4, -5});
+    auto Y = Tensor<float>::range({3, 3, 5}, 0);
+
+    auto dev_X = dev(X);
+    auto dev_Y = dev(Y);
+
+    auto src_shape = X.shape().broadcast({1, 3, 5});
+    auto dst_shape = Y.shape().slice({1}, {2}, {0}, {1});
+
+    auto R = Tensor<float>({3, 3, 5}, {
+         0,  1,  2,  3,  4,
+         5,  6,  7,  8,  9,
+        10, 11, 12, 13, 14,
+
+        -1, -2, -3, -4, -5,
+        -1, -2, -3, -4, -5,
+        -1, -2, -3, -4, -5,
+
+        30, 31, 32, 33, 34,
+        35, 36, 37, 38, 39,
+        40, 41, 42, 43, 44
+    });
+
+    reorder(X, src_shape, Y, dst_shape);
+    EXPECT_EQ(Y, R);
+
+    reorder(dev_X, src_shape, dev_Y, dst_shape);
+    EXPECT_EQ(dev_Y.read(), R);
+}
+
+TEST(UniformTest, BroadcastSlice) {
+    /*
+     * 0 1 2 3
+     * 0 1 2 3
+     * 0 1 2 3
+     *
+     * 4 5 6 7
+     * 4 5 6 7
+     * 4 5 6 7
+     */
+    auto X = Tensor<float>::range({2, 1, 4}, 0);
+    auto shape = X.shape().broadcast({2, 3, 4}).slice({1, 1}, {3, 3}, {1, 2}, {1, 1});
+    auto Y = Tensor<float>({2, 2, 2});
+    reorder(X, shape, Y);
+    EXPECT_EQ(Y, Tensor<float>({2, 2, 2}, {
+        1, 2, 1, 2, 5, 6, 5, 6
+    }));
+
+    auto dev_X = dev(X);
+    auto dev_Y = DevTensor<float>({2, 2, 2});
+    reorder(dev_X, shape, dev_Y);
+    EXPECT_EQ(dev_Y.read(), Y);
+}
+
+TEST(UniformTest, SliceBroadcast) {
+    /*
+     *  0  1  2  3
+     *  4  5  6  7
+     *  8  9 10 11
+     *
+     * 12 13 14 15
+     * 16 17 18 19
+     * 20 21 22 23
+     */
+    auto X = Tensor<float>::range({2, 3, 4}, 0);
+    auto shape = X.shape().slice({1}, {2}, {2}, {1}).broadcast({2, 3, 4});
+    auto Y = Tensor<float>({2, 3, 4});
+    reorder(X, shape, Y);
+    EXPECT_EQ(Y, Tensor<float>({2, 3, 4}, {
+         1,  1,  1,  1,
+         5,  5,  5,  5,
+         9,  9,  9,  9,
+        13, 13, 13, 13,
+        17, 17, 17, 17,
+        21, 21, 21, 21
+    }));
+
+    auto dev_X = dev(X);
+    auto dev_Y = DevTensor<float>({2, 3, 4});
     reorder(dev_X, shape, dev_Y);
     EXPECT_EQ(dev_Y.read(), Y);
 }

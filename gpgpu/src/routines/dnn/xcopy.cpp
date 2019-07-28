@@ -57,34 +57,74 @@ void Xcopy<T>::DoCopy(const size_t x_size, const Buffer<T>& x_buffer, const size
   }
 }
 
+static bool is_contiguous(const std::vector<size_t>& dim, const std::vector<size_t>& stride) {
+  size_t size = 1;
+  for (int i = dim.size(); --i >= 0; ) {
+      if (stride[i] == 0 && dim[i] == 1)
+          continue;
+      if (stride[i] != size)
+          return false;
+      size *= dim[i];
+  }
+  return true;
+}
+
+static Buffer<int> pack_shape(
+    const Context& context, const Queue& queue,
+    const std::vector<size_t>& dim, const std::vector<size_t>& stride)
+{
+    auto rank = dim.size();
+    assert(stride.size() == rank);
+
+    std::vector<int> shape(rank * 2);
+    std::copy(dim.begin(), dim.end(), shape.begin());
+    std::copy(stride.begin(), stride.end(), shape.begin() + rank);
+
+    Buffer<int> shape_buffer = context.createBuffer<int>(rank*2, BufferAccess::WriteOnly);
+    shape_buffer.write(queue, shape.data(), shape.size());
+    return shape_buffer;
+}
+
 // The main routine
 template <typename T>
 void Xcopy<T>::DoCopyStrided(const size_t n,
     const Buffer<T>& x_buffer, const size_t x_offset,
+    const std::vector<size_t>& x_dim, const std::vector<size_t>& x_stride,
     Buffer<T>& y_buffer, const size_t y_offset,
-    const std::vector<size_t>& stride, const std::vector<size_t>& shape)
+    const std::vector<size_t>& y_dim, const std::vector<size_t>& y_stride)
 {
-    // Makes sure all dimensions are larger than zero
-    if (n == 0)
-        throw BLASError(StatusCode::kInvalidDimension);
+    if (is_contiguous(x_dim, x_stride) && is_contiguous(y_dim, y_stride)) {
+        DoCopy(n, x_buffer, x_offset, n, y_buffer, y_offset);
+        return;
+    }
 
-    // Create compact buffer to hold stride and shape
-    auto rank = shape.size();
-    assert(stride.size() == rank);
-    std::vector<int> shape_data(rank * 2);
-    std::copy(shape.begin(), shape.end(), shape_data.begin());
-    std::copy(stride.begin(), stride.end(), shape_data.begin() + rank);
-    Buffer<int> shape_buffer = context_.createBuffer<int>(rank*2, BufferAccess::WriteOnly);
-    shape_buffer.write(queue_, shape_data.data(), shape_data.size());
+    Buffer<int> x_shape, y_shape;
+    Kernel kernel;
 
-    // Retrieves the Xcopy kernel from the compiled binary
-    auto kernel = program_.getKernel("XcopyStrided");
-
-    // Sets the kernel arguments
-    kernel.setArguments(static_cast<int>(n), static_cast<int>(rank),
-                        shape_buffer,
-                        x_buffer, static_cast<int>(x_offset),
-                        y_buffer, static_cast<int>(y_offset));
+    if (is_contiguous(y_dim, y_stride)) {
+        x_shape = pack_shape(context_, queue_, x_dim, x_stride);
+        kernel = program_.getKernel("XcopyStridedL");
+        kernel.setArguments(static_cast<int>(n),
+                            x_buffer, static_cast<int>(x_offset),
+                            static_cast<int>(x_dim.size()), x_shape,
+                            y_buffer, static_cast<int>(y_offset));
+    } else if (is_contiguous(x_dim, x_stride)) {
+        y_shape = pack_shape(context_, queue_, y_dim, y_stride);
+        kernel = program_.getKernel("XcopyStridedR");
+        kernel.setArguments(static_cast<int>(n),
+                            x_buffer, static_cast<int>(x_offset),
+                            static_cast<int>(y_dim.size()), y_shape,
+                            y_buffer, static_cast<int>(y_offset));
+    } else {
+        x_shape = pack_shape(context_, queue_, x_dim, x_stride);
+        y_shape = pack_shape(context_, queue_, y_dim, y_stride);
+        kernel = program_.getKernel("XcopyStridedLR");
+        kernel.setArguments(static_cast<int>(n),
+                            static_cast<int>(x_dim.size()), x_shape,
+                            x_buffer, static_cast<int>(x_offset),
+                            static_cast<int>(y_dim.size()), y_shape,
+                            y_buffer, static_cast<int>(y_offset));
+    }
 
     // Launches the kernel
     auto n_ceiled = Ceil(n, db_["WGS"]*db_["WPT"]);

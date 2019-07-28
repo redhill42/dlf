@@ -530,7 +530,7 @@ Tensor<W>& transformTo(const Tensor<T>& A, const Tensor<U>& B, Tensor<W>& C, F f
         par::transform(B.begin(), B.end(), C.begin(), [x=*A.data(),f](auto& y){ return f(x, y); });
     } else if (B.size() == 1) {
         par::transform(A.begin(), A.end(), C.begin(), [y=*B.data(),f](auto& x){ return f(x, y); });
-    } else if ((axis = A.shape().pole(B.shape())) != -1) {
+    } else if ((axis = A.shape().find_channel_axis(B.shape())) != -1) {
         transformChannel(A, B, C, axis, f);
     } else if (sA.is_contiguous()) {
         par::transform(A.begin(), A.end(), B.begin(sB), C.begin(), f);
@@ -545,7 +545,7 @@ Tensor<W>& transformTo(const Tensor<T>& A, const Tensor<U>& B, Tensor<W>& C, F f
 
 template <typename T, typename U, typename W, typename F>
 void transformChannel(const Tensor<T>& A, const Tensor<U>& B, Tensor<W>& C, size_t axis, F fn) {
-    assert(B.is_vector() || A.shape().pole(B.shape()) == axis);
+    assert(B.is_vector() || A.shape().find_channel_axis(B.shape()) == axis);
     assert(axis < A.rank());
     assert(A.extent(axis) == B.size());
     assert(C.shape() == A.shape());
@@ -624,24 +624,47 @@ inline Tensor<U> Tensor<T>::cast() const {
 }
 
 template <typename T>
-void reorder(const Tensor<T>& src, const Shape& shape, Tensor<T>& dst) {
-    assert(dst.shape() == shape);
+void reorder(const Tensor<T>& src, const Shape& src_shape, Tensor<T>& dst, const Shape& dst_shape) {
+    assert(src_shape == dst_shape);
 
-    if (src.size() == 1) {
-        std::fill(dst.begin(), dst.end(), *src.data());
-        return;
-    }
-
-    if (shape.is_contiguous()) {
-        if (src.data() + shape.offset() != dst.data()) {
-            par::copy(src.data() + shape.offset(),
-                      src.data() + shape.offset() + shape.size(),
-                      dst.data());
+    if (dst_shape.is_contiguous()) {
+        if (src.size() == 1) {
+            std::fill(dst.data() + dst_shape.offset(),
+                      dst.data() + dst_shape.offset() + dst_shape.size(),
+                      *src.data());
+            return;
         }
-        return;
-    }
 
-    par::copy(src.begin(shape), src.end(shape), dst.begin());
+        if (src_shape.is_contiguous()) {
+            if (src.data() != dst.data() || src_shape.offset() !=  dst_shape.offset()) {
+                par::copy(src.data() + src_shape.offset(),
+                          src.data() + src_shape.offset() + src_shape.size(),
+                          dst.data() + dst_shape.offset());
+            }
+            return;
+        }
+
+        par::copy(src.begin(src_shape), src.end(src_shape), dst.data() + dst_shape.offset());
+    } else {
+        if (src.size() == 1) {
+            std::fill(dst.begin(dst_shape), dst.end(dst_shape), *src.data());
+            return;
+        }
+
+        if (src_shape.is_contiguous()) {
+            par::copy(src.data() + src_shape.offset(),
+                      src.data() + src_shape.offset() + src_shape.size(),
+                      dst.begin(dst_shape));
+            return;
+        }
+
+        par::copy(src.begin(src_shape), src.end(src_shape), dst.begin(dst_shape));
+    }
+}
+
+template <typename T>
+inline void reorder(const Tensor<T>& src, const Shape& src_shape, Tensor<T>& dst) {
+    reorder(src, src_shape, dst, dst.shape());
 }
 
 template <typename T>

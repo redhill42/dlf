@@ -35,6 +35,7 @@ void Shape::init(const std::vector<size_t>& extents) noexcept {
         }
         m_size = size;
     }
+    m_offset = 0;
 }
 
 void Shape::init() noexcept {
@@ -43,6 +44,7 @@ void Shape::init() noexcept {
         m_dims[i].stride = size;
         size *= m_dims[i].extent;
     }
+    m_offset = 0;
 }
 
 size_t Shape::partial_size(size_t start, size_t end) const noexcept {
@@ -55,15 +57,13 @@ size_t Shape::partial_size(size_t start, size_t end) const noexcept {
 }
 
 bool Shape::is_contiguous() const noexcept {
-    if (rank() != 0) {
-        size_t size = 1;
-        for (size_t i = rank(); i-- != 0;) {
-            if (stride(i) == 0 && extent(i) == 1)
-                continue;
-            if (stride(i) != size)
-                return false;
-            size *= extent(i);
-        }
+    size_t size = 1;
+    for (int i = rank(); --i >= 0;) {
+        if (stride(i) == 0 && extent(i) == 1)
+            continue;
+        if (stride(i) != size)
+            return false;
+        size *= extent(i);
     }
     return true;
 }
@@ -130,7 +130,7 @@ bool Shape::previous(std::vector<size_t>& index) const noexcept {
     return false;
 }
 
-int Shape::pole(const Shape& base) const {
+int Shape::find_channel_axis(const Shape& base) const {
     int axis = -1;
     if (base.rank() <= rank()) {
         for (int i = base.rank(); --i >= 0; ) {
@@ -273,7 +273,7 @@ Shape Shape::broadcast(const Shape& to) const {
         new_size *= to.extent(idim);
     }
 
-    return Shape(std::move(new_dims), new_size);
+    return Shape(std::move(new_dims), new_size, offset());
 }
 
 Shape Shape::broadcast(const std::vector<Shape>& shapes) {
@@ -317,7 +317,7 @@ Shape Shape::transpose(const std::vector<size_t>& perm) const {
     for (size_t i = 0; i < rank(); i++) {
         dims[i] = m_dims[perm[i]];
     }
-    return Shape(std::move(dims), size());
+    return Shape(std::move(dims), size(), offset());
 }
 
 Shape Shape::slice(
