@@ -355,6 +355,16 @@ TEST(ActivationTest, Clip) {
     EXPECT_EQ(D, C);
 }
 
+TEST(ActivationTest, Shrink) {
+    auto A = Tensor<float>({5}, {-2, -1, 0, 1, 2});
+    auto B = transform(A, xfn::shrink<float>(1.5, 1.5));
+    auto C = Tensor<float>({5}, {-0.5, 0, 0, 0, 0.5});
+    EXPECT_EQ(B, C);
+
+    auto D = transform(dev(A), xfn::shrink<float>(1.5, 1.5)).read();
+    EXPECT_EQ(D, C);
+}
+
 TEST(ActivationTest, Relu) {
     constexpr size_t N = 20;
 

@@ -313,6 +313,21 @@ private:
         result = std::make_unique<ClipOp>(this, n);
     }
 
+    struct ShrinkOp : Operator {
+        xfn::shrink<T> op; TensorT<> X, Y;
+        ShrinkOp(OperatorFactory* of, model::Shrink* n)
+            : op(n->lambd(), n->bias()),
+              X(of->alloc(n->input())),
+              Y(of->allocInplace(n->input(), n->output())) {}
+        void evaluate() override {
+            dlf::transformTo(X, Y, op);
+        }
+    };
+
+    void visit(model::Shrink* n) override {
+        result = std::make_unique<ShrinkOp>(this, n);
+    }
+
     struct ReluOp : Operator {
         TensorT<> X, Y;
         ReluOp(OperatorFactory* of, model::Relu* n)

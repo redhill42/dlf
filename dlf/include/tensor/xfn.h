@@ -236,6 +236,17 @@ struct clip : std::unary_function<T,T>, parameterized_function<T> {
 };
 
 template <typename T>
+struct shrink : std::unary_function<T,T>, parameterized_function<T> {
+    static constexpr auto name = "shrink";
+    constexpr shrink(const T& lambd, const T& bias)
+        : parameterized_function<T>(lambd, bias) {}
+    const T operator()(const T& x) const {
+        return x < -this->alpha ? x + this->beta :
+               x >  this->alpha ? x - this->beta : 0;
+    }
+};
+
+template <typename T>
 struct relu : std::unary_function<T,T>, parameterized_function<T> {
     static constexpr auto name = "relu";
     constexpr T operator()(const T& x) const {

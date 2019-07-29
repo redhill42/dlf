@@ -20,6 +20,18 @@ void Xclip(const int n, const real_arg low_arg, const real_arg high_arg,
 }
 
 __kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
+void Xshrink(const int n, const real_arg lambd_arg, const real_arg bias_arg,
+    const __global real* restrict xgm, __global real* ygm)
+{
+  const real lambd = GetRealArg(lambd_arg);
+  const real bias = GetRealArg(bias_arg);
+  for (int id = get_global_id(0); id < n; id += get_global_size(0)) {
+    real x = xgm[id];
+    ygm[id] = x < -lambd ? x + bias : x > lambd ? x - bias : 0;
+  }
+}
+
+__kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
 void Xrelu(const int n, const real_arg alpha_arg, const real_arg beta_arg,
     const __global real* restrict xgm,__global real* ygm)
 {

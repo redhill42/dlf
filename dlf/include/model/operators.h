@@ -270,6 +270,11 @@ BEGIN_OPERATOR(Clip)
     DEFINE_FLOAT_ATTRIBUTE(max, std::numeric_limits<float>::max())
 END_OPERATOR()
 
+BEGIN_OPERATOR(Shrink)
+    DEFINE_FLOAT_ATTRIBUTE(bias, 0.f)
+    DEFINE_FLOAT_ATTRIBUTE(lambd, 0.5f)
+END_OPERATOR()
+
 DEFINE_OPERATOR(Sigmoid)
 
 DEFINE_OPERATOR(Relu)
@@ -506,11 +511,6 @@ END_OPERATOR()
 BEGIN_OPERATOR(Dropout)
     DEFINE_FLOAT_ATTRIBUTE(ratio, 0.5f)
     Value* mask() { return output(1); }
-END_OPERATOR()
-
-BEGIN_OPERATOR(Shrink)
-    DEFINE_FLOAT_ATTRIBUTE(bias, 0.f)
-    DEFINE_FLOAT_ATTRIBUTE(lambd, 0.5f)
 END_OPERATOR()
 
 BEGIN_OPERATOR(Flatten)

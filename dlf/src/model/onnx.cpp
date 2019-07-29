@@ -272,7 +272,7 @@ template <>
 std::unique_ptr<Graph> import_model<ONNX>(std::istream& input) {
     ::google::protobuf::io::IstreamInputStream stream(&input);
     ::google::protobuf::io::CodedInputStream decoder(&stream);
-    decoder.SetTotalBytesLimit(500*1024*1024, 64*1024*1024);
+    decoder.SetTotalBytesLimit(1024*1024*1024, 64*1024*1024);
 
     ModelProto mp;
     if (!mp.ParseFromCodedStream(&decoder)) {
