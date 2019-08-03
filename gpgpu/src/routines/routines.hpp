@@ -86,5 +86,6 @@
 #include "routines/dnn/xpool.hpp"
 #include "routines/dnn/xsoftmax.hpp"
 #include "routines/dnn/xargmax.hpp"
+#include "routines/dnn/xwhere.hpp"
 
 #endif // GPGPU_BLAS_ROUTINES_ROUTINES_H_

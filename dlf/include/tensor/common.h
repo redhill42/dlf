@@ -908,4 +908,55 @@ slice(const TensorT& X,
     return Y;
 }
 
+template <typename T>
+void where(const Tensor<bool>& C, const Tensor<T>& X, const Tensor<T>& Y, Tensor<T>& Z) {
+    auto final_shape = Shape::broadcast(C, X, Y);
+    assert(Z.shape() == final_shape);
+
+    auto c_shape = C.shape().broadcast(final_shape);
+    auto x_shape = X.shape().broadcast(final_shape);
+    auto y_shape = Y.shape().broadcast(final_shape);
+
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, Z.size(), GRAINSIZE), [&](auto r) {
+        auto c_it = std::next(C.begin(c_shape), r.begin());
+        auto x_it = std::next(X.begin(x_shape), r.begin());
+        auto y_it = std::next(Y.begin(y_shape), r.begin());
+        auto pz = Z.data() + r.begin();
+        for (int count = r.size(); --count >= 0; ++pz, ++c_it, ++x_it, ++y_it) {
+            *pz = *c_it ? *x_it : *y_it;
+        }
+    });
+}
+
+template <typename T>
+Tensor<T> where(const Tensor<bool>& C, const Tensor<T>& X, const Tensor<T>& Y) {
+    Tensor<T> Z(Shape::broadcast(C, X, Y));
+    where(C, X, Y, Z);
+    return Z;
+}
+
+template <typename T>
+void where(const DevTensor<bool>& C, const DevTensor<T>& X, const DevTensor<T>&Y, DevTensor<T>& Z) {
+    auto final_shape = Shape::broadcast(C, X, Y);
+    assert(Z.shape() == final_shape);
+
+    auto c_shape = C.shape().broadcast(final_shape);
+    auto x_shape = X.shape().broadcast(final_shape);
+    auto y_shape = Y.shape().broadcast(final_shape);
+
+    gpgpu::dnn::where(
+        final_shape.size(), final_shape.rank(),
+        C.data(), 0, c_shape.extents(), c_shape.strides(),
+        X.data(), 0, x_shape.extents(), x_shape.strides(),
+        Y.data(), 0, y_shape.extents(), y_shape.strides(),
+        Z.data(), 0);
+}
+
+template <typename T>
+DevTensor<T> where(const DevTensor<bool>& C, const DevTensor<T>& X, const DevTensor<T>& Y) {
+    DevTensor<T> Z(Shape::broadcast(C, X, Y));
+    where(C, X, Y, Z);
+    return Z;
+}
+
 } // namespace dlf

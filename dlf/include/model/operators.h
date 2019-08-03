@@ -141,6 +141,7 @@ BEGIN_OPERATOR(Where)
     Value* condition() { return input(0); }
     Value* X() { return input(1); }
     Value* Y() { return input(2); }
+    Value* Z() { return output(); }
 END_OPERATOR()
 
 //==-------------------------------------------------------------------------

@@ -955,3 +955,19 @@ TYPED_TEST(TransposeTest, TransposePerm_GPU) {
     EXPECT_EQ(transpose(A, {1, 0, 2}).read(), B1);
     EXPECT_EQ(transpose(A, {0, 2, 1}).read(), B2);
 }
+
+TEST(UniformTest, Where_CPU) {
+    auto condition = Tensor<bool>({2}, {true, false});
+    auto X = Tensor<int>({2, 2}, {1, 2, 3, 4});
+    auto Y = Tensor<int>({2, 2}, {5, 6, 7, 8});
+    auto Z = where(condition, X, Y);
+    EXPECT_EQ(Z, Tensor<int>({2, 2}, {1, 6, 3, 8}));
+}
+
+TEST(UniformTest, Where_GPU) {
+    auto condition = dev(Tensor<bool>({2}, {true, false}));
+    auto X = dev(Tensor<int>({2, 2}, {1, 2, 3, 4}));
+    auto Y = dev(Tensor<int>({2, 2}, {5, 6, 7, 8}));
+    auto Z = where(condition, X, Y);
+    EXPECT_EQ(Z.read(), Tensor<int>({2, 2}, {1, 6, 3, 8}));
+}

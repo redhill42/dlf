@@ -951,6 +951,21 @@ private:
     void visit(model::Transpose* n) override {
         result = std::make_unique<TransposeOp>(this, n);
     }
+
+    struct WhereOp : Operator {
+        TensorT<bool> C;
+        TensorT<> X, Y, Z;
+        WhereOp(OperatorFactory* of, model::Where* n)
+            : C(of->alloc<bool>(n->condition())),
+              X(of->alloc(n->X())),
+              Y(of->alloc(n->Y())),
+              Z(of->alloc(n->Z())) {}
+        void evaluate() override { where(C, X, Y, Z); }
+    };
+
+    void visit(model::Where* n) override {
+        result = std::make_unique<WhereOp>(this, n);
+    }
 };
 
 template <typename Context, typename T>
