@@ -598,6 +598,7 @@ private:
         T alpha, beta;
         bool transA, transB;
         TensorT<> A, B, C, Y;
+        size_t workspace_size;
         Workspace<Context>& workspace;
 
         GemmOp(OperatorFactory* of, model::Gemm* n)
@@ -607,15 +608,12 @@ private:
               B(of->alloc(n->B())),
               C(of->alloc(n->C())),
               Y(of->alloc(n->Y())),
-              workspace(of->reserve(workspace_size())) {}
+              workspace_size(gemmWorkspaceSize(A, B, Y, transA, transB)),
+              workspace(of->reserve(workspace_size)) {}
 
         void evaluate() override {
-            auto work = workspace.template get<T>(workspace_size());
+            auto work = workspace.template get<T>(workspace_size);
             gemm(alpha, A, B, beta, C, Y, transA, transB, &work);
-        }
-
-        size_t workspace_size() {
-            return gemmWorkspaceSize(A, B, Y, transA, transB);
         }
     };
 
@@ -639,6 +637,7 @@ private:
     struct ConvOp : Operator {
         TensorT<> X, W, B, Y;
         dnn::Filter2D filter;
+        size_t workspace_size;
         Workspace<Context>& workspace;
 
         ConvOp(OperatorFactory* of, model::Conv* n)
@@ -650,18 +649,15 @@ private:
                 .pads(n->pads())
                 .strides(n->strides())
                 .dilations(n->dilations())),
-              workspace(of->reserve(workspace_size())){}
+              workspace_size(conv2dWorkspaceSize(X, W, filter)),
+              workspace(of->reserve(workspace_size)){}
 
         void evaluate() override {
-            auto work = workspace.template get<T>(workspace_size());
+            auto work = workspace.template get<T>(workspace_size);
             dnn::conv2d(X, W, Y, filter, &work);
             if (!B.empty()) {
                 transformChannel(Y, B, Y, 1, xfn::plus<T>());
             }
-        }
-
-        size_t workspace_size() const {
-            return conv2dWorkspaceSize(X, W, filter);
         }
     };
 

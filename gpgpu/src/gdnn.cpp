@@ -298,8 +298,18 @@ void transform(const std::string& name,
                const Buffer<T>& x_buffer, const Buffer<T>& y_buffer, Buffer<T>& z_buffer,
                const Queue& queue, Event* event)
 {
-    auto routine = Xtransform_c<T>(queue, event);
-    routine.DoTransform(name, m, n, channels, x_buffer, y_buffer, z_buffer);
+    if (name == "add_v" && IsCUDA(queue.context().device()) && x_buffer == z_buffer) {
+        auto y_desc = TensorDescriptor<T>(1, channels, 1, 1);
+        auto z_desc = TensorDescriptor<T>(m/channels, channels, 1, n);
+        T alpha = 1, beta = 1;
+        checkCUDNN(cudnnAddTensor(
+            cudnn_handle(queue),
+            &alpha, y_desc, cu::cuBuffer::unwrap(y_buffer),
+            &beta,  z_desc, cu::cuBuffer::unwrap(z_buffer)));
+    } else {
+        auto routine = Xtransform_c<T>(queue, event);
+        routine.DoTransform(name, m, n, channels, x_buffer, y_buffer, z_buffer);
+    }
 }
 
 template void PUBLIC_API transform<int16_t>(const std::string&,
@@ -457,6 +467,35 @@ template void PUBLIC_API lrn<double>(const std::vector<size_t>&,
 
 namespace {
 
+#define CUDNN_CONV2D_PROLOGUE                                               \
+    auto cudnn = cudnn_handle(queue);                                       \
+                                                                            \
+    auto conv_desc = ConvolutionDescriptor<T>(                              \
+        pad_top, pad_left, stride_h, stride_w, dilation_h, dilation_w);     \
+    auto x_desc = TensorDescriptor<T>(                                      \
+        batches, channels, height, width);                                  \
+    auto w_desc = FilterDescriptor<T>(                                      \
+        num_kernels, channels/group, kernel_h, kernel_w);                   \
+    auto y_desc = TensorDescriptor<T>(                                      \
+        batches, num_kernels, output_h, output_w);                          \
+                                                                            \
+    checkCUDNN(cudnnSetConvolutionGroupCount(conv_desc, group));            \
+                                                                            \
+    cudnnConvolutionFwdAlgo_t conv_algo;                                    \
+    if (group != 1) {                                      \
+        conv_algo = CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_GEMM;               \
+    } else {                                                                \
+        checkCUDNN(cudnnGetConvolutionForwardAlgorithm(                     \
+            cudnn, x_desc, w_desc, conv_desc, y_desc,                       \
+            CUDNN_CONVOLUTION_FWD_PREFER_FASTEST,                           \
+            /*memoryLimitInBytes=*/0,                                       \
+            &conv_algo));                                                   \
+    }                                                                       \
+                                                                            \
+    size_t workspace_size = 0;                                              \
+    checkCUDNN(cudnnGetConvolutionForwardWorkspaceSize(                     \
+        cudnn, x_desc, w_desc, conv_desc, y_desc, conv_algo, &workspace_size));
+
 template <typename T>
 void cudnnConv(
     const size_t batches, const size_t channels,
@@ -470,32 +509,16 @@ void cudnnConv(
     const Buffer<T>& im_buffer, const Buffer<T>& kernel_buffer,
     Buffer<T>& result_buffer, Buffer<T>* work, const Queue& queue)
 {
-    auto cudnn = cudnn_handle(queue);
-
-    auto desc = ConvolutionDescriptor<T>(pad_top, pad_left, stride_h, stride_w, dilation_h, dilation_w);
-    auto x_desc = TensorDescriptor<T>(batches, channels, height, width);
-    auto w_desc = FilterDescriptor<T>(num_kernels, channels/group, kernel_h, kernel_w);
-    auto y_desc = TensorDescriptor<T>(batches, num_kernels, output_h, output_w);
-
-    checkCUDNN(cudnnSetConvolutionGroupCount(desc, group));
-
-    cudnnConvolutionFwdAlgo_t algo;
-    checkCUDNN(cudnnGetConvolutionForwardAlgorithm(
-        cudnn, x_desc, w_desc, desc, y_desc,
-        CUDNN_CONVOLUTION_FWD_PREFER_FASTEST,
-        /*memoryLimitInBytes=*/0,
-        &algo));
-
-    size_t workspace_size = 0;
-    checkCUDNN(cudnnGetConvolutionForwardWorkspaceSize(
-        cudnn, x_desc, w_desc, desc, y_desc, algo, &workspace_size));
+    CUDNN_CONV2D_PROLOGUE
 
     Buffer<T> temp_buffer;
-    if (work == nullptr) {
-        temp_buffer = queue.context().createBuffer<T>(workspace_size / sizeof(T));
-        work = &temp_buffer;
-    } else {
-        assert(work->size() * sizeof(T) >= workspace_size);
+    if (workspace_size > 0) {
+        if (work == nullptr) {
+            temp_buffer = queue.context().createBuffer<T>(workspace_size / sizeof(T));
+            work = &temp_buffer;
+        } else {
+            assert(work->size() * sizeof(T) >= workspace_size);
+        }
     }
 
     const T alpha = 1, beta = 0;
@@ -503,44 +526,11 @@ void cudnnConv(
         cudnn, &alpha,
         x_desc, cu::cuBuffer::unwrap(im_buffer),
         w_desc, cu::cuBuffer::unwrap(kernel_buffer),
-        desc, algo,
-        cu::cuBuffer::unwrap(*work), workspace_size,
+        conv_desc, conv_algo,
+        workspace_size == 0 ? nullptr : cu::cuBuffer::unwrap(*work),
+        workspace_size,
         &beta,
         y_desc, cu::cuBuffer::unwrap((result_buffer))));
-}
-
-template <typename T>
-size_t cudnnConv2dWorkspaceSize(
-    const size_t batches, const size_t channels,
-    const size_t height, const size_t width,
-    const size_t output_h, const size_t output_w,
-    const size_t num_kernels, const size_t group,
-    const size_t kernel_h, const size_t kernel_w,
-    const size_t pad_top, const size_t pad_left,
-    const size_t stride_h, const size_t stride_w,
-    const size_t dilation_h, const size_t dilation_w,
-    const Queue& queue)
-{
-    auto cudnn = cudnn_handle(queue);
-
-    auto desc = ConvolutionDescriptor<T>(pad_top, pad_left, stride_h, stride_w, dilation_h, dilation_w);
-    auto x_desc = TensorDescriptor<T>(batches, channels, height, width);
-    auto w_desc = FilterDescriptor<T>(num_kernels, channels/group, kernel_h, kernel_w);
-    auto y_desc = TensorDescriptor<T>(batches, num_kernels, output_h, output_w);
-
-    checkCUDNN(cudnnSetConvolutionGroupCount(desc, group));
-
-    cudnnConvolutionFwdAlgo_t algo;
-    checkCUDNN(cudnnGetConvolutionForwardAlgorithm(
-        cudnn, x_desc, w_desc, desc, y_desc,
-        CUDNN_CONVOLUTION_FWD_PREFER_FASTEST,
-        /*memoryLimitInBytes=*/0,
-        &algo));
-
-    size_t workspace_size = 0;
-    checkCUDNN(cudnnGetConvolutionForwardWorkspaceSize(
-        cudnn, x_desc, w_desc, desc, y_desc, algo, &workspace_size));
-    return workspace_size / sizeof(T);
 }
 
 template <typename T>
@@ -630,7 +620,18 @@ void conv2d(const size_t batches, const size_t channels,
             Buffer<T>& result_buffer, Buffer<T>* work_buffer,
             const Queue& queue, Event* event)
 {
-    if (IsCUDA(queue.context().device()) && pad_top == pad_bottom && pad_left == pad_right) {
+    bool is_cuda_applicable =
+        IsCUDA(queue.context().device()) &&
+        pad_top == pad_bottom &&
+        pad_left == pad_right;
+
+    bool is_1x1_kernel =
+        kernel_h == 1 && kernel_w == 1 &&
+        stride_h == 1 && stride_w == 1 &&
+        dilation_h == 1 && dilation_w == 1 &&
+        pad_top + pad_bottom == 0  && pad_left + pad_right == 0;
+
+    if (is_cuda_applicable) {
         cudnnConv(
             batches, channels, height, width, output_h, output_w,
             num_kernels, group, kernel_h, kernel_w,
@@ -638,12 +639,6 @@ void conv2d(const size_t batches, const size_t channels,
             im_buffer, kernel_buffer, result_buffer, work_buffer, queue);
         return;
     }
-
-    bool is_1x1_kernel =
-        kernel_h == 1 && kernel_w == 1 &&
-        stride_h == 1 && stride_w == 1 &&
-        dilation_h == 1 && dilation_w == 1 &&
-        pad_top + pad_bottom == 0  && pad_left + pad_right == 0;
 
     if (is_1x1_kernel || group != 1) {
         convWithIm2Col(
@@ -715,18 +710,21 @@ size_t conv2dWorkspaceSize(const size_t batches, const size_t channels,
                            const size_t dilation_h, const size_t dilation_w,
                            const Queue& queue)
 {
-    if (IsCUDA(queue.context().device()) && pad_top == pad_bottom && pad_left == pad_right) {
-        return cudnnConv2dWorkspaceSize<T>(
-            batches, channels, height, width, output_h, output_w,
-            num_kernels, group, kernel_h, kernel_w, pad_top, pad_left,
-            stride_h, stride_w, dilation_h, dilation_w, queue);
-    }
+    bool is_cuda_applicable =
+        IsCUDA(queue.context().device()) &&
+        pad_top == pad_bottom &&
+        pad_left == pad_right;
 
     bool is_1x1_kernel =
         kernel_h == 1 && kernel_w == 1 &&
         stride_h == 1 && stride_w == 1 &&
         dilation_h == 1 && dilation_w == 1 &&
         pad_top + pad_bottom == 0 && pad_left + pad_right == 0;
+
+    if (is_cuda_applicable) {
+        CUDNN_CONV2D_PROLOGUE
+        return workspace_size / sizeof(T);
+    }
 
     if (is_1x1_kernel)
         return 0;
