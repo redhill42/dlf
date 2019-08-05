@@ -943,4 +943,94 @@ argmin(const TensorT& X, int axis, bool keepdims = true) {
     return Y;
 }
 
+template <typename TensorT>
+enable_if_tensor<TensorT, void>
+space_to_depth(const TensorT& X, TensorT& Y, int blocksize) {
+    if (blocksize <= 0)
+        throw shape_error("space_to_depth: blocksize has incorrect value");
+    if (X.rank() != 4)
+        throw shape_error("space_to_depth: input tensor must be 4-dimensional");
+    if (Y.rank() != 4)
+        throw shape_error("space_to_depth: output tensor must be 4-dimensional");
+    if (Y.extent(0) != X.extent(0) ||
+        Y.extent(1) != X.extent(1)*blocksize*blocksize ||
+        Y.extent(2)*blocksize != X.extent(2) ||
+        Y.extent(3)*blocksize != X.extent(3))
+        throw shape_error("space_to_depth: incompatible output tensor shape");
+
+    int n = X.extent(0), c = X.extent(1), h = X.extent(2), w = X.extent(3);
+    auto x_shape = X.shape();
+    x_shape.reshape({n, c, h/blocksize, blocksize, w/blocksize, blocksize});
+    x_shape = x_shape.transpose({0, 3, 5, 1, 2, 4});
+
+    Y.reshape({n, blocksize, blocksize, c, h/blocksize, w/blocksize});
+    reorder(X, x_shape, Y);
+    Y.reshape({n, c*blocksize*blocksize, h/blocksize, w/blocksize});
+}
+
+template <typename TensorT>
+enable_if_tensor<TensorT>
+space_to_depth(const TensorT& X, int blocksize) {
+    if (blocksize <= 0)
+        throw shape_error("space_to_depth: blocksize has incorrect value");
+    if (X.rank() != 4)
+        throw shape_error("space_to_depth: input tensor must be 4-dimensional");
+    if (X.extent(2) % blocksize != 0 || X.extent(3) % blocksize != 0)
+        throw shape_error("space_to_depth: blocksize has incorrect value");
+
+    auto n = X.extent(0), c = X.extent(1), h = X.extent(2), w = X.extent(3);
+    tensor_type<TensorT> Y({n, c*blocksize*blocksize, h/blocksize, w/blocksize});
+    space_to_depth(X, Y, blocksize);
+    return Y;
+}
+
+template <typename TensorT>
+enable_if_tensor<TensorT, void>
+depth_to_space(const TensorT& X, TensorT& Y, int blocksize, std::string mode = "DCR") {
+    if (blocksize <= 0)
+        throw shape_error("depth_to_space: blocksize has incorrect value");
+    if (X.rank() != 4)
+        throw shape_error("depth_to_space: input tensor must be 4-dimensional");
+    if (Y.rank() != 4)
+        throw shape_error("depth_to_space: output tensor must be 4-dimensional");
+    if (Y.extent(0) != X.extent(0) ||
+        Y.extent(1)*blocksize*blocksize != X.extent(1) ||
+        Y.extent(2) != X.extent(2)*blocksize ||
+        Y.extent(3) != X.extent(3)*blocksize)
+        throw shape_error("depth_to_space: incompatible output tensor shape");
+    if (mode != "DCR" && mode != "CRD")
+        throw shape_error("depth_to_space: mode has incorrect value");
+
+    int n = X.extent(0), c = X.extent(1), h = X.extent(2), w = X.extent(3);
+
+    auto x_shape = X.shape();
+    if (mode == "DCR") {
+        x_shape.reshape({n, blocksize, blocksize, c/(blocksize*blocksize), h, w});
+        x_shape = x_shape.transpose({0, 3, 4, 1, 5, 2});
+    } else {
+        x_shape.reshape({n, c/(blocksize*blocksize), blocksize, blocksize, h, w});
+        x_shape = x_shape.transpose({0, 1, 4, 2, 5, 3});
+    }
+
+    Y.reshape({n, c/(blocksize*blocksize), h, blocksize, w, blocksize});
+    reorder(X, x_shape, Y);
+    Y.reshape({n, c/(blocksize*blocksize), h*blocksize, w*blocksize});
+}
+
+template <typename TensorT>
+enable_if_tensor<TensorT>
+depth_to_space(const TensorT& X, int blocksize, std::string mode = "DCR") {
+    if (blocksize <= 0)
+        throw shape_error("depth_to_space: blocksize has incorrect value");
+    if (X.rank() != 4)
+        throw shape_error("depth_to_space: input tensor must be 4-dimensional");
+    if (X.extent(1) % (blocksize*blocksize) != 0)
+        throw shape_error("depth_to_space: blocksize has incorrect value");
+
+    auto n = X.extent(0), c = X.extent(1), h = X.extent(2), w = X.extent(3);
+    tensor_type<TensorT> Y({n, c/(blocksize*blocksize), h*blocksize, w*blocksize});
+    depth_to_space(X, Y, blocksize, mode);
+    return Y;
+}
+
 }} // namespace dlf::dnn

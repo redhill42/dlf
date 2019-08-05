@@ -948,6 +948,38 @@ private:
         result = std::make_unique<TransposeOp>(this, n);
     }
 
+    struct SpaceToDepthOp : Operator {
+        TensorT<> X, Y;
+        int blocksize;
+        SpaceToDepthOp(OperatorFactory* of, model::SpaceToDepth* n)
+            : X(of->alloc(n->input())), Y(of->alloc(n->output())),
+              blocksize(n->blocksize()) {}
+        void evaluate() override {
+            dnn::space_to_depth(X, Y, blocksize);
+        }
+    };
+
+    void visit(model::SpaceToDepth* n) override {
+        result = std::make_unique<SpaceToDepthOp>(this, n);
+    }
+
+    struct DepthToSpaceOp : Operator {
+        TensorT<> X, Y;
+        int blocksize;
+        std::string mode;
+        DepthToSpaceOp(OperatorFactory* of, model::DepthToSpace* n)
+            : X(of->alloc(n->input())), Y(of->alloc(n->output())),
+              blocksize(n->blocksize()),
+              mode(n->mode()) {}
+        void evaluate() override {
+            dnn::depth_to_space(X, Y, blocksize, mode);
+        }
+    };
+
+    void visit(model::DepthToSpace* n) override {
+        result = std::make_unique<DepthToSpaceOp>(this, n);
+    }
+
     struct WhereOp : Operator {
         TensorT<bool> C;
         TensorT<> X, Y, Z;
