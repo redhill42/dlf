@@ -59,12 +59,9 @@ void XaxpyBatched<T>::DoAxpyBatched(const size_t n, const std::vector<T> &alphas
     x_offsets_int[batch] = static_cast<int>(x_offsets[batch]);
     y_offsets_int[batch] = static_cast<int>(y_offsets[batch]);
   }
-  auto x_offsets_device = context_.createBuffer<int>(batch_count);
-  auto y_offsets_device = context_.createBuffer<int>(batch_count);
-  auto alphas_device = context_.createBuffer<T>(batch_count);
-  x_offsets_device.write(queue_, x_offsets_int.data(), batch_count);
-  y_offsets_device.write(queue_, y_offsets_int.data(), batch_count);
-  alphas_device.write(queue_, alphas.data(), batch_count);
+  auto x_offsets_device = context_.getSharedBuffer<int>(x_offsets_int.data(), batch_count, queue_);
+  auto y_offsets_device = context_.getSharedBuffer<int>(y_offsets_int.data(), batch_count, queue_);
+  auto alphas_device = context_.getSharedBuffer<T>(alphas.data(), batch_count, queue_);
 
   // Retrieves the Xaxpy kernel from the compiled binary
   auto kernel = program_.getKernel("XaxpyBatched");

@@ -38,37 +38,14 @@ void XcopyFast(const int n, const __global realV* restrict xgm, __global realV* 
 
 // Strided version of the kernel with offsets and non-standard stride access
 __kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
-void XcopyStridedL(const int n,
-                   const __global real* restrict xgm, const int x_offset,
-                   const int x_rank, __constant int* x_shape,
+void XcopyStrided(const int n, const int rank, __constant int* shape,
+                  const __global real* restrict xgm, const int x_offset,
                   __global real* ygm, const int y_offset)
 {
   for (int id = get_global_id(0); id < n; id += get_global_size(0)) {
-    ygm[id + y_offset] = xgm[unravel(id, x_rank, &x_shape[x_rank], x_shape) + x_offset];
-  }
-}
-
-__kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
-void XcopyStridedR(const int n,
-                   const __global real* restrict xgm, const int x_offset,
-                   const int y_rank, __constant int* y_shape,
-                   __global real* ygm, const int y_offset)
-{
-  for (int id = get_global_id(0); id < n; id += get_global_size(0)) {
-    ygm[unravel(id, y_rank, &y_shape[y_rank], y_shape) + y_offset] = xgm[id + x_offset];
-  }
-}
-
-__kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
-void XcopyStridedLR(const int n,
-                    const int x_rank, __constant int* x_shape,
-                    const __global real* restrict xgm, const int x_offset,
-                    const int y_rank, __constant int* y_shape,
-                    __global real* ygm, const int y_offset)
-{
-  for (int id = get_global_id(0); id < n; id += get_global_size(0)) {
-    ygm[unravel(id, y_rank, &y_shape[y_rank], y_shape) + y_offset] =
-    xgm[unravel(id, x_rank, &x_shape[x_rank], x_shape) + x_offset];
+    int x_id = x_offset, y_id = y_offset;
+    unravel2(id, &x_id, &y_id, rank, shape, &shape[rank], &shape[rank*2]);
+    ygm[y_id] = xgm[x_id];
   }
 }
 

@@ -40,56 +40,48 @@ template void PUBLIC_API copy<half>   (const size_t, const Buffer<half>&, const 
                                        const Queue&, Event*);
 
 template <typename T>
-void copy(const size_t n,
-          const Buffer<T>& x_buffer, const size_t x_offset,
-          const std::vector<size_t>& x_dim, const std::vector<size_t>& x_stride,
-          Buffer<T>& y_buffer, const size_t y_offset,
-          const std::vector<size_t>& y_dim, const std::vector<size_t>& y_stride,
+void copy(const size_t n, const std::vector<size_t>& dims,
+          const Buffer<T>& x_buffer, const size_t x_offset, const std::vector<size_t>& x_stride,
+          Buffer<T>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_stride,
           const Queue& queue, Event* event) {
     auto routine = Xcopy<T>(queue, event);
-    routine.DoCopyStrided(n, x_buffer, x_offset, x_dim, x_stride,
-                             y_buffer, y_offset, y_dim, y_stride);
+    routine.DoCopyStrided(
+        n, dims,
+        x_buffer, x_offset, x_stride,
+        y_buffer, y_offset, y_stride);
 }
 
-template void PUBLIC_API copy<int16_t>(const size_t, const Buffer<int16_t>&, const size_t,
-                                       const std::vector<size_t>&, const std::vector<size_t>&,
-                                       Buffer<int16_t>&, const size_t,
-                                       const std::vector<size_t>&, const std::vector<size_t>&,
+template void PUBLIC_API copy<int16_t>(const size_t, const std::vector<size_t>&,
+                                       const Buffer<int16_t>&, const size_t, const std::vector<size_t>&,
+                                       Buffer<int16_t>&, const size_t, const std::vector<size_t>&,
                                        const Queue&, Event*);
-template void PUBLIC_API copy<int32_t>(const size_t, const Buffer<int32_t>&, const size_t,
-                                       const std::vector<size_t>&, const std::vector<size_t>&,
-                                       Buffer<int32_t>&, const size_t,
-                                       const std::vector<size_t>&, const std::vector<size_t>&,
+template void PUBLIC_API copy<int32_t>(const size_t, const std::vector<size_t>&,
+                                       const Buffer<int32_t>&, const size_t, const std::vector<size_t>&,
+                                       Buffer<int32_t>&, const size_t, const std::vector<size_t>&,
                                        const Queue&, Event*);
-template void PUBLIC_API copy<int64_t>(const size_t, const Buffer<int64_t>&, const size_t,
-                                       const std::vector<size_t>&, const std::vector<size_t>&,
-                                       Buffer<int64_t>&, const size_t,
-                                       const std::vector<size_t>&, const std::vector<size_t>&,
+template void PUBLIC_API copy<int64_t>(const size_t, const std::vector<size_t>&,
+                                       const Buffer<int64_t>&, const size_t, const std::vector<size_t>&,
+                                       Buffer<int64_t>&, const size_t, const std::vector<size_t>&,
                                        const Queue&, Event*);
-template void PUBLIC_API copy<half>   (const size_t, const Buffer<half>&, const size_t,
-                                       const std::vector<size_t>&, const std::vector<size_t>&,
-                                       Buffer<half>&, const size_t,
-                                       const std::vector<size_t>&, const std::vector<size_t>&,
+template void PUBLIC_API copy<half>   (const size_t, const std::vector<size_t>&,
+                                       const Buffer<half>&, const size_t, const std::vector<size_t>&,
+                                       Buffer<half>&, const size_t, const std::vector<size_t>&,
                                        const Queue&, Event*);
-template void PUBLIC_API copy<float>  (const size_t, const Buffer<float>&, const size_t,
-                                       const std::vector<size_t>&, const std::vector<size_t>&,
-                                       Buffer<float>&, const size_t,
-                                       const std::vector<size_t>&, const std::vector<size_t>&,
+template void PUBLIC_API copy<float>  (const size_t, const std::vector<size_t>&,
+                                       const Buffer<float>&, const size_t, const std::vector<size_t>&,
+                                       Buffer<float>&, const size_t, const std::vector<size_t>&,
                                        const Queue&, Event*);
-template void PUBLIC_API copy<double> (const size_t, const Buffer<double>&, const size_t,
-                                       const std::vector<size_t>&, const std::vector<size_t>&,
-                                       Buffer<double>&, const size_t,
-                                       const std::vector<size_t>&, const std::vector<size_t>&,
+template void PUBLIC_API copy<double> (const size_t, const std::vector<size_t>&,
+                                       const Buffer<double>&, const size_t, const std::vector<size_t>&,
+                                       Buffer<double>&, const size_t, const std::vector<size_t>&,
                                        const Queue&, Event*);
-template void PUBLIC_API copy<float2> (const size_t, const Buffer<float2>&, const size_t,
-                                       const std::vector<size_t>&, const std::vector<size_t>&,
-                                       Buffer<float2>&, const size_t,
-                                       const std::vector<size_t>&, const std::vector<size_t>&,
+template void PUBLIC_API copy<float2> (const size_t, const std::vector<size_t>&,
+                                       const Buffer<float2>&, const size_t, const std::vector<size_t>&,
+                                       Buffer<float2>&, const size_t, const std::vector<size_t>&,
                                        const Queue&, Event*);
-template void PUBLIC_API copy<double2>(const size_t, const Buffer<double2>&, const size_t,
-                                       const std::vector<size_t>&, const std::vector<size_t>&,
-                                       Buffer<double2>&, const size_t,
-                                       const std::vector<size_t>&, const std::vector<size_t>&,
+template void PUBLIC_API copy<double2>(const size_t, const std::vector<size_t>&,
+                                       const Buffer<double2>&, const size_t, const std::vector<size_t>&,
+                                       Buffer<double2>&, const size_t, const std::vector<size_t>&,
                                        const Queue&, Event*);
 
 template <typename T>
@@ -242,54 +234,57 @@ template void PUBLIC_API transform<double2>(const std::string&,
 
 template <typename T>
 void transform(const std::string& name, const size_t n,
-               const Buffer<T>& x_buffer, const Buffer<T>& y_buffer, Buffer<T>& z_buffer,
-               const std::vector<size_t>& lstride, const std::vector<size_t>& rstride,
-               const std::vector<size_t>& oshape,
+               const Buffer<T>& x_buffer, const size_t x_offset, const std::vector<size_t>& x_stride,
+               const Buffer<T>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_stride,
+               Buffer<T>& z_buffer, const std::vector<size_t>& oshape,
                const Queue& queue, Event* event)
 {
     auto routine = Xtransform_b<T>(queue, event);
-    routine.DoTransform(name, n, x_buffer, y_buffer, z_buffer, lstride, rstride, oshape);
+    routine.DoTransform(name, n,
+        x_buffer, x_offset, x_stride,
+        y_buffer, y_offset, y_stride,
+        z_buffer, oshape);
 }
 
 template void PUBLIC_API transform<int16_t>(const std::string&, const size_t,
-                                            const Buffer<int16_t>&, const Buffer<int16_t>&, Buffer<int16_t>&,
-                                            const std::vector<size_t>&, const std::vector<size_t>&,
-                                            const std::vector<size_t>&,
+                                            const Buffer<int16_t>&, const size_t, const std::vector<size_t>&,
+                                            const Buffer<int16_t>&, const size_t, const std::vector<size_t>&,
+                                            Buffer<int16_t>&, const std::vector<size_t>&,
                                             const Queue&, Event*);
 template void PUBLIC_API transform<int32_t>(const std::string&, const size_t,
-                                            const Buffer<int32_t>&, const Buffer<int32_t>&, Buffer<int32_t>&,
-                                            const std::vector<size_t>&, const std::vector<size_t>&,
-                                            const std::vector<size_t>&,
+                                            const Buffer<int32_t>&, const size_t, const std::vector<size_t>&,
+                                            const Buffer<int32_t>&, const size_t, const std::vector<size_t>&,
+                                            Buffer<int32_t>&, const std::vector<size_t>&,
                                             const Queue&, Event*);
 template void PUBLIC_API transform<int64_t>(const std::string&, const size_t,
-                                            const Buffer<int64_t>&, const Buffer<int64_t>&, Buffer<int64_t>&,
-                                            const std::vector<size_t>&, const std::vector<size_t>&,
-                                            const std::vector<size_t>&,
+                                            const Buffer<int64_t>&, const size_t, const std::vector<size_t>&,
+                                            const Buffer<int64_t>&, const size_t, const std::vector<size_t>&,
+                                            Buffer<int64_t>&, const std::vector<size_t>&,
                                             const Queue&, Event*);
 template void PUBLIC_API transform<half>   (const std::string&, const size_t,
-                                            const Buffer<half>&, const Buffer<half>&, Buffer<half>&,
-                                            const std::vector<size_t>&, const std::vector<size_t>&,
-                                            const std::vector<size_t>&,
+                                            const Buffer<half>&, const size_t, const std::vector<size_t>&,
+                                            const Buffer<half>&, const size_t, const std::vector<size_t>&,
+                                            Buffer<half>&, const std::vector<size_t>&,
                                             const Queue&, Event*);
 template void PUBLIC_API transform<float>  (const std::string&, const size_t,
-                                            const Buffer<float>&, const Buffer<float>&, Buffer<float>&,
-                                            const std::vector<size_t>&, const std::vector<size_t>&,
-                                            const std::vector<size_t>&,
+                                            const Buffer<float>&, const size_t, const std::vector<size_t>&,
+                                            const Buffer<float>&, const size_t, const std::vector<size_t>&,
+                                            Buffer<float>&, const std::vector<size_t>&,
                                             const Queue&, Event*);
 template void PUBLIC_API transform<double> (const std::string&, const size_t,
-                                            const Buffer<double>&, const Buffer<double>&, Buffer<double>&,
-                                            const std::vector<size_t>&, const std::vector<size_t>&,
-                                            const std::vector<size_t>&,
+                                            const Buffer<double>&, const size_t, const std::vector<size_t>&,
+                                            const Buffer<double>&, const size_t, const std::vector<size_t>&,
+                                            Buffer<double>&, const std::vector<size_t>&,
                                             const Queue&, Event*);
 template void PUBLIC_API transform<float2> (const std::string&, const size_t,
-                                            const Buffer<float2>&, const Buffer<float2>&, Buffer<float2>&,
-                                            const std::vector<size_t>&, const std::vector<size_t>&,
-                                            const std::vector<size_t>&,
+                                            const Buffer<float2>&, const size_t, const std::vector<size_t>&,
+                                            const Buffer<float2>&, const size_t, const std::vector<size_t>&,
+                                            Buffer<float2>&, const std::vector<size_t>&,
                                             const Queue&, Event*);
 template void PUBLIC_API transform<double2>(const std::string&, const size_t,
-                                            const Buffer<double2>&, const Buffer<double2>&, Buffer<double2>&,
-                                            const std::vector<size_t>&, const std::vector<size_t>&,
-                                            const std::vector<size_t>&,
+                                            const Buffer<double2>&, const size_t, const std::vector<size_t>&,
+                                            const Buffer<double2>&, const size_t, const std::vector<size_t>&,
+                                            Buffer<double2>&, const std::vector<size_t>&,
                                             const Queue&, Event*);
 
 template <typename T>

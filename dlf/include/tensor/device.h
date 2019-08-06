@@ -180,11 +180,9 @@ void reorder(const DevTensor<T>& src, const Shape& src_shape, DevTensor<T>& dst,
         return;
     }
 
-    gpgpu::dnn::copy(src_shape.size(),
-                     src.data(), src_shape.offset(),
-                     src_shape.extents(), src_shape.strides(),
-                     dst.data(), dst_shape.offset(),
-                     dst_shape.extents(), dst_shape.strides());
+    gpgpu::dnn::copy(src_shape.size(), src_shape.extents(),
+                     src.data(), src_shape.offset(), src_shape.strides(),
+                     dst.data(), dst_shape.offset(), dst_shape.strides());
 }
 
 template <typename T>
@@ -222,8 +220,10 @@ DevTensor<T>& transformTo(const DevTensor<T>& A, const DevTensor<T>& B, DevTenso
 
     auto shape_A = A.shape().broadcast(final_shape);
     auto shape_B = B.shape().broadcast(final_shape);
-    gpgpu::dnn::transform(Fn::name, final_shape.size(), A.data(), B.data(), C.data(),
-                          shape_A.strides(), shape_B.strides(), final_shape.extents());
+    gpgpu::dnn::transform(Fn::name, final_shape.size(),
+                          A.data(), shape_A.offset(), shape_A.strides(),
+                          B.data(), shape_B.offset(), shape_B.strides(),
+                          C.data(), final_shape.extents());
     return C;
 }
 

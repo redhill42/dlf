@@ -78,9 +78,9 @@ void Xtransform_b<T>::DoTransform(
 
 template <typename T>
 void Xtransform_b<T>::DoTransform(const std::string& name, const size_t n,
-    const Buffer<T>& x_buffer, const Buffer<T>& y_buffer, Buffer<T>& z_buffer,
-    const std::vector<size_t>& lstride, const std::vector<size_t>& rstride,
-    const std::vector<size_t>& oshape)
+    const Buffer<T>& x_buffer, const size_t x_offset, const std::vector<size_t>& x_stride,
+    const Buffer<T>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_stride,
+    Buffer<T>& z_buffer, const std::vector<size_t>& oshape)
 {
     // Make sure all dimensions are larger than zero
     if (n == 0)
@@ -88,20 +88,23 @@ void Xtransform_b<T>::DoTransform(const std::string& name, const size_t n,
 
     // Create compact buffer to hold strides and shapes
     auto rank = oshape.size();
-    assert(lstride.size() == rank && rstride.size() == rank);
+    assert(x_stride.size() == rank && y_stride.size() == rank);
     std::vector<int> shape_data(rank * 3);
     std::copy(oshape.begin(), oshape.end(), shape_data.begin());
-    std::copy(lstride.begin(), lstride.end(), shape_data.begin() + rank);
-    std::copy(rstride.begin(), rstride.end(), shape_data.begin() + rank*2);
-    Buffer<int> shape_buffer = context_.createBuffer<int>(rank*3, BufferAccess::WriteOnly);
-    shape_buffer.write(queue_, shape_data.data(), shape_data.size());
+    std::copy(x_stride.begin(), x_stride.end(), shape_data.begin() + rank);
+    std::copy(y_stride.begin(), y_stride.end(), shape_data.begin() + rank*2);
+    auto shape_buffer = context_.getSharedBuffer<int>(shape_data.data(), shape_data.size(), queue_);
 
     // Retrieves the kernel from the compiled binary
     auto kernel = program_.getKernel("X" + name + "Strided");
 
     // Sets the kernel arguments
-    kernel.setArguments(static_cast<int>(n), static_cast<int>(rank),
-                        shape_buffer, x_buffer, y_buffer, z_buffer);
+    kernel.setArguments(static_cast<int>(n),
+                        static_cast<int>(rank),
+                        shape_buffer,
+                        x_buffer, static_cast<int>(x_offset),
+                        y_buffer, static_cast<int>(y_offset),
+                        z_buffer);
 
     // Launches the kernel
     const auto n_ceiled = Ceil(n, db_["WGS"]*db_["WPT"]);

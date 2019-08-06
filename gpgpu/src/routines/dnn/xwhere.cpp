@@ -22,9 +22,7 @@ static Buffer<int> pack_shape(
     std::copy(dim.begin(), dim.end(), shape.begin());
     std::copy(stride.begin(), stride.end(), shape.begin() + rank);
 
-    Buffer<int> shape_buffer = context.createBuffer<int>(rank*2);
-    shape_buffer.write(queue, shape.data(), shape.size());
-    return shape_buffer;
+    return context.getSharedBuffer<int>(shape.data(), shape.size(), queue);
 }
 
 template <typename T>

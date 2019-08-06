@@ -22,7 +22,7 @@ namespace gpgpu { namespace blas {
 
 // Constructor: forwards to base class constructor
 template <typename T>
-XgemmBatched<T>::XgemmBatched(const Queue &queue, Event* event, const std::string &name):
+XgemmBatched<T>::XgemmBatched(const Queue& queue, Event* event, const std::string& name):
     Routine(queue, event, name,
             {"Copy","Pad","Transpose","Padtranspose","Xgemm","XgemmDirect","GemmRoutine"},
             PrecisionValue<T>(), {}, {
@@ -53,11 +53,11 @@ XgemmBatched<T>::XgemmBatched(const Queue &queue, Event* event, const std::strin
 template <typename T>
 void XgemmBatched<T>::DoGemmBatched(const Layout layout, const Transpose a_transpose, const Transpose b_transpose,
                                     const size_t m, const size_t n, const size_t k,
-                                    const std::vector<T> &alphas,
-                                    const Buffer<T> & a_buffer, const std::vector<size_t> &a_offsets, const size_t a_ld,
-                                    const Buffer<T> & b_buffer, const std::vector<size_t> &b_offsets, const size_t b_ld,
-                                    const std::vector<T> &betas,
-                                    Buffer<T> & c_buffer, const std::vector<size_t> &c_offsets, const size_t c_ld,
+                                    const std::vector<T>& alphas,
+                                    const Buffer<T>& a_buffer, const std::vector<size_t>& a_offsets, const size_t a_ld,
+                                    const Buffer<T>& b_buffer, const std::vector<size_t>& b_offsets, const size_t b_ld,
+                                    const std::vector<T>& betas,
+                                    Buffer<T>& c_buffer, const std::vector<size_t>& c_offsets, const size_t c_ld,
                                     const size_t batch_count) {
 
   // Tests for a valid batch count
@@ -86,10 +86,8 @@ void XgemmBatched<T>::DoGemmBatched(const Layout layout, const Transpose a_trans
   }
 
   // Upload the scalar arguments to the device
-  auto alphas_device = context_.createBuffer<T>(batch_count);
-  auto betas_device = context_.createBuffer<T>(batch_count);
-  alphas_device.write(queue_, alphas.data(), batch_count);
-  betas_device.write(queue_, betas.data(), batch_count);
+  auto alphas_device = context_.getSharedBuffer<T>(alphas.data(), batch_count, queue_);
+  auto betas_device = context_.getSharedBuffer<T>(betas.data(), batch_count, queue_);
 
   // Converts the offset to integers
   auto a_offsets_int = std::vector<int>(batch_count);
@@ -126,11 +124,11 @@ void XgemmBatched<T>::DoGemmBatched(const Layout layout, const Transpose a_trans
 // overhead of these extra kernels might not be ideal for certain devices/arguments.
 template <typename T>
 void XgemmBatched<T>::BatchedGemmIndirect(const size_t m, const size_t n, const size_t k,
-                                          const Buffer<T> &alphas,
-                                          const Buffer<T> &a_buffer, const std::vector<int> &a_offsets, const size_t a_ld,
-                                          const Buffer<T> &b_buffer, const std::vector<int> &b_offsets, const size_t b_ld,
-                                          const Buffer<T> &betas,
-                                          Buffer<T> &c_buffer, const std::vector<int> &c_offsets, const size_t c_ld,
+                                          const Buffer<T>& alphas,
+                                          const Buffer<T>& a_buffer, const std::vector<int>& a_offsets, const size_t a_ld,
+                                          const Buffer<T>& b_buffer, const std::vector<int>& b_offsets, const size_t b_ld,
+                                          const Buffer<T>& betas,
+                                          Buffer<T>& c_buffer, const std::vector<int>& c_offsets, const size_t c_ld,
                                           const bool a_do_transpose, const bool b_do_transpose, const bool c_do_transpose,
                                           const bool a_conjugate, const bool b_conjugate,
                                           const size_t a_one, const size_t a_two,
@@ -176,10 +174,8 @@ void XgemmBatched<T>::BatchedGemmIndirect(const size_t m, const size_t n, const 
   // to fill it up until it reaches a certain multiple of size (kernel parameter dependent). In
   // case nothing has to be done, these kernels can be skipped.
   if (!a_no_temp) {
-    auto a_offsets_device = context_.createBuffer<int>(batch_count);
-    auto a_offsets_i_device = context_.createBuffer<int>(batch_count);
-    a_offsets_device.write(queue_, a_offsets.data(), batch_count);
-    a_offsets_i_device.write(queue_, a_offsets_i.data(), batch_count);
+    auto a_offsets_device = context_.getSharedBuffer<int>(a_offsets.data(), batch_count, queue_);
+    auto a_offsets_i_device = context_.getSharedBuffer<int>(a_offsets_i.data(), batch_count, queue_);
     PadCopyTransposeMatrixBatched(queue_, device_, db_, nullptr,
                                   a_one, a_two, a_ld, a_offsets_device, a_buffer,
                                   a_one_i, a_two_i, a_one_i, a_offsets_i_device, a_temp,
@@ -188,10 +184,8 @@ void XgemmBatched<T>::BatchedGemmIndirect(const size_t m, const size_t n, const 
 
   // As above, but now for matrix B
   if (!b_no_temp) {
-    auto b_offsets_device = context_.createBuffer<int>(batch_count);
-    auto b_offsets_i_device = context_.createBuffer<int>(batch_count);
-    b_offsets_device.write(queue_, b_offsets.data(), batch_count);
-    b_offsets_i_device.write(queue_, b_offsets_i.data(), batch_count);
+    auto b_offsets_device = context_.getSharedBuffer<int>(b_offsets.data(), batch_count, queue_);
+    auto b_offsets_i_device = context_.getSharedBuffer<int>(b_offsets_i.data(), batch_count, queue_);
     PadCopyTransposeMatrixBatched(queue_, device_, db_, nullptr,
                                   b_one, b_two, b_ld, b_offsets_device, b_buffer,
                                   b_one_i, b_two_i, b_one_i, b_offsets_i_device, b_temp,
@@ -199,11 +193,10 @@ void XgemmBatched<T>::BatchedGemmIndirect(const size_t m, const size_t n, const 
   }
 
   // As above, but now for matrix C
-  auto c_offsets_device = context_.createBuffer<int>(batch_count);
-  auto c_offsets_i_device = context_.createBuffer<int>(batch_count);
+  Buffer<int> c_offsets_device, c_offsets_i_device;
   if (!c_no_temp) {
-    c_offsets_device.write(queue_, c_offsets.data(), batch_count);
-    c_offsets_i_device.write(queue_, c_offsets_i.data(), batch_count);
+    c_offsets_device = context_.getSharedBuffer<int>(c_offsets.data(), batch_count, queue_);
+    c_offsets_i_device = context_.getSharedBuffer<int>(c_offsets_i.data(), batch_count, queue_);
     PadCopyTransposeMatrixBatched(queue_, device_, db_, nullptr,
                                   c_one, c_two, c_ld, c_offsets_device, c_buffer,
                                   c_one_i, c_two_i, c_one_i, c_offsets_i_device, c_temp,
@@ -255,22 +248,19 @@ void XgemmBatched<T>::BatchedGemmIndirect(const size_t m, const size_t n, const 
 // The direct version of batched GEMM, requiring just one kernel, no pre or post-processing kernels.
 template <typename T>
 void XgemmBatched<T>::BatchedGemmDirect(const size_t m, const size_t n, const size_t k,
-                                        const Buffer<T> &alphas,
-                                        const Buffer<T> &a_buffer, const std::vector<int> &a_offsets, const size_t a_ld,
-                                        const Buffer<T> &b_buffer, const std::vector<int> &b_offsets, const size_t b_ld,
-                                        const Buffer<T> &betas,
-                                        Buffer<T> &c_buffer, const std::vector<int> &c_offsets, const size_t c_ld,
+                                        const Buffer<T>& alphas,
+                                        const Buffer<T>& a_buffer, const std::vector<int>& a_offsets, const size_t a_ld,
+                                        const Buffer<T>& b_buffer, const std::vector<int>& b_offsets, const size_t b_ld,
+                                        const Buffer<T>& betas,
+                                        Buffer<T>& c_buffer, const std::vector<int>& c_offsets, const size_t c_ld,
                                         const bool a_do_transpose, const bool b_do_transpose, const bool c_do_transpose,
                                         const bool a_conjugate, const bool b_conjugate,
                                         const size_t batch_count) {
 
   // Uploads the offsets to the device
-  auto a_offsets_device = context_.createBuffer<int>(batch_count);
-  auto b_offsets_device = context_.createBuffer<int>(batch_count);
-  auto c_offsets_device = context_.createBuffer<int>(batch_count);
-  a_offsets_device.write(queue_, a_offsets.data(), batch_count);
-  b_offsets_device.write(queue_, b_offsets.data(), batch_count);
-  c_offsets_device.write(queue_, c_offsets.data(), batch_count);
+  auto a_offsets_device = context_.getSharedBuffer<int>(a_offsets.data(), batch_count, queue_);
+  auto b_offsets_device = context_.getSharedBuffer<int>(b_offsets.data(), batch_count, queue_);
+  auto c_offsets_device = context_.getSharedBuffer<int>(c_offsets.data(), batch_count, queue_);
 
   // Retrieves the proper XgemmDirect kernel from the compiled binary
   const auto name = (a_do_transpose) ? (b_do_transpose ? "XgemmDirectBatchedTT" : "XgemmDirectBatchedTN") :

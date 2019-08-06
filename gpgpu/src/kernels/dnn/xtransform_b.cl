@@ -102,13 +102,14 @@ void name(const int x_size, const __global real* restrict xgm,              \
                                                                             \
 __kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))                   \
 void name##Strided(const int n, const int rank, __constant int* shape,      \
-                   const __global real* restrict xgm,                       \
-                   const __global real* restrict ygm,                       \
+                   const __global real* restrict xgm, const int x_offset,   \
+                   const __global real* restrict ygm, const int y_offset,   \
                    __global real* zgm)                                      \
 {                                                                           \
   for (int id = get_global_id(0); id < n; id += get_global_size(0)) {       \
-    real x_value = xgm[unravel(id, rank, &shape[rank], shape)];             \
-    real y_value = ygm[unravel(id, rank, &shape[rank*2], shape)];           \
+    int x_id = x_offset, y_id = y_offset;                                                 \
+    unravel2(id, &x_id, &y_id, rank, shape, &shape[rank], &shape[rank*2]);  \
+    real x_value = xgm[x_id], y_value = ygm[y_id];                          \
     real z_value;                                                           \
     op(z_value, x_value, y_value);                                          \
     zgm[id] = z_value;                                                      \

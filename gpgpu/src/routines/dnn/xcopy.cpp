@@ -69,62 +69,31 @@ static bool is_contiguous(const std::vector<size_t>& dim, const std::vector<size
   return true;
 }
 
-static Buffer<int> pack_shape(
-    const Context& context, const Queue& queue,
-    const std::vector<size_t>& dim, const std::vector<size_t>& stride)
-{
-    auto rank = dim.size();
-    assert(stride.size() == rank);
-
-    std::vector<int> shape(rank * 2);
-    std::copy(dim.begin(), dim.end(), shape.begin());
-    std::copy(stride.begin(), stride.end(), shape.begin() + rank);
-
-    Buffer<int> shape_buffer = context.createBuffer<int>(rank*2, BufferAccess::WriteOnly);
-    shape_buffer.write(queue, shape.data(), shape.size());
-    return shape_buffer;
-}
-
 // The main routine
 template <typename T>
-void Xcopy<T>::DoCopyStrided(const size_t n,
-    const Buffer<T>& x_buffer, const size_t x_offset,
-    const std::vector<size_t>& x_dim, const std::vector<size_t>& x_stride,
-    Buffer<T>& y_buffer, const size_t y_offset,
-    const std::vector<size_t>& y_dim, const std::vector<size_t>& y_stride)
+void Xcopy<T>::DoCopyStrided(const size_t n, const std::vector<size_t>& dims,
+    const Buffer<T>& x_buffer, const size_t x_offset, const std::vector<size_t>& x_stride,
+    Buffer<T>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_stride)
 {
-    if (is_contiguous(x_dim, x_stride) && is_contiguous(y_dim, y_stride)) {
+    if (is_contiguous(dims, x_stride) && is_contiguous(dims, y_stride)) {
         DoCopy(n, x_buffer, x_offset, n, y_buffer, y_offset);
         return;
     }
 
-    Buffer<int> x_shape, y_shape;
-    Kernel kernel;
+    // Create compact buffer to hold strides and dims
+    auto rank = dims.size();
+    assert(x_stride.size() == rank && y_stride.size() == rank);
+    std::vector<int> shape_data(rank * 3);
+    std::copy(dims.begin(), dims.end(), shape_data.begin());
+    std::copy(x_stride.begin(), x_stride.end(), shape_data.begin() + rank);
+    std::copy(y_stride.begin(), y_stride.end(), shape_data.begin() + rank*2);
+    auto shape_buffer = context_.getSharedBuffer<int>(shape_data.data(), shape_data.size(), queue_);
 
-    if (is_contiguous(y_dim, y_stride)) {
-        x_shape = pack_shape(context_, queue_, x_dim, x_stride);
-        kernel = program_.getKernel("XcopyStridedL");
-        kernel.setArguments(static_cast<int>(n),
-                            x_buffer, static_cast<int>(x_offset),
-                            static_cast<int>(x_dim.size()), x_shape,
-                            y_buffer, static_cast<int>(y_offset));
-    } else if (is_contiguous(x_dim, x_stride)) {
-        y_shape = pack_shape(context_, queue_, y_dim, y_stride);
-        kernel = program_.getKernel("XcopyStridedR");
-        kernel.setArguments(static_cast<int>(n),
-                            x_buffer, static_cast<int>(x_offset),
-                            static_cast<int>(y_dim.size()), y_shape,
-                            y_buffer, static_cast<int>(y_offset));
-    } else {
-        x_shape = pack_shape(context_, queue_, x_dim, x_stride);
-        y_shape = pack_shape(context_, queue_, y_dim, y_stride);
-        kernel = program_.getKernel("XcopyStridedLR");
-        kernel.setArguments(static_cast<int>(n),
-                            static_cast<int>(x_dim.size()), x_shape,
-                            x_buffer, static_cast<int>(x_offset),
-                            static_cast<int>(y_dim.size()), y_shape,
-                            y_buffer, static_cast<int>(y_offset));
-    }
+    auto kernel = program_.getKernel("XcopyStrided");
+    kernel.setArguments(static_cast<int>(n), static_cast<int>(rank),
+                        shape_buffer,
+                        x_buffer, static_cast<int>(x_offset),
+                        y_buffer, static_cast<int>(y_offset));
 
     // Launches the kernel
     auto n_ceiled = Ceil(n, db_["WGS"]*db_["WPT"]);

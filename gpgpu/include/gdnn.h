@@ -11,10 +11,9 @@ void copy(const size_t x_size, const Buffer<T>& x_buffer, const size_t x_offset,
           const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 template <typename T>
-void copy(const size_t n, const Buffer<T>& x_buffer, const size_t x_offset,
-          const std::vector<size_t>& x_dim, const std::vector<size_t>& x_stride,
-          Buffer<T>& y_buffer, const size_t y_offset,
-          const std::vector<size_t>& y_dim, const std::vector<size_t>& y_stride,
+void copy(const size_t n, const std::vector<size_t>& dims,
+          const Buffer<T>& x_buffer, const size_t x_offset, const std::vector<size_t>& x_stride,
+          Buffer<T>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_stride,
           const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 template <typename T>
@@ -46,9 +45,9 @@ void transform(const std::string& name,
 
 template <typename T>
 void transform(const std::string& name, const size_t n,
-               const Buffer<T>& x_buffer, const Buffer<T>& y_buffer, Buffer<T>& z_buffer,
-               const std::vector<size_t>& lstride, const std::vector<size_t>& rstride,
-               const std::vector<size_t>& oshape,
+               const Buffer<T>& x_buffer, const size_t x_offset, const std::vector<size_t>& x_stride,
+               const Buffer<T>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_stride,
+               Buffer<T>& z_buffer, const std::vector<size_t>& oshape,
                const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 template <typename T>

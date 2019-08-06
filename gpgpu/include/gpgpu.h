@@ -4,6 +4,7 @@
 #include <string>
 #include <cstring>
 #include <vector>
+#include <unordered_map>
 #include <memory>
 #include <stdexcept>
 
@@ -549,6 +550,13 @@ public:
     template <typename T>
     Buffer<T> createBuffer(size_t size, BufferAccess access = BufferAccess::ReadWrite) const;
 
+    /**
+     * Get or create a device buffer with constant data. The buffer can be reused
+     * by multiple operations to eliminate reallocation of device buffers
+     */
+    template <typename T>
+    Buffer<T> getSharedBuffer(const T* content, size_t size, const Queue& queue) const;
+
     bool operator==(const Context& other) const noexcept {
         return m_raw->id() == other.m_raw->id();
     }
@@ -556,6 +564,9 @@ public:
     bool operator!=(const Context& other) const noexcept {
         return !(*this == other);
     }
+
+private:
+    mutable std::unordered_map<std::string, std::shared_ptr<rawBuffer>> m_shared_buffers;
 };
 
 class Queue {
@@ -793,6 +804,20 @@ inline Event Context::createEvent() const {
 template <typename T>
 inline Buffer<T> Context::createBuffer(size_t size, BufferAccess access) const {
     return Buffer<T>(m_raw->createBuffer(size*sizeof(T), access), size);
+}
+
+template <typename T>
+Buffer<T> Context::getSharedBuffer(const T* content, size_t size, const Queue& queue) const {
+    std::string key(reinterpret_cast<const char*>(content), size * sizeof(T));
+    auto it = m_shared_buffers.find(key);
+    if (it != m_shared_buffers.end()) {
+        return Buffer<T>(it->second, size);
+    }
+
+    Buffer<T> buffer = createBuffer<T>(size);
+    buffer.write(queue, content, size);
+    m_shared_buffers.emplace(std::move(key), buffer.handle());
+    return buffer;
 }
 
 inline void Queue::finish(Event& event) const {
