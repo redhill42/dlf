@@ -159,37 +159,37 @@ public:
             return false;
 
         auto scale = bn->scale()->initializer().decode<T>();
-        auto bbn   = bn->B()->initializer().decode<T>();
+        auto Bbn   = bn->B()->initializer().decode<T>();
         auto mean  = bn->mean()->initializer().decode<T>();
         auto var   = bn->var()->initializer().decode<T>();
         auto W     = conv->W()->initializer().decode<T>();
 
         assert(scale.rank() == 1);
-        assert(bbn.shape() == scale.shape());
+        assert(Bbn.shape() == scale.shape());
         assert(mean.shape() == scale.shape());
         assert(var.shape() == scale.shape());
         assert(W.rank() > 2 && W.extent(0) == scale.extent(0));
 
-        Tensor<T> bc;
+        Tensor<T> Bc;
         if (conv->B() != nullptr) {
-            bc = conv->B()->initializer().decode<T>();
-            assert(bc.shape() == scale.shape());
+            Bc = conv->B()->initializer().decode<T>();
+            assert(Bc.shape() == scale.shape());
         } else {
-            bc = Tensor<T>::fill(scale.shape(), T{});
+            Bc = Tensor<T>::fill(scale.shape(), T{});
         }
 
         // do computation
-        T epsilon = static_cast<T>(bn->epsilon());
-        scale.apply(var, [=](auto s, auto v) { return s / std::sqrt(v + epsilon); });
-        bc = (bc - mean) * scale + bbn;
+        auto epsilon = static_cast<T>(bn->epsilon());
+        scale /= sqrt(var + epsilon);
+        Bc = (Bc - mean) * scale + Bbn;
         transformChannel(W, scale, W, 0, xfn::multiplies<>());
 
         // replace inputs
         conv->W()->initializer().set_data(W.begin(), W.end());
         if (conv->B() != nullptr) {
-            conv->B()->initializer().set_data(bc.begin(), bc.end());
+            conv->B()->initializer().set_data(Bc.begin(), Bc.end());
         } else {
-            auto b_data = TensorData(conv->Y()->name() + ":bias", bc); // FIXME
+            auto b_data = TensorData(conv->Y()->name() + ":bias", Bc); // FIXME
             conv->addInput(graph.addInitializer(std::move(b_data)));
         }
 
@@ -229,6 +229,122 @@ public:
         }
 
         bn->Y()->replaceAllUsesWith(bn->X());
+        destroyCurrent = NodeDestroyType::DestroyOne;
+        return true;
+    }
+};
+
+class FuseScaleIntoConv final : public PredicateBasedPass {
+public:
+    std::string getPassName() const override {
+        return "fuse_scale_into_conv";
+    }
+
+    bool isComplete() const override {
+        return false;
+    }
+
+    bool patternMatchPredicate(Node* node) override {
+        return node->kind() == kMul && node->input(0)->node()->kind() == kConv;
+    }
+
+    bool runTransform(Node* n, Graph& graph, NodeDestroyType& destroyCurrent) override {
+        auto conv = static_cast<Conv*>(n->input(0)->node());
+        auto val = n->input(1);
+
+        if (conv->Y()->uses().size() != 1)
+            return false;
+        if (!val->has_initializer())
+            return false;
+        if (!conv->W()->has_initializer())
+            return false;
+        if (conv->B() != nullptr && !conv->B()->has_initializer())
+            return false;
+
+        // try to get output channel M
+        auto M = conv->W()->dim(0);
+
+        // for output shape (N,M,H,W...), the scale must have shape (M,1,1...)
+        if (val->dims().rank() != conv->Y()->dims().rank()-1 || val->dim(0) != M)
+            return false;
+        for (int i = 1; i < val->dims().rank(); i++)
+            if (val->dim(i) != 1)
+                return false;
+
+        auto scale = val->initializer().decode<float>();
+        scale.squeeze();
+
+        auto W = conv->W()->initializer().decode<float>();
+        transformChannel(W, scale, W, 0, xfn::multiplies<>());
+        conv->W()->initializer().set_data(W.begin(), W.end());
+
+        if (conv->B() != nullptr) {
+            auto B = conv->B()->initializer().decode<float>() * scale;
+            conv->B()->initializer().set_data(B.begin(), B.end());
+        }
+
+        if (val->uses().size() == 1) {
+            n->eraseInput(1);
+            graph.eraseInput(val);
+        }
+
+        n->output()->replaceAllUsesWith(conv->Y());
+        destroyCurrent = NodeDestroyType::DestroyOne;
+        return true;
+    }
+};
+
+class FuseAddBiasIntoConv final : public PredicateBasedPass {
+public:
+    std::string getPassName() const override {
+        return "fuse_add_bias_into_conv";
+    }
+
+    bool isComplete() const override {
+        return false;
+    }
+
+    bool patternMatchPredicate(Node* node) override {
+        return node->kind() == kAdd && node->input(0)->node()->kind() == kConv;
+    }
+
+    bool runTransform(Node* n, Graph& graph, NodeDestroyType& destroyCurrent) override {
+        auto conv = static_cast<Conv*>(n->input(0)->node());
+        auto val = n->input(1);
+
+        if (conv->Y()->uses().size() != 1)
+            return false;
+        if (!val->has_initializer())
+            return false;
+        if (conv->B() != nullptr && !conv->B()->has_initializer())
+            return false;
+
+        // try to get output channel M
+        auto M = conv->W()->dim(0);
+
+        // for output shape (N,M,H,W...), the bias must have shape (M,1,1...)
+        if (val->dims().rank() != conv->Y()->dims().rank()-1 || val->dim(0) != M)
+            return false;
+        for (int i = 1; i < val->dims().rank(); i++)
+            if (val->dim(i) != 1)
+                return false;
+
+        Tensor<float> bias = val->initializer().decode<float>();
+        bias.squeeze();
+
+        if (conv->B() == nullptr) {
+            conv->addInput(graph.addInitializer(TensorData(conv->Y()->name() + ":bias", bias)));
+        } else {
+            auto B = conv->B()->initializer().decode<float>() + bias;
+            conv->B()->initializer().set_data(B.begin(), B.end());
+        }
+
+        if (val->uses().size() == 1) {
+            n->eraseInput(1);
+            graph.eraseInput(val);
+        }
+
+        n->output()->replaceAllUsesWith(conv->Y());
         destroyCurrent = NodeDestroyType::DestroyOne;
         return true;
     }

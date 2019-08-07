@@ -83,6 +83,8 @@ GlobalPassRegistryImpl::GlobalPassRegistryImpl() {
     registerPass<EliminateNopTranspose>();
     registerPass<ReshapeInitializer>();
     registerPass<FuseBnIntoConv>();
+    registerPass<FuseScaleIntoConv>();
+    registerPass<FuseAddBiasIntoConv>();
 }
 
 GlobalPassRegistry& GlobalPassRegistry::Instance() {
