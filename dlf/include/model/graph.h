@@ -1803,12 +1803,56 @@ public:
         return static_cast<const Node*>(m_input)->outputs();
     }
 
+    Value* input(size_t id) noexcept {
+        return m_input->output(id);
+    }
+
+    const Value* input(size_t id) const noexcept {
+        return m_input->output(id);
+    }
+
+    Value* input(const std::string& name) noexcept {
+        for (auto v : inputs())
+            if (v->name() == name)
+                return v;
+        return nullptr;
+    }
+
+    const Value* input(const std::string& name) const noexcept {
+        for (auto v : inputs())
+            if (v->name() == name)
+                return v;
+        return nullptr;
+    }
+
     cxx::array_ref<Value*> outputs() noexcept {
         return m_output->inputs();
     }
 
     cxx::array_ref<const Value*> outputs() const noexcept {
         return static_cast<const Node*>(m_output)->inputs();
+    }
+
+    Value* output(size_t id) noexcept {
+        return m_output->input(id);
+    }
+
+    const Value* output(size_t id) const noexcept {
+        return m_output->input(id);
+    }
+
+    Value* output(const std::string& name) noexcept {
+        for (auto v : outputs())
+            if (v->name() == name)
+                return v;
+        return nullptr;
+    }
+
+    const Value* output(const std::string& name) const noexcept {
+        for (auto v : outputs())
+            if (v->name() == name)
+                return v;
+        return nullptr;
     }
 
     GraphNodeList nodes() noexcept {
