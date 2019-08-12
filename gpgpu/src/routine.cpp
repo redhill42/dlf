@@ -40,18 +40,18 @@ Routine::Routine(const Queue &queue, Event* event, const std::string &name,
 }
 
 void Routine::InitProgram(std::initializer_list<const char *> source) {
+  const auto context_id = context_.id();
+  const auto device_id = device_.id();
 
   // Determines the identifier for this particular routine call
   auto routine_info = routine_name_;
   for (const auto &kernel_name : kernel_names_) {
     routine_info += "_" + kernel_name + db_(kernel_name).GetValuesString();
   }
-  log_debug(routine_info);
 
   // Queries the cache to see whether or not the program (context-specific) is already there
   bool has_program;
-  program_ = ProgramCache::Instance().Get(ProgramKeyRef{ context_.id(), device_.id(), precision_, routine_info },
-                                          &has_program);
+  program_ = ProgramCache::Instance().Get(ProgramKeyRef{context_id, device_id, precision_, routine_info}, &has_program);
   if (has_program) { return; }
 
   // Sets the build options from an environmental variable (if set)
@@ -70,7 +70,7 @@ void Routine::InitProgram(std::initializer_list<const char *> source) {
                                             &has_binary);
   if (has_binary) {
     program_ = context_.loadProgram(binary);
-    ProgramCache::Instance().Store(ProgramKey{ context_.id(), device_.id(), precision_, routine_info },
+    ProgramCache::Instance().Store(ProgramKey{context_id, device_id, precision_, routine_info},
                                    program_);
     return;
   }
@@ -109,7 +109,7 @@ void Routine::InitProgram(std::initializer_list<const char *> source) {
   BinaryCache::Instance().Store(BinaryKey{platform_id, precision_, routine_info, device_name},
                                 program_.getIR());
 
-  ProgramCache::Instance().Store(ProgramKey{context_.id(), device_.id(), precision_, routine_info},
+  ProgramCache::Instance().Store(ProgramKey{context_id, device_id, precision_, routine_info},
                                  program_);
 }
 

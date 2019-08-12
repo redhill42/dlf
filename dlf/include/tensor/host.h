@@ -236,6 +236,11 @@ public: // Attributes
     template <typename... Args, typename = RequireIndexes<Args...>>
     T& operator()(Args... args) noexcept;
 
+    /**
+     * Returns a slice given by the index.
+     */
+    Tensor<T> operator[](int index) noexcept;
+
 public: // Transformations
     /**
      * Transform tensor's elements by applying a unary function on tensor's elements.
@@ -449,6 +454,12 @@ template<typename T>
 template<typename... Args, typename>
 inline T& Tensor<T>::operator()(Args... args) noexcept {
     return data()[shape().offset({size_t(args)...})];
+}
+
+template <typename T>
+inline Tensor<T> Tensor<T>::operator[](int index) noexcept {
+    auto slice_shape = shape().slice({index}, {index+1}, {0}, {1});
+    return wrap(slice_shape, data() + slice_shape.offset());
 }
 
 template <typename T>

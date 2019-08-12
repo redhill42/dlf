@@ -1804,11 +1804,17 @@ public:
     }
 
     Value* input(size_t id) noexcept {
-        return m_input->output(id);
+        for (auto v : inputs())
+            if (!v->has_initializer() && id-- == 0)
+                return v;
+        return nullptr;
     }
 
     const Value* input(size_t id) const noexcept {
-        return m_input->output(id);
+        for (auto v : inputs())
+            if (!v->has_initializer() && id-- == 0)
+                return v;
+        return nullptr;
     }
 
     Value* input(const std::string& name) noexcept {

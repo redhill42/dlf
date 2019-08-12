@@ -82,6 +82,13 @@ template <> inline bool PrecisionTraits<double2>::Supported(const Device& device
   return device.supportsFP64();
 }
 
+template <typename T>
+constexpr T PrecisionTraits<T>::Zero;
+template <typename T>
+constexpr T PrecisionTraits<T>::One;
+template <typename T>
+constexpr T PrecisionTraits<T>::NegOne;
+
 template <>
 struct PrecisionTraits<half> {
   static const half Zero, One, NegOne;
