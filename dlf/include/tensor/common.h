@@ -888,7 +888,7 @@ template <typename TensorT>
 enable_if_tensor<TensorT, void>
 slice(const TensorT& X, TensorT& Y,
       const std::vector<int>& starts, const std::vector<int>& ends,
-      const std::vector<int>& axes = {}, const std::vector<int>& steps = {})
+      const std::vector<int>& axes, const std::vector<int>& steps)
 {
     Shape slice_shape = X.shape().slice(starts, ends, axes, steps);
     if (Y.shape() != slice_shape)
@@ -900,9 +900,27 @@ template <typename TensorT>
 enable_if_tensor<TensorT>
 slice(const TensorT& X,
       const std::vector<int>& starts, const std::vector<int>& ends,
-      const std::vector<int>& axes = {}, const std::vector<int>& steps = {})
+      const std::vector<int>& axes, const std::vector<int>& steps)
 {
     Shape slice_shape = X.shape().slice(starts, ends, axes, steps);
+    tensor_type<TensorT> Y(slice_shape);
+    reorder(X, slice_shape, Y);
+    return Y;
+}
+
+template <typename TensorT>
+enable_if_tensor<TensorT, void>
+slice(const TensorT& X, TensorT& Y, const std::vector<SliceDim>& dims) {
+    Shape slice_shape = X.shape().slice(dims);
+    if (Y.shape() != slice_shape)
+        throw shape_error("slice: incompatible output shape");
+    reorder(X, slice_shape, Y);
+}
+
+template <typename TensorT>
+enable_if_tensor<TensorT>
+slice(const TensorT& X, const std::vector<SliceDim>& dims) {
+    Shape slice_shape = X.shape().slice(dims);
     tensor_type<TensorT> Y(slice_shape);
     reorder(X, slice_shape, Y);
     return Y;

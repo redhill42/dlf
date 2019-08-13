@@ -322,7 +322,7 @@ Shape Shape::transpose(const std::vector<size_t>& perm) const {
 
 Shape Shape::slice(
     const std::vector<int>& starts, const std::vector<int>& ends,
-    const std::vector<int>& axes_opt, const std::vector<int>& steps) const
+    const std::vector<int>& axes_opt, const std::vector<int>& steps_opt) const
 {
     if (starts.size() != ends.size() || starts.size() > rank())
         throw shape_error("slice: incorrect value for starts and ends");
@@ -337,11 +337,16 @@ Shape Shape::slice(
         axes = axes_opt;
     }
 
-    if (!steps.empty()) {
-        if (axes.size() != starts.size())
+    std::vector<int> steps;
+    if (steps_opt.empty()) {
+        steps.resize(starts.size());
+        std::fill(steps.begin(), steps.end(), 1);
+    } else {
+        if (steps_opt.size() != starts.size())
             throw shape_error("slice: steps has incorrect length");
-        if (std::any_of(steps.begin(), steps.end(), [](auto x){ return x != 1; }))
-            throw shape_error("slice: currently only step 1 is supported"); // FIXME
+        if (std::any_of(steps_opt.begin(), steps_opt.end(), [](auto x){ return x == 0; }))
+            throw shape_error("slice: step cannot be 0");
+        steps = steps_opt;
     }
 
     std::vector<dim_t> dims = m_dims;
@@ -358,20 +363,30 @@ Shape Shape::slice(
         unique_axes.insert(axis);
 
         auto input_dim = static_cast<int>(extent(axis));
+        auto step = steps[i];
 
         int start = starts[i];
         if (start < 0)
             start += input_dim;
-        start = cxx::clamp(start, 0, input_dim);
+        if (step < 0)
+            start = cxx::clamp(start, 0, input_dim - 1);
+        else
+            start = cxx::clamp(start, 0, input_dim);
 
         int end = ends[i];
         if (end < 0)
             end += input_dim;
-        end = cxx::clamp(end, 0, input_dim);
+        if (step < 0)
+            end = cxx::clamp(end, -1, input_dim);
+        else
+            end = cxx::clamp(end, 0, input_dim);
 
-        if (start >= end)
+        // find output dim value for this axis
+        auto temp = (end - start - (step<0 ? -1 : 1)) / step + 1;
+        if (temp <= 0)
             throw shape_error("slice: incorrect start and end value");
-        dims[axis].extent = end - start;
+        dims[axis].extent = temp;
+        dims[axis].stride *= step;
         start_index[axis] = start;
     }
 
@@ -379,6 +394,22 @@ Shape Shape::slice(
     for (int i = 0; i < rank(); i++)
         size *= dims[i].extent;
     return Shape(std::move(dims), size, offset(start_index));
+}
+
+Shape Shape::slice(const std::vector<SliceDim>& dims) const {
+    std::vector<int> axes(dims.size());
+    std::vector<int> starts(dims.size());
+    std::vector<int> ends(dims.size());
+    std::vector<int> steps(dims.size());
+
+    for (int i = 0; i < dims.size(); i++) {
+        axes[i] = i;
+        starts[i] = dims[i].start;
+        ends[i] = dims[i].end;
+        steps[i] = dims[i].step;
+    }
+
+    return slice(starts, ends, axes, steps);
 }
 
 std::ostream& operator<<(std::ostream& os, const Shape& shape) {

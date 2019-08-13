@@ -239,7 +239,7 @@ public: // Attributes
     /**
      * Returns a slice given by the index.
      */
-    Tensor<T> operator[](int index) noexcept;
+    Tensor<T> operator[](int index);
 
 public: // Transformations
     /**
@@ -457,8 +457,8 @@ inline T& Tensor<T>::operator()(Args... args) noexcept {
 }
 
 template <typename T>
-inline Tensor<T> Tensor<T>::operator[](int index) noexcept {
-    auto slice_shape = shape().slice({index}, {index+1}, {0}, {1});
+inline Tensor<T> Tensor<T>::operator[](int index) {
+    auto slice_shape = shape().slice({{index, index+1}});
     return wrap(slice_shape, data() + slice_shape.offset());
 }
 

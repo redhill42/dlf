@@ -14,6 +14,13 @@ public:
     using std::logic_error::logic_error;
 };
 
+struct SliceDim {
+    int start, end, step;
+
+    SliceDim(int start = 0, int end = std::numeric_limits<int>::max(), int step = 1) :
+        start(start), end(end), step(step) {}
+};
+
 /**
  * The Shape defines the dimensions of a Tensor.
  */
@@ -172,6 +179,11 @@ public:
      */
     Shape slice(const std::vector<int>& starts, const std::vector<int>& ends,
                 const std::vector<int>& axes, const std::vector<int>& steps) const;
+
+    /**
+     * Numpy style slice.
+     */
+    Shape slice(const std::vector<SliceDim>& dims) const;
 
     /**
      * Returns the axis that make the give shape to be the channel of this shape.
