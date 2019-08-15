@@ -105,15 +105,15 @@ public:
     }
 
     Shape input_shape() const noexcept {
-        return {batches(), channels(), height(), width()};
+        return Shape(batches(), channels(), height(), width());
     }
 
     Shape kernel_shape() const noexcept {
-        return {num_kernels(), channels()/group(), kernel_h(), kernel_w()};
+        return Shape(num_kernels(), channels()/group(), kernel_h(), kernel_w());
     }
 
     Shape output_shape() const noexcept {
-        return {batches(), num_kernels(), output_h(), output_w()};
+        return Shape(batches(), num_kernels(), output_h(), output_w());
     }
 };
 
@@ -283,7 +283,7 @@ void conv2d(const Tensor<T>& X, const Tensor<T>& W, Tensor<T>& Y, const Filter2D
         temp_buffer = Tensor<T>({k, n});
         work = &temp_buffer;
     } else {
-        work->reshape({int(k), int(n)});
+        work->reshape(k, n);
     }
 
     auto x_buffer = X.data();
@@ -629,7 +629,7 @@ void softmax(const Tensor<T>& X, Tensor<T>& Y, int axis = 1) {
     if (axis < 0) axis += rank;
     if (axis < 0 || axis >= rank)
         throw shape_error("softmax: invalid axis");
-    Y.alloc(X.shape());
+    Y.resize(X.shape());
 
     const auto m = X.shape().partial_size(0, axis);
     const auto n = X.size() / m;
@@ -666,7 +666,7 @@ void softmax(const DevTensor<T>& X, DevTensor<T>& Y, int axis = 1) {
     if (axis < 0) axis += rank;
     if (axis < 0 || axis >= rank)
         throw shape_error("softmax: invalid axis");
-    Y.alloc(X.shape());
+    Y.resize(X.shape());
 
     auto m = X.shape().partial_size(0, axis);
     auto n = X.size() / m;
@@ -674,7 +674,7 @@ void softmax(const DevTensor<T>& X, DevTensor<T>& Y, int axis = 1) {
 }
 
 template <typename TensorT>
-enable_if_tensor<TensorT> softmax(TensorT&& X, int axis = 1) {
+enable_if_non_view_tensor<TensorT> softmax(TensorT&& X, int axis = 1) {
     if (std::is_rvalue_reference<decltype(X)>::value) {
         auto Y = std::move(X);
         softmax(Y, Y, axis);
@@ -692,7 +692,7 @@ void logsoftmax(const Tensor<T>& X, Tensor<T>& Y, int axis = 1) {
     if (axis < 0) axis += rank;
     if (axis < 0 || axis >= rank)
         throw shape_error("logsoftmax: invalid axis");
-    Y.alloc(X.shape());
+    Y.resize(X.shape());
 
     const auto m = X.shape().partial_size(0, axis);
     const auto n = X.size() / m;
@@ -729,7 +729,7 @@ void logsoftmax(const DevTensor<T>& X, DevTensor<T>& Y, int axis = 1) {
     if (axis < 0) axis += rank;
     if (axis < 0 || axis >= rank)
         throw shape_error("logsoftmax: invalid axis");
-    Y.alloc(X.shape());
+    Y.resize(X.shape());
 
     auto m = X.shape().partial_size(0, axis);
     auto n = X.size() / m;
@@ -737,7 +737,7 @@ void logsoftmax(const DevTensor<T>& X, DevTensor<T>& Y, int axis = 1) {
 }
 
 template <typename TensorT>
-enable_if_tensor<TensorT> logsoftmax(TensorT&& X, int axis = 1) {
+enable_if_non_view_tensor<TensorT> logsoftmax(TensorT&& X, int axis = 1) {
     if (std::is_rvalue_reference<decltype(X)>::value) {
         auto Y = std::move(X);
         logsoftmax(Y, Y, axis);
@@ -755,7 +755,7 @@ void hardmax(const Tensor<T>& X, Tensor<T>& Y, int axis = 1) {
     if (axis < 0) axis += rank;
     if (axis < 0 || axis >= rank)
         throw shape_error("hardmax: invalid axis");
-    Y.alloc(X.shape());
+    Y.resize(X.shape());
 
     const auto m = X.shape().partial_size(0, axis);
     const auto n = X.size() / m;
@@ -789,7 +789,7 @@ void hardmax(const DevTensor<T>& X, DevTensor<T>& Y, int axis = 1) {
     if (axis < 0) axis += rank;
     if (axis < 0 || axis >= rank)
         throw shape_error("softmax: invalid axis");
-    Y.alloc(X.shape());
+    Y.resize(X.shape());
 
     auto m = X.shape().partial_size(0, axis);
     auto n = X.size() / m;
@@ -797,7 +797,7 @@ void hardmax(const DevTensor<T>& X, DevTensor<T>& Y, int axis = 1) {
 }
 
 template <typename TensorT>
-enable_if_tensor<TensorT> hardmax(TensorT&& X, int axis = 1) {
+enable_if_non_view_tensor<TensorT> hardmax(TensorT&& X, int axis = 1) {
     if (std::is_rvalue_reference<decltype(X)>::value) {
         auto Y = std::move(X);
         hardmax(Y, Y, axis);
@@ -833,7 +833,7 @@ void arg_reduce(
     int axis, bool keepdims, Compare compare)
 {
     axis = norm_axis(name, axis, X.rank());
-    Y.alloc(get_reduced_shape(X.shape(), axis, keepdims));
+    Y.resize(get_reduced_shape(X.shape(), axis, keepdims));
 
     auto m = X.shape().partial_size(0, axis);
     auto k = X.extent(axis);
@@ -874,7 +874,7 @@ void argmin(const Tensor<T>& X, Tensor<int>& Y, int axis,bool keepdims = true) {
 template <typename T>
 void argmax(const DevTensor<T>& X, DevTensor<int>& Y, int axis, bool keepdims = true) {
     axis = detail::norm_axis("argmax", axis, X.rank());
-    Y.alloc(detail::get_reduced_shape(X.shape(), axis, keepdims));
+    Y.resize(detail::get_reduced_shape(X.shape(), axis, keepdims));
 
     auto m = X.shape().partial_size(0, axis);
     auto k = X.extent(axis);
@@ -885,7 +885,7 @@ void argmax(const DevTensor<T>& X, DevTensor<int>& Y, int axis, bool keepdims = 
 template <typename T>
 void argmin(const DevTensor<T>& X, DevTensor<int>& Y, int axis, bool keepdims = true) {
     axis = detail::norm_axis("argmin", axis, X.rank());
-    Y.alloc(detail::get_reduced_shape(X.shape(), axis, keepdims));
+    Y.resize(detail::get_reduced_shape(X.shape(), axis, keepdims));
 
     auto m = X.shape().partial_size(0, axis);
     auto k = X.extent(axis);
@@ -894,7 +894,7 @@ void argmin(const DevTensor<T>& X, DevTensor<int>& Y, int axis, bool keepdims = 
 }
 
 template <typename TensorT>
-enable_if_tensor<TensorT, tensor_type<TensorT, int>>
+enable_if_non_view_tensor<TensorT, tensor_type<TensorT, int>>
 argmax(const TensorT& X, int axis, bool keepdims = true) {
     tensor_type<TensorT, int> Y{};
     argmax(X, Y, axis, keepdims);
@@ -902,7 +902,7 @@ argmax(const TensorT& X, int axis, bool keepdims = true) {
 }
 
 template <typename TensorT>
-enable_if_tensor<TensorT, tensor_type<TensorT, int>>
+enable_if_non_view_tensor<TensorT, tensor_type<TensorT, int>>
 argmin(const TensorT& X, int axis, bool keepdims = true) {
     tensor_type<TensorT, int> Y{};
     argmin(X, Y, axis, keepdims);
@@ -910,7 +910,7 @@ argmin(const TensorT& X, int axis, bool keepdims = true) {
 }
 
 template <typename TensorT>
-enable_if_tensor<TensorT, void>
+enable_if_non_view_tensor<TensorT, void>
 space_to_depth(const TensorT& X, TensorT& Y, int blocksize) {
     if (blocksize <= 0)
         throw shape_error("space_to_depth: blocksize has incorrect value");
@@ -922,17 +922,17 @@ space_to_depth(const TensorT& X, TensorT& Y, int blocksize) {
         throw shape_error("space_to_depth: blocksize has incorrect value");
 
     auto x_shape = X.shape();
-    x_shape.reshape({n, c, h/blocksize, blocksize, w/blocksize, blocksize});
-    x_shape = x_shape.transpose({0, 3, 5, 1, 2, 4});
+    x_shape = x_shape.reshape(n, c, h/blocksize, blocksize, w/blocksize, blocksize);
+    x_shape = x_shape.transpose(0, 3, 5, 1, 2, 4);
 
-    Y.alloc({size_t(n), size_t(c*blocksize*blocksize), size_t(h/blocksize), size_t(w/blocksize)});
-    Y.reshape({n, blocksize, blocksize, c, h/blocksize, w/blocksize});
+    Y.resize(n, c*blocksize*blocksize, h/blocksize, w/blocksize);
+    Y.reshape(n, blocksize, blocksize, c, h/blocksize, w/blocksize);
     reorder(X, x_shape, Y);
-    Y.reshape({n, c*blocksize*blocksize, h/blocksize, w/blocksize});
+    Y.reshape(n, c*blocksize*blocksize, h/blocksize, w/blocksize);
 }
 
 template <typename TensorT>
-enable_if_tensor<TensorT>
+enable_if_non_view_tensor<TensorT>
 space_to_depth(const TensorT& X, int blocksize) {
     TensorT Y;
     space_to_depth(X, Y, blocksize);
@@ -940,7 +940,7 @@ space_to_depth(const TensorT& X, int blocksize) {
 }
 
 template <typename TensorT>
-enable_if_tensor<TensorT, void>
+enable_if_non_view_tensor<TensorT, void>
 depth_to_space(const TensorT& X, TensorT& Y, int blocksize, std::string mode = "DCR") {
     if (blocksize <= 0)
         throw shape_error("depth_to_space: blocksize has incorrect value");
@@ -955,21 +955,21 @@ depth_to_space(const TensorT& X, TensorT& Y, int blocksize, std::string mode = "
 
     auto x_shape = X.shape();
     if (mode == "DCR") {
-        x_shape.reshape({n, blocksize, blocksize, c/(blocksize*blocksize), h, w});
-        x_shape = x_shape.transpose({0, 3, 4, 1, 5, 2});
+        x_shape = x_shape.reshape(n, blocksize, blocksize, c/(blocksize*blocksize), h, w);
+        x_shape = x_shape.transpose(0, 3, 4, 1, 5, 2);
     } else {
-        x_shape.reshape({n, c/(blocksize*blocksize), blocksize, blocksize, h, w});
-        x_shape = x_shape.transpose({0, 1, 4, 2, 5, 3});
+        x_shape = x_shape.reshape(n, c/(blocksize*blocksize), blocksize, blocksize, h, w);
+        x_shape = x_shape.transpose(0, 1, 4, 2, 5, 3);
     }
 
-    Y.alloc({size_t(n), size_t(c/(blocksize*blocksize)), size_t(h*blocksize), size_t(w*blocksize)});
-    Y.reshape({n, c/(blocksize*blocksize), h, blocksize, w, blocksize});
+    Y.resize(n, c/(blocksize*blocksize), h*blocksize, w*blocksize);
+    Y.reshape(n, c/(blocksize*blocksize), h, blocksize, w, blocksize);
     reorder(X, x_shape, Y);
-    Y.reshape({n, c/(blocksize*blocksize), h*blocksize, w*blocksize});
+    Y.reshape(n, c/(blocksize*blocksize), h*blocksize, w*blocksize);
 }
 
 template <typename TensorT>
-enable_if_tensor<TensorT>
+enable_if_non_view_tensor<TensorT>
 depth_to_space(const TensorT& X, int blocksize, std::string mode = "DCR") {
     TensorT Y;
     depth_to_space(X, Y, blocksize, mode);

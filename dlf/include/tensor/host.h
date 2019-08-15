@@ -85,10 +85,6 @@ private: // Concepts
                 T, typename std::iterator_traits<InputIterator>::reference>::value,
             InputIterator>;
 
-    template <typename... Args>
-    using RequireIndexes =
-        std::enable_if_t<cxx::conjunction<std::is_convertible<Args, size_t>...>::value>;
-
 private:
     /**
      * Construct a tensor with given dimension and wrapped data. This constructor
@@ -144,6 +140,8 @@ public: // Constructors
     /**
      * Construct a tensor from a tensor view. The contents of the tensor view is
      * copied into newly created tensor and the shape is normalized.
+     *
+     * @param view the tensor view
      */
     explicit Tensor(const TensorView<T>& view);
 
@@ -176,13 +174,22 @@ public: // Constructors
     static Tensor build(Shape shape, F f);
 
     /**
-     * Create an n by n identity matrix.
+     * Fill tensor with generator function.
      *
-     * @param n the matrix dimension
-     * @param value the identity value
-     * @return the identity matrix
+     * @param f the generator function
      */
-    static Tensor identity(size_t n, const T& value = T{1});
+    template <typename F>
+    Tensor& generate(F f);
+
+    /**
+     * Create an n by n identity tensor.
+     *
+     * @param r the tensor rank
+     * @param n the tensor dimension
+     * @param value the identity value
+     * @return the identity tensor
+     */
+    static Tensor identity(size_t r, size_t n, const T& value = T{1});
 
     /**
      * Create a tensor with values starting from n.
@@ -218,6 +225,14 @@ public: // Constructors
      */
     static Tensor random(Shape shape, T low, T high);
 
+    /**
+     * Fill the tensor with random data.
+     *
+     * @param low the lowest random value
+     * @param high the highest random value
+     */
+    Tensor& random(T low, T high);
+
     // Copy and move constructors/assignments.
     Tensor(const Tensor& t);
     Tensor& operator=(const Tensor& t);
@@ -228,8 +243,17 @@ public: // Constructors
 
     /**
      * Allocate tensor data if necessary.
+     *
+     * This tensor must be an uninitialized tensor or initialized with the given
+     * shape. In all other cases, the shape_error exception is thrown.
      */
-    Tensor& alloc(const Shape& shape);
+    Tensor& resize(const Shape& shape);
+
+    template <typename... Args>
+    std::enable_if_t<cxx::conjunction<std::is_integral<Args>...>::value, Tensor&>
+    resize(Args... args) {
+        return resize({static_cast<size_t>(args)...});
+    }
 
 public: // Attributes
     /**
@@ -249,14 +273,20 @@ public: // Attributes
     /**
      * Returns the element given by the index.
      */
-    template <typename... Args, typename = RequireIndexes<Args...>>
-    const T& operator()(Args... args) const noexcept;
+    template <typename... Args>
+    std::enable_if_t<cxx::conjunction<std::is_integral<Args>...>::value, const T&>
+    operator()(Args... args) const noexcept {
+        return data()[shape().offset({static_cast<size_t>(args)...})];
+    }
 
     /**
      * Returns the mutable element given by the index.
      */
-    template <typename... Args, typename = RequireIndexes<Args...>>
-    T& operator()(Args... args) noexcept;
+    template <typename... Args>
+    std::enable_if_t<cxx::conjunction<std::is_integral<Args>...>::value, T&>
+    operator()(Args... args) noexcept {
+        return data()[shape().offset({static_cast<size_t>(args)...})];
+    }
 
     /**
      * Returns a slice given by the index.
@@ -291,6 +321,25 @@ public: // Transformations
      */
     template <typename U>
     Tensor<U> cast() const;
+
+public: // Shape operations
+    using Shaped::reshape;
+    using Shaped::flatten;
+    using Shaped::squeeze;
+    using Shaped::unsqueeze;
+
+    TensorView<T> broadcast(const Shape& to) const;
+    TensorView<T> transpose(const std::vector<size_t>& perm) const;
+    TensorView<T> transpose() const;
+    TensorView<T> operator~() const;
+    TensorView<T> slice(const std::vector<SliceDim>& dims) const;
+    TensorView<T> diagonal() const;
+
+    template <typename... Args>
+    std::enable_if_t<cxx::conjunction<std::is_integral<Args>...>::value, TensorView<T>>
+    transpose(Args... args) const {
+        return transpose({static_cast<size_t>(args)...});
+    }
 };
 
 template <typename T>
@@ -334,11 +383,17 @@ public: // Attributes
     T* data() noexcept { return m_data; }
     const T* data() const noexcept { return m_data; }
 
-    template <typename... Args, typename = std::enable_if_t<cxx::conjunction<std::is_convertible<Args, size_t>...>::value>>
-    const T& operator()(Args... args) const noexcept;
+    template <typename... Args>
+    std::enable_if_t<cxx::conjunction<std::is_integral<Args>...>::value, const T&>
+    operator()(Args... args) const noexcept {
+        return data()[shape().offset({static_cast<size_t>(args)...})];
+    }
 
-    template <typename... Args, typename = std::enable_if_t<cxx::conjunction<std::is_convertible<Args, size_t>...>::value>>
-    T& operator()(Args... args) noexcept;
+    template <typename... Args>
+    std::enable_if_t<cxx::conjunction<std::is_integral<Args>...>::value, T&>
+    operator()(Args... args) noexcept {
+        return data()[shape().offset({static_cast<size_t>(args)...})];
+    }
 
     operator Tensor<T>() const { return Tensor<T>(*this); }
 
@@ -352,6 +407,28 @@ public: // Operations
     TensorView& fill(const T& value) {
         std::fill(begin(), end(), value);
         return *this;
+    }
+
+    template <typename F>
+    TensorView& generate(F f) {
+        std::generate(begin(), end(), f);
+        return *this;
+    }
+
+    TensorView& random(T low, T high);
+
+public: // Shape operations
+    TensorView<T> broadcast(const Shape& to) const;
+    TensorView<T> transpose(const std::vector<size_t>& perm) const;
+    TensorView<T> transpose() const;
+    TensorView<T> operator~() const;
+    TensorView<T> slice(const std::vector<SliceDim>& dims) const;
+    TensorView<T> diagonal() const;
+
+    template <typename... Args>
+    std::enable_if_t<cxx::conjunction<std::is_integral<Args>...>::value, TensorView<T>>
+    transpose(Args... args) const {
+        return transpose({static_cast<size_t>(args)...});
     }
 };
 
@@ -402,7 +479,7 @@ Tensor<T>::Tensor(Shape shape, std::shared_ptr<T> data)
 template <typename T>
 Tensor<T>::Tensor(const TensorView<T>& view) : Shaped(view.shape()) {
     init();
-    std::copy(view.begin(), view.end(), m_data);
+    reorder(view, *this);
 }
 
 template <typename T>
@@ -419,17 +496,27 @@ inline Tensor<T> Tensor<T>::scalar(const T& value) {
 
 template <typename T>
 template <typename F>
+inline Tensor<T>& Tensor<T>::generate(F f) {
+    std::generate(begin(), end(), f);
+    return *this;
+}
+
+template <typename T>
+template <typename F>
 inline Tensor<T> Tensor<T>::build(Shape shape, F f) { // NOLINT(performance-unnecessary-value-param)
     Tensor<T> res(std::move(shape));
-    std::generate(res.begin(), res.end(), f);
+    res.generate(f);
     return res;
 }
 
 template <typename T>
-Tensor<T> Tensor<T>::identity(size_t n, const T& value) {
-    Tensor<T> res({n, n});
+Tensor<T> Tensor<T>::identity(size_t r, size_t n, const T& value) {
+    Tensor<T> res(Shape(std::vector<size_t>(r, n)));
+    size_t k = 1, stride = 0;
+    for (int i = 0; i < r; i++)
+        stride += k, k *= n;
     T* p = res.data();
-    for (size_t i = 0; i < n; i++, p += n+1)
+    for (size_t i = 0; i < n; i++, p += stride)
         *p = value;
     return res;
 }
@@ -444,41 +531,23 @@ Tensor<T> Tensor<T>::range(Shape shape, T n, T step) {
 }
 
 template <typename T>
-Tensor<T> Tensor<T>::fill(Shape shape, const T& value) {
-    Tensor<T> res(std::move(shape));
-    std::fill(res.begin(), res.end(), value);
-    return res;
-}
-
-template <typename T>
 inline Tensor<T>& Tensor<T>::fill(const T& value) {
     std::fill(begin(), end(), value);
     return *this;
 }
 
 template <typename T>
-Tensor<T> Tensor<T>::random(Shape shape, T low, T high) {
-    static_assert(std::is_integral<T>::value, "Tensor::random: requires integral type");
-    std::random_device rd;
-    std::default_random_engine eng(rd());
-    auto rand = std::bind(std::uniform_int_distribution<T>(low, high), eng);
-    return build(std::move(shape), rand);
+inline Tensor<T> Tensor<T>::fill(Shape shape, const T& value) {
+    Tensor<T> res(std::move(shape));
+    res.fill(value);
+    return res;
 }
 
-template <>
-inline Tensor<float> Tensor<float>::random(Shape shape, float low, float high) {
-    std::random_device rd;
-    std::default_random_engine eng(rd());
-    auto rand = std::bind(std::uniform_real_distribution<float>(low, high), eng);
-    return build(std::move(shape), rand);
-}
-
-template <>
-inline Tensor<double> Tensor<double>::random(Shape shape, double low, double high) {
-    std::random_device rd;
-    std::default_random_engine eng(rd());
-    auto rand = std::bind(std::uniform_real_distribution<double>(low, high), eng);
-    return build(std::move(shape), rand);
+template <typename T>
+inline Tensor<T> Tensor<T>::random(Shape shape, T low, T high) {
+    Tensor<T> res(std::move(shape));
+    res.random(low, high);
+    return res;
 }
 
 template <typename T>
@@ -490,7 +559,7 @@ Tensor<T>::Tensor(const Tensor& t) : Shaped(t) {
 template <typename T>
 Tensor<T>& Tensor<T>::operator=(const Tensor& t) {
     auto old_size = size();
-    set_shape(t.shape());
+    Shaped::resize(t.shape());
     if (size() != old_size || m_alloc_data == nullptr)
         init();
     std::copy(t.begin(), t.end(), m_data);
@@ -500,7 +569,7 @@ Tensor<T>& Tensor<T>::operator=(const Tensor& t) {
 template <typename T>
 Tensor<T>& Tensor<T>::operator=(const TensorView<T>& v) {
     auto old_size = size();
-    set_shape(v.shape());
+    Shaped::resize(v.shape());
     if (size() != old_size || m_alloc_data == nullptr)
         init();
     std::copy(v.begin(), v.end(), m_data);
@@ -517,16 +586,16 @@ Tensor<T>::Tensor(Tensor&& t) noexcept
 
 template <typename T>
 Tensor<T>& Tensor<T>::operator=(Tensor&& t) noexcept {
-    set_shape(t.shape());
+    Shaped::resize(t.shape());
     m_data = std::exchange(t.m_data, nullptr);
     m_alloc_data = std::move(t.m_alloc_data);
     return *this;
 }
 
 template <typename T>
-Tensor<T>& Tensor<T>::alloc(const Shape& shape) {
+Tensor<T>& Tensor<T>::resize(const Shape& shape) {
     if (empty()) {
-        set_shape(shape);
+        Shaped::resize(shape);
         init();
     } else if (this->shape() != shape) {
         throw shape_error("incompatible shape");
@@ -546,18 +615,6 @@ inline bool operator==(const Tensor<T>& lhs, const Tensor<T>& rhs) {
 template <typename T>
 inline bool operator!=(const Tensor<T>& lhs, const Tensor<T>& rhs) {
     return !(lhs == rhs);
-}
-
-template<typename T>
-template<typename... Args, typename>
-inline const T& Tensor<T>::operator()(Args... args) const noexcept {
-    return data()[shape().offset({size_t(args)...})];
-}
-
-template<typename T>
-template<typename... Args, typename>
-inline T& Tensor<T>::operator()(Args... args) noexcept {
-    return data()[shape().offset({size_t(args)...})];
 }
 
 template <typename T>
@@ -614,75 +671,117 @@ inline bool operator!=(const TensorView<T>& lhs, const Tensor<T>& rhs) {
     return !(lhs == rhs);
 }
 
+//==-------------------------------------------------------------------------
+// Tensor randomize
+//==-------------------------------------------------------------------------
+
 template <typename T>
-template <typename... Args, typename>
-inline const T& TensorView<T>::operator()(Args... args) const noexcept {
-    return data()[shape().offset({size_t(args)...})];
+class randomize_detail {
+    template <typename TensorT>
+    static TensorT& randomize(TensorT& t, T low, T high);
+
+    friend class Tensor<T>;
+    friend class TensorView<T>;
+};
+
+template <typename T>
+template <typename TensorT>
+TensorT& randomize_detail<T>::randomize(TensorT& t, T low, T high) {
+    static_assert(std::is_integral<T>::value, "randomize: requires integral type");
+    std::random_device rd;
+    std::default_random_engine eng(rd());
+    return t.generate(std::bind(std::uniform_int_distribution<T>(low, high), eng));
+}
+
+template <>
+template <typename TensorT>
+TensorT& randomize_detail<float>::randomize(TensorT& t, float low, float high) {
+    std::random_device rd;
+    std::default_random_engine eng(rd());
+    return t.generate(std::bind(std::uniform_real_distribution<float>(low, high), eng));
+}
+
+template <>
+template <typename TensorT>
+TensorT& randomize_detail<double>::randomize(TensorT& t, double low, double high) {
+    std::random_device rd;
+    std::default_random_engine eng(rd());
+    return t.generate(std::bind(std::uniform_real_distribution<double>(low, high), eng));
 }
 
 template <typename T>
-template <typename... Args, typename>
-inline T& TensorView<T>::operator()(Args... args) noexcept {
-    return data()[shape().offset({size_t(args)...})];
+inline Tensor<T>& Tensor<T>::random(T low, T high) {
+    return randomize_detail<T>::randomize(*this, low, high);
+}
+
+template <typename T>
+inline TensorView<T>& TensorView<T>::random(T low, T high) {
+    return randomize_detail<T>::randomize(*this, low, high);
 }
 
 //==-------------------------------------------------------------------------
 // Tensor printer
 //==-------------------------------------------------------------------------
 
-namespace impl {
-template <typename Iterator>
-Iterator print_tensor_rec(std::ostream& out, const Shape& shape, size_t level, Iterator cur) {
-    auto d = shape.extent(level);
+class tensor_printer {
+    template <typename Iterator>
+    static Iterator print_rec(std::ostream& out, const Shape& shape, size_t level, Iterator cur) {
+        auto d = shape.extent(level);
 
-    if (level == shape.rank()-1) {
-        // last level, printing data
-        out << '[';
-        for (int i = 0; ; i++) {
-            out << *cur++;
-            if (i == d-1)
-                break;
-            out << ',';
+        if (level == shape.rank()-1) {
+            // last level, printing data
+            out << '[';
+            for (int i = 0; ; i++) {
+                out << *cur++;
+                if (i == d-1)
+                    break;
+                out << ',';
+            }
+            out << ']';
+        } else {
+            // Intermediate levels, recursive
+            out << '[';
+            for (int i = 0; ; i++) {
+                cur = print_rec(out, shape, level+1, cur);
+                if (i == d-1)
+                    break;
+                out << ',' << '\n';
+                if (level != shape.rank()-2)
+                    out << '\n';
+                for (int j = 0; j <= level; j++)
+                    out << ' ';
+            }
+            out << ']';
         }
-        out << ']';
-    } else {
-        // Intermediate levels, recursive
-        out << '[';
-        for (int i = 0; ; i++) {
-            cur = print_tensor_rec(out, shape, level+1, cur);
-            if (i == d-1)
-                break;
-            out << ',' << '\n';
-            if (level != shape.rank()-2)
-                out << '\n';
-            for (int j = 0; j <= level; j++)
-                out << ' ';
-        }
-        out << ']';
+
+        return cur;
     }
 
-    return cur;
-}
-
-template <typename TensorT>
-std::ostream& print_tensor(std::ostream& out, const TensorT& t) {
-    out << t.shape() << '\n';
-    if (!t.empty()) {
-        print_tensor_rec(out, t.shape(), 0, t.begin());
-        out << '\n';
+    template <typename TensorT>
+    static std::ostream& print(std::ostream& out, const TensorT& t) {
+        out << t.shape() << '\n';
+        if (!t.empty()) {
+            print_rec(out, t.shape(), 0, t.begin());
+            out << '\n';
+        }
+        return out;
     }
-    return out;
-}
-} // namespace impl
+
+    template <typename T>
+    friend std::ostream& operator<<(std::ostream& out, const Tensor<T>& t);
+
+    template <typename T>
+    friend std::ostream& operator<<(std::ostream& out, const TensorView<T>& t);
+};
 
 template <typename T>
 inline std::ostream& operator<<(std::ostream& out, const Tensor<T>& t) {
-    return impl::print_tensor(out, t);
+    return tensor_printer::print(out, t);
 }
 
 template <typename T>
 inline std::ostream& operator<<(std::ostream& out, const TensorView<T>& v) {
-    return impl::print_tensor(out, v);
+    return tensor_printer::print(out, v);
 }
 
 //==-------------------------------------------------------------------------
@@ -695,42 +794,42 @@ inline std::ostream& operator<<(std::ostream& out, const TensorView<T>& v) {
  */
 template <typename T, typename U, typename F>
 inline Tensor<U>& transformTo(const Tensor<T>& A, Tensor<U>& B, F f) {
-    B.alloc(A.shape());
+    B.resize(A.shape());
     par::transform(A.begin(), A.end(), B.begin(), f);
     return B;
 }
 
 template <typename T, typename U, typename F>
 inline TensorView<U>& transformTo(const Tensor<T>& A, TensorView<U>& B, F f) {
-    B.alloc(A.shape());
+    assert(B.shape() == A.shape());
     par::transform(A.begin(), A.end(), B.begin(), f);
     return B;
 }
 
 template <typename T, typename U, typename F>
 inline TensorView<U>& transformTo(const Tensor<T>& A, TensorView<U>&& B, F f) {
-    B.alloc(A.shape());
+    assert(B.shape() == A.shape());
     par::transform(A.begin(), A.end(), B.begin(), f);
     return B;
 }
 
 template <typename T, typename U, typename F>
 inline Tensor<U>& transformTo(const TensorView<T>& A, Tensor<U>& B, F f) {
-    B.alloc(A.shape());
+    B.resize(A.shape());
     par::transform(A.begin(), A.end(), B.begin(), f);
     return B;
 }
 
 template <typename T, typename U, typename F>
 inline TensorView<U>& transformTo(const TensorView<T>& A, TensorView<U>& B, F f) {
-    B.alloc(A.shape());
+    assert(B.shape() == A.shape());
     par::transform(A.begin(), A.end(), B.begin(), f);
     return B;
 }
 
 template <typename T, typename U, typename F>
 inline TensorView<U>& transformTo(const TensorView<T>& A, TensorView<U>&& B, F f) {
-    B.alloc(A.shape());
+    assert(B.shape() == A.shape());
     par::transform(A.begin(), A.end(), B.begin(), f);
     return B;
 }
@@ -917,44 +1016,63 @@ void transformTo(const Shape& shape_A, const T* data_A, const size_t size_A,
     Shape sB = shape_B.broadcast(shape_C);
     int   axis;
 
+    if (size_A == 1) {
+        if (sB.is_contiguous()) {
+            par::transform(data_B + sB.offset(), data_B + sB.offset() + sB.size(),
+                           begin_C,
+                           [x = data_A[shape_A.offset()], f](auto& y){ return f(x, y); });
+        } else {
+            par::transform(const_shaped_iterator<U>(sB, data_B, 0),
+                           const_shaped_iterator<U>(sB, data_B, sB.size()),
+                           begin_C,
+                           [x = data_A[shape_A.offset()], f](auto& y){ return f(x, y); });
+        }
+        return;
+    }
+
+    if (size_B == 1) {
+        if (sA.is_contiguous()) {
+            par::transform(data_A + sA.offset(), data_A + sA.offset() + sA.size(),
+                           begin_C,
+                           [y = data_B[shape_B.offset()], f](auto& x){ return f(x, y); });
+        } else {
+            par::transform(const_shaped_iterator<T>(sA, data_A, 0),
+                           const_shaped_iterator<T>(sA, data_A, sA.size()),
+                           begin_C,
+                           [y = data_B[shape_B.offset()], f](auto& x){ return f(x, y); });
+        }
+        return;
+    }
+
     if (shape_A.is_contiguous() && shape_B.is_contiguous()) {
         if (shape_A == shape_B) {
             assert(shape_A == sA && shape_B == sB);
             par::transform(data_A + sA.offset(), data_A + sA.offset() + sA.size(),
                            data_B + sB.offset(),
                            begin_C, f);
-        } else if (size_A == 1) {
-            par::transform(data_B + sB.offset(), data_B + sB.offset() + sB.size(),
-                           begin_C,
-                           [x = data_A[shape_A.offset()], f](auto& y) { return f(x, y); });
-        } else if (size_B == 1) {
-            par::transform(data_A + sA.offset(), data_A + sA.offset() + sA.size(),
-                           begin_C,
-                           [y = data_B[shape_B.offset()], f](auto& x) { return f(x, y); });
-        } else if ((axis = shape_A.find_channel_axis(shape_B)) != -1) {
+            return;
+        }
+
+        if ((axis = shape_A.find_channel_axis(shape_B)) != -1) {
             transformChannel(shape_A, data_A, shape_B, data_B, shape_C, begin_C, axis, f);
-        } else {
-            par::transform(const_shaped_iterator<T>(sA, data_A, 0),
-                           const_shaped_iterator<T>(sA, data_A, sA.size()),
-                           const_shaped_iterator<U>(sB, data_B, 0),
-                           begin_C, f);
+            return;
         }
+    }
+
+    if (sA.is_contiguous()) {
+        par::transform(data_A + sA.offset(), data_A + sA.offset() + sA.size(),
+                       const_shaped_iterator<U>(sB, data_B, 0),
+                       begin_C, f);
+    } else if (sB.is_contiguous()) {
+        par::transform(const_shaped_iterator<T>(sA, data_A, 0),
+                       const_shaped_iterator<T>(sA, data_A, sA.size()),
+                       data_B + sB.offset(),
+                       begin_C, f);
     } else {
-        if (sA.is_contiguous()) {
-            par::transform(data_A + sA.offset(), data_A + sA.offset() + sA.size(),
-                           const_shaped_iterator<U>(sB, data_B, 0),
-                           begin_C, f);
-        } else if (sB.is_contiguous()) {
-            par::transform(const_shaped_iterator<T>(sA, data_A, 0),
-                           const_shaped_iterator<T>(sA, data_A, sA.size()),
-                           data_B + sB.offset(),
-                           begin_C, f);
-        } else {
-            par::transform(const_shaped_iterator<T>(sA, data_A, 0),
-                           const_shaped_iterator<T>(sA, data_A, sA.size()),
-                           const_shaped_iterator<U>(sB, data_B, 0),
-                           begin_C, f);
-        }
+        par::transform(const_shaped_iterator<T>(sA, data_A, 0),
+                       const_shaped_iterator<T>(sA, data_A, sA.size()),
+                       const_shaped_iterator<U>(sB, data_B, 0),
+                       begin_C, f);
     }
 }
 
@@ -963,7 +1081,7 @@ Tensor<W>& transformTo(const Shape& shape_A, const T* data_A, const size_t size_
                        const Shape& shape_B, const U* data_B, const size_t size_B,
                        Tensor<W>& C, F f)
 {
-    C.alloc(Shape::broadcast(shape_A, shape_B));
+    C.resize(Shape::broadcast(shape_A, shape_B));
     transformTo(shape_A, data_A, size_A, shape_B, data_B, size_B, C.shape(), C.begin(), f);
     return C;
 }
@@ -1118,73 +1236,79 @@ inline Tensor<T>& Tensor<T>::apply(const Tensor<U>& y, F f) {
 //==-------------------------------------------------------------------------
 
 template <typename T>
-TensorView<T> broadcast(const Tensor<T>& src, const Shape& shape) {
-    return TensorView<T>(src.shape().broadcast(shape), src);
+inline TensorView<T> Tensor<T>::broadcast(const Shape& to) const {
+    return TensorView<T>(shape().broadcast(to), *this);
 }
 
 template <typename T>
-TensorView<T> broadcast(const TensorView<T>& src, const Shape& shape) {
-    return TensorView<T>(src.shape().broadcast(shape), src);
+inline TensorView<T> TensorView<T>::broadcast(const Shape& to) const {
+    return TensorView<T>(shape().broadcast(to), *this);
 }
 
 template <typename T>
-void transpose(const Tensor<T>& src, Tensor<T>& dst, const std::vector<size_t>& perm) {
+inline void transpose(const Tensor<T>& src, Tensor<T>& dst, const std::vector<size_t>& perm) {
     Shape shape = src.shape().transpose(perm);
-    reorder(src, shape, dst.alloc(shape));
+    reorder(src, shape, dst.resize(shape));
 }
 
 template <typename T>
-inline TensorView<T> transpose(const Tensor<T>& src, const std::vector<size_t>& perm) {
-    return TensorView<T>(src.shape().transpose(perm), src);
+inline TensorView<T> Tensor<T>::transpose(const std::vector<size_t>& perm) const {
+    return TensorView<T>(shape().transpose(perm), *this);
 }
 
 template <typename T>
-inline TensorView<T> transpose(const Tensor<T>& src) {
-    if (src.is_vector()) {
-        return TensorView<T>({src.extent(0), 1}, src);
-    } else {
-        return TensorView<T>(src.shape().transpose(), src);
-    }
+inline TensorView<T> Tensor<T>::transpose() const {
+    return TensorView<T>(shape().transpose(), *this);
 }
 
 template <typename T>
-inline TensorView<T> transpose(const TensorView<T>& src, const std::vector<size_t>& perm) {
-    return TensorView<T>(src.shape().transpose(perm), src);
+inline TensorView<T> Tensor<T>::operator~() const {
+    return transpose();
 }
 
 template <typename T>
-inline TensorView<T> transpose(const TensorView<T>& src) {
-    return TensorView<T>(src.shape().transpose(), src);
+inline TensorView<T> TensorView<T>::transpose(const std::vector<size_t>& perm) const {
+    return TensorView<T>(shape().transpose(perm), *this);
 }
 
 template <typename T>
-inline TensorView<T> operator~(const Tensor<T>& src) {
-    return transpose(src);
+inline TensorView<T> TensorView<T>::transpose() const {
+    return TensorView<T>(shape().transpose(), *this);
 }
 
 template <typename T>
-inline TensorView<T> operator~(const TensorView<T>& src) {
-    return transpose(src);
+inline TensorView<T> TensorView<T>::operator~() const {
+    return transpose();
 }
 
 template <typename T>
-inline TensorView<T> slice(const Tensor<T>& src, const std::vector<SliceDim>& dims) {
-    return TensorView<T>(src.shape().slice(dims), src);
+inline TensorView<T> Tensor<T>::slice(const std::vector<SliceDim>& dims) const {
+    return TensorView<T>(shape().slice(dims), *this);
 }
 
 template <typename T>
-inline TensorView<T> slice(const TensorView<T>& src, const std::vector<SliceDim>& dims) {
-    return TensorView<T>(src.shape().slice(dims), src);
+inline TensorView<T> TensorView<T>::slice(const std::vector<SliceDim>& dims) const {
+    return TensorView<T>(shape().slice(dims), *this);
 }
 
 template <typename T>
-inline TensorView<T> diagonal(const Tensor<T>& src) {
-    return TensorView<T>(src.shape().diagonal(), src);
+inline TensorView<T> Tensor<T>::diagonal() const {
+    return TensorView<T>(shape().diagonal(), *this);
 }
 
 template <typename T>
-inline TensorView<T> diagonal(const TensorView<T>& src) {
-    return TensorView<T>(src.shape().diagonal(), src);
+inline TensorView<T> TensorView<T>::diagonal() const {
+    return TensorView<T>(shape().diagonal(), *this);
+}
+
+template <typename T>
+inline TensorView<T> squeeze(const TensorView<T>& src, const std::vector<int>& axes = {}) {
+    return TensorView<T>(src.shape().squeeze(axes), src);
+}
+
+template <typename T>
+inline TensorView<T> unsqueeze(const TensorView<T>& src, const std::vector<int>& axes) {
+    return TensorView<T>(src.shape().unsqueeze(axes), src);
 }
 
 //==-------------------------------------------------------------------------
@@ -1272,7 +1396,7 @@ Tensor<T>& dot(const Tensor<T>& A, const Tensor<T>& B, Tensor<T>* C) {
     if (A.is_vector() && B.is_vector()) {
         auto n = A.extent(0);
         assert(n == B.extent(0));
-        C->alloc({1});
+        C->resize({1});
         *C->data() = impl::dot(n, A.data(), B.data());
         return *C;
     }
@@ -1280,7 +1404,7 @@ Tensor<T>& dot(const Tensor<T>& A, const Tensor<T>& B, Tensor<T>* C) {
     if (A.is_matrix() && B.is_vector()) {
         auto m = A.extent(0), n = A.extent(1);
         assert(n == B.extent(0));
-        C->alloc({m});
+        C->resize({m});
         impl::gemv(m, n, A.data(), A.stride(0), B.data(), C->data());
         return *C;
     }
@@ -1292,12 +1416,12 @@ Tensor<T>& dot(const Tensor<T>& A, const Tensor<T>& B, Tensor<T>* C) {
             A_shape = Shape({1, A.extent(0)});
             B_shape = B.shape();
             C_shape = Shape({1, B.extent(1)});
-            C->alloc({B.extent(1)});
+            C->resize({B.extent(1)});
         } else {
             A_shape = A.shape();
             B_shape = B.shape();
             C_shape = Shape({A.extent(0), B.extent(1)});
-            C->alloc(C_shape);
+            C->resize(C_shape);
         }
 
         assert(A_shape.extent(1) == B_shape.extent(0));
@@ -1332,7 +1456,7 @@ gemm(const T& alpha, const Tensor<T>& A, const Tensor<T>& B,
         std::swap(p, n);
     if (k != p)
         throw shape_error("gemm: incompatible shape");
-    C->alloc({m, n});
+    C->resize({m, n});
 
     if (alpha == T(0)) {
         *C *= Tensor<T>::scalar(beta);
@@ -1376,7 +1500,7 @@ gemm(const T& alpha, const Tensor<T>& A, const Tensor<T>& B,
         std::swap(p, n);
     if (k != p)
         throw shape_error("gemm: incompatible shape");
-    C->alloc({m, n});
+    C->resize({m, n});
 
     cblas::gemm(cblas::Layout::RowMajor,
                 transA ? cblas::Transpose::Trans : cblas::Transpose::NoTrans,

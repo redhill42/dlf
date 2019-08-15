@@ -39,14 +39,28 @@ class Shape final {
 
     Shape(std::vector<dim_t>&& dims, size_t size, size_t offset)
         : m_dims(std::move(dims)), m_size(size), m_offset(offset) {}
+
     void init(const std::vector<size_t>& extents) noexcept;
     void init() noexcept;
+
     friend class Shaped;
 
 public:
     Shape() = default;
-    explicit Shape(const std::vector<size_t>& dims) { init(dims); };
-    Shape(std::initializer_list<size_t> dims) { init(dims); }
+
+    explicit Shape(const std::vector<size_t>& dims) {
+        init(dims);
+    }
+
+    Shape(std::initializer_list<size_t> dims) {
+        init(dims);
+    }
+
+    template <typename... Args, typename = std::enable_if_t<cxx::conjunction<std::is_integral<Args>...>::value>>
+    explicit Shape(Args... args) {
+        init(std::vector<size_t>{static_cast<size_t>(args)...});
+    }
+
     Shape(const Shape&) = default;
     Shape& operator=(const Shape&) = default;
     Shape(Shape&& rhs);
@@ -126,15 +140,21 @@ public:
     bool is_tail(const Shape& shape) const noexcept;
 
     /**
-     * Change dimensions of this shape. The new shape must compatible to
+     * Returns a shape with new dimensions. The new shape must compatible to
      * this shape.
      */
-    void reshape(const std::vector<int>& new_shape);
+    Shape reshape(const std::vector<int>& new_shape) const;
+
+    template <typename... Args>
+    std::enable_if_t<cxx::conjunction<std::is_integral<Args>...>::value, Shape>
+    reshape(Args... args) const {
+        return reshape({static_cast<int>(args)...});
+    }
 
     /**
      * Flattens the shape into a 2D matrix shape.
      */
-    void flatten(int axis);
+    Shape flatten(int axis) const;
 
     /**
      * Remove single-dimensional entries from the shape of an array.
@@ -143,12 +163,12 @@ public:
      * in the shape. If an axis is selected with shape entry greater
      * than one, an error is raised.
      */
-    void squeeze(const std::vector<int> axes = {});
+    Shape squeeze(const std::vector<int> axes = {}) const;
 
     template <typename... Args>
-    std::enable_if_t<cxx::conjunction<std::is_convertible<Args, int>...>::value>
-    squeeze(Args... args) {
-        squeeze({static_cast<int>(args)...});
+    std::enable_if_t<cxx::conjunction<std::is_integral<Args>...>::value, Shape>
+    squeeze(Args... args) const {
+        return squeeze({static_cast<int>(args)...});
     }
 
     /**
@@ -156,12 +176,12 @@ public:
      *
      * @param axes List of integers, indicate the dimensions to be inserted.
      */
-    void unsqueeze(const std::vector<int> axes);
+    Shape unsqueeze(const std::vector<int> axes) const;
 
     template <typename... Args>
-    std::enable_if_t<cxx::conjunction<std::is_convertible<Args, int>...>::value>
-    unsqueeze(Args... args) {
-        unsqueeze({static_cast<int>(args)...});
+    std::enable_if_t<cxx::conjunction<std::is_integral<Args>...>::value, Shape>
+    unsqueeze(Args... args) const {
+        return unsqueeze({static_cast<int>(args)...});
     }
 
     /**
@@ -174,6 +194,12 @@ public:
      */
     Shape transpose(const std::vector<size_t>& perm) const;
     Shape transpose() const;
+
+    template <typename... Args>
+    std::enable_if_t<cxx::conjunction<std::is_integral<Args>...>::value, Shape>
+    transpose(Args... args) const {
+        return transpose({static_cast<size_t>(args)...});
+    }
 
     /**
      * Produces a slice of the shape along multiple axes.
@@ -277,12 +303,6 @@ class Shaped {
 private:
     Shape m_shape;
 
-protected:
-    void set_shape(const Shape& shape) {
-        m_shape = shape;
-        m_shape.init();
-    }
-
 public:
     Shaped() = default;
 
@@ -303,54 +323,6 @@ public:
      */
     const Shape& shape() const noexcept {
         return m_shape;
-    }
-
-    /**
-     * Reshape the tensor without changing shaped data. The new shape
-     * should be compatible with the original shape. At most one
-     * dimension of the new shape can be -1. In this case, the
-     * actual dimension value is inferred from the size of the tensor
-     * and the remaining dimensions.
-     *
-     * @param new_shape specifies the new shape.
-     * @return true if shape changed, false if new shape is not
-     * compatible with current shape.
-     */
-    void reshape(const std::vector<int>& new_shape) {
-        m_shape.reshape(new_shape);
-    }
-
-    /**
-     * Flattens the tensor into a 2D matrix.
-     */
-    void flatten(int axis) {
-        m_shape.flatten(axis);
-    }
-
-    /**
-     * Remove single-dimensional entries from the shape.
-     */
-    void squeeze(const std::vector<int> axes = {}) {
-        m_shape.squeeze(axes);
-    }
-
-    template <typename... Args>
-    std::enable_if_t<cxx::conjunction<std::is_convertible<Args, int>...>::value>
-    squeeze(Args... args) {
-        m_shape.squeeze(args...);
-    }
-
-    /**
-     * Insert single-dimensional entries to the shape.
-     */
-    void unsqueeze(const std::vector<int> axes) {
-        m_shape.unsqueeze(axes);
-    }
-
-    template <typename... Args>
-    std::enable_if_t<cxx::conjunction<std::is_convertible<Args, int>...>::value>
-    unsqueeze(Args... args) {
-        m_shape.unsqueeze(args...);
     }
 
     /**
@@ -414,6 +386,70 @@ public:
      */
     bool is_square() const noexcept {
         return is_matrix() && extent(0) == extent(1);
+    }
+
+protected:
+    /**
+     * Reshape the tensor without changing shaped data. The new shape
+     * should be compatible with the original shape.
+     *
+     * @param new_shape specifies the new shape.
+     */
+    void resize(Shape new_shape) {
+        m_shape = std::move(new_shape);
+        m_shape.init();
+    }
+
+    /**
+     * Reshape the tensor without changing shaped data. The new shape
+     * should be compatible with the original shape. At most one
+     * dimension of the new shape can be -1. In this case, the
+     * actual dimension value is inferred from the size of the tensor
+     * and the remaining dimensions.
+     *
+     * @param new_shape specifies the new shape.
+     */
+    void reshape(const std::vector<int>& new_shape) {
+        resize(m_shape.reshape(new_shape));
+    }
+
+    template <typename... Args>
+    std::enable_if_t<cxx::conjunction<std::is_integral<Args>...>::value>
+    reshape(Args... args) {
+        reshape({static_cast<int>(args)...});
+    }
+
+    /**
+     * Flattens the tensor into a 2D matrix.
+     */
+    void flatten(int axis) {
+        resize(m_shape.flatten(axis));
+    }
+
+    /**
+     * Remove single-dimensional entries from the shape.
+     */
+    void squeeze(const std::vector<int> axes = {}) {
+        resize(m_shape.squeeze(axes));
+    }
+
+    template <typename... Args>
+    std::enable_if_t<cxx::conjunction<std::is_integral<Args>...>::value>
+    squeeze(Args... args) {
+        squeeze({static_cast<int>(args)...});
+    }
+
+    /**
+     * Insert single-dimensional entries to the shape.
+     */
+    void unsqueeze(const std::vector<int>& axes) {
+        resize(m_shape.unsqueeze(axes));
+    }
+
+    template <typename... Args>
+    std::enable_if_t<cxx::conjunction<std::is_integral<Args>...>::value>
+    unsqueeze(Args... args) {
+        unsqueeze({static_cast<int>(args)...});
     }
 };
 

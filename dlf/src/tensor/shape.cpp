@@ -146,7 +146,7 @@ int Shape::find_channel_axis(const Shape& base) const {
     return axis;
 }
 
-void Shape::reshape(const std::vector<int>& new_shape) {
+Shape Shape::reshape(const std::vector<int>& new_shape) const {
     std::vector<size_t> dims(new_shape.size());
     size_t new_size = 1;
     int pending = -1;
@@ -179,20 +179,20 @@ void Shape::reshape(const std::vector<int>& new_shape) {
 
     if (size() != new_size)
         throw shape_error("reshape: incompatible shape");
-    init(std::move(dims));
+    return Shape(std::move(dims));
 }
 
-void Shape::flatten(int axis) {
+Shape Shape::flatten(int axis) const {
     if (axis < 0) axis += rank();
     if (axis < 0 || axis > rank())
         throw shape_error("flatten: invalid axis");
 
-    int rows = partial_size(0, axis);
-    int cols = partial_size(axis, rank());
-    reshape({rows, cols});
+    size_t rows = partial_size(0, axis);
+    size_t cols = partial_size(axis, rank());
+    return Shape(rows, cols);
 }
 
-void Shape::squeeze(const std::vector<int> axes) {
+Shape Shape::squeeze(const std::vector<int> axes) const {
     std::unordered_set<int> norm_axes;
     for (auto a : axes) {
         if (a < 0) a += rank();
@@ -201,7 +201,7 @@ void Shape::squeeze(const std::vector<int> axes) {
         norm_axes.insert(a); // duplicate is ok
     }
 
-    std::vector<int> new_dims;
+    std::vector<dim_t> new_dims;
     for (int i = 0; i < rank(); i++) {
         if (norm_axes.find(i) != norm_axes.end()) {
             if (extent(i) != 1)
@@ -210,14 +210,14 @@ void Shape::squeeze(const std::vector<int> axes) {
         } else if (norm_axes.empty() && extent(i) == 1) {
             continue;
         } else {
-            new_dims.push_back(extent(i));
+            new_dims.push_back(m_dims[i]);
         }
     }
 
-    reshape(new_dims);
+    return Shape(std::move(new_dims), size(), offset());
 }
 
-void Shape::unsqueeze(const std::vector<int> axes) {
+Shape Shape::unsqueeze(const std::vector<int> axes) const {
     const auto new_rank = rank() + axes.size();
     std::unordered_set<int> norm_axes;
 
@@ -230,16 +230,16 @@ void Shape::unsqueeze(const std::vector<int> axes) {
         norm_axes.insert(a);
     }
 
-    std::vector<int> new_dims;
+    std::vector<dim_t> new_dims;
     for (size_t i = 0, j = 0; i < new_rank; i++) {
         if (norm_axes.find(i) != norm_axes.end()) {
-            new_dims.push_back(1);
+            new_dims.push_back({1, 0});
         } else {
-            new_dims.push_back(extent(j++));
+            new_dims.push_back(m_dims[j++]);
         }
     }
 
-    reshape(new_dims);
+    return Shape(std::move(new_dims), size(), offset());
 }
 
 Shape Shape::broadcast(const Shape& to) const {
@@ -321,6 +321,13 @@ Shape Shape::transpose(const std::vector<size_t>& perm) const {
 }
 
 Shape Shape::transpose() const {
+    if (rank() == 1) {
+        return Shape({
+            {extent(0), stride(0)},
+            {1, 0}
+        }, size(), offset());
+    }
+
     std::vector<size_t> perm(rank());
     std::iota(perm.begin(), perm.end(), 0);
     std::reverse(perm.begin(), perm.end());

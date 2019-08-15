@@ -38,7 +38,7 @@ public:
     DevTensor& operator=(const DevTensor& src) {
         if (size() != src.size() || m_data.handle() == nullptr)
             m_data = gpgpu::current::context().createBuffer<T>(src.size());
-        set_shape(src.shape());
+        Shaped::resize(src.shape());
         src.copyTo(*this);
         return *this;
     }
@@ -46,14 +46,20 @@ public:
     DevTensor(DevTensor&&) = default;
     DevTensor& operator=(DevTensor&&) = default;
 
-    DevTensor& alloc(const Shape& shape) {
+    DevTensor& resize(const Shape& shape) {
         if (empty()) {
-            set_shape(shape);
+            Shaped::resize(shape);
             m_data = gpgpu::current::context().createBuffer<T>(size());
         } else if (this->shape() != shape) {
             throw shape_error("incompatible shape");
         }
         return *this;
+    }
+
+    template <typename... Args>
+    std::enable_if_t<cxx::conjunction<std::is_integral<Args>...>::value, DevTensor&>
+    resize(Args... args) {
+        return resize({static_cast<size_t>(args)...});
     }
 
     /**
@@ -137,6 +143,24 @@ public:
         res.data().write(gpgpu::current::queue(), &value, 1);
         return res;
     }
+
+public: // Shape operations
+    using Shaped::reshape;
+    using Shaped::flatten;
+    using Shaped::squeeze;
+    using Shaped::unsqueeze;
+
+    DevTensor<T> broadcast(const Shape& to) const;
+    DevTensor<T> transpose(const std::vector<size_t>& perm) const;
+    DevTensor<T> transpose() const;
+    DevTensor<T> operator~() const;
+    DevTensor<T> slice(const std::vector<SliceDim>& dims) const;
+
+    template <typename... Args>
+    std::enable_if_t<cxx::conjunction<std::is_integral<Args>...>::value, DevTensor<T>>
+    transpose(Args... args) const {
+        return transpose({static_cast<size_t>(args)...});
+    }
 };
 
 template <typename T>
@@ -151,7 +175,7 @@ inline DevTensor<T> dev(const Tensor<T>& host) {
 template <typename T, typename Fn>
 std::enable_if_t<!std::is_base_of<xfn::parameterized_function<T>, Fn>::value, DevTensor<T>&>
 inline transformTo(const DevTensor<T>& X, DevTensor<T>& Y, Fn) {
-    Y.alloc(X.shape());
+    Y.resize(X.shape());
     gpgpu::dnn::transform(Fn::name, X.size(), X.data(), Y.data());
     return Y;
 }
@@ -159,7 +183,7 @@ inline transformTo(const DevTensor<T>& X, DevTensor<T>& Y, Fn) {
 template <typename T, typename Fn>
 std::enable_if_t<std::is_base_of<xfn::parameterized_function<T>, Fn>::value, DevTensor<T>&>
 inline transformTo(const DevTensor<T>& X, DevTensor<T>& Y, Fn fn) {
-    Y.alloc(X.shape());
+    Y.resize(X.shape());
     gpgpu::dnn::transform(Fn::name, X.size(), fn.alpha, fn.beta, X.data(), Y.data());
     return Y;
 }
@@ -213,7 +237,7 @@ inline void flat_copy(const DevTensor<T>& src, DevTensor<T>& dst) {
 template <typename T, typename Fn>
 DevTensor<T>& transformTo(const DevTensor<T>& A, const DevTensor<T>& B, DevTensor<T>& C, Fn fn) {
     Shape final_shape = Shape::broadcast(A, B);
-    C.alloc(final_shape);
+    C.resize(final_shape);
 
     if (A.shape().is_tail(B.shape()) || B.shape().is_tail(A.shape())) {
         gpgpu::dnn::transform(Fn::name, A.size(), A.data(), B.size(), B.data(), C.data());
@@ -289,25 +313,17 @@ inline DevTensor<T> transform(DevTensor<T>&& A, DevTensor<T>&& B, Fn fn) {
 //==-------------------------------------------------------------------------
 
 template <typename T>
-inline DevTensor<T> broadcast(const DevTensor<T>& src, const Shape& shape) {
-    DevTensor<T> dst(shape);
-    reorder(src, src.shape().broadcast(shape), dst);
-    return dst;
-}
-
-template <typename T>
-inline DevTensor<T> broadcast(DevTensor<T>&& src, const Shape& shape) {
-    if (src.shape() == shape) {
-        return std::move(src);
-    } else {
-        return broadcast(src, shape);
-    }
+inline DevTensor<T> DevTensor<T>::broadcast(const Shape& to) const {
+    DevTensor<T> ret(to);
+    reorder(*this, shape().broadcast(to), ret);
+    return ret;
 }
 
 template <typename T>
 void transpose(const DevTensor<T>& src, DevTensor<T>& dst, const std::vector<size_t>& perm) {
     Shape shape = src.shape().transpose(perm);
-    dst.alloc(shape);
+    dst.resize(shape);
+
     if (shape.rank() == 2 && !shape.is_contiguous()) {
         gpgpu::blas::omatcopy(gpgpu::blas::Layout::RowMajor,
                               gpgpu::blas::Transpose::Trans,
@@ -320,22 +336,18 @@ void transpose(const DevTensor<T>& src, DevTensor<T>& dst, const std::vector<siz
 }
 
 template <typename T>
-inline DevTensor<T> transpose(const DevTensor<T>& src, const std::vector<size_t>& perm) {
-    DevTensor<T> dst;
-    transpose(src, dst, perm);
-    return dst;
+inline DevTensor<T> DevTensor<T>::transpose(const std::vector<size_t>& perm) const {
+    DevTensor<T> ret;
+    ::dlf::transpose(*this, ret, perm);
+    return ret;
 }
 
 template <typename T>
-DevTensor<T> transpose(const DevTensor<T>& src) {
-    if (src.is_vector()) {
-        return reshape(src, {0, 1});
-    } else {
-        std::vector<size_t> perm(src.rank());
-        std::iota(perm.begin(), perm.end(), 0);
-        std::reverse(perm.begin(), perm.end());
-        return transpose(src, perm);
-    }
+DevTensor<T> DevTensor<T>::transpose() const {
+    Shape transpose_shape = shape().transpose();
+    DevTensor<T> ret(transpose_shape);
+    reorder(*this, transpose_shape, ret);
+    return ret;
 }
 
 /**
@@ -343,16 +355,16 @@ DevTensor<T> transpose(const DevTensor<T>& src) {
  * operator.
  */
 template <typename T>
-inline DevTensor<T> operator~(const DevTensor<T>& src) {
-    return transpose(src);
+inline DevTensor<T> DevTensor<T>::operator~() const {
+    return transpose();
 }
 
 template <typename T>
-DevTensor<T> slice(const DevTensor<T>& X, const std::vector<SliceDim>& dims) {
-    Shape slice_shape = X.shape().slice(dims);
-    DevTensor<T> Y(slice_shape);
-    reorder(X, slice_shape, Y);
-    return Y;
+DevTensor<T> DevTensor<T>::slice(const std::vector<SliceDim>& dims) const {
+    Shape slice_shape = shape().slice(dims);
+    DevTensor<T> ret(slice_shape);
+    reorder(*this, slice_shape, ret);
+    return ret;
 }
 
 //==-------------------------------------------------------------------------
@@ -368,7 +380,7 @@ DevTensor<T>& dot(const DevTensor<T>& A, const DevTensor<T>& B, DevTensor<T>* C)
     if (A.is_vector() && B.is_vector()) {
         auto n = A.extent(0);
         assert(n == B.extent(0));
-        C->alloc({1});
+        C->resize({1});
         gblas::dot(n, A.data(), 1, B.data(), 1, C->data());
         return *C;
     }
@@ -376,7 +388,7 @@ DevTensor<T>& dot(const DevTensor<T>& A, const DevTensor<T>& B, DevTensor<T>* C)
     if (A.is_matrix() && B.is_vector()) {
         auto m = A.extent(0), n = A.extent(1);
         assert(n == B.extent(0));
-        C->alloc({m});
+        C->resize({m});
         gblas::gemv(gblas::Layout::RowMajor,
                     gblas::Transpose::NoTrans,
                     m, n, T(1),
@@ -393,12 +405,12 @@ DevTensor<T>& dot(const DevTensor<T>& A, const DevTensor<T>& B, DevTensor<T>* C)
             A_shape = Shape({1, A.extent(0)});
             B_shape = B.shape();
             C_shape = Shape({1, B.extent(1)});
-            C->alloc({B.extent(1)});
+            C->resize({B.extent(1)});
         } else {
             A_shape = A.shape();
             B_shape = B.shape();
             C_shape = Shape({A.extent(0), B.extent(1)});
-            C->alloc(C_shape);
+            C->resize(C_shape);
         }
 
         assert(A_shape.extent(1) == B_shape.extent(0));
@@ -436,7 +448,7 @@ void gemm(const T& alpha, const DevTensor<T>& A, const DevTensor<T>& B,
         std::swap(p, n);
     if (k != p)
         throw shape_error("gemm: incompatible shape");
-    C->alloc({m, n});
+    C->resize({m, n});
 
     gblas::gemm(gblas::Layout::RowMajor,
                 transA ? gblas::Transpose::Trans : gblas::Transpose::NoTrans,

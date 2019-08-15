@@ -88,10 +88,10 @@ Tensor<Real> preprocess(const cv::Mat& img) {
     cv::Mat tmp_img;
     cv::cvtColor(img, tmp_img, cv::COLOR_BGR2RGB);
 
-    auto tmp = Tensor<uint8_t>::wrap({1, rows, cols, 3}, tmp_img.data);
+    auto pixels = Tensor<uint8_t>::wrap({1, rows, cols, 3}, tmp_img.data) / Real{255};
     auto mean = Tensor<Real>({3}, {0.485, 0.456, 0.406});
     auto stdev = Tensor<Real>({3}, {0.229, 0.224, 0.225});
-    return transpose((tmp / Real{255} - mean) / stdev, {0, 3, 1, 2});
+    return ((pixels - mean) / stdev).transpose({0, 3, 1, 2});
 }
 
 std::vector<Score> postprocess(Tensor<Real>&& scores) {

@@ -15,6 +15,7 @@ template <typename T> struct gpu {};
 template <typename T>
 struct tensor_traits_impl {
     using is_tensor = std::false_type;
+    using is_view = std::false_type;
     using tag = void;
     using value_type = T;
 
@@ -25,6 +26,7 @@ struct tensor_traits_impl {
 template <typename T>
 struct tensor_traits_impl<Tensor<T>> {
     using is_tensor = std::true_type;
+    using is_view = std::false_type;
     using tag = cpu<void>;
     using value_type = T;
 
@@ -35,6 +37,7 @@ struct tensor_traits_impl<Tensor<T>> {
 template <typename T>
 struct tensor_traits_impl<TensorView<T>> {
     using is_tensor = std::true_type;
+    using is_view = std::true_type;
     using tag = cpu<void>;
     using value_type = T;
 
@@ -45,6 +48,7 @@ struct tensor_traits_impl<TensorView<T>> {
 template <typename T>
 struct tensor_traits_impl<DevTensor<T>> {
     using is_tensor = std::true_type;
+    using is_view = std::false_type;
     using tag = gpu<T>;
     using value_type = T;
 
@@ -58,6 +62,9 @@ struct tensor_traits : detail::tensor_traits_impl<std::decay_t<TensorT>> {};
 
 template <typename TensorT>
 using is_tensor = typename tensor_traits<TensorT>::is_tensor;
+
+template <typename TensorT>
+using is_tensor_view = typename tensor_traits<TensorT>::is_view;
 
 template <typename X, typename Y>
 using is_same_tensor = cxx::conjunction<
@@ -73,6 +80,10 @@ using tensor_type = typename tensor_traits<TensorT>::template tensor_type<U>;
 template <typename TensorT, typename R = tensor_type<TensorT>>
 using enable_if_tensor = std::enable_if_t<is_tensor<TensorT>::value, R>;
 
+template <typename TensorT, typename R = tensor_type<TensorT>>
+using enable_if_non_view_tensor =
+    std::enable_if_t<is_tensor<TensorT>::value && !is_tensor_view<TensorT>::value, R>;
+
 template <typename Fn, typename LHS, typename RHS>
 using tensor_invoke_result =
     std::conditional_t<is_tensor<LHS>::value,
@@ -85,6 +96,16 @@ using enable_if_tensors =
         is_same_tensor<LHS, RHS>::value ||
         is_tensor<LHS>::value ||
         is_tensor<RHS>::value, R>;
+
+template <typename LHS, typename RHS, typename Fn, typename R = tensor_invoke_result<Fn, LHS, RHS>>
+using enable_if_non_view_tensors =
+    std::enable_if_t<
+        !is_tensor_view<LHS>::value &&
+        !is_tensor_view<RHS>::value &&
+        (is_same_tensor<LHS, RHS>::value ||
+         is_tensor<LHS>::value ||
+         is_tensor<RHS>::value),
+        R>;
 
 template <typename TensorT, typename U>
 inline tensor_type<TensorT, U> tensor_scalar(U&& value) {
@@ -200,7 +221,7 @@ pow(LHS&& lhs, RHS&& rhs) {
 // vector or matrix dot product.
 
 template <typename TensorT>
-inline enable_if_tensor<TensorT> dot(const TensorT& A, const TensorT& B) {
+inline enable_if_non_view_tensor<TensorT> dot(const TensorT& A, const TensorT& B) {
     TensorT C;
     dot(A, B, &C);
     return C;
@@ -234,35 +255,27 @@ inline DevTensor<T> operator,(const DevTensor<T>& lhs, const DevTensor<T>& rhs) 
  * q + r with dimensions (k1, ..., kq+r) which are the i dimensions followed
  * by the j dimensions.
  */
-template <typename T, typename U, typename F, typename W = cxx::invoke_result_t<F,T,U>>
-Tensor<W> cross(const Tensor<T>& A, const Tensor<U>& B, F f) {
-    std::vector<size_t> dimsA, dimsB;
-    for (size_t i = 0; i < A.rank(); i++) {
-        dimsA.push_back(A.extent(i));
-        dimsB.push_back(1);
-    }
-    for (size_t i = 0; i < B.rank(); i++) {
-        dimsA.push_back(1);
-        dimsB.push_back(B.extent(i));
-    }
-    return transform(Tensor<const T>::wrap(Shape(dimsA), A.data()),
-                     Tensor<const T>::wrap(Shape(dimsB), B.data()),
+template <typename LHS, typename RHS, typename Fn>
+std::enable_if_t<
+    std::is_same<typename tensor_traits<LHS>::tag, detail::cpu<void>>::value &&
+    std::is_same<typename tensor_traits<RHS>::tag, detail::cpu<void>>::value,
+    tensor_invoke_result<Fn, LHS, RHS>>
+cross(const LHS& A, const RHS& B, Fn f) {
+    std::vector<int> axesA(B.rank()), axesB(A.rank());
+    std::iota(axesA.begin(), axesA.end(), A.rank()); // unsqueeze right
+    std::iota(axesB.begin(), axesB.end(), 0);        // unsqueeze left
+    return transform(TensorView<tensor_value_type<LHS>>(A.shape().unsqueeze(axesA), A),
+                     TensorView<tensor_value_type<RHS>>(B.shape().unsqueeze(axesB), B),
                      f);
 }
 
 template <typename T, typename F>
 DevTensor<T> cross(const DevTensor<T>& A, const DevTensor<T>& B, F f) {
-    std::vector<size_t> dimsA, dimsB;
-    for (size_t i = 0; i < A.rank(); i++) {
-        dimsA.push_back(A.extent(i));
-        dimsB.push_back(1);
-    }
-    for (size_t i = 0; i < B.rank(); i++) {
-        dimsA.push_back(1);
-        dimsB.push_back(B.extent(i));
-    }
-    return transform(DevTensor<T>(Shape(dimsA), A.data()),
-                     DevTensor<T>(Shape(dimsB), B.data()),
+    std::vector<int> axesA(B.rank()), axesB(A.rank());
+    std::iota(axesA.begin(), axesA.end(), A.rank()); // unsqueeze right
+    std::iota(axesB.begin(), axesB.end(), 0);        // unsqueeze left
+    return transform(DevTensor<T>(A.shape().unsqueeze(axesA), A.data()),
+                     DevTensor<T>(B.shape().unsqueeze(axesB), B.data()),
                      f);
 }
 
@@ -275,7 +288,7 @@ cross(const LHS& lhs, const RHS& rhs) {
 // General matrix multiplication
 
 template <typename TensorT>
-inline enable_if_tensor<TensorT, void> gemm(
+inline enable_if_non_view_tensor<TensorT, void> gemm(
     const tensor_value_type<TensorT>& alpha, const TensorT& A, const TensorT& B,
     const tensor_value_type<TensorT>& beta, const TensorT& C, TensorT& Y,
     bool transA = false, bool transB = false, TensorT* work = nullptr)
@@ -285,7 +298,7 @@ inline enable_if_tensor<TensorT, void> gemm(
 }
 
 template <typename TensorT>
-enable_if_tensor<TensorT> gemm(
+enable_if_non_view_tensor<TensorT> gemm(
     const tensor_value_type<TensorT>& alpha, const TensorT& A, const TensorT& B,
     const tensor_value_type<TensorT>& beta, const TensorT& C,
     bool transA = false, bool transB = false, TensorT* work = nullptr)
@@ -300,7 +313,7 @@ enable_if_tensor<TensorT> gemm(
         std::swap(p, n);
     assert(k == p);
 
-    tensor_type<TensorT> Y = broadcast(C, {m, n});
+    tensor_type<TensorT> Y = C.broadcast({m, n});
     gemm(alpha, A, B, beta, &Y, transA, transB, work);
     return Y;
 }
@@ -313,9 +326,9 @@ inline int matmul_broadcast(Shape& shapeA, Shape& shapeB, Shape& shapeC) {
     // First promote each shape to at least rank-2. This logic is
     // specific to matmul, not generic broadcasting.
     if (shapeA.rank() == 1)
-        shapeA.unsqueeze(0);
+        shapeA = shapeA.unsqueeze(0);
     if (shapeB.rank() == 1)
-        shapeB.unsqueeze(1);
+        shapeB = shapeB.unsqueeze(1);
 
     auto dimsA = shapeA.extents();
     auto dimsB = shapeB.extents();
@@ -332,8 +345,8 @@ inline int matmul_broadcast(Shape& shapeA, Shape& shapeB, Shape& shapeC) {
     // Now call out to generic multidimensional broadcasting for
     // the broadcastable prefixes.
     auto prefixShape = Shape::broadcast(
-        Shape({dimsA.begin(), dimsA.end() - 2}),
-        Shape({dimsB.begin(), dimsB.end() - 2})
+        Shape(std::vector<size_t>{dimsA.begin(), dimsA.end() - 2}),
+        Shape(std::vector<size_t>{dimsB.begin(), dimsB.end() - 2})
     );
 
     // Back to matmul-specific. Add the trailing dimensions back in.
@@ -399,10 +412,10 @@ void matmul(const Tensor<T>& A, const Tensor<T>& B, Tensor<T>& C) {
     int off_c = shapeC.stride(shapeC.rank() - 3);
 
     if (A.rank() == 1)
-        shapeC.squeeze(-2);
+        shapeC = shapeC.squeeze(-2);
     if (B.rank() == 1)
-        shapeC.squeeze(-1);
-    C.alloc(shapeC);
+        shapeC = shapeC.squeeze(-1);
+    C.resize(shapeC);
 
     auto px = A.data(), py = B.data();
     auto pz = C.data();
@@ -439,10 +452,10 @@ void matmul(const DevTensor<T>& A, const DevTensor<T>& B, DevTensor<T>& C) {
     int off_c = shapeC.stride(shapeC.rank() - 3);
 
     if (A.rank() == 1)
-        shapeC.squeeze(-2);
+        shapeC = shapeC.squeeze(-2);
     if (B.rank() == 1)
-        shapeC.squeeze(-1);
-    C.alloc(shapeC);
+        shapeC = shapeC.squeeze(-1);
+    C.resize(shapeC);
 
     std::vector<size_t> a_offsets(batch);
     std::vector<size_t> b_offsets(batch);
@@ -471,7 +484,7 @@ void matmul(const DevTensor<T>& A, const DevTensor<T>& B, DevTensor<T>& C) {
 }
 
 template <typename TensorT>
-enable_if_tensor<TensorT> matmul(const TensorT& A, const TensorT& B) {
+enable_if_non_view_tensor<TensorT> matmul(const TensorT& A, const TensorT& B) {
     if (A.rank() <= 2 && B.rank() <= 2) {
         return dot(A, B);
     } else {
@@ -482,10 +495,10 @@ enable_if_tensor<TensorT> matmul(const TensorT& A, const TensorT& B) {
 }
 
 template <typename TensorT>
-enable_if_tensor<TensorT> matpow(TensorT&& A, long n) {
+enable_if_non_view_tensor<TensorT> matpow(TensorT&& A, long n) {
     assert(A.is_square() && n >= 0);
     if (n == 0)
-        return Tensor<tensor_value_type<TensorT>>::identity(A.extent(0));
+        return Tensor<tensor_value_type<TensorT>>::identity(2, A.extent(0));
     if (n == 1)
         return std::forward<TensorT>(A);
     n--;
@@ -520,9 +533,17 @@ struct aggregate_type<Fn, First, Tensors...> {
 };
 
 template <typename Fn, typename TensorY, typename TensorA>
-inline void aggregate(Fn, TensorY& Y, TensorA&& A) {
+std::enable_if_t<!is_tensor_view<TensorA>::value>
+inline aggregate(Fn, TensorY& Y, TensorA&& A) {
     assert(A.shape() == Y.shape());
     flat_copy(std::forward<TensorA>(A), Y);
+}
+
+template <typename Fn, typename TensorY, typename TensorA>
+std::enable_if_t<is_tensor_view<TensorA>::value>
+inline aggregate(Fn, TensorY& Y, TensorA&& A) {
+    assert(A.shape() == Y.shape());
+    reorder(std::forward<TensorA>(A), Y);
 }
 
 template <typename Fn, typename TensorY, typename First, typename Second, typename... Rest>
@@ -548,8 +569,8 @@ auto aggregate(Fn fn, First&& first, Rest&&... rest)
 template <typename First, typename... Rest>
 inline auto max(First&& first, Rest&&... rest) {
     return aggregate(xfn::max<tensor_value_type<First>>(),
-                    std::forward<First>(first),
-                    std::forward<Rest>(rest)...);
+                     std::forward<First>(first),
+                     std::forward<Rest>(rest)...);
 }
 
 template <typename First, typename... Rest>
@@ -582,7 +603,7 @@ inline auto product(First&& first, Rest&&... rest) {
 //==-------------------------------------------------------------------------
 
 template <typename TensorT>
-enable_if_tensor<TensorT, void>
+enable_if_non_view_tensor<TensorT, void>
 inline reshape(const TensorT& src, TensorT& dst) {
     if (src.size() != dst.size())
         throw shape_error("cannot reshape to destination tensor");
@@ -590,7 +611,8 @@ inline reshape(const TensorT& src, TensorT& dst) {
 }
 
 template <typename TensorT>
-inline enable_if_tensor<TensorT> reshape(TensorT&& tensor, const std::vector<int>& new_shape) {
+enable_if_tensor<TensorT>
+inline reshape(TensorT&& tensor, const std::vector<int>& new_shape) {
     tensor_type<TensorT> ret = std::forward<TensorT>(tensor);
     ret.reshape(new_shape);
     return ret;
@@ -604,14 +626,14 @@ enable_if_tensor<TensorT> flatten(TensorT&& tensor, int axis) {
 }
 
 template <typename TensorT>
-enable_if_tensor<TensorT> squeeze(TensorT&& tensor, const std::vector<int>& axes = {}) {
+enable_if_non_view_tensor<TensorT> squeeze(TensorT&& tensor, const std::vector<int>& axes = {}) {
     tensor_type<TensorT> ret = std::forward<TensorT>(tensor);
     ret.squeeze(axes);
     return ret;
 }
 
 template <typename TensorT>
-enable_if_tensor<TensorT> unsqueeze(TensorT&& tensor, const std::vector<int>& axes) {
+enable_if_non_view_tensor<TensorT> unsqueeze(TensorT&& tensor, const std::vector<int>& axes) {
     tensor_type<TensorT> ret = std::forward<TensorT>(tensor);
     ret.unsqueeze(axes);
     return ret;
@@ -684,7 +706,7 @@ void split(const DevTensor<T>& input,
 } // namespace detail
 
 template <typename TensorT>
-enable_if_tensor<TensorT, void>
+enable_if_non_view_tensor<TensorT, void>
 concat(int axis, const std::vector<const tensor_type<TensorT>*>& inputs, TensorT& output) {
     auto rank = output.rank();
     if (axis < 0) axis += rank;
@@ -724,7 +746,7 @@ concat(int axis, const std::vector<const tensor_type<TensorT>*>& inputs, TensorT
 
 template <typename TensorT, typename... Tensors>
 std::enable_if_t<
-    is_tensor<TensorT>::value &&
+    is_tensor<TensorT>::value && !is_tensor_view<TensorT>::value &&
     cxx::conjunction<std::is_same<TensorT, Tensors>...>::value,
     tensor_type<TensorT>
 >
@@ -749,7 +771,7 @@ concat(int axis, const TensorT& first, const Tensors&... rest) {
 }
 
 template <typename TensorT>
-enable_if_tensor<TensorT, void>
+enable_if_non_view_tensor<TensorT, void>
 split(int axis, const TensorT& input, const std::vector<tensor_type<TensorT>*>& outputs) {
     auto rank = input.rank();
     if (axis < 0) axis += rank;
@@ -794,14 +816,14 @@ slice(const TensorT& X, TensorT& Y,
       const std::vector<int>& axes, const std::vector<int>& steps)
 {
     Shape slice_shape = X.shape().slice(starts, ends, axes, steps);
-    reorder(X, slice_shape, Y.alloc(slice_shape));
+    reorder(X, slice_shape, Y.resize(slice_shape));
 }
 
 template <typename TensorT>
 enable_if_tensor<TensorT, void>
 slice(const TensorT& X, TensorT& Y, const std::vector<SliceDim>& dims) {
     Shape slice_shape = X.shape().slice(dims);
-    reorder(X, slice_shape, Y.alloc(slice_shape));
+    reorder(X, slice_shape, Y.resize(slice_shape));
 }
 
 template <typename TensorT>
@@ -809,19 +831,21 @@ inline enable_if_tensor<TensorT, void> broadcast(const TensorT& src, TensorT& ds
     reorder(src, src.shape().broadcast(dst.shape()), dst);
 }
 
-template <typename T>
-void where(const Tensor<bool>& C, const Tensor<T>& X, const Tensor<T>& Y, Tensor<T>& Z) {
-    auto final_shape = Shape::broadcast(C, X, Y);
-    Z.alloc(final_shape);
+template <typename TensorT>
+std::enable_if_t<std::is_same<typename tensor_traits<TensorT>::tag, detail::cpu<void>>::value>
+inline where(const Tensor<bool>& C, const TensorT& X, const TensorT& Y, tensor_type<TensorT>& Z) {
+    auto z_shape = Shape::broadcast(C, X, Y);
+    Z.resize(z_shape);
 
-    auto c_shape = C.shape().broadcast(final_shape);
-    auto x_shape = X.shape().broadcast(final_shape);
-    auto y_shape = Y.shape().broadcast(final_shape);
+    auto c_shape = C.shape().broadcast(z_shape);
+    auto x_shape = X.shape().broadcast(z_shape);
+    auto y_shape = Y.shape().broadcast(z_shape);
+    using T = tensor_value_type<TensorT>;
 
     tbb::parallel_for(tbb::blocked_range<size_t>(0, Z.size(), GRAINSIZE), [&](auto r) {
-        auto c_it = std::next(C.begin(c_shape), r.begin());
-        auto x_it = std::next(X.begin(x_shape), r.begin());
-        auto y_it = std::next(Y.begin(y_shape), r.begin());
+        auto c_it = const_shaped_iterator<bool>(c_shape, C.data(), r.begin());
+        auto x_it = const_shaped_iterator<T>(x_shape, X.data(), r.begin());
+        auto y_it = const_shaped_iterator<T>(y_shape, Y.data(), r.begin());
         auto pz = Z.data() + r.begin();
         for (int count = r.size(); --count >= 0; ++pz, ++c_it, ++x_it, ++y_it) {
             *pz = *c_it ? *x_it : *y_it;
@@ -830,16 +854,9 @@ void where(const Tensor<bool>& C, const Tensor<T>& X, const Tensor<T>& Y, Tensor
 }
 
 template <typename T>
-Tensor<T> where(const Tensor<bool>& C, const Tensor<T>& X, const Tensor<T>& Y) {
-    Tensor<T> Z;
-    where(C, X, Y, Z);
-    return Z;
-}
-
-template <typename T>
 void where(const DevTensor<bool>& C, const DevTensor<T>& X, const DevTensor<T>&Y, DevTensor<T>& Z) {
     auto final_shape = Shape::broadcast(C, X, Y);
-    Z.alloc(final_shape);
+    Z.resize(final_shape);
 
     auto c_shape = C.shape().broadcast(final_shape);
     auto x_shape = X.shape().broadcast(final_shape);
@@ -853,9 +870,9 @@ void where(const DevTensor<bool>& C, const DevTensor<T>& X, const DevTensor<T>&Y
         Z.data(), 0);
 }
 
-template <typename T>
-DevTensor<T> where(const DevTensor<bool>& C, const DevTensor<T>& X, const DevTensor<T>& Y) {
-    DevTensor<T> Z;
+template <typename TensorT>
+enable_if_tensor<TensorT> where(const tensor_type<TensorT,bool>& C, const TensorT& X, const TensorT& Y) {
+    tensor_type<TensorT> Z;
     where(C, X, Y, Z);
     return Z;
 }

@@ -317,7 +317,7 @@ TEST(DNNTest, TransformChannel_CPU) {
     auto D = Tensor<int>(A.shape());
 
     transformChannel(A, B, C, 1, xfn::plus<>());
-    transformTo(A, broadcast(B, A.shape()), D, xfn::plus<>());
+    transformTo(A, B.broadcast(A.shape()), D, xfn::plus<>());
     EXPECT_EQ(C, D);
 }
 
@@ -329,8 +329,8 @@ TEST(DNNTest, TransformChannel_GPU) {
 
     transformChannel(A, B, C, 1, xfn::plus<>());
 
-    B = broadcast(B, A.shape());
-    transformTo(A, broadcast(B, A.shape()), D, xfn::plus<>());
+    B = B.broadcast(A.shape());
+    transformTo(A, B.broadcast(A.shape()), D, xfn::plus<>());
     EXPECT_EQ(C.read(), D.read());
 }
 
@@ -341,7 +341,7 @@ TEST(DNNTest, ShapeBroadcastCopy) {
         1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3
     });
 
-    auto dev_A = broadcast(dev(A), {2, 3, 4});
+    auto dev_A = dev(A).broadcast({2, 3, 4});
     EXPECT_EQ(dev_A.read(), B);
 }
 
@@ -390,10 +390,10 @@ Tensor<T> batch_norm_test(const Tensor<T>& x, Tensor<T> s, Tensor<T> b,
                            Tensor<T> m, Tensor<T> v, T epsilon = T(1e-5))
 {
     int c = x.extent(1);
-    s.reshape({1, c, 1, 1});
-    b.reshape({1, c, 1, 1});
-    m.reshape({1, c, 1, 1});
-    v.reshape({1, c, 1, 1});
+    s.reshape(1, c, 1, 1);
+    b.reshape(1, c, 1, 1);
+    m.reshape(1, c, 1, 1);
+    v.reshape(1, c, 1, 1);
     return s * (x - m) / sqrt(v + epsilon) + b;
 }
 

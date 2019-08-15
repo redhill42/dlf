@@ -64,7 +64,7 @@ protected:
 };
 
 TEST_F(TensorTest, Init) {
-    EXPECT_EQ(t1.shape(), Shape({2,3,4}));
+    EXPECT_EQ(t1.shape(), Shape(2,3,4));
     EXPECT_EQ(t1.size(), 2*3*4);
     EXPECT_THAT(t1, ElementsAreArray(data1));
 }
@@ -89,71 +89,71 @@ TEST_F(TensorTest, Reshape) {
     // reordered dims
     {
         Tensor<int> A({2, 3, 4});
-        EXPECT_NO_THROW(A.reshape({4, 2, 3}));
-        EXPECT_EQ(A.shape(), Shape({4, 2, 3}));
+        EXPECT_NO_THROW(A.reshape(4, 2, 3));
+        EXPECT_EQ(A.shape(), Shape(4, 2, 3));
     }
     // reduced dims
     {
         Tensor<int> A({2, 3, 4});
-        EXPECT_NO_THROW(A.reshape({3, 8}));
-        EXPECT_EQ(A.shape(), Shape({3, 8}));
+        EXPECT_NO_THROW(A.reshape(3, 8));
+        EXPECT_EQ(A.shape(), Shape(3, 8));
     }
     // extended dims
     {
         Tensor<int> A({2, 3, 4});
-        EXPECT_NO_THROW(A.reshape({3, 2, 2, 2}));
-        EXPECT_EQ(A.shape(), Shape({3, 2, 2, 2}));
+        EXPECT_NO_THROW(A.reshape(3, 2, 2, 2));
+        EXPECT_EQ(A.shape(), Shape(3, 2, 2, 2));
     }
     // one dim
     {
         Tensor<int> A({2, 3, 4});
-        EXPECT_NO_THROW(A.reshape({24}));
-        EXPECT_EQ(A.shape(), Shape({24}));
+        EXPECT_NO_THROW(A.reshape(24));
+        EXPECT_EQ(A.shape(), Shape(24));
     }
     // negative dim
     {
         Tensor<int> A({2, 3, 4});
-        EXPECT_NO_THROW(A.reshape({6, -1, 2}));
-        EXPECT_EQ(A.shape(), Shape({6, 2, 2}));
+        EXPECT_NO_THROW(A.reshape(6, -1, 2));
+        EXPECT_EQ(A.shape(), Shape(6, 2, 2));
     }
     // multiple negative dim
     {
         Tensor<int> A({2, 3, 4});
-        EXPECT_ANY_THROW(A.reshape({2, -1, -1}));
-        EXPECT_EQ(A.shape(), Shape({2, 3, 4}));
+        EXPECT_ANY_THROW(A.reshape(2, -1, -1));
+        EXPECT_EQ(A.shape(), Shape(2, 3, 4));
     }
     // zero dimension
     {
         Tensor<int> A({2, 3, 4});
-        EXPECT_NO_THROW(A.reshape({0, 0, 2, 2}));
-        EXPECT_EQ(A.shape(), Shape({2, 3, 2, 2}));
+        EXPECT_NO_THROW(A.reshape(0, 0, 2, 2));
+        EXPECT_EQ(A.shape(), Shape(2, 3, 2, 2));
     }
     // zero and -1 dimension
     {
         Tensor<int> A({2, 3, 4});
-        EXPECT_NO_THROW(A.reshape({0, -1}));
-        EXPECT_EQ(A.shape(), Shape({2, 12}));
+        EXPECT_NO_THROW(A.reshape(0, -1));
+        EXPECT_EQ(A.shape(), Shape(2, 12));
     }
     {
         Tensor<int> A({2, 3, 4});
-        EXPECT_NO_THROW(A.reshape({-1, 0}));
-        EXPECT_EQ(A.shape(), Shape({8, 3}));
+        EXPECT_NO_THROW(A.reshape(-1, 0));
+        EXPECT_EQ(A.shape(), Shape(8, 3));
     }
     // empty shape
     {
         Tensor<int> A;
         EXPECT_NO_THROW(A.reshape({}));
-        EXPECT_EQ(A.shape(), Shape({}));
+        EXPECT_EQ(A.shape(), Shape());
     }
     // incompatible shape
     {
         Tensor<int> A({3, 7});
-        EXPECT_ANY_THROW(A.reshape({2, -1}));
-        EXPECT_EQ(A.shape(), Shape({3, 7}));
+        EXPECT_ANY_THROW(A.reshape(2, -1));
+        EXPECT_EQ(A.shape(), Shape(3, 7));
     }
     {
         Tensor<int> A({2, 3});
-        EXPECT_ANY_THROW(A.reshape({0, 0, 0, -1}));
+        EXPECT_ANY_THROW(A.reshape(0, 0, 0, -1));
     }
 }
 
@@ -409,7 +409,7 @@ TEST_F(TensorTest, ShapeBroadcastCopy) {
         1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3,
         1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3
     });
-    EXPECT_EQ(broadcast(A, {2, 3, 4}), B);
+    EXPECT_EQ(A.broadcast({2, 3, 4}), B);
 }
 
 template <typename T>
@@ -509,6 +509,18 @@ TEST_F(TensorTest, MatrixOuter) {
         20, 24, 28, 32, 36, 40
     });
     EXPECT_EQ(cross(A, B), C);
+    EXPECT_EQ(cross(dev(A), dev(B)).read(), C);
+}
+
+TEST_F(TensorTest, MatrixOuterView) {
+    auto A = Tensor<int>::range({5, 2}, 1);
+    auto C = cross(A.slice({{0,2}}), A.slice({{2,5}}));
+    EXPECT_EQ(C, Tensor<int>({2, 2, 3, 2}, {
+         5,  6,  7,  8,  9, 10,
+        10, 12, 14, 16, 18, 20,
+        15, 18, 21, 24, 27, 30,
+        20, 24, 28, 32, 36, 40
+    }));
 }
 
 template <typename T>
