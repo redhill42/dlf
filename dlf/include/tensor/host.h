@@ -286,16 +286,6 @@ public: // Transformations
      */
     template <typename U>
     Tensor<U> cast() const;
-
-private: // Formatting
-    friend std::ostream& operator<<(std::ostream& os, const Tensor& t) {
-        os << t.shape();
-        if (!t.empty())
-            printRec(os, t.shape(), 0, t.data());
-        return os;
-    }
-
-    static const T* printRec(std::ostream& out, const Shape& shape, size_t level, const T* data);
 };
 
 template <typename T>
@@ -358,16 +348,6 @@ public: // Operations
         std::fill(begin(), end(), value);
         return *this;
     }
-
-private: // Formatting
-    friend std::ostream& operator<<(std::ostream& os, const TensorView& v) {
-        os << v.shape();
-        if (!v.empty())
-            printRec(os, v.shape(), 0, v.begin());
-        return os;
-    }
-
-    static const_iterator printRec(std::ostream& out, const Shape& shape, size_t level, const_iterator cur);
 };
 
 //==-------------------------------------------------------------------------
@@ -570,33 +550,6 @@ inline Tensor<T> Tensor<T>::operator[](int index) {
     return wrap(slice_shape, data() + slice_shape.offset());
 }
 
-template <typename T>
-const T* Tensor<T>::printRec(std::ostream& out, const Shape& shape, size_t level, const T* data) {
-    auto d = shape.extent(level);
-
-    out << '[';
-    if (level == shape.rank()-1) {
-        // last level, printing data
-        for (int i = 0; ; i++) {
-            out << *data++;
-            if (i == d-1)
-                break;
-            out << ',';
-        }
-    } else {
-        // intermediate levels, recursive
-        for (int i = 0; ; i++) {
-            data = printRec(out, shape, level+1, data);
-            if (i == d-1)
-                break;
-            out << ',';
-        }
-    }
-    out << ']';
-
-    return data;
-}
-
 //==-------------------------------------------------------------------------
 // TensorView implementation
 //==-------------------------------------------------------------------------
@@ -657,33 +610,63 @@ inline T& TensorView<T>::operator()(Args... args) noexcept {
     return data()[shape().offset({size_t(args)...})];
 }
 
-template <typename T>
-typename TensorView<T>::const_iterator TensorView<T>::printRec(
-    std::ostream& out, const Shape& shape, size_t level, const_iterator cur)
-{
+//==-------------------------------------------------------------------------
+// Tensor printer
+//==-------------------------------------------------------------------------
+
+namespace impl {
+template <typename Iterator>
+Iterator print_tensor_rec(std::ostream& out, const Shape& shape, size_t level, Iterator cur) {
     auto d = shape.extent(level);
 
-    out << '[';
     if (level == shape.rank()-1) {
         // last level, printing data
+        out << '[';
         for (int i = 0; ; i++) {
             out << *cur++;
             if (i == d-1)
                 break;
             out << ',';
         }
+        out << ']';
     } else {
-        // intermediate levels, recursive
+        // Intermediate levels, recursive
+        out << '[';
         for (int i = 0; ; i++) {
-            cur = printRec(out, shape, level+1, cur);
+            cur = print_tensor_rec(out, shape, level+1, cur);
             if (i == d-1)
                 break;
-            out << ',';
+            out << ',' << '\n';
+            if (level != shape.rank()-2)
+                out << '\n';
+            for (int j = 0; j <= level; j++)
+                out << ' ';
         }
+        out << ']';
     }
-    out << ']';
 
     return cur;
+}
+
+template <typename TensorT>
+std::ostream& print_tensor(std::ostream& out, const TensorT& t) {
+    out << t.shape() << '\n';
+    if (!t.empty()) {
+        print_tensor_rec(out, t.shape(), 0, t.begin());
+        out << '\n';
+    }
+    return out;
+}
+} // namespace impl
+
+template <typename T>
+inline std::ostream& operator<<(std::ostream& out, const Tensor<T>& t) {
+    return impl::print_tensor(out, t);
+}
+
+template <typename T>
+inline std::ostream& operator<<(std::ostream& out, const TensorView<T>& v) {
+    return impl::print_tensor(out, v);
 }
 
 //==-------------------------------------------------------------------------
@@ -709,6 +692,13 @@ inline TensorView<U>& transformTo(const Tensor<T>& A, TensorView<U>& B, F f) {
 }
 
 template <typename T, typename U, typename F>
+inline TensorView<U>& transformTo(const Tensor<T>& A, TensorView<U>&& B, F f) {
+    assert(A.shape() == B.shape());
+    par::transform(A.begin(), A.end(), B.begin(), f);
+    return B;
+}
+
+template <typename T, typename U, typename F>
 inline Tensor<U>& transformTo(const TensorView<T>& A, Tensor<U>& B, F f) {
     assert(A.shape() == B.shape());
     par::transform(A.begin(), A.end(), B.begin(), f);
@@ -716,7 +706,14 @@ inline Tensor<U>& transformTo(const TensorView<T>& A, Tensor<U>& B, F f) {
 }
 
 template <typename T, typename U, typename F>
-inline TensorView<U>& transformTo(const TensorView<T>& A, Tensor<U>& B, F f) {
+inline TensorView<U>& transformTo(const TensorView<T>& A, TensorView<U>& B, F f) {
+    assert(A.shape() == B.shape());
+    par::transform(A.begin(), A.end(), B.begin(), f);
+    return B;
+}
+
+template <typename T, typename U, typename F>
+inline TensorView<U>& transformTo(const TensorView<T>& A, TensorView<U>&& B, F f) {
     assert(A.shape() == B.shape());
     par::transform(A.begin(), A.end(), B.begin(), f);
     return B;
@@ -816,7 +813,7 @@ void reorder(const Shape& src_shape, const T* src_data, const size_t src_size,
                   shaped_iterator<T>(dst_shape, dst_data, 0));
     }
 }
-}
+} // namespace impl
 
 template <typename T>
 inline void reorder(const Tensor<T>& src, const Shape& src_shape, Tensor<T>& dst, const Shape& dst_shape) {
@@ -961,7 +958,7 @@ void transformTo(const Shape& shape_A, const T* data_A, const size_t size_A,
         transformTo(shape_A, data_A, size_A, shape_B, data_B, size_B, f, shape_C, shaped_iterator<W>(shape_C, data_C, 0));
     }
 }
-}
+} // namespace impl
 
 template <typename T, typename U, typename W, typename F>
 inline Tensor<W>& transformTo(const Tensor<T>& A, const Tensor<U>& B, Tensor<W>& C, F f) {

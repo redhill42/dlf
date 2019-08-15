@@ -443,7 +443,7 @@ std::ostream& operator<<(std::ostream& os, const Shape& shape) {
         os << shape.extent(i);
         if (i == shape.rank()-1)
             break;
-        os << ',' << ' ';
+        os << ',';
     }
     os << ">>";
     return os;
