@@ -277,6 +277,78 @@ inline DevTensor<T> transform(DevTensor<T>&& A, DevTensor<T>&& B, Fn fn) {
 }
 
 //==-------------------------------------------------------------------------
+// DevTensor shape operations
+//==-------------------------------------------------------------------------
+
+template <typename T>
+inline DevTensor<T> broadcast(const DevTensor<T>& src, const Shape& shape) {
+    DevTensor<T> dst(shape);
+    reorder(src, src.shape().broadcast(shape), dst);
+    return dst;
+}
+
+template <typename T>
+inline DevTensor<T> broadcast(DevTensor<T>&& src, const Shape& shape) {
+    if (src.shape() == shape) {
+        return std::move(src);
+    } else {
+        return broadcast(src, shape);
+    }
+}
+
+template <typename T>
+void transpose(const DevTensor<T>& src, DevTensor<T>& dst, const std::vector<size_t>& perm) {
+    Shape shape = src.shape().transpose(perm);
+    if (shape != dst.shape())
+        throw shape_error("transpose: invalid output shape");
+    if (shape.rank() == 2 && !shape.is_contiguous()) {
+        gpgpu::blas::omatcopy(gpgpu::blas::Layout::RowMajor,
+                              gpgpu::blas::Transpose::Trans,
+                              src.extent(0), src.extent(1),
+                              T(1), src.data(), src.stride(0),
+                              dst.data(), dst.stride(0));
+    } else {
+        reorder(src, shape, dst);
+    }
+}
+
+template <typename T>
+inline DevTensor<T> transpose(const DevTensor<T>& src, const std::vector<size_t>& perm) {
+    DevTensor<T> dst(src.shape().transpose(perm));
+    transpose(src, dst, perm);
+    return dst;
+}
+
+template <typename T>
+DevTensor<T> transpose(const DevTensor<T>& src) {
+    if (src.is_vector()) {
+        return reshape(src, {0, 1});
+    } else {
+        std::vector<size_t> perm(src.rank());
+        std::iota(perm.begin(), perm.end(), 0);
+        std::reverse(perm.begin(), perm.end());
+        return transpose(src, perm);
+    }
+}
+
+/**
+ * We use ~ operator to represent tensor transposition instead of bitwise not
+ * operator.
+ */
+template <typename T>
+inline DevTensor<T> operator~(const DevTensor<T>& src) {
+    return transpose(src);
+}
+
+template <typename T>
+DevTensor<T> slice(const DevTensor<T>& X, const std::vector<SliceDim>& dims) {
+    Shape slice_shape = X.shape().slice(dims);
+    DevTensor<T> Y(slice_shape);
+    reorder(X, slice_shape, Y);
+    return Y;
+}
+
+//==-------------------------------------------------------------------------
 // DevTensor production
 //==-------------------------------------------------------------------------
 

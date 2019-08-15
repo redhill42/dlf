@@ -33,6 +33,16 @@ struct tensor_traits_impl<Tensor<T>> {
 };
 
 template <typename T>
+struct tensor_traits_impl<TensorView<T>> {
+    using is_tensor = std::true_type;
+    using tag = cpu<void>;
+    using value_type = T;
+
+    template <typename U>
+    using tensor_type = Tensor<std::decay_t<U>>;
+};
+
+template <typename T>
 struct tensor_traits_impl<DevTensor<T>> {
     using is_tensor = std::true_type;
     using tag = gpu<T>;
@@ -136,13 +146,13 @@ inline transform(LHS&& lhs, RHS&& rhs, Fn fn) {
 
 #define DEFINE_BINARY_OPERATOR(op, fn)                                              \
 template <typename LHS, typename RHS>                                               \
-std::enable_if_t<is_same_tensor<LHS, RHS>::value, tensor_type<LHS>&>                \
+std::enable_if_t<is_same_tensor<LHS, RHS>::value, LHS&>                             \
 inline operator op##=(LHS& lhs, RHS&& rhs) {                                        \
     return transformTo(lhs, std::forward<RHS>(rhs), lhs, xfn::fn<>());              \
 }                                                                                   \
                                                                                     \
 template <typename LHS, typename RHS>                                               \
-std::enable_if_t<is_tensor<LHS>::value && !is_tensor<RHS>::value, tensor_type<LHS>&>\
+std::enable_if_t<is_tensor<LHS>::value && !is_tensor<RHS>::value, LHS&>             \
 inline operator op##=(LHS& lhs, RHS&& rhs) {                                        \
     return operator op##=(lhs, tensor_scalar<LHS>(std::forward<RHS>(rhs)));         \
 }                                                                                   \
@@ -312,7 +322,7 @@ enable_if_tensor<TensorT> gemm(
         std::swap(p, n);
     assert(k == p);
 
-    auto Y = broadcast(C, {m, n});
+    tensor_type<TensorT> Y = broadcast(C, {m, n});
     gemm(alpha, A, B, beta, &Y, transA, transB, work);
     return Y;
 }
@@ -605,19 +615,11 @@ inline auto product(First&& first, Rest&&... rest) {
 //==-------------------------------------------------------------------------
 
 template <typename TensorT>
-inline enable_if_tensor<TensorT, void> broadcast(const TensorT& src, TensorT& dst) {
-    reorder(src, src.shape().broadcast(dst.shape()), dst);
-}
-
-template <typename TensorT>
-inline enable_if_tensor<TensorT> broadcast(TensorT&& src, const Shape& shape) {
-    if (src.shape() == shape) {
-        return std::forward<TensorT>(src);
-    } else {
-        tensor_type<TensorT> dst(shape);
-        broadcast(src, dst);
-        return dst;
-    }
+enable_if_tensor<TensorT, void>
+inline reshape(const TensorT& src, TensorT& dst) {
+    if (src.size() != dst.size())
+        throw shape_error("cannot reshape to destination tensor");
+    flat_copy(src, dst);
 }
 
 template <typename TensorT>
@@ -625,14 +627,6 @@ inline enable_if_tensor<TensorT> reshape(TensorT&& tensor, const std::vector<int
     tensor_type<TensorT> ret = std::forward<TensorT>(tensor);
     ret.reshape(new_shape);
     return ret;
-}
-
-template <typename TensorT>
-enable_if_tensor<TensorT, void>
-inline reshape(const TensorT& src, TensorT& dst) {
-    if (src.size() != dst.size())
-        throw shape_error("cannot reshape to destination tensor");
-    flat_copy(src, dst);
 }
 
 template <typename TensorT>
@@ -826,64 +820,6 @@ split(int axis, const TensorT& input, const std::vector<tensor_type<TensorT>*>& 
     detail::split(input, outputs, batch, stride, offsets, blocks);
 }
 
-namespace detail {
-template <typename T>
-inline void transpose(const Tensor<T>& src, const Shape& shape, Tensor<T>& dst) {
-    reorder(src, shape, dst);
-}
-
-template <typename T>
-inline void transpose(const DevTensor<T>& src, const Shape& shape, DevTensor<T>& dst) {
-    if (shape.rank() == 2 && !shape.is_contiguous()) {
-        gpgpu::blas::omatcopy(gpgpu::blas::Layout::RowMajor,
-                              gpgpu::blas::Transpose::Trans,
-                              src.extent(0), src.extent(1),
-                              T(1), src.data(), src.stride(0),
-                              dst.data(), dst.stride(0));
-    } else {
-        reorder(src, shape, dst);
-    }
-}
-} // namespace detail
-
-template <typename TensorT>
-enable_if_tensor<TensorT, void>
-transpose(const TensorT& src, TensorT& dst, const std::vector<size_t> perm) {
-    Shape shape = src.shape().transpose(perm);
-    if (shape != dst.shape())
-        throw shape_error("transpose: invalid output shape");
-    detail::transpose(src, shape, dst);
-}
-
-template <typename TensorT>
-enable_if_tensor<TensorT> transpose(const TensorT& src, const std::vector<size_t>& perm) {
-    Shape shape = src.shape().transpose(perm);
-    tensor_type<TensorT> dst(shape);
-    detail::transpose(src, shape, dst);
-    return dst;
-}
-
-template <typename TensorT>
-enable_if_tensor<TensorT> transpose(TensorT&& src) {
-    if (src.is_vector()) {
-        return reshape(std::forward<TensorT>(src), {0, 1});
-    } else {
-        std::vector<size_t> perm(src.rank());
-        std::iota(perm.begin(), perm.end(), 0);
-        std::reverse(perm.begin(), perm.end());
-        return transpose(src, perm);
-    }
-}
-
-/**
- * We use ~ operator to represent tensor transposition instead of bitwise not
- * operator.
- */
-template <typename TensorT>
-inline enable_if_tensor<TensorT> operator~(TensorT&& src) {
-    return transpose(std::forward<TensorT>(src));
-}
-
 template <typename TensorT>
 enable_if_tensor<TensorT, void>
 slice(const TensorT& X, TensorT& Y,
@@ -897,18 +833,6 @@ slice(const TensorT& X, TensorT& Y,
 }
 
 template <typename TensorT>
-enable_if_tensor<TensorT>
-slice(const TensorT& X,
-      const std::vector<int>& starts, const std::vector<int>& ends,
-      const std::vector<int>& axes, const std::vector<int>& steps)
-{
-    Shape slice_shape = X.shape().slice(starts, ends, axes, steps);
-    tensor_type<TensorT> Y(slice_shape);
-    reorder(X, slice_shape, Y);
-    return Y;
-}
-
-template <typename TensorT>
 enable_if_tensor<TensorT, void>
 slice(const TensorT& X, TensorT& Y, const std::vector<SliceDim>& dims) {
     Shape slice_shape = X.shape().slice(dims);
@@ -918,12 +842,8 @@ slice(const TensorT& X, TensorT& Y, const std::vector<SliceDim>& dims) {
 }
 
 template <typename TensorT>
-enable_if_tensor<TensorT>
-slice(const TensorT& X, const std::vector<SliceDim>& dims) {
-    Shape slice_shape = X.shape().slice(dims);
-    tensor_type<TensorT> Y(slice_shape);
-    reorder(X, slice_shape, Y);
-    return Y;
+inline enable_if_tensor<TensorT, void> broadcast(const TensorT& src, TensorT& dst) {
+    reorder(src, src.shape().broadcast(dst.shape()), dst);
 }
 
 template <typename T>

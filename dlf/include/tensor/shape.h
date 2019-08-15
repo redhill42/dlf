@@ -173,6 +173,7 @@ public:
      * Create a transposed shape.
      */
     Shape transpose(const std::vector<size_t>& perm) const;
+    Shape transpose() const;
 
     /**
      * Produces a slice of the shape along multiple axes.
@@ -184,6 +185,12 @@ public:
      * Numpy style slice.
      */
     Shape slice(const std::vector<SliceDim>& dims) const;
+
+    /**
+     * Returns the diagonal shape. The original shape must have same extent
+     * on all axes.
+     */
+    Shape diagonal() const;
 
     /**
      * Returns the axis that make the give shape to be the channel of this shape.
@@ -272,8 +279,18 @@ private:
 
 public:
     Shaped() = default;
-    explicit Shaped(const Shape& shape) : m_shape(shape) { m_shape.init(); }
-    explicit Shaped(Shape&& shape) : m_shape(std::move(shape)) { m_shape.init(); }
+
+    explicit Shaped(const Shape& shape, bool keep = false) :
+        m_shape(shape)
+    {
+        if (!keep) m_shape.init();
+    }
+
+    explicit Shaped(Shape&& shape, bool keep = false) :
+        m_shape(std::move(shape))
+    {
+        if (!keep) m_shape.init();
+    }
 
     /**
      * Returns the shape of this shaped object.

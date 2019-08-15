@@ -320,6 +320,13 @@ Shape Shape::transpose(const std::vector<size_t>& perm) const {
     return Shape(std::move(dims), size(), offset());
 }
 
+Shape Shape::transpose() const {
+    std::vector<size_t> perm(rank());
+    std::iota(perm.begin(), perm.end(), 0);
+    std::reverse(perm.begin(), perm.end());
+    return transpose(perm);
+}
+
 Shape Shape::slice(
     const std::vector<int>& starts, const std::vector<int>& ends,
     const std::vector<int>& axes_opt, const std::vector<int>& steps_opt) const
@@ -410,6 +417,19 @@ Shape Shape::slice(const std::vector<SliceDim>& dims) const {
     }
 
     return slice(starts, ends, axes, steps);
+}
+
+Shape Shape::diagonal() const {
+    auto extent = this->extent(0);
+    auto stride = this->stride(0);
+
+    for (int i = 1; i < rank(); i++) {
+        if (extent != this->extent(i))
+            throw shape_error("diagonal: the input shape must have same extent on all axes");
+        stride += this->stride(i);
+    }
+
+    return Shape({{extent, stride}}, extent, offset());
 }
 
 std::ostream& operator<<(std::ostream& os, const Shape& shape) {
