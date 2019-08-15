@@ -277,6 +277,12 @@ class Shaped {
 private:
     Shape m_shape;
 
+protected:
+    void set_shape(const Shape& shape) {
+        m_shape = shape;
+        m_shape.init();
+    }
+
 public:
     Shaped() = default;
 

@@ -38,13 +38,23 @@ public:
     DevTensor& operator=(const DevTensor& src) {
         if (size() != src.size() || m_data.handle() == nullptr)
             m_data = gpgpu::current::context().createBuffer<T>(src.size());
-        Shaped::operator=(src);
+        set_shape(src.shape());
         src.copyTo(*this);
         return *this;
     }
 
     DevTensor(DevTensor&&) = default;
     DevTensor& operator=(DevTensor&&) = default;
+
+    DevTensor& alloc(const Shape& shape) {
+        if (empty()) {
+            set_shape(shape);
+            m_data = gpgpu::current::context().createBuffer<T>(size());
+        } else if (this->shape() != shape) {
+            throw shape_error("incompatible shape");
+        }
+        return *this;
+    }
 
     /**
      * Read data from device.
@@ -140,30 +150,30 @@ inline DevTensor<T> dev(const Tensor<T>& host) {
 
 template <typename T, typename Fn>
 std::enable_if_t<!std::is_base_of<xfn::parameterized_function<T>, Fn>::value, DevTensor<T>&>
-inline transformTo(const DevTensor<T>& x, DevTensor<T>& y, Fn) {
-    assert(x.shape() == y.shape());
-    gpgpu::dnn::transform(Fn::name, x.size(), x.data(), y.data());
-    return y;
+inline transformTo(const DevTensor<T>& X, DevTensor<T>& Y, Fn) {
+    Y.alloc(X.shape());
+    gpgpu::dnn::transform(Fn::name, X.size(), X.data(), Y.data());
+    return Y;
 }
 
 template <typename T, typename Fn>
 std::enable_if_t<std::is_base_of<xfn::parameterized_function<T>, Fn>::value, DevTensor<T>&>
 inline transformTo(const DevTensor<T>& X, DevTensor<T>& Y, Fn fn) {
-    assert(X.shape() == Y.shape());
+    Y.alloc(X.shape());
     gpgpu::dnn::transform(Fn::name, X.size(), fn.alpha, fn.beta, X.data(), Y.data());
     return Y;
 }
 
 template <typename T, typename Fn>
-inline DevTensor<T> transform(const DevTensor<T>& x, Fn fn) {
-    DevTensor<T> y(x.shape());
-    transformTo(x, y, fn);
-    return y;
+inline DevTensor<T> transform(const DevTensor<T>& X, Fn fn) {
+    DevTensor<T> Y;
+    transformTo(X, Y, fn);
+    return Y;
 }
 
 template <typename T, typename Fn>
-inline DevTensor<T> transform(DevTensor<T>&& x, Fn fn) {
-    return std::move(transformTo(x, x, fn));
+inline DevTensor<T> transform(DevTensor<T>&& X, Fn fn) {
+    return std::move(transformTo(X, X, fn));
 }
 
 template <typename T>
@@ -203,9 +213,7 @@ inline void flat_copy(const DevTensor<T>& src, DevTensor<T>& dst) {
 template <typename T, typename Fn>
 DevTensor<T>& transformTo(const DevTensor<T>& A, const DevTensor<T>& B, DevTensor<T>& C, Fn fn) {
     Shape final_shape = Shape::broadcast(A, B);
-    if (C.shape() != final_shape) {
-        throw shape_error("incompatible shape");
-    }
+    C.alloc(final_shape);
 
     if (A.shape().is_tail(B.shape()) || B.shape().is_tail(A.shape())) {
         gpgpu::dnn::transform(Fn::name, A.size(), A.data(), B.size(), B.data(), C.data());
@@ -244,7 +252,7 @@ void transformChannel(const DevTensor<T>& A, const DevTensor<T>& B, DevTensor<T>
 
 template <typename T, typename Fn>
 inline DevTensor<T> transform(const DevTensor<T>& A, const DevTensor<T>& B, Fn fn) {
-    DevTensor<T> C(Shape::broadcast(A, B));
+    DevTensor<T> C;
     transformTo(A, B, C, fn);
     return C;
 }
@@ -299,8 +307,7 @@ inline DevTensor<T> broadcast(DevTensor<T>&& src, const Shape& shape) {
 template <typename T>
 void transpose(const DevTensor<T>& src, DevTensor<T>& dst, const std::vector<size_t>& perm) {
     Shape shape = src.shape().transpose(perm);
-    if (shape != dst.shape())
-        throw shape_error("transpose: invalid output shape");
+    dst.alloc(shape);
     if (shape.rank() == 2 && !shape.is_contiguous()) {
         gpgpu::blas::omatcopy(gpgpu::blas::Layout::RowMajor,
                               gpgpu::blas::Transpose::Trans,
@@ -314,7 +321,7 @@ void transpose(const DevTensor<T>& src, DevTensor<T>& dst, const std::vector<siz
 
 template <typename T>
 inline DevTensor<T> transpose(const DevTensor<T>& src, const std::vector<size_t>& perm) {
-    DevTensor<T> dst(src.shape().transpose(perm));
+    DevTensor<T> dst;
     transpose(src, dst, perm);
     return dst;
 }
@@ -361,7 +368,7 @@ DevTensor<T>& dot(const DevTensor<T>& A, const DevTensor<T>& B, DevTensor<T>* C)
     if (A.is_vector() && B.is_vector()) {
         auto n = A.extent(0);
         assert(n == B.extent(0));
-        assert(C->is_scalar());
+        C->alloc({1});
         gblas::dot(n, A.data(), 1, B.data(), 1, C->data());
         return *C;
     }
@@ -369,7 +376,7 @@ DevTensor<T>& dot(const DevTensor<T>& A, const DevTensor<T>& B, DevTensor<T>* C)
     if (A.is_matrix() && B.is_vector()) {
         auto m = A.extent(0), n = A.extent(1);
         assert(n == B.extent(0));
-        assert(C->is_vector() && m == C->extent(0));
+        C->alloc({m});
         gblas::gemv(gblas::Layout::RowMajor,
                     gblas::Transpose::NoTrans,
                     m, n, T(1),
@@ -383,21 +390,18 @@ DevTensor<T>& dot(const DevTensor<T>& A, const DevTensor<T>& B, DevTensor<T>* C)
         Shape A_shape, B_shape, C_shape;
 
         if (A.is_vector()) {
-            assert(C->is_vector());
             A_shape = Shape({1, A.extent(0)});
             B_shape = B.shape();
-            C_shape = Shape({1, C->extent(0)});
+            C_shape = Shape({1, B.extent(1)});
+            C->alloc({B.extent(1)});
         } else {
-            assert(C->is_matrix());
             A_shape = A.shape();
             B_shape = B.shape();
-            C_shape = C->shape();
+            C_shape = Shape({A.extent(0), B.extent(1)});
+            C->alloc(C_shape);
         }
 
         assert(A_shape.extent(1) == B_shape.extent(0));
-        assert(C_shape.extent(0) == A_shape.extent(0));
-        assert(C_shape.extent(1) == B_shape.extent(1));
-
         gblas::gemm(gblas::Layout::RowMajor,
                     gblas::Transpose::NoTrans,
                     gblas::Transpose::NoTrans,
@@ -430,8 +434,9 @@ void gemm(const T& alpha, const DevTensor<T>& A, const DevTensor<T>& B,
         std::swap(m, k);
     if (transB)
         std::swap(p, n);
-    if (k != p || m != C->extent(0) || n != C->extent(1))
+    if (k != p)
         throw shape_error("gemm: incompatible shape");
+    C->alloc({m, n});
 
     gblas::gemm(gblas::Layout::RowMajor,
                 transA ? gblas::Transpose::Trans : gblas::Transpose::NoTrans,

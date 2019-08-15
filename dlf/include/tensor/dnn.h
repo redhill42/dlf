@@ -625,12 +625,11 @@ void global_lppool(const DevTensor<T>& input, DevTensor<T>& output, int p) {
 
 template <typename T>
 void softmax(const Tensor<T>& X, Tensor<T>& Y, int axis = 1) {
-    assert(Y.shape() == X.shape());
-
     auto rank = X.rank();
     if (axis < 0) axis += rank;
     if (axis < 0 || axis >= rank)
         throw shape_error("softmax: invalid axis");
+    Y.alloc(X.shape());
 
     const auto m = X.shape().partial_size(0, axis);
     const auto n = X.size() / m;
@@ -667,10 +666,10 @@ void softmax(const DevTensor<T>& X, DevTensor<T>& Y, int axis = 1) {
     if (axis < 0) axis += rank;
     if (axis < 0 || axis >= rank)
         throw shape_error("softmax: invalid axis");
+    Y.alloc(X.shape());
 
     auto m = X.shape().partial_size(0, axis);
     auto n = X.size() / m;
-    assert(Y.shape() == X.shape() );
     gpgpu::dnn::softmax(m, n, X.data(), Y.data());
 }
 
@@ -681,7 +680,7 @@ enable_if_tensor<TensorT> softmax(TensorT&& X, int axis = 1) {
         softmax(Y, Y, axis);
         return Y;
     } else {
-        auto Y = tensor_type<TensorT>(X.shape());
+        tensor_type<TensorT> Y{};
         softmax(X, Y, axis);
         return Y;
     }
@@ -689,12 +688,11 @@ enable_if_tensor<TensorT> softmax(TensorT&& X, int axis = 1) {
 
 template <typename T>
 void logsoftmax(const Tensor<T>& X, Tensor<T>& Y, int axis = 1) {
-    assert(Y.shape() == X.shape());
-
     auto rank = X.rank();
     if (axis < 0) axis += rank;
     if (axis < 0 || axis >= rank)
         throw shape_error("logsoftmax: invalid axis");
+    Y.alloc(X.shape());
 
     const auto m = X.shape().partial_size(0, axis);
     const auto n = X.size() / m;
@@ -731,10 +729,10 @@ void logsoftmax(const DevTensor<T>& X, DevTensor<T>& Y, int axis = 1) {
     if (axis < 0) axis += rank;
     if (axis < 0 || axis >= rank)
         throw shape_error("logsoftmax: invalid axis");
+    Y.alloc(X.shape());
 
     auto m = X.shape().partial_size(0, axis);
     auto n = X.size() / m;
-    assert(Y.shape() == X.shape());
     gpgpu::dnn::logsoftmax(m, n, X.data(), Y.data());
 }
 
@@ -745,7 +743,7 @@ enable_if_tensor<TensorT> logsoftmax(TensorT&& X, int axis = 1) {
         logsoftmax(Y, Y, axis);
         return Y;
     } else {
-        auto Y = tensor_type<TensorT>(X.shape());
+        tensor_type<TensorT> Y{};
         logsoftmax(X, Y, axis);
         return Y;
     }
@@ -753,12 +751,11 @@ enable_if_tensor<TensorT> logsoftmax(TensorT&& X, int axis = 1) {
 
 template <typename T>
 void hardmax(const Tensor<T>& X, Tensor<T>& Y, int axis = 1) {
-    assert(Y.shape() == X.shape());
-
     auto rank = X.rank();
     if (axis < 0) axis += rank;
     if (axis < 0 || axis >= rank)
         throw shape_error("hardmax: invalid axis");
+    Y.alloc(X.shape());
 
     const auto m = X.shape().partial_size(0, axis);
     const auto n = X.size() / m;
@@ -792,10 +789,10 @@ void hardmax(const DevTensor<T>& X, DevTensor<T>& Y, int axis = 1) {
     if (axis < 0) axis += rank;
     if (axis < 0 || axis >= rank)
         throw shape_error("softmax: invalid axis");
+    Y.alloc(X.shape());
 
     auto m = X.shape().partial_size(0, axis);
     auto n = X.size() / m;
-    assert(Y.shape() == X.shape());
     gpgpu::dnn::hardmax(m, n, X.data(), Y.data());
 }
 
@@ -806,7 +803,7 @@ enable_if_tensor<TensorT> hardmax(TensorT&& X, int axis = 1) {
         hardmax(Y, Y, axis);
         return Y;
     } else {
-        auto Y = tensor_type<TensorT>(X.shape());
+        tensor_type<TensorT> Y{};
         hardmax(X, Y, axis);
         return Y;
     }
@@ -820,24 +817,14 @@ inline int norm_axis(const char* name, int axis, size_t rank) {
     return axis;
 }
 
-inline bool check_reduced_shape(int axis, bool keepdims,
-    const Shape& x_shape, const Shape& y_shape)
-{
-    auto x_dims = x_shape.extents();
-    auto y_dims = y_shape.extents();
-
+inline Shape get_reduced_shape(const Shape& x_shape, int axis, bool keepdims) {
+    auto y_dims = x_shape.extents();
     if (keepdims) {
-        if (x_dims.size() != y_dims.size())
-            return false;
-        if (y_dims[axis] != 1)
-            return false;
-        y_dims[axis] = x_dims[axis];
+        y_dims[axis] = 1;
     } else {
-        if (x_dims.size() != y_dims.size() + 1)
-            return false;
-        y_dims.insert(y_dims.begin()+axis, x_dims[axis]);
+        y_dims.erase(y_dims.begin() + axis);
     }
-    return x_dims == y_dims;
+    return Shape(y_dims);
 }
 
 template <typename T, typename Compare>
@@ -846,8 +833,7 @@ void arg_reduce(
     int axis, bool keepdims, Compare compare)
 {
     axis = norm_axis(name, axis, X.rank());
-    if (!check_reduced_shape(axis, keepdims, X.shape(), Y.shape()))
-        throw shape_error(cxx::string_concat(name, ": incompatible output shape"));
+    Y.alloc(get_reduced_shape(X.shape(), axis, keepdims));
 
     auto m = X.shape().partial_size(0, axis);
     auto k = X.extent(axis);
@@ -888,8 +874,7 @@ void argmin(const Tensor<T>& X, Tensor<int>& Y, int axis,bool keepdims = true) {
 template <typename T>
 void argmax(const DevTensor<T>& X, DevTensor<int>& Y, int axis, bool keepdims = true) {
     axis = detail::norm_axis("argmax", axis, X.rank());
-    if (!detail::check_reduced_shape(axis, keepdims, X.shape(), Y.shape()))
-        throw shape_error("argmax: incompatible output shape");
+    Y.alloc(detail::get_reduced_shape(X.shape(), axis, keepdims));
 
     auto m = X.shape().partial_size(0, axis);
     auto k = X.extent(axis);
@@ -900,8 +885,7 @@ void argmax(const DevTensor<T>& X, DevTensor<int>& Y, int axis, bool keepdims = 
 template <typename T>
 void argmin(const DevTensor<T>& X, DevTensor<int>& Y, int axis, bool keepdims = true) {
     axis = detail::norm_axis("argmin", axis, X.rank());
-    if (!detail::check_reduced_shape(axis, keepdims, X.shape(), Y.shape()))
-        throw shape_error("argmin: incompatible output shape");
+    Y.alloc(detail::get_reduced_shape(X.shape(), axis, keepdims));
 
     auto m = X.shape().partial_size(0, axis);
     auto k = X.extent(axis);
@@ -912,16 +896,7 @@ void argmin(const DevTensor<T>& X, DevTensor<int>& Y, int axis, bool keepdims = 
 template <typename TensorT>
 enable_if_tensor<TensorT, tensor_type<TensorT, int>>
 argmax(const TensorT& X, int axis, bool keepdims = true) {
-    axis = detail::norm_axis("argmax", axis, X.rank());
-
-    auto dims = X.shape().extents();
-    if (keepdims) {
-        dims[axis] = 1;
-    } else {
-        dims.erase(dims.begin() + axis);
-    }
-
-    auto Y = tensor_type<TensorT, int>(Shape(dims));
+    tensor_type<TensorT, int> Y{};
     argmax(X, Y, axis, keepdims);
     return Y;
 }
@@ -929,16 +904,7 @@ argmax(const TensorT& X, int axis, bool keepdims = true) {
 template <typename TensorT>
 enable_if_tensor<TensorT, tensor_type<TensorT, int>>
 argmin(const TensorT& X, int axis, bool keepdims = true) {
-    axis = detail::norm_axis("argmin", axis, X.rank());
-
-    auto dims = X.shape().extents();
-    if (keepdims) {
-        dims[axis] = 1;
-    } else {
-        dims.erase(dims.begin() + axis);
-    }
-
-    auto Y = tensor_type<TensorT, int>(Shape(dims));
+    tensor_type<TensorT, int> Y{};
     argmin(X, Y, axis, keepdims);
     return Y;
 }
@@ -950,19 +916,16 @@ space_to_depth(const TensorT& X, TensorT& Y, int blocksize) {
         throw shape_error("space_to_depth: blocksize has incorrect value");
     if (X.rank() != 4)
         throw shape_error("space_to_depth: input tensor must be 4-dimensional");
-    if (Y.rank() != 4)
-        throw shape_error("space_to_depth: output tensor must be 4-dimensional");
-    if (Y.extent(0) != X.extent(0) ||
-        Y.extent(1) != X.extent(1)*blocksize*blocksize ||
-        Y.extent(2)*blocksize != X.extent(2) ||
-        Y.extent(3)*blocksize != X.extent(3))
-        throw shape_error("space_to_depth: incompatible output tensor shape");
 
     int n = X.extent(0), c = X.extent(1), h = X.extent(2), w = X.extent(3);
+    if (h % blocksize != 0 || w % blocksize != 0)
+        throw shape_error("space_to_depth: blocksize has incorrect value");
+
     auto x_shape = X.shape();
     x_shape.reshape({n, c, h/blocksize, blocksize, w/blocksize, blocksize});
     x_shape = x_shape.transpose({0, 3, 5, 1, 2, 4});
 
+    Y.alloc({size_t(n), size_t(c*blocksize*blocksize), size_t(h/blocksize), size_t(w/blocksize)});
     Y.reshape({n, blocksize, blocksize, c, h/blocksize, w/blocksize});
     reorder(X, x_shape, Y);
     Y.reshape({n, c*blocksize*blocksize, h/blocksize, w/blocksize});
@@ -971,15 +934,7 @@ space_to_depth(const TensorT& X, TensorT& Y, int blocksize) {
 template <typename TensorT>
 enable_if_tensor<TensorT>
 space_to_depth(const TensorT& X, int blocksize) {
-    if (blocksize <= 0)
-        throw shape_error("space_to_depth: blocksize has incorrect value");
-    if (X.rank() != 4)
-        throw shape_error("space_to_depth: input tensor must be 4-dimensional");
-    if (X.extent(2) % blocksize != 0 || X.extent(3) % blocksize != 0)
-        throw shape_error("space_to_depth: blocksize has incorrect value");
-
-    auto n = X.extent(0), c = X.extent(1), h = X.extent(2), w = X.extent(3);
-    tensor_type<TensorT> Y({n, c*blocksize*blocksize, h/blocksize, w/blocksize});
+    TensorT Y;
     space_to_depth(X, Y, blocksize);
     return Y;
 }
@@ -991,17 +946,12 @@ depth_to_space(const TensorT& X, TensorT& Y, int blocksize, std::string mode = "
         throw shape_error("depth_to_space: blocksize has incorrect value");
     if (X.rank() != 4)
         throw shape_error("depth_to_space: input tensor must be 4-dimensional");
-    if (Y.rank() != 4)
-        throw shape_error("depth_to_space: output tensor must be 4-dimensional");
-    if (Y.extent(0) != X.extent(0) ||
-        Y.extent(1)*blocksize*blocksize != X.extent(1) ||
-        Y.extent(2) != X.extent(2)*blocksize ||
-        Y.extent(3) != X.extent(3)*blocksize)
-        throw shape_error("depth_to_space: incompatible output tensor shape");
     if (mode != "DCR" && mode != "CRD")
         throw shape_error("depth_to_space: mode has incorrect value");
 
     int n = X.extent(0), c = X.extent(1), h = X.extent(2), w = X.extent(3);
+    if (c % (blocksize*blocksize) != 0)
+        throw shape_error("depth_to_space: blocksize has incorrect value");
 
     auto x_shape = X.shape();
     if (mode == "DCR") {
@@ -1012,6 +962,7 @@ depth_to_space(const TensorT& X, TensorT& Y, int blocksize, std::string mode = "
         x_shape = x_shape.transpose({0, 1, 4, 2, 5, 3});
     }
 
+    Y.alloc({size_t(n), size_t(c/(blocksize*blocksize)), size_t(h*blocksize), size_t(w*blocksize)});
     Y.reshape({n, c/(blocksize*blocksize), h, blocksize, w, blocksize});
     reorder(X, x_shape, Y);
     Y.reshape({n, c/(blocksize*blocksize), h*blocksize, w*blocksize});
@@ -1020,15 +971,7 @@ depth_to_space(const TensorT& X, TensorT& Y, int blocksize, std::string mode = "
 template <typename TensorT>
 enable_if_tensor<TensorT>
 depth_to_space(const TensorT& X, int blocksize, std::string mode = "DCR") {
-    if (blocksize <= 0)
-        throw shape_error("depth_to_space: blocksize has incorrect value");
-    if (X.rank() != 4)
-        throw shape_error("depth_to_space: input tensor must be 4-dimensional");
-    if (X.extent(1) % (blocksize*blocksize) != 0)
-        throw shape_error("depth_to_space: blocksize has incorrect value");
-
-    auto n = X.extent(0), c = X.extent(1), h = X.extent(2), w = X.extent(3);
-    tensor_type<TensorT> Y({n, c/(blocksize*blocksize), h*blocksize, w*blocksize});
+    TensorT Y;
     depth_to_space(X, Y, blocksize, mode);
     return Y;
 }

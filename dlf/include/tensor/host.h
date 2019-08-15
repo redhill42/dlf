@@ -226,6 +226,11 @@ public: // Constructors
 
     Tensor& operator=(const TensorView<T>& v);
 
+    /**
+     * Allocate tensor data if necessary.
+     */
+    Tensor& alloc(const Shape& shape);
+
 public: // Attributes
     /**
      * Returns the raw data elements.
@@ -485,7 +490,7 @@ Tensor<T>::Tensor(const Tensor& t) : Shaped(t) {
 template <typename T>
 Tensor<T>& Tensor<T>::operator=(const Tensor& t) {
     auto old_size = size();
-    Shaped::operator=(t);
+    set_shape(t.shape());
     if (size() != old_size || m_alloc_data == nullptr)
         init();
     std::copy(t.begin(), t.end(), m_data);
@@ -495,7 +500,7 @@ Tensor<T>& Tensor<T>::operator=(const Tensor& t) {
 template <typename T>
 Tensor<T>& Tensor<T>::operator=(const TensorView<T>& v) {
     auto old_size = size();
-    Shaped::operator=(v);
+    set_shape(v.shape());
     if (size() != old_size || m_alloc_data == nullptr)
         init();
     std::copy(v.begin(), v.end(), m_data);
@@ -512,9 +517,20 @@ Tensor<T>::Tensor(Tensor&& t) noexcept
 
 template <typename T>
 Tensor<T>& Tensor<T>::operator=(Tensor&& t) noexcept {
-    Shaped::operator=(std::move(t));
+    set_shape(t.shape());
     m_data = std::exchange(t.m_data, nullptr);
     m_alloc_data = std::move(t.m_alloc_data);
+    return *this;
+}
+
+template <typename T>
+Tensor<T>& Tensor<T>::alloc(const Shape& shape) {
+    if (empty()) {
+        set_shape(shape);
+        init();
+    } else if (this->shape() != shape) {
+        throw shape_error("incompatible shape");
+    }
     return *this;
 }
 
@@ -679,42 +695,42 @@ inline std::ostream& operator<<(std::ostream& out, const TensorView<T>& v) {
  */
 template <typename T, typename U, typename F>
 inline Tensor<U>& transformTo(const Tensor<T>& A, Tensor<U>& B, F f) {
-    assert(A.shape() == B.shape());
+    B.alloc(A.shape());
     par::transform(A.begin(), A.end(), B.begin(), f);
     return B;
 }
 
 template <typename T, typename U, typename F>
 inline TensorView<U>& transformTo(const Tensor<T>& A, TensorView<U>& B, F f) {
-    assert(A.shape() == B.shape());
+    B.alloc(A.shape());
     par::transform(A.begin(), A.end(), B.begin(), f);
     return B;
 }
 
 template <typename T, typename U, typename F>
 inline TensorView<U>& transformTo(const Tensor<T>& A, TensorView<U>&& B, F f) {
-    assert(A.shape() == B.shape());
+    B.alloc(A.shape());
     par::transform(A.begin(), A.end(), B.begin(), f);
     return B;
 }
 
 template <typename T, typename U, typename F>
 inline Tensor<U>& transformTo(const TensorView<T>& A, Tensor<U>& B, F f) {
-    assert(A.shape() == B.shape());
+    B.alloc(A.shape());
     par::transform(A.begin(), A.end(), B.begin(), f);
     return B;
 }
 
 template <typename T, typename U, typename F>
 inline TensorView<U>& transformTo(const TensorView<T>& A, TensorView<U>& B, F f) {
-    assert(A.shape() == B.shape());
+    B.alloc(A.shape());
     par::transform(A.begin(), A.end(), B.begin(), f);
     return B;
 }
 
 template <typename T, typename U, typename F>
 inline TensorView<U>& transformTo(const TensorView<T>& A, TensorView<U>&& B, F f) {
-    assert(A.shape() == B.shape());
+    B.alloc(A.shape());
     par::transform(A.begin(), A.end(), B.begin(), f);
     return B;
 }
@@ -725,7 +741,7 @@ inline TensorView<U>& transformTo(const TensorView<T>& A, TensorView<U>&& B, F f
  */
 template <typename T, typename F, typename U = cxx::invoke_result_t<F,T>>
 inline Tensor<U> transform(const Tensor<T>& A, F f) {
-    Tensor<U> B(A.shape());
+    Tensor<U> B;
     transformTo(A, B, f);
     return B;
 }
@@ -737,7 +753,7 @@ inline Tensor<T> transform(Tensor<T>&& A, F f) {
 
 template <typename T, typename F, typename U = cxx::invoke_result_t<F,T>>
 inline Tensor<U> transform(const TensorView<T>& A, F f) {
-    Tensor<U> B(A.shape());
+    Tensor<U> B;
     transformTo(A, B, f);
     return B;
 }
@@ -863,10 +879,10 @@ inline void flat_copy(const Tensor<T>& src, Tensor<T>& dst) {
 //==-------------------------------------------------------------------------
 
 namespace impl {
-template <typename T, typename U, typename IC, typename F>
+template <typename T, typename U, typename IteratorC, typename F>
 void transformChannel(const Shape& shape_A, const T* data_A,
                       const Shape& shape_B, const U* data_B,
-                      const Shape& shape_C, IC begin_C,
+                      const Shape& shape_C, IteratorC begin_C,
                       int axis, F f)
 {
     assert(shape_B.rank() == 1 || shape_A.find_channel_axis(shape_B) == axis);
@@ -892,19 +908,14 @@ void transformChannel(const Shape& shape_A, const T* data_A,
     });
 }
 
-template <typename T, typename U, typename F, typename IteratorC>
+template <typename T, typename U, typename IteratorC, typename F>
 void transformTo(const Shape& shape_A, const T* data_A, const size_t size_A,
                  const Shape& shape_B, const U* data_B, const size_t size_B,
-                 F f, const Shape& shape_C, IteratorC begin_C)
+                 const Shape& shape_C, IteratorC begin_C, F f)
 {
-    Shape final_shape = Shape::broadcast(shape_A, shape_B);
-    Shape sA = shape_A.broadcast(final_shape);
-    Shape sB = shape_B.broadcast(final_shape);
+    Shape sA = shape_A.broadcast(shape_C);
+    Shape sB = shape_B.broadcast(shape_C);
     int   axis;
-
-    if (shape_C != final_shape) {
-        throw shape_error("incompatible shape");
-    }
 
     if (shape_A.is_contiguous() && shape_B.is_contiguous()) {
         if (shape_A == shape_B) {
@@ -948,88 +959,89 @@ void transformTo(const Shape& shape_A, const T* data_A, const size_t size_A,
 }
 
 template <typename T, typename U, typename W, typename F>
-void transformTo(const Shape& shape_A, const T* data_A, const size_t size_A,
-                        const Shape& shape_B, const U* data_B, const size_t size_B,
-                        const Shape& shape_C, W* data_C, F f)
+Tensor<W>& transformTo(const Shape& shape_A, const T* data_A, const size_t size_A,
+                       const Shape& shape_B, const U* data_B, const size_t size_B,
+                       Tensor<W>& C, F f)
 {
-    if (shape_C.is_contiguous()) {
-        transformTo(shape_A, data_A, size_A, shape_B, data_B, size_B, f, shape_C, data_C + shape_C.offset());
+    C.alloc(Shape::broadcast(shape_A, shape_B));
+    transformTo(shape_A, data_A, size_A, shape_B, data_B, size_B, C.shape(), C.begin(), f);
+    return C;
+}
+
+template <typename T, typename U, typename W, typename F>
+TensorView<W>& transformTo(const Shape& shape_A, const T* data_A, const size_t size_A,
+                           const Shape& shape_B, const U* data_B, const size_t size_B,
+                           TensorView<W>& C, F f)
+{
+    if (C.shape() != Shape::broadcast(shape_A, shape_B))
+        throw shape_error("incompatible shape");
+    if (C.shape().is_contiguous()) {
+        transformTo(shape_A, data_A, size_A, shape_B, data_B, size_B, C.shape(), C.data() + C.shape().offset(), f);
     } else {
-        transformTo(shape_A, data_A, size_A, shape_B, data_B, size_B, f, shape_C, shaped_iterator<W>(shape_C, data_C, 0));
+        transformTo(shape_A, data_A, size_A, shape_B, data_B, size_B, C.shape(), C.begin(), f);
     }
+    return C;
 }
 } // namespace impl
 
 template <typename T, typename U, typename W, typename F>
 inline Tensor<W>& transformTo(const Tensor<T>& A, const Tensor<U>& B, Tensor<W>& C, F f) {
-    impl::transformTo(A.shape(), A.data(), A.size(), B.shape(), B.data(), B.size(), C.shape(), C.data(), f);
-    return C;
+    return impl::transformTo(A.shape(), A.data(), A.size(), B.shape(), B.data(), B.size(), C, f);
 }
 
 template <typename T, typename U, typename W, typename F>
 inline TensorView<W>& transformTo(const Tensor<T>& A, const Tensor<U>& B, TensorView<W>& C, F f) {
-    impl::transformTo(A.shape(), A.data(), A.size(), B.shape(), B.data(), B.size(), C.shape(), C.data(), f);
-    return C;
+    return impl::transformTo(A.shape(), A.data(), A.size(), B.shape(), B.data(), B.size(), C, f);
 }
 
 template <typename T, typename U, typename W, typename F>
 inline TensorView<W>& transformTo(const Tensor<T>& A, const Tensor<U>& B, TensorView<W>&& C, F f) {
-    impl::transformTo(A.shape(), A.data(), A.size(), B.shape(), B.data(), B.size(), C.shape(), C.data(), f);
-    return C;
+    return impl::transformTo(A.shape(), A.data(), A.size(), B.shape(), B.data(), B.size(), C, f);
 }
 
 template <typename T, typename U, typename W, typename F>
 inline Tensor<W>& transformTo(const Tensor<T>& A, const TensorView<U>& B, Tensor<W>& C, F f) {
-    impl::transformTo(A.shape(), A.data(), A.size(), B.shape(), B.data(), B.size(), C.shape(), C.data(), f);
-    return C;
+    return impl::transformTo(A.shape(), A.data(), A.size(), B.shape(), B.data(), B.size(), C, f);
 }
 
 template <typename T, typename U, typename W, typename F>
 inline TensorView<W>& transformTo(const Tensor<T>& A, const TensorView<U>& B, TensorView<W>& C, F f) {
-    impl::transformTo(A.shape(), A.data(), A.size(), B.shape(), B.data(), B.size(), C.shape(), C.data(), f);
-    return C;
+    return impl::transformTo(A.shape(), A.data(), A.size(), B.shape(), B.data(), B.size(), C, f);
 }
 
 template <typename T, typename U, typename W, typename F>
 inline TensorView<W>& transformTo(const Tensor<T>& A, const TensorView<U>& B, TensorView<W>&& C, F f) {
-    impl::transformTo(A.shape(), A.data(), A.size(), B.shape(), B.data(), B.size(), C.shape(), C.data(), f);
-    return C;
+    return impl::transformTo(A.shape(), A.data(), A.size(), B.shape(), B.data(), B.size(), C, f);
 }
 
 template <typename T, typename U, typename W, typename F>
 inline Tensor<W>& transformTo(const TensorView<T>& A, const Tensor<U>& B, Tensor<W>& C, F f) {
-    impl::transformTo(A.shape(), A.data(), A.size(), B.shape(), B.data(), B.size(), C.shape(), C.data(), f);
-    return C;
+    return impl::transformTo(A.shape(), A.data(), A.size(), B.shape(), B.data(), B.size(), C, f);
 }
 
 template <typename T, typename U, typename W, typename F>
 inline TensorView<W>& transformTo(const TensorView<T>& A, const Tensor<U>& B, TensorView<W>& C, F f) {
-    impl::transformTo(A.shape(), A.data(), A.size(), B.shape(), B.data(), B.size(), C.shape(), C.data(), f);
-    return C;
+    return impl::transformTo(A.shape(), A.data(), A.size(), B.shape(), B.data(), B.size(), C, f);
 }
 
 template <typename T, typename U, typename W, typename F>
 inline TensorView<W>& transformTo(const TensorView<T>& A, const Tensor<U>& B, TensorView<W>&& C, F f) {
-    impl::transformTo(A.shape(), A.data(), A.size(), B.shape(), B.data(), B.size(), C.shape(), C.data(), f);
-    return C;
+    return impl::transformTo(A.shape(), A.data(), A.size(), B.shape(), B.data(), B.size(), C, f);
 }
 
 template <typename T, typename U, typename W, typename F>
 inline Tensor<W>& transformTo(const TensorView<T>& A, const TensorView<U>& B, Tensor<W>& C, F f) {
-    impl::transformTo(A.shape(), A.data(), A.size(), B.shape(), B.data(), B.size(), C.shape(), C.data(), f);
-    return C;
+    return impl::transformTo(A.shape(), A.data(), A.size(), B.shape(), B.data(), B.size(), C, f);
 }
 
 template <typename T, typename U, typename W, typename F>
 inline TensorView<W>& transformTo(const TensorView<T>& A, const TensorView<U>& B, TensorView<W>& C, F f) {
-    impl::transformTo(A.shape(), A.data(), A.size(), B.shape(), B.data(), B.size(), C.shape(), C.data(), f);
-    return C;
+    return impl::transformTo(A.shape(), A.data(), A.size(), B.shape(), B.data(), B.size(), C, f);
 }
 
 template <typename T, typename U, typename W, typename F>
 inline TensorView<W>& transformTo(const TensorView<T>& A, const TensorView<U>& B, TensorView<W>&& C, F f) {
-    impl::transformTo(A.shape(), A.data(), A.size(), B.shape(), B.data(), B.size(), C.shape(), C.data(), f);
-    return C;
+    return impl::transformTo(A.shape(), A.data(), A.size(), B.shape(), B.data(), B.size(), C, f);
 }
 
 template <typename T, typename U, typename W, typename F>
@@ -1042,28 +1054,28 @@ inline void transformChannel(const Tensor<T>& A, const Tensor<U>& B, Tensor<W>& 
  */
 template <typename T, typename U, typename F, typename W = cxx::invoke_result_t<F,T,U>>
 inline Tensor<W> transform(const Tensor<T>& A, const Tensor<U>& B, F f) {
-    Tensor<W> C(Shape::broadcast(A, B));
+    Tensor<W> C;
     transformTo(A, B, C, f);
     return C;
 }
 
 template <typename T, typename U, typename F, typename W = cxx::invoke_result_t<F,T,U>>
 inline Tensor<W> transform(const Tensor<T>& A, const TensorView<U>& B, F f) {
-    Tensor<W> C(Shape::broadcast(A, B));
+    Tensor<W> C;
     transformTo(A, B, C, f);
     return C;
 }
 
 template <typename T, typename U, typename F, typename W = cxx::invoke_result_t<F,T,U>>
 inline Tensor<W> transform(const TensorView<T>& A, const Tensor<U>& B, F f) {
-    Tensor<W> C(Shape::broadcast(A, B));
+    Tensor<W> C;
     transformTo(A, B, C, f);
     return C;
 }
 
 template <typename T, typename U, typename F, typename W = cxx::invoke_result_t<F,T,U>>
 inline Tensor<W> transform(const TensorView<T>& A, const TensorView<U>& B, F f) {
-    Tensor<W> C(Shape::broadcast(A, B));
+    Tensor<W> C;
     transformTo(A, B, C, f);
     return C;
 }
@@ -1118,9 +1130,7 @@ TensorView<T> broadcast(const TensorView<T>& src, const Shape& shape) {
 template <typename T>
 void transpose(const Tensor<T>& src, Tensor<T>& dst, const std::vector<size_t>& perm) {
     Shape shape = src.shape().transpose(perm);
-    if (shape != dst.shape())
-        throw shape_error("transpose: invalid output shape");
-    reorder(src, shape, dst);
+    reorder(src, shape, dst.alloc(shape));
 }
 
 template <typename T>
@@ -1262,7 +1272,7 @@ Tensor<T>& dot(const Tensor<T>& A, const Tensor<T>& B, Tensor<T>* C) {
     if (A.is_vector() && B.is_vector()) {
         auto n = A.extent(0);
         assert(n == B.extent(0));
-        assert(C->is_vector() && 1 == C->extent(0));
+        C->alloc({1});
         *C->data() = impl::dot(n, A.data(), B.data());
         return *C;
     }
@@ -1270,7 +1280,7 @@ Tensor<T>& dot(const Tensor<T>& A, const Tensor<T>& B, Tensor<T>* C) {
     if (A.is_matrix() && B.is_vector()) {
         auto m = A.extent(0), n = A.extent(1);
         assert(n == B.extent(0));
-        assert(C->is_vector() && m == C->extent(0));
+        C->alloc({m});
         impl::gemv(m, n, A.data(), A.stride(0), B.data(), C->data());
         return *C;
     }
@@ -1279,21 +1289,18 @@ Tensor<T>& dot(const Tensor<T>& A, const Tensor<T>& B, Tensor<T>* C) {
         Shape A_shape, B_shape, C_shape;
 
         if (A.is_vector()) {
-            assert(C->is_vector());
             A_shape = Shape({1, A.extent(0)});
             B_shape = B.shape();
-            C_shape = Shape({1, C->extent(0)});
+            C_shape = Shape({1, B.extent(1)});
+            C->alloc({B.extent(1)});
         } else {
-            assert(C->is_matrix());
             A_shape = A.shape();
             B_shape = B.shape();
-            C_shape = C->shape();
+            C_shape = Shape({A.extent(0), B.extent(1)});
+            C->alloc(C_shape);
         }
 
         assert(A_shape.extent(1) == B_shape.extent(0));
-        assert(C_shape.extent(0) == A_shape.extent(0));
-        assert(C_shape.extent(1) == B_shape.extent(1));
-
         impl::gemm(C_shape.extent(0), C_shape.extent(1), A_shape.extent(1),
                    A.data(),  A_shape.stride(0),
                    B.data(),  B_shape.stride(0),
@@ -1323,8 +1330,9 @@ gemm(const T& alpha, const Tensor<T>& A, const Tensor<T>& B,
         std::swap(m, k);
     if (transB)
         std::swap(p, n);
-    assert(k == p);
-    assert(C->shape() == Shape({m, n}));
+    if (k != p)
+        throw shape_error("gemm: incompatible shape");
+    C->alloc({m, n});
 
     if (alpha == T(0)) {
         *C *= Tensor<T>::scalar(beta);
@@ -1366,8 +1374,9 @@ gemm(const T& alpha, const Tensor<T>& A, const Tensor<T>& B,
         std::swap(m, k);
     if (transB)
         std::swap(p, n);
-    assert(k == p);
-    assert(C->shape() == Shape({m, n}));
+    if (k != p)
+        throw shape_error("gemm: incompatible shape");
+    C->alloc({m, n});
 
     cblas::gemm(cblas::Layout::RowMajor,
                 transA ? cblas::Transpose::Trans : cblas::Transpose::NoTrans,

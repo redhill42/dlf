@@ -200,32 +200,10 @@ pow(LHS&& lhs, RHS&& rhs) {
 // vector or matrix dot product.
 
 template <typename TensorT>
-enable_if_tensor<TensorT> dot(const TensorT& A, const TensorT& B) {
-    if (A.is_vector() && B.is_vector()) {
-        assert(A.shape() == B.shape());
-        TensorT C({1});
-        dot(A, B, &C);
-        return C;
-    } else if (A.is_matrix() && B.is_vector()) {
-        assert(A.extent(1) == B.extent(0));
-        TensorT C({A.extent(0)});
-        dot(A, B, &C);
-        return C;
-    } else if (A.is_vector() && B.is_matrix()) {
-        assert(A.extent(0) == B.extent(0));
-        TensorT C({B.extent(1)});
-        dot(A, B, &C);
-        return C;
-    } else if (A.is_matrix() && B.is_matrix()) {
-        auto m = A.extent(0), k = A.extent(1);
-        auto p = B.extent(0), n = B.extent(1);
-        assert(k == p);
-        TensorT C({m, n});
-        dot(A, B, &C);
-        return C;
-    } else {
-        throw std::runtime_error("dot unsupported on tensors");
-    }
+inline enable_if_tensor<TensorT> dot(const TensorT& A, const TensorT& B) {
+    TensorT C;
+    dot(A, B, &C);
+    return C;
 }
 
 namespace dot_product {
@@ -424,7 +402,7 @@ void matmul(const Tensor<T>& A, const Tensor<T>& B, Tensor<T>& C) {
         shapeC.squeeze(-2);
     if (B.rank() == 1)
         shapeC.squeeze(-1);
-    assert(C.shape() == shapeC);
+    C.alloc(shapeC);
 
     auto px = A.data(), py = B.data();
     auto pz = C.data();
@@ -464,7 +442,7 @@ void matmul(const DevTensor<T>& A, const DevTensor<T>& B, DevTensor<T>& C) {
         shapeC.squeeze(-2);
     if (B.rank() == 1)
         shapeC.squeeze(-1);
-    assert(C.shape() == shapeC);
+    C.alloc(shapeC);
 
     std::vector<size_t> a_offsets(batch);
     std::vector<size_t> b_offsets(batch);
@@ -496,22 +474,11 @@ template <typename TensorT>
 enable_if_tensor<TensorT> matmul(const TensorT& A, const TensorT& B) {
     if (A.rank() <= 2 && B.rank() <= 2) {
         return dot(A, B);
+    } else {
+        TensorT C;
+        matmul(A, B, C);
+        return C;
     }
-
-    Shape shapeA = A.shape();
-    Shape shapeB = B.shape();
-    Shape shapeC;
-
-    detail::matmul_broadcast(shapeA, shapeB, shapeC);
-
-    if (A.rank() == 1)
-        shapeC.squeeze(-2);
-    if (B.rank() == 1)
-        shapeC.squeeze(-1);
-
-    tensor_type<TensorT> C(shapeC);
-    matmul(A, B, C);
-    return C;
 }
 
 template <typename TensorT>
@@ -827,18 +794,14 @@ slice(const TensorT& X, TensorT& Y,
       const std::vector<int>& axes, const std::vector<int>& steps)
 {
     Shape slice_shape = X.shape().slice(starts, ends, axes, steps);
-    if (Y.shape() != slice_shape)
-        throw shape_error("slice: incompatible output shape");
-    reorder(X, slice_shape, Y);
+    reorder(X, slice_shape, Y.alloc(slice_shape));
 }
 
 template <typename TensorT>
 enable_if_tensor<TensorT, void>
 slice(const TensorT& X, TensorT& Y, const std::vector<SliceDim>& dims) {
     Shape slice_shape = X.shape().slice(dims);
-    if (Y.shape() != slice_shape)
-        throw shape_error("slice: incompatible output shape");
-    reorder(X, slice_shape, Y);
+    reorder(X, slice_shape, Y.alloc(slice_shape));
 }
 
 template <typename TensorT>
@@ -849,7 +812,7 @@ inline enable_if_tensor<TensorT, void> broadcast(const TensorT& src, TensorT& ds
 template <typename T>
 void where(const Tensor<bool>& C, const Tensor<T>& X, const Tensor<T>& Y, Tensor<T>& Z) {
     auto final_shape = Shape::broadcast(C, X, Y);
-    assert(Z.shape() == final_shape);
+    Z.alloc(final_shape);
 
     auto c_shape = C.shape().broadcast(final_shape);
     auto x_shape = X.shape().broadcast(final_shape);
@@ -868,7 +831,7 @@ void where(const Tensor<bool>& C, const Tensor<T>& X, const Tensor<T>& Y, Tensor
 
 template <typename T>
 Tensor<T> where(const Tensor<bool>& C, const Tensor<T>& X, const Tensor<T>& Y) {
-    Tensor<T> Z(Shape::broadcast(C, X, Y));
+    Tensor<T> Z;
     where(C, X, Y, Z);
     return Z;
 }
@@ -876,7 +839,7 @@ Tensor<T> where(const Tensor<bool>& C, const Tensor<T>& X, const Tensor<T>& Y) {
 template <typename T>
 void where(const DevTensor<bool>& C, const DevTensor<T>& X, const DevTensor<T>&Y, DevTensor<T>& Z) {
     auto final_shape = Shape::broadcast(C, X, Y);
-    assert(Z.shape() == final_shape);
+    Z.alloc(final_shape);
 
     auto c_shape = C.shape().broadcast(final_shape);
     auto x_shape = X.shape().broadcast(final_shape);
@@ -892,7 +855,7 @@ void where(const DevTensor<bool>& C, const DevTensor<T>& X, const DevTensor<T>&Y
 
 template <typename T>
 DevTensor<T> where(const DevTensor<bool>& C, const DevTensor<T>& X, const DevTensor<T>& Y) {
-    DevTensor<T> Z(Shape::broadcast(C, X, Y));
+    DevTensor<T> Z;
     where(C, X, Y, Z);
     return Z;
 }
