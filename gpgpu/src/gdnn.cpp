@@ -293,6 +293,7 @@ void transform(const std::string& name,
                const Buffer<T>& x_buffer, const Buffer<T>& y_buffer, Buffer<T>& z_buffer,
                const Queue& queue, Event* event)
 {
+#if HAS_CUDA
     if (name == "add_v" && IsCUDA(queue.context().device()) && x_buffer == z_buffer) {
         auto y_desc = TensorDescriptor<T>(1, channels, 1, 1);
         auto z_desc = TensorDescriptor<T>(m/channels, channels, 1, n);
@@ -301,10 +302,12 @@ void transform(const std::string& name,
             cudnn_handle(queue),
             &alpha, y_desc, cu::cuBuffer::unwrap(y_buffer),
             &beta,  z_desc, cu::cuBuffer::unwrap(z_buffer)));
-    } else {
-        auto routine = Xtransform_c<T>(queue, event);
-        routine.DoTransform(name, m, n, channels, x_buffer, y_buffer, z_buffer);
+        return;
     }
+#endif
+
+    auto routine = Xtransform_c<T>(queue, event);
+    routine.DoTransform(name, m, n, channels, x_buffer, y_buffer, z_buffer);
 }
 
 template void PUBLIC_API transform<int16_t>(const std::string&,
@@ -378,15 +381,8 @@ void batch_norm(const std::vector<size_t>& dims,
                 const T epsilon,
                 const Queue& queue, Event* event)
 {
-    if (IsOpenCL(queue.context().device()) || (dims.size() != 4 && dims.size() != 5)) {
-        auto batches = dims[0];
-        auto channels = dims[1];
-        auto spatial = std::accumulate(dims.begin()+2, dims.end(), size_t{1}, std::multiplies<>());
-
-        auto routine = Xnormalization<T>(queue, event);
-        routine.DoBatchNorm(batches, channels, spatial, x_buffer, y_buffer,
-                            scale_buffer, bias_buffer, mean_buffer, var_buffer, epsilon);
-    } else {
+#if HAS_CUDA
+    if (IsCUDA(queue.context().device()) && (dims.size() == 4 || dims.size() == 5)) {
         TensorDescriptor<T> xy_desc(dims);
         TensorDescriptor<T> sbmv_desc;
         checkCUDNN(cudnnDeriveBNTensorDescriptor(sbmv_desc, xy_desc,
@@ -404,7 +400,17 @@ void batch_norm(const std::vector<size_t>& dims,
             cu::cuBuffer::unwrap(mean_buffer),
             cu::cuBuffer::unwrap(var_buffer),
             0.00001)); // FIXME
+        return;
     }
+#endif
+
+    auto batches = dims[0];
+    auto channels = dims[1];
+    auto spatial = std::accumulate(dims.begin()+2, dims.end(), size_t{1}, std::multiplies<>());
+
+    auto routine = Xnormalization<T>(queue, event);
+    routine.DoBatchNorm(batches, channels, spatial, x_buffer, y_buffer,
+                        scale_buffer, bias_buffer, mean_buffer, var_buffer, epsilon);
 }
 
 template void PUBLIC_API batch_norm<half>  (const std::vector<size_t>&,
@@ -428,14 +434,8 @@ void lrn(const std::vector<size_t>& dims, const Buffer<T>& x_buffer, Buffer<T>& 
          const int nsize, const T alpha, const T beta, const T bias,
          const Queue& queue, Event* event)
 {
-    if (IsOpenCL(queue.context().device()) || (dims.size() != 4 && dims.size() != 5)) {
-        auto batches = dims[0];
-        auto channels = dims[1];
-        auto spatial = std::accumulate(dims.begin()+2, dims.end(), size_t{1}, std::multiplies<>());
-
-        auto routine = Xnormalization<T>(queue, event);
-        routine.DoLRN(batches, channels, spatial, x_buffer, y_buffer, nsize, alpha, beta, bias);
-    } else {
+#if HAS_CUDA
+    if (IsCUDA(queue.context().device()) && (dims.size() == 4 || dims.size() == 5)) {
         TensorDescriptor<T> xy_desc(dims);
         LRNDescriptor desc(nsize, alpha, beta, bias);
 
@@ -444,7 +444,16 @@ void lrn(const std::vector<size_t>& dims, const Buffer<T>& x_buffer, Buffer<T>& 
             cudnn_handle(queue), desc, CUDNN_LRN_CROSS_CHANNEL_DIM1,
             &blend_alpha, xy_desc, cu::cuBuffer::unwrap(x_buffer),
             &blend_beta,  xy_desc, cu::cuBuffer::unwrap(y_buffer)));
+        return;
     }
+#endif
+
+    auto batches = dims[0];
+    auto channels = dims[1];
+    auto spatial = std::accumulate(dims.begin()+2, dims.end(), size_t{1}, std::multiplies<>());
+
+    auto routine = Xnormalization<T>(queue, event);
+    routine.DoLRN(batches, channels, spatial, x_buffer, y_buffer, nsize, alpha, beta, bias);
 }
 
 template void PUBLIC_API lrn<half>  (const std::vector<size_t>&,
@@ -462,6 +471,8 @@ template void PUBLIC_API lrn<double>(const std::vector<size_t>&,
 
 namespace {
 
+#if HAS_CUDA
+
 #define CUDNN_CONV2D_PROLOGUE                                               \
     auto cudnn = cudnn_handle(queue);                                       \
                                                                             \
@@ -477,7 +488,7 @@ namespace {
     checkCUDNN(cudnnSetConvolutionGroupCount(conv_desc, group));            \
                                                                             \
     cudnnConvolutionFwdAlgo_t conv_algo;                                    \
-    if (group != 1) {                                      \
+    if (group != 1) {                                                       \
         conv_algo = CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_GEMM;               \
     } else {                                                                \
         checkCUDNN(cudnnGetConvolutionForwardAlgorithm(                     \
@@ -527,6 +538,8 @@ void cudnnConv(
         &beta,
         y_desc, cu::cuBuffer::unwrap((result_buffer))));
 }
+
+#endif //!HAS_CUDA
 
 template <typename T>
 void convWithIm2Col(
@@ -615,16 +628,17 @@ void conv2d(const size_t batches, const size_t channels,
             Buffer<T>& result_buffer, Buffer<T>* work_buffer,
             const Queue& queue, Event* event)
 {
-    bool is_cuda_applicable =
-        IsCUDA(queue.context().device()) &&
-        pad_top == pad_bottom &&
-        pad_left == pad_right;
-
     bool is_1x1_kernel =
         kernel_h == 1 && kernel_w == 1 &&
         stride_h == 1 && stride_w == 1 &&
         dilation_h == 1 && dilation_w == 1 &&
         pad_top + pad_bottom == 0  && pad_left + pad_right == 0;
+
+#if HAS_CUDA
+    bool is_cuda_applicable =
+        IsCUDA(queue.context().device()) &&
+        pad_top == pad_bottom &&
+        pad_left == pad_right;
 
     if (is_cuda_applicable) {
         cudnnConv(
@@ -634,6 +648,7 @@ void conv2d(const size_t batches, const size_t channels,
             im_buffer, kernel_buffer, result_buffer, work_buffer, queue);
         return;
     }
+#endif
 
     if (is_1x1_kernel || group != 1) {
         convWithIm2Col(
@@ -705,21 +720,26 @@ size_t conv2dWorkspaceSize(const size_t batches, const size_t channels,
                            const size_t dilation_h, const size_t dilation_w,
                            const Queue& queue)
 {
-    bool is_cuda_applicable =
-        IsCUDA(queue.context().device()) &&
-        pad_top == pad_bottom &&
-        pad_left == pad_right;
-
     bool is_1x1_kernel =
         kernel_h == 1 && kernel_w == 1 &&
         stride_h == 1 && stride_w == 1 &&
         dilation_h == 1 && dilation_w == 1 &&
         pad_top + pad_bottom == 0 && pad_left + pad_right == 0;
 
+#if HAS_CUDA
+    bool is_cuda_applicable =
+        IsCUDA(queue.context().device()) &&
+        pad_top == pad_bottom &&
+        pad_left == pad_right;
+
     if (is_cuda_applicable) {
         CUDNN_CONV2D_PROLOGUE
         return workspace_size / sizeof(T);
     }
+#else
+    (void)height, (void)width, (void)num_kernels, (void)group;
+    (void)pad_bottom, (void)pad_right;
+#endif
 
     if (is_1x1_kernel)
         return 0;
@@ -779,18 +799,9 @@ void maxpool(const size_t batches, const size_t channels,
              const Buffer<T>& x_buffer, Buffer<T>& y_buffer,
              const Queue& queue, Event* event)
 {
-    if (IsOpenCL(queue.context().device()) || (pad_top != pad_bottom || pad_left != pad_right)
-                                           || (dilation_h != 1 || dilation_w != 1)) {
-        auto routine = Xpool<T>(queue, event);
-        routine.DoMaxPool(batches, channels,
-                          height, width,
-                          output_h, output_w,
-                          kernel_h, kernel_w,
-                          pad_top, pad_left,
-                          stride_h, stride_w,
-                          dilation_h, dilation_w,
-                          x_buffer, 0, y_buffer, 0);
-    } else {
+#if HAS_CUDA
+    if (IsCUDA(queue.context().device()) && (pad_top == pad_bottom && pad_left == pad_right)
+                                         && (dilation_h == 1 && dilation_w == 1)) {
         PoolingDescriptor desc(cudnnPoolingMode_t::CUDNN_POOLING_MAX,
             kernel_h, kernel_w, pad_top, pad_left, stride_h, stride_w);
         TensorDescriptor<T> x_desc(batches, channels, height, width);
@@ -801,7 +812,21 @@ void maxpool(const size_t batches, const size_t channels,
             cudnn_handle(queue), desc,
             &alpha, x_desc, cu::cuBuffer::unwrap(x_buffer),
             &beta, y_desc, cu::cuBuffer::unwrap(y_buffer));
+        return;
     }
+#else
+    (void)pad_bottom, (void)pad_right;
+#endif
+
+    auto routine = Xpool<T>(queue, event);
+    routine.DoMaxPool(batches, channels,
+                      height, width,
+                      output_h, output_w,
+                      kernel_h, kernel_w,
+                      pad_top, pad_left,
+                      stride_h, stride_w,
+                      dilation_h, dilation_w,
+                      x_buffer, 0, y_buffer, 0);
 }
 
 template void PUBLIC_API maxpool<half>  (const size_t, const size_t, const size_t, const size_t,
@@ -836,19 +861,9 @@ void avgpool(const size_t batches, const size_t channels,
              const Buffer<T>& x_buffer, Buffer<T>& y_buffer,
              const Queue& queue, Event* event)
 {
-    if (IsOpenCL(queue.context().device()) || (pad_top != pad_bottom || pad_left != pad_right)
-                                           || (dilation_h != 1 || dilation_w != 1)) {
-        auto routine = Xpool<T>(queue, event);
-        routine.DoAvgPool(batches, channels,
-                          height, width,
-                          output_h, output_w,
-                          kernel_h, kernel_w,
-                          pad_top, pad_left,
-                          stride_h, stride_w,
-                          dilation_h, dilation_w,
-                          count_include_pad,
-                          x_buffer, 0, y_buffer, 0);
-    } else {
+#if HAS_CUDA
+    if (IsCUDA(queue.context().device()) && (pad_top == pad_bottom && pad_left == pad_right)
+                                         && (dilation_h == 1 && dilation_w == 1)) {
         PoolingDescriptor desc(
             count_include_pad ? CUDNN_POOLING_AVERAGE_COUNT_INCLUDE_PADDING
                               : CUDNN_POOLING_AVERAGE_COUNT_EXCLUDE_PADDING,
@@ -861,7 +876,22 @@ void avgpool(const size_t batches, const size_t channels,
             cudnn_handle(queue), desc,
             &alpha, x_desc, cu::cuBuffer::unwrap(x_buffer),
             &beta, y_desc, cu::cuBuffer::unwrap(y_buffer));
+        return;
     }
+#else
+    (void)pad_bottom, (void)pad_right;
+#endif
+
+    auto routine = Xpool<T>(queue, event);
+    routine.DoAvgPool(batches, channels,
+                      height, width,
+                      output_h, output_w,
+                      kernel_h, kernel_w,
+                      pad_top, pad_left,
+                      stride_h, stride_w,
+                      dilation_h, dilation_w,
+                      count_include_pad,
+                      x_buffer, 0, y_buffer, 0);
 }
 
 template void PUBLIC_API avgpool<half>  (const size_t, const size_t, const size_t, const size_t,
@@ -937,10 +967,8 @@ template <typename T>
 void softmax(const size_t m, const size_t n, const Buffer<T>& x_buffer, Buffer<T>& y_buffer,
              const Queue& queue, Event* event)
 {
-    if (IsOpenCL(queue.context().device())) {
-        auto routine = Xsoftmax<T>(queue, event);
-        routine.DoSoftmax(m, n, x_buffer, y_buffer);
-    } else {
+#if HAS_CUDA
+    if (IsCUDA(queue.context().device())) {
         TensorDescriptor<T> xy_desc(m, 1, 1, n);
         T alpha = 1, beta = 0;
         checkCUDNN(cudnnSoftmaxForward(
@@ -949,7 +977,12 @@ void softmax(const size_t m, const size_t n, const Buffer<T>& x_buffer, Buffer<T
             cudnnSoftmaxMode_t::CUDNN_SOFTMAX_MODE_INSTANCE,
             &alpha, xy_desc, cu::cuBuffer::unwrap(x_buffer),
             &beta,  xy_desc, cu::cuBuffer::unwrap(y_buffer)));
+        return;
     }
+#endif
+
+    auto routine = Xsoftmax<T>(queue, event);
+    routine.DoSoftmax(m, n, x_buffer, y_buffer);
 }
 
 template void PUBLIC_API softmax<half>  (const size_t, const size_t,
@@ -966,10 +999,8 @@ template <typename T>
 void logsoftmax(const size_t m, const size_t n, const Buffer<T>& x_buffer, Buffer<T>& y_buffer,
              const Queue& queue, Event* event)
 {
-    if (IsOpenCL(queue.context().device())) {
-        auto routine = Xsoftmax<T>(queue, event);
-        routine.DoLogSoftmax(m, n, x_buffer, y_buffer);
-    } else {
+#if HAS_CUDA
+    if (IsCUDA(queue.context().device())) {
         TensorDescriptor<T> xy_desc(m, 1, 1, n);
         T alpha = 1, beta = 0;
         checkCUDNN(cudnnSoftmaxForward(
@@ -978,7 +1009,12 @@ void logsoftmax(const size_t m, const size_t n, const Buffer<T>& x_buffer, Buffe
             cudnnSoftmaxMode_t::CUDNN_SOFTMAX_MODE_INSTANCE,
             &alpha, xy_desc, cu::cuBuffer::unwrap(x_buffer),
             &beta,  xy_desc, cu::cuBuffer::unwrap(y_buffer)));
+        return;
     }
+#endif
+
+    auto routine = Xsoftmax<T>(queue, event);
+    routine.DoLogSoftmax(m, n, x_buffer, y_buffer);
 }
 
 template void PUBLIC_API logsoftmax<half>  (const size_t, const size_t,

@@ -124,9 +124,30 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${CFLAGS}")
 # Package scripts location
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${gpgpu_SOURCE_DIR}/cmake/Modules/")
 
-# OpenCL and CUDA
-set(API_LIBRARIES ${OpenCL_LIBRARY} ${CUDA_LIBRARIES})
-set(API_INCLUDE_DIRS ${OPENCL_INCLUDE_DIRS} ${CUDA_INCLUDE_DIRS})
+# OpenCL
+find_package(OpenCL REQUIRED)
+include_directories(${OpenCL_INCLUDE_DIRS})
+
+# CUDA
+find_package(CUDA)
+if(CUDA_FOUND)
+  set(HAS_CUDA YES)
+  add_definitions(-DHAS_CUDA=1)
+  find_cuda_helper_libs("cuda")
+  find_cuda_helper_libs("nvrtc")
+  find_cuda_helper_libs("cublas")
+  find_cuda_helper_libs("cudnn")
+  set(CUDA_LIBRARIES ${CUDA_cuda_LIBRARY} ${CUDA_nvrtc_LIBRARY} ${CUDA_cublas_LIBRARY} ${CUDA_cudnn_LIBRARY})
+  include_directories(${CUDA_INCLUDE_DIRS})
+endif()
+
+if(HAS_CUDA)
+  set(API_LIBRARIES ${OpenCL_LIBRARY} ${CUDA_LIBRARIES})
+  set(API_INCLUDE_DIRS ${OPENCL_INCLUDE_DIRS} ${CUDA_INCLUDE_DIRS})
+else()
+  set(API_LIBRARIES ${OpenCL_LIBRARY})
+  set(API_INCLUDE_DIRS ${OPENCL_INCLUDE_DIRS})
+endif()
 
 # ==================================================================================================
 

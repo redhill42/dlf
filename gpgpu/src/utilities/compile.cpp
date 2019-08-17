@@ -75,13 +75,15 @@ Program CompileFromSource(const std::string& source_string,
       header_string += "#define SUBGROUP_SHUFFLING_NVIDIA_PRE_VOLTA 1\n";
     }
   }
-  
+
+#if HAS_CUDA
   // Optionally adds a translation header from OpenCL kernels to CUDA kernels
   if (IsCUDA(device)) {
     header_string +=
       #include "kernels/opencl_to_cuda.cl"
       ;
   }
+#endif
 
   // Loads the common header (typedefs and defines and such)
   header_string +=

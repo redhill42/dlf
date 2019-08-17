@@ -1,5 +1,6 @@
 #pragma once
 
+#if HAS_CUDA
 #include "gpgpu_cu.hpp"
 
 #define checkCUDNN(expression)                                      \
@@ -123,3 +124,5 @@ struct LRNDescriptor {
 };
 
 }} // namespace gpgpu::dnn
+
+#endif //!HAS_CUDA

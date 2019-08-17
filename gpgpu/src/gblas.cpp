@@ -25,6 +25,7 @@ namespace gpgpu { namespace blas {
 // cuBlas integration
 // =================================================================================================
 
+#if HAS_CUDA
 using namespace gpgpu::cu;
 
 template <typename T>
@@ -67,6 +68,21 @@ inline std::enable_if_t<!RequireCublas<T>>
 dispatch(const Queue&, CL&& cl, CU&&) {
     cl();
 }
+
+#define OPENCL(...) [&](){__VA_ARGS__}
+#define CUDA(...)   [&](auto h, auto t){(void)t; __VA_ARGS__}
+
+#else
+
+template <typename T, typename CL, typename CU>
+void dispatch(const Queue&, CL&& cl, CU&&) {
+    cl();
+}
+
+#define OPENCL(...) [&](){__VA_ARGS__}
+#define CUDA(...)   [&](){}
+
+#endif // !HAS_CUDA
 
 // =================================================================================================
 // BLAS level-1 (vector-vector) routines
@@ -170,6 +186,7 @@ template void PUBLIC_API rotm<double>(const size_t,
 //---------------------------------------------------------------------------
 // Swap two vectors: SSWAP/DSWAP/CSWAP/ZSWAP/HSWAP
 
+#if HAS_CUDA
 inline void cublasSwapEx(cublasHandle_t handle, int n, float* x, int incx, float* y, int incy) {
     cublasSswap(handle, n, x, incx, y, incy);
 }
@@ -185,6 +202,7 @@ inline void cublasSwapEx(cublasHandle_t handle, int n, float2* x, int incx, floa
 inline void cublasSwapEx(cublasHandle_t handle, int n, double2* x, int incx, double2* y, int incy) {
     cublasZswap(handle, n, reinterpret_cast<cuDoubleComplex*>(x), incx, reinterpret_cast<cuDoubleComplex*>(y), incy);
 }
+#endif
 
 template <typename T>
 void swap(const size_t n,
@@ -192,17 +210,17 @@ void swap(const size_t n,
           Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
           const Queue& queue, Event* event) {
     dispatch<T>(queue,
-        [&]() {
+        OPENCL(
             auto routine = Xswap<T>(queue, event);
             routine.DoSwap(n,
                            x_buffer, x_offset, x_inc,
                            y_buffer, y_offset, y_inc);
-        },
-        [&](auto h, auto) {
+        ),
+        CUDA(
             auto x = cuBuffer::unwrap(x_buffer) + x_offset;
             auto y = cuBuffer::unwrap(y_buffer) + y_offset;
             cublasSwapEx(h, n, x, x_inc, y, y_inc);
-        });
+        ));
 }
 
 template void PUBLIC_API swap<float>  (const size_t,
@@ -242,14 +260,14 @@ void scal(const size_t n, const T alpha,
           Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
           const Queue& queue, Event* event) {
     dispatch<T>(queue,
-        [&]() {
+        OPENCL(
             auto routine = Xscal<T>(queue, event);
             routine.DoScal(n, alpha, x_buffer, x_offset, x_inc);
-        },
-        [&](auto h, auto t) {
+        ),
+        CUDA(
             auto x = cuBuffer::unwrap(x_buffer) + x_offset;
             cublasScalEx(h, n, &alpha, t, x, t, x_inc, t);
-        });
+        ));
 }
 
 template void PUBLIC_API scal<float>  (const size_t, const float,
@@ -277,6 +295,7 @@ template void PUBLIC_API scal<int64_t>(const size_t, const int64_t,
 //---------------------------------------------------------------------------
 // Vector copy: SCOPY/DCOPY/CCOPY/ZCOPY/HCOPY
 
+#if HAS_CUDA
 inline void cublasCopyEx(cublasHandle_t handle, int n, const float* x, int incx, float* y, int incy) {
     cublasScopy(handle, n, x, incx, y, incy);
 }
@@ -292,6 +311,7 @@ inline void cublasCopyEx(cublasHandle_t handle, int n, const float2* x, int incx
 inline void cublasCopyEx(cublasHandle_t handle, int n, const double2* x, int incx, double2* y, int incy) {
     cublasZcopy(handle, n, reinterpret_cast<const cuDoubleComplex*>(x), incx, reinterpret_cast<cuDoubleComplex*>(y), incy);
 }
+#endif
 
 template <typename T>
 void copy(const size_t n,
@@ -299,17 +319,17 @@ void copy(const size_t n,
           Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
           const Queue& queue, Event* event) {
     dispatch<T>(queue,
-        [&]() {
+        OPENCL(
             auto routine = Xcopy<T>(queue, event);
             routine.DoCopy(n,
                            x_buffer, x_offset, x_inc,
                            y_buffer, y_offset, y_inc);
-        },
-        [&](auto h, auto) {
+        ),
+        CUDA(
             auto x = cuBuffer::unwrap(x_buffer) + x_offset;
             auto y = cuBuffer::unwrap(y_buffer) + y_offset;
             cublasCopyEx(h, n, x, x_inc, y, y_inc);
-        });
+        ));
 }
 
 template void PUBLIC_API copy<float>  (const size_t,
@@ -342,17 +362,17 @@ void axpy(const size_t n, const T alpha,
           Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
           const Queue& queue, Event* event) {
     dispatch<T>(queue,
-        [&]() {
+        OPENCL(
             auto routine = Xaxpy<T>(queue, event);
             routine.DoAxpy(n, alpha,
                            x_buffer, x_offset, x_inc,
                            y_buffer, y_offset, y_inc);
-        },
-        [&](auto h, auto t) {
+        ),
+        CUDA(
             auto x = cuBuffer::unwrap(x_buffer) + x_offset;
             auto y = cuBuffer::unwrap(y_buffer) + y_offset;
             cublasAxpyEx(h, n, &alpha, t, x, t, x_inc, y, t, y_inc, t);
-        });
+        ));
 }
 
 template void PUBLIC_API axpy<float>  (const size_t, const float,
@@ -394,14 +414,14 @@ void dot(const size_t n,
          Buffer<T>& r_buffer, const size_t r_offset,
          const Queue& queue, Event* event) {
     dispatch<T>(queue,
-        [&]() {
+        OPENCL(
             auto routine = Xdot<T>(queue, event);
             routine.DoDot(n,
                           x_buffer, x_offset, x_inc,
                           y_buffer, y_offset, y_inc,
                           r_buffer, r_offset);
-        },
-        [&](auto h, auto t) {
+        ),
+        CUDA(
             auto x = cuBuffer::unwrap(x_buffer) + x_offset;
             auto y = cuBuffer::unwrap(y_buffer) + y_offset;
             auto r = cuBuffer::unwrap(r_buffer) + r_offset;
@@ -411,7 +431,7 @@ void dot(const size_t n,
             cublasSetPointerMode(h, cublasPointerMode_t::CUBLAS_POINTER_MODE_DEVICE);
             cublasDotEx(h, n, x, t, x_inc, y, t, y_inc, r, t, t);
             cublasSetPointerMode(h, mode);
-        });
+        ));
 }
 
 template void PUBLIC_API dot<float>  (const size_t,
@@ -477,19 +497,19 @@ void dotc(const size_t n,
           Buffer<T>& r_buffer, const size_t r_offset,
           const Queue& queue, Event* event) {
     dispatch<T>(queue,
-        [&]() {
+        OPENCL(
             auto routine = Xdotc<T>(queue, event);
             routine.DoDotc(n,
                            x_buffer, x_offset, x_inc,
                            y_buffer, y_offset, y_inc,
                            r_buffer, r_offset);
-        },
-        [&](auto h, auto t) {
+        ),
+        CUDA(
             auto x = cuBuffer::unwrap(x_buffer) + x_offset;
             auto y = cuBuffer::unwrap(y_buffer) + y_offset;
             auto r = cuBuffer::unwrap(r_buffer) + r_offset;
             cublasDotcEx(h, n, x, t, x_inc, y, t, y_inc, r, t, t);
-        });
+        ));
 }
 
 template void PUBLIC_API dotc<float2> (const size_t,
@@ -512,13 +532,13 @@ void nrm2(const size_t n,
           Buffer<T>& r_buffer, const size_t r_offset,
           const Queue& queue, Event* event) {
     dispatch<T>(queue,
-        [&]() {
+        OPENCL(
             auto routine = Xnrm2<T>(queue, event);
             routine.DoNrm2(n,
                            x_buffer, x_offset, x_inc,
                            r_buffer, r_offset);
-        },
-        [&](auto h, auto t) {
+        ),
+        CUDA(
             auto x = cuBuffer::unwrap(x_buffer) + x_offset;
             auto r = cuBuffer::unwrap(r_buffer) + r_offset;
 
@@ -527,7 +547,7 @@ void nrm2(const size_t n,
             cublasSetPointerMode(h, cublasPointerMode_t::CUBLAS_POINTER_MODE_DEVICE);
             cublasNrm2Ex(h, n, x, t, x_inc, r, t, t);
             cublasSetPointerMode(h, mode);
-        });
+        ));
 }
 
 template void PUBLIC_API nrm2<float>  (const size_t,
@@ -640,6 +660,7 @@ template void PUBLIC_API sum<int64_t>(const size_t,
 //---------------------------------------------------------------------------
 // Index of absolute maximum value in a vector: iSAMAX/iDAMAX/iCAMAX/iZAMAX/iHAMAX
 
+#if HAS_CUDA
 inline void cublasAmaxEx(cublasHandle_t handle, int n, const float* x, int incx, int* result) {
     cublasIsamax(handle, n, x, incx, result);
 }
@@ -655,6 +676,7 @@ inline void cublasAmaxEx(cublasHandle_t handle, int n, const float2* x, int incx
 inline void cublasAmaxEx(cublasHandle_t handle, int n, const double2* x, int incx, int* result) {
     cublasIzamax(handle, n, reinterpret_cast<const cuDoubleComplex*>(x), incx, result);
 }
+#endif
 
 template <typename T>
 void amax(const size_t n,
@@ -662,13 +684,13 @@ void amax(const size_t n,
           Buffer<unsigned int>& r_buffer, const size_t r_offset,
           const Queue& queue, Event* event) {
     dispatch<T>(queue,
-        [&]() {
+        OPENCL(
             auto routine = Xamax<T>(queue, event);
             routine.DoAmax(n,
                            x_buffer, x_offset, x_inc,
                            r_buffer, r_offset);
-        },
-        [&](auto h, auto) {
+        ),
+        CUDA(
             auto x = cuBuffer::unwrap(x_buffer) + x_offset;
             auto r = cuBuffer::unwrap(r_buffer) + r_offset;
 
@@ -677,7 +699,7 @@ void amax(const size_t n,
             cublasSetPointerMode(h, cublasPointerMode_t::CUBLAS_POINTER_MODE_DEVICE);
             cublasAmaxEx(h, n, x, x_inc, reinterpret_cast<int*>(r));
             cublasSetPointerMode(h, mode);
-        });
+        ));
 }
 
 template void PUBLIC_API amax<float>  (const size_t,
@@ -712,6 +734,7 @@ template void PUBLIC_API amax<int64_t>(const size_t,
 //---------------------------------------------------------------------------
 // Index of absolute minimum value in a vector (non-BLAS function): iSAMIN/iDAMIN/iCAMIN/iZAMIN/iHAMIN
 
+#if HAS_CUDA
 inline void cublasAminEx(cublasHandle_t handle, int n, const float* x, int incx, int* result) {
     cublasIsamin(handle, n, x, incx, result);
 }
@@ -727,6 +750,7 @@ inline void cublasAminEx(cublasHandle_t handle, int n, const float2* x, int incx
 inline void cublasAminEx(cublasHandle_t handle, int n, const double2* x, int incx, int* result) {
     cublasIzamin(handle, n, reinterpret_cast<const cuDoubleComplex*>(x), incx, result);
 }
+#endif
 
 template <typename T>
 void amin(const size_t n,
@@ -734,13 +758,13 @@ void amin(const size_t n,
           Buffer<unsigned int>& r_buffer, const size_t r_offset,
           const Queue& queue, Event* event) {
     dispatch<T>(queue,
-        [&]() {
+        OPENCL(
             auto routine = Xamin<T>(queue, event);
             routine.DoAmin(n,
                            x_buffer, x_offset, x_inc,
                            r_buffer, r_offset);
-        },
-        [&](auto h, auto) {
+        ),
+        CUDA(
             auto x = cuBuffer::unwrap(x_buffer) + x_offset;
             auto r = cuBuffer::unwrap(r_buffer) + r_offset;
 
@@ -749,7 +773,7 @@ void amin(const size_t n,
             cublasSetPointerMode(h, cublasPointerMode_t::CUBLAS_POINTER_MODE_DEVICE);
             cublasAminEx(h, n, x, x_inc, reinterpret_cast<int*>(r));
             cublasSetPointerMode(h, mode);
-        });
+        ));
 }
 
 template void PUBLIC_API amin<float>  (const size_t,
@@ -874,6 +898,7 @@ template void PUBLIC_API min<int64_t>(const size_t,
 //---------------------------------------------------------------------------
 // General matrix-vector multiplication: SGEMV/DGEMV/CGEMV/ZGEMV/HGEMV
 
+#if HAS_CUDA
 inline void cublasGemvEx(cublasHandle_t handle, Transpose trans,
                          int m, int n, float alpha,
                          const float* a, int lda, const float* x, int x_inc,
@@ -911,6 +936,7 @@ inline void cublasGemvEx(cublasHandle_t handle, Transpose trans,
                 reinterpret_cast<cuDoubleComplex*>(&beta),
                 reinterpret_cast<cuDoubleComplex*>(y), y_inc);
 }
+#endif
 
 template <typename T>
 void gemv(const Layout layout, const Transpose a_transpose,
@@ -922,7 +948,7 @@ void gemv(const Layout layout, const Transpose a_transpose,
           Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
           const Queue& queue, Event* event) {
     dispatch<T>(queue,
-        [&]() {
+        OPENCL(
             auto routine = Xgemv<T>(queue, event);
             routine.DoGemv(layout, a_transpose,
                            m, n,
@@ -931,8 +957,8 @@ void gemv(const Layout layout, const Transpose a_transpose,
                            x_buffer, x_offset, x_inc,
                            beta,
                            y_buffer, y_offset, y_inc);
-        },
-        [&](auto h, auto) {
+        ),
+        CUDA(
             auto a = cuBuffer::unwrap(a_buffer) + a_offset;
             auto x = cuBuffer::unwrap(x_buffer) + x_offset;
             auto y = cuBuffer::unwrap(y_buffer) + y_offset;
@@ -943,7 +969,7 @@ void gemv(const Layout layout, const Transpose a_transpose,
             } else {
                 cublasGemvEx(h, a_transpose, m, n, alpha, a, a_ld, x, x_inc, beta, y, y_inc);
             }
-        });
+        ));
 }
 
 template void PUBLIC_API gemv<float>  (const Layout, const Transpose,
@@ -1856,7 +1882,7 @@ void gemm(const Layout layout, const Transpose a_transpose, const Transpose b_tr
           Buffer<T>* temp_buffer,
           const Queue& queue, Event* event) {
     dispatch<T>(queue,
-        [&]() {
+        OPENCL(
             auto routine = Xgemm<T>(queue, event);
             routine.DoGemm(layout, a_transpose, b_transpose,
                            m, n, k,
@@ -1866,8 +1892,8 @@ void gemm(const Layout layout, const Transpose a_transpose, const Transpose b_tr
                            beta,
                            c_buffer, c_offset, c_ld,
                            temp_buffer);
-        },
-        [&](auto h, auto t) {
+        ),
+        CUDA(
             auto a = cuBuffer::unwrap(a_buffer) + a_offset;
             auto b = cuBuffer::unwrap(b_buffer) + b_offset;
             auto c = cuBuffer::unwrap(c_buffer) + c_offset;
@@ -1881,7 +1907,7 @@ void gemm(const Layout layout, const Transpose a_transpose, const Transpose b_tr
                              m, n, k, &alpha, a, t, a_ld, b, t, b_ld, &beta, c, t, c_ld, t,
                              cublasGemmAlgo_t::CUBLAS_GEMM_DFALT);
             }
-        });
+        ));
 }
 
 template void PUBLIC_API gemm(const Layout, const Transpose, const Transpose,

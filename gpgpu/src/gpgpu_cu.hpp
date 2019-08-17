@@ -1,6 +1,8 @@
 #ifndef _GPGPU_CU_H
 #define _GPGPU_CU_H
 
+#if HAS_CUDA
+
 #include "gpgpu.h"
 #include <cuda.h>
 #include <nvrtc.h>
@@ -264,4 +266,5 @@ std::shared_ptr<rawPlatform> probe();
 
 }} // namespace gpgpu::cu
 
+#endif //!HAS_CUDA
 #endif //_GPGPU_CU_H

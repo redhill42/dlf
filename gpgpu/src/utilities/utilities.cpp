@@ -27,7 +27,9 @@
   #include "CL/cl.h"
 #endif
 
+#if HAS_CUDA
 #include <cuda.h>
+#endif
 
 using namespace gpgpu;
 
@@ -228,8 +230,10 @@ std::string AMDBoardName(const Device& device) {
 }
 
 std::string NVIDIAComputeCapability(const Device& device) {
+#if HAS_CUDA
   if (IsCUDA(device))
     return device.capabilities();
+#endif
 
   #ifndef CL_DEVICE_COMPUTE_CAPABILITY_MAJOR_NV
     #define CL_DEVICE_COMPUTE_CAPABILITY_MAJOR_NV 0x4000
@@ -253,12 +257,14 @@ std::string NVIDIAComputeCapability(const Device& device) {
 }
 
 bool IsPostNVIDIAVolta(const Device& device) {
+#if HAS_CUDA
   if (IsCUDA(device)) {
     auto device_id = static_cast<CUdevice>(device.id());
     int info = 0;
     cuDeviceGetAttribute(&info, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, device_id);
     return info >= 7;
   }
+#endif
 
   if (device.hasExtension("cl_nv_device_attribute_query")) {
     auto device_id = reinterpret_cast<cl_device_id>(device.id());

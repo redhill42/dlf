@@ -1,3 +1,5 @@
+#if HAS_CUDA
+
 #include <iostream>
 #include "gpgpu_cu.hpp"
 
@@ -345,3 +347,5 @@ void cuKernel::launch(const rawQueue& queue,
 }
 
 }} // namespace gpgpu::cu
+
+#endif //!HAS_CUDA
