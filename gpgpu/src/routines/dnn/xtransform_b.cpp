@@ -4,8 +4,8 @@
 namespace gpgpu { namespace dnn {
 using namespace gpgpu::blas;
 
-template <typename T>
-Xtransform_b<T>::Xtransform_b(const Queue& queue, Event* event, const std::string& name)
+template <typename T, typename R>
+Xtransform_b<T, R>::Xtransform_b(const Queue& queue, Event* event, const std::string& name)
     : Routine(queue, event, name, {"Xaxpy"}, PrecisionValue<T>(), {}, {
     #include "../../kernels/level1/level1.cl"
     #include "kernels/dnn/xtransform_b.cl"
@@ -17,12 +17,12 @@ static inline bool ends_with(const std::string& str, const std::string& suffix) 
         0 == str.compare(str.length()-suffix.length(), suffix.length(), suffix);
 }
 
-template <typename T>
-void Xtransform_b<T>::DoTransform(
+template <typename T, typename R>
+void Xtransform_b<T, R>::DoTransform(
     const std::string& name,
     const size_t x_size, const Buffer<T>& x_buffer,
     const size_t y_size, const Buffer<T>& y_buffer,
-    Buffer<T>& z_buffer)
+    Buffer<R>& z_buffer)
 {
     const size_t n = std::max(x_size, y_size);
 
@@ -76,11 +76,11 @@ void Xtransform_b<T>::DoTransform(
     }
 }
 
-template <typename T>
-void Xtransform_b<T>::DoTransform(const std::string& name, const size_t n,
+template <typename T, typename R>
+void Xtransform_b<T, R>::DoTransform(const std::string& name, const size_t n,
     const Buffer<T>& x_buffer, const size_t x_offset, const std::vector<size_t>& x_stride,
     const Buffer<T>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_stride,
-    Buffer<T>& z_buffer, const std::vector<size_t>& oshape)
+    Buffer<R>& z_buffer, const std::vector<size_t>& oshape)
 {
     // Make sure all dimensions are larger than zero
     if (n == 0)
@@ -113,13 +113,20 @@ void Xtransform_b<T>::DoTransform(const std::string& name, const size_t n,
     RunKernel(kernel, queue_, device_, global, local, event_);
 }
 
-template class Xtransform_b<int16_t>;
-template class Xtransform_b<int32_t>;
-template class Xtransform_b<int64_t>;
-template class Xtransform_b<half>;
-template class Xtransform_b<float>;
-template class Xtransform_b<double>;
-template class Xtransform_b<float2>;
-template class Xtransform_b<double2>;
+template class Xtransform_b<int16_t, int16_t>;
+template class Xtransform_b<int32_t, int32_t>;
+template class Xtransform_b<int64_t, int64_t>;
+template class Xtransform_b<half,    half>;
+template class Xtransform_b<float,   float>;
+template class Xtransform_b<double,  double>;
+template class Xtransform_b<float2,  float2>;
+template class Xtransform_b<double2, double2>;
+
+template class Xtransform_b<int16_t, bool>;
+template class Xtransform_b<int32_t, bool>;
+template class Xtransform_b<int64_t, bool>;
+template class Xtransform_b<half,    bool>;
+template class Xtransform_b<float,   bool>;
+template class Xtransform_b<double,  bool>;
 
 }}

@@ -195,6 +195,30 @@ DEFINE_BINARY_OPERATOR(^, bit_xor)
 #undef DEFINE_BINARY_OPERATOR
 
 template <typename LHS, typename RHS>
+enable_if_tensors<LHS, RHS, xfn::less<>>
+inline operator<(LHS&& lhs, RHS&& rhs) {
+    return transform(std::forward<LHS>(lhs), std::forward<RHS>(rhs), xfn::less<>());
+}
+
+template <typename LHS, typename RHS>
+enable_if_tensors<LHS, RHS, xfn::less_equal<>>
+inline operator<=(LHS&& lhs, RHS&& rhs) {
+    return transform(std::forward<LHS>(lhs), std::forward<RHS>(rhs), xfn::less_equal<>());
+}
+
+template <typename LHS, typename RHS>
+enable_if_tensors<LHS, RHS, xfn::greater<>>
+inline operator>(LHS&& lhs, RHS&& rhs) {
+    return transform(std::forward<LHS>(lhs), std::forward<RHS>(rhs), xfn::greater<>());
+}
+
+template <typename LHS, typename RHS>
+enable_if_tensors<LHS, RHS, xfn::greater_equal<>>
+inline operator>=(LHS&& lhs, RHS&& rhs) {
+    return transform(std::forward<LHS>(lhs), std::forward<RHS>(rhs), xfn::greater_equal<>());
+}
+
+template <typename LHS, typename RHS>
 enable_if_tensors<LHS, RHS, xfn::logical_and<>>
 inline operator&&(LHS&& lhs, RHS&& rhs) {
     return transform(std::forward<LHS>(lhs), std::forward<RHS>(rhs), xfn::logical_and<>());

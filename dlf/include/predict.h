@@ -535,6 +535,28 @@ private:
     }
 
     template <typename Fn>
+    struct RelationOp : Operator {
+        TensorT<> A, B;
+        TensorT<bool> C;
+        RelationOp(OperatorFactory* of, model::Node* n)
+            : A(of->alloc(n->input(0))), B(of->alloc(n->input(1))),
+              C(of->alloc<bool>(n->output())) {}
+        void evaluate() override { transformTo(A, B, C, Fn{}); }
+    };
+
+    void visit(model::Greater* n) override {
+        result = std::make_unique<RelationOp<xfn::greater<T>>>(this, n);
+    }
+
+    void visit(model::Less* n) override {
+        result = std::make_unique<RelationOp<xfn::less<T>>>(this, n);
+    }
+
+    void visit(model::Equal* n) override {
+        result = std::make_unique<RelationOp<xfn::equal_to<T>>>(this, n);
+    }
+
+    template <typename Fn>
     struct AggregateOp : Operator {
         std::list<TensorT<>> inputs;
         TensorT<> output;

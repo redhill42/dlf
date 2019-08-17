@@ -189,6 +189,38 @@ struct min : std::binary_function<T,T,T> {
 //==-------------------------------------------------------------------------
 
 template <typename T = void>
+struct equal_to : std::equal_to<T> {
+    static constexpr auto name = "equal_to";
+};
+
+template <typename T = void>
+struct not_equal_to : std::not_equal_to<T> {
+    static constexpr auto name = "not_equal_to";
+};
+
+template <typename T = void>
+struct less : std::less<T> {
+    static constexpr auto name = "less";
+};
+
+template <typename T = void>
+struct less_equal : std::less_equal<T> {
+    static constexpr auto name = "less_equal";
+};
+
+template <typename T = void>
+struct greater : std::greater<T> {
+    static constexpr auto name = "greater";
+};
+
+template <typename T = void>
+struct greater_equal : std::greater_equal<T> {
+    static constexpr auto name = "greater_equal";
+};
+
+//==-------------------------------------------------------------------------
+
+template <typename T = void>
 struct bit_and : std::bit_and<T> {
     static constexpr auto name = "bit_and";
 };

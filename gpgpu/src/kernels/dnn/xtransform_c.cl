@@ -22,6 +22,23 @@ void name(const int m, const int n, const int channels,                     \
   }                                                                         \
 }
 
+#define DEFINE_RELATION(name, op)                                           \
+__kernel __attribute__((reqd_work_group_size(COPY_DIMX, COPY_DIMY, 1)))     \
+void name(const int m, const int n, const int channels,                     \
+          const __global real* restrict xgm,                                \
+          const __global real* restrict ygm,                                \
+          __global char* zgm)                                               \
+{                                                                           \
+  const int rid = get_global_id(0);                                         \
+  if (rid < m) {                                                            \
+    const real y = ygm[rid % channels];                                     \
+    for (int id = get_global_id(1); id < n; id += get_global_size(1)) {     \
+      const int offset = rid*n + id;                                        \
+      zgm[offset] = xgm[offset] op y;                                       \
+    }                                                                       \
+  }                                                                         \
+}
+
 // The scalar division function
 #if PRECISION == 3232 || PRECISION == 6464
   #define Divide(c,a,b) \
@@ -67,6 +84,13 @@ DEFINE_BINARY(Xpow, Pow)
 
 #define PRelu(c,a,b) c = a<ZERO ? a*b : a
 DEFINE_BINARY(Xprelu, PRelu)
+
+DEFINE_RELATION(Xequal_to, ==)
+DEFINE_RELATION(Xnot_equal_to, !=)
+DEFINE_RELATION(Xless, <)
+DEFINE_RELATION(Xless_equal, <=)
+DEFINE_RELATION(Xgreater, >)
+DEFINE_RELATION(Xgreater_equal, >=)
 
 #endif
 

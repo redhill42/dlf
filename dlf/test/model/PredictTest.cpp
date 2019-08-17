@@ -150,6 +150,38 @@ TYPED_TEST(PredictTest, Slice) {
     }));
 }
 
+TYPED_TEST(PredictTest, Where) {
+    using Context = TypeParam;
+    Graph g;
+
+    auto x = g.addInput("X", DataType::FLOAT, {10});
+
+    auto a = g.append<Less>();
+    a->addInput(x);
+    a->addInput(g.addInitializer(TensorData("c5", DataType::FLOAT, {1}, {5})));
+    a->addOutput("cond");
+
+    auto b = g.append<Mul>();
+    b->addInput(x);
+    b->addInput(g.addInitializer(TensorData("c10", DataType::FLOAT, {1}, {10})));
+    b->addOutput("Y");
+
+    // where(X < 5, X, X*10)
+    auto c = g.append<Where>();
+    c->addInput(a->output());
+    c->addInput(x);
+    c->addInput(b->output());
+    g.addOutput(c->addOutput("Z"));
+
+    Predictor<Context, float> predictor(g);
+    predictor.set(0, Tensor<float>::range({10}, 0));
+    predictor.predict();
+
+    EXPECT_EQ(predictor.get(0), Tensor<float>({10}, {
+        0, 1, 2, 3, 4, 50, 60, 70, 80, 90
+    }));
+}
+
 TYPED_PERFORMANCE_TEST(PredictTest, Performance) {
     std::fstream fs("data/resnet18v1.onnx", std::ios::in | std::ios::binary);
     auto g = import_model(fs);

@@ -1085,7 +1085,19 @@ TEST(UniformTest, Where_CPU) {
     EXPECT_EQ(Z, Tensor<int>({2, 2}, {1, 6, 3, 8}));
 }
 
-TEST(UniformTest, Where_CPUView) {
+TEST(UniformTest, WhereExpr_CPU) {
+    auto X = Tensor<int>::range({10}, 0);
+    auto Y = where(X<5, X, 10*X);
+    EXPECT_EQ(Y, Tensor<int>({10}, {0, 1, 2, 3, 4, 50, 60, 70, 80, 90}));
+}
+
+TEST(UniformTest, WhereExpr_GPU) {
+    auto X = dev(Tensor<int>::range({10}, 0));
+    auto Y = where(X<5, X, 10*X);
+    EXPECT_EQ(Y.read(), Tensor<int>({10}, {0, 1, 2, 3, 4, 50, 60, 70, 80, 90}));
+}
+
+TEST(UniformTest, WhereView_CPU) {
     auto condition = Tensor<bool>({2}, {true, false});
     auto X = Tensor<int>({4, 2}, {1, 2, 3, 4, 5, 6, 7, 8});
     auto Z = where(condition, X.slice({{0,2}}), X.slice({{2,4}}));

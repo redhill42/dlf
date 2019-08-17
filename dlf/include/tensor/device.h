@@ -234,8 +234,20 @@ inline void flat_copy(const DevTensor<T>& src, DevTensor<T>& dst) {
 // DevTensor binary transformations
 //==-------------------------------------------------------------------------
 
+template <typename T> struct is_relop                        : public std::false_type {};
+template <typename T> struct is_relop<xfn::equal_to<T>>      : public std::true_type {};
+template <typename T> struct is_relop<xfn::not_equal_to<T>>  : public std::true_type {};
+template <typename T> struct is_relop<xfn::less<T>>          : public std::true_type {};
+template <typename T> struct is_relop<xfn::less_equal<T>>    : public std::true_type {};
+template <typename T> struct is_relop<xfn::greater<T>>       : public std::true_type {};
+template <typename T> struct is_relop<xfn::greater_equal<T>> : public std::true_type {};
+
 template <typename T, typename Fn>
-DevTensor<T>& transformTo(const DevTensor<T>& A, const DevTensor<T>& B, DevTensor<T>& C, Fn fn) {
+DevTensor<std::conditional_t<is_relop<Fn>::value, bool, T>>&
+transformTo(const DevTensor<T>& A, const DevTensor<T>& B,
+            DevTensor<std::conditional_t<is_relop<Fn>::value, bool, T>>& C,
+            Fn fn)
+{
     Shape final_shape = Shape::broadcast(A, B);
     C.resize(final_shape);
 
@@ -260,7 +272,11 @@ DevTensor<T>& transformTo(const DevTensor<T>& A, const DevTensor<T>& B, DevTenso
 }
 
 template <typename T, typename Fn>
-void transformChannel(const DevTensor<T>& A, const DevTensor<T>& B, DevTensor<T>& C, size_t axis, Fn) {
+void transformChannel(
+    const DevTensor<T>& A, const DevTensor<T>& B,
+    DevTensor<std::conditional_t<is_relop<Fn>::value, bool, T>>& C,
+    size_t axis, Fn)
+{
     assert(B.is_vector() || A.shape().find_channel_axis(B.shape()) == axis);
     assert(axis < A.rank());
     assert(A.extent(axis) == B.size());
@@ -275,14 +291,15 @@ void transformChannel(const DevTensor<T>& A, const DevTensor<T>& B, DevTensor<T>
 }
 
 template <typename T, typename Fn>
-inline DevTensor<T> transform(const DevTensor<T>& A, const DevTensor<T>& B, Fn fn) {
-    DevTensor<T> C;
+inline auto transform(const DevTensor<T>& A, const DevTensor<T>& B, Fn fn) {
+    DevTensor<std::conditional_t<is_relop<Fn>::value, bool, T>> C;
     transformTo(A, B, C, fn);
     return C;
 }
 
 template <typename T, typename Fn>
-inline DevTensor<T> transform(DevTensor<T>&& A, const DevTensor<T>& B, Fn fn) {
+std::enable_if_t<!is_relop<Fn>::value, DevTensor<T>>
+inline transform(DevTensor<T>&& A, const DevTensor<T>& B, Fn fn) {
     if (A.shape() == Shape::broadcast(A, B))
         return std::move(transformTo(A, B, A, fn));
     else
@@ -290,7 +307,8 @@ inline DevTensor<T> transform(DevTensor<T>&& A, const DevTensor<T>& B, Fn fn) {
 }
 
 template <typename T, typename Fn>
-inline DevTensor<T> transform(const DevTensor<T>& A, DevTensor<T>&& B, Fn fn) {
+std::enable_if_t<!is_relop<Fn>::value, DevTensor<T>>
+inline transform(const DevTensor<T>& A, DevTensor<T>&& B, Fn fn) {
     if (B.shape() == Shape::broadcast(A, B))
         return std::move(transformTo(A, B, B, fn));
     else
@@ -298,7 +316,8 @@ inline DevTensor<T> transform(const DevTensor<T>& A, DevTensor<T>&& B, Fn fn) {
 }
 
 template <typename T, typename Fn>
-inline DevTensor<T> transform(DevTensor<T>&& A, DevTensor<T>&& B, Fn fn) {
+std::enable_if_t<!is_relop<Fn>::value, DevTensor<T>>
+inline transform(DevTensor<T>&& A, DevTensor<T>&& B, Fn fn) {
     Shape final_shape = Shape::broadcast(A, B);
     if (A.shape() == final_shape)
         return std::move(transformTo(A, B, A, fn));

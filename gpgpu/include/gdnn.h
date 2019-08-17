@@ -36,24 +36,24 @@ void transform(const std::string& name, const size_t n, const T alpha, const T b
                const Buffer<T>& x_buffer, Buffer<T>& y_buffer,
                const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
-template <typename T>
+template <typename T, typename R>
 void transform(const std::string& name,
                const size_t x_size, const Buffer<T>& x_buffer,
                const size_t y_size, const Buffer<T>& y_buffer,
-               Buffer<T>& z_buffer,
+               Buffer<R>& z_buffer,
                const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
-template <typename T>
+template <typename T, typename R>
 void transform(const std::string& name, const size_t n,
                const Buffer<T>& x_buffer, const size_t x_offset, const std::vector<size_t>& x_stride,
                const Buffer<T>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_stride,
-               Buffer<T>& z_buffer, const std::vector<size_t>& oshape,
+               Buffer<R>& z_buffer, const std::vector<size_t>& oshape,
                const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
-template <typename T>
+template <typename T, typename R>
 void transform(const std::string& name,
                const size_t m, const size_t n, const size_t channels,
-               const Buffer<T>& x_buffer, const Buffer<T>& y_buffer, Buffer<T>& z_buffer,
+               const Buffer<T>& x_buffer, const Buffer<T>& y_buffer, Buffer<R>& z_buffer,
                const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 template <typename T>
