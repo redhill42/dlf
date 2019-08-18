@@ -724,6 +724,74 @@ void transformChannel(
 }
 
 //==-------------------------------------------------------------------------
+// DevTensor reduction operations
+//==-------------------------------------------------------------------------
+
+namespace detail {
+template <typename T, typename DevTensorT>
+void reduce(const std::string& name,
+            const DevTensorT& X, DevTensor<T>& Y,
+            std::vector<int>&& axes, bool keepdims)
+{
+    auto rank = X.rank();
+
+    // normalize axes
+    for (auto& a : axes) {
+        if (a < 0) a += rank;
+        if (a < 0 || a >= rank)
+            throw shape_error("reduce: axes has incorrect value");
+    }
+
+    std::vector<size_t> output_dims;
+    std::vector<size_t> transpose_perm;
+    size_t n = 1;
+
+    for (int i = 0; i < rank; i++) {
+        // axes empty means reduce all dim
+        if (!axes.empty() && std::find(axes.begin(), axes.end(), i) == axes.end()) {
+            output_dims.push_back(X.extent(i));
+            transpose_perm.push_back(i);
+        } else if (keepdims) {
+            output_dims.push_back(1);
+        }
+    }
+    for (int i = 0; i < rank; i++) {
+        if (axes.empty() || std::find(axes.begin(), axes.end(), i) != axes.end()) {
+            transpose_perm.push_back(i);
+            n *= X.extent(i);
+        }
+    }
+    if (output_dims.empty()) {
+        output_dims.push_back(1);
+    }
+
+    Shape x_shape = X.shape().transpose(transpose_perm);
+    Shape y_shape = Shape(output_dims);
+    Y.resize(y_shape);
+
+    gpgpu::dnn::reduce(name, X.size()/n, n,
+                       x_shape.extents(), x_shape.strides(),
+                       X.data(), x_shape.offset(), Y.data(), 0);
+}
+} // namespace detail
+
+template <typename T, typename Reduction>
+inline void reduce(
+    const DevTensor<T>& X, DevTensor<T>& Y, Reduction,
+    std::vector<int> axes = {}, bool keepdims = false)
+{
+    detail::reduce(Reduction::name, X, Y, std::move(axes), keepdims);
+}
+
+template <typename T, typename Reduction>
+inline void reduce(
+    const DevTensorView<T>& X, DevTensor<T>& Y, Reduction,
+    std::vector<int> axes = {}, bool keepdims = false)
+{
+    detail::reduce(Reduction::name, X, Y, std::move(axes), keepdims);
+}
+
+//==-------------------------------------------------------------------------
 // DevTensor shape operations
 //==-------------------------------------------------------------------------
 

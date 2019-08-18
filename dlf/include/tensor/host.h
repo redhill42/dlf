@@ -1249,6 +1249,91 @@ inline Tensor<T>& Tensor<T>::apply(const Tensor<U>& y, F f) {
 }
 
 //==-------------------------------------------------------------------------
+// Tensor reduction operations
+//==-------------------------------------------------------------------------
+
+namespace detail {
+template <typename T, typename TensorT, typename Reduction>
+void reduce(const TensorT& X, Tensor<T>& Y, Reduction reduction,
+            std::vector<int>&& axes, bool keepdims)
+{
+    auto rank = X.rank();
+
+    // normalize axes
+    for (auto& a : axes) {
+        if (a < 0) a += rank;
+        if (a < 0 || a >= rank)
+            throw shape_error("reduce: axes has incorrect value");
+    }
+
+    std::vector<size_t> output_dims;
+    std::vector<size_t> transpose_perm;
+    size_t n = 1;
+
+    for (int i = 0; i < rank; i++) {
+        // axes empty means reduce all dim
+        if (!axes.empty() && std::find(axes.begin(), axes.end(), i) == axes.end()) {
+            output_dims.push_back(X.extent(i));
+            transpose_perm.push_back(i);
+        } else if (keepdims) {
+            output_dims.push_back(1);
+        }
+    }
+    for (int i = 0; i < rank; i++) {
+        if (axes.empty() || std::find(axes.begin(), axes.end(), i) != axes.end()) {
+            transpose_perm.push_back(i);
+            n *= X.extent(i);
+        }
+    }
+    if (output_dims.empty()) {
+        output_dims.push_back(1);
+    }
+
+    Shape x_shape = X.shape().transpose(transpose_perm);
+    Shape y_shape = Shape(output_dims);
+    Y.resize(y_shape);
+
+    if (x_shape.is_contiguous()) {
+        tbb::parallel_for(tbb::blocked_range<int>(0, X.size()/n, 1), [&](auto r) {
+            for (int i = r.begin(); i < r.end(); i++) {
+                auto px = X.data() + i*n + x_shape.offset();
+                T acc = Reduction::identity;
+                for (int j = 0; j < n; ++j, ++px)
+                    acc = reduction(acc, *px);
+                Y.data()[i] = Reduction::post(acc, n);
+            }
+        });
+    } else {
+        tbb::parallel_for(tbb::blocked_range<int>(0, X.size()/n, 1), [&](auto r) {
+            for (int i = r.begin(); i < r.end(); i++) {
+                auto px = const_shaped_iterator<T>(x_shape, X.data(), i*n);
+                T acc = Reduction::identity;
+                for (int j = 0; j < n; ++j, ++px)
+                    acc = reduction(acc, *px);
+                Y.data()[i] = Reduction::post(acc, n);
+            }
+        });
+    }
+}
+} // namespace detail
+
+template <typename T, typename Reduction>
+inline void reduce(
+    const Tensor<T>& X, Tensor<T>& Y, Reduction reduction,
+    std::vector<int> axes = {}, bool keepdims = false)
+{
+    detail::reduce(X, Y, reduction, std::move(axes), keepdims);
+}
+
+template <typename T, typename Reduction>
+inline void reduce(
+    const TensorView<T>& X, Tensor<T>& Y, Reduction reduction,
+    std::vector<int> axes = {}, bool keepdims = false)
+{
+    detail::reduce(X, Y, reduction, std::move(axes), keepdims);
+}
+
+//==-------------------------------------------------------------------------
 // Tensor shape operations
 //==-------------------------------------------------------------------------
 

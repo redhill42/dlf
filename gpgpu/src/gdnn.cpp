@@ -603,6 +603,33 @@ template void PUBLIC_API transform<double, bool>(
     const Queue&, Event*);
 
 template <typename T>
+void reduce(const std::string& name, const size_t m, const size_t n,
+            const std::vector<size_t>& dims, const std::vector<size_t>& strides,
+            const Buffer<T>& x_buffer, const size_t x_offset,
+            Buffer<T>& y_buffer, const size_t y_offset,
+            const Queue& queue, Event* event)
+{
+    auto routine = Xreduce<T>(queue, event);
+    routine.DoReduce(name, m, n, dims, strides, x_buffer, x_offset, y_buffer, y_offset);
+}
+
+template void PUBLIC_API reduce<half>  (const std::string&, const size_t, const size_t,
+                                        const std::vector<size_t>&, const std::vector<size_t>&,
+                                        const Buffer<half>&, const size_t,
+                                        Buffer<half>&, const size_t,
+                                        const Queue&, Event*);
+template void PUBLIC_API reduce<float> (const std::string&, const size_t, const size_t,
+                                        const std::vector<size_t>&, const std::vector<size_t>&,
+                                        const Buffer<float>&, const size_t,
+                                        Buffer<float>&, const size_t,
+                                        const Queue&, Event*);
+template void PUBLIC_API reduce<double>(const std::string&, const size_t, const size_t,
+                                        const std::vector<size_t>&, const std::vector<size_t>&,
+                                        const Buffer<double>&, const size_t,
+                                        Buffer<double>&, const size_t,
+                                        const Queue&, Event*);
+
+template <typename T>
 void batch_norm(const std::vector<size_t>& dims,
                 const Buffer<T>& x_buffer,
                       Buffer<T>& y_buffer,

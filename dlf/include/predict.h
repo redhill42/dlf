@@ -461,7 +461,6 @@ private:
         result = std::make_unique<HardmaxOp>(this, n);
     }
 
-
     struct SoftsignOp : Operator {
         TensorT<> X, Y;
         SoftsignOp(OperatorFactory* of, model::Softsign* n)
@@ -614,6 +613,105 @@ private:
 
     void visit(model::Mean* n) override {
         result = std::make_unique<MeanOp>(this, n);
+    }
+
+    template <typename Fn>
+    struct ReductionOp : Operator {
+        TensorT<> X, Y;
+        std::vector<int> axes;
+        bool keepdims;
+
+        ReductionOp(OperatorFactory* of, model::Node* n)
+            : X(of->alloc(n->input())), Y(of->alloc(n->output()))
+        {
+            auto v = n->get_is(model::kaxes, {});
+            axes.assign(v.begin(), v.end());
+            keepdims = n->get_i(model::kkeepdims, 1) != 0;
+        }
+
+        void evaluate() override {
+            dlf::reduce(X, Y, Fn{}, axes, keepdims);
+        }
+    };
+
+    void visit(model::ReduceMax* n) override {
+        result = std::make_unique<ReductionOp<xfn::reduce_max<T>>>(this, n);
+    }
+
+    void visit(model::ReduceMin* n) override {
+        result = std::make_unique<ReductionOp<xfn::reduce_min<T>>>(this, n);
+    }
+
+    void visit(model::ReduceSum* n) override {
+        result = std::make_unique<ReductionOp<xfn::reduce_sum<T>>>(this, n);
+    }
+
+    void visit(model::ReduceSumSquare* n) override {
+        result = std::make_unique<ReductionOp<xfn::reduce_sum_square<T>>>(this, n);
+    }
+
+    void visit(model::ReduceMean* n) override {
+        result = std::make_unique<ReductionOp<xfn::reduce_mean<T>>>(this, n);
+    }
+
+    void visit(model::ReduceProd* n) override {
+        result = std::make_unique<ReductionOp<xfn::reduce_prod<T>>>(this, n);
+    }
+
+    void visit(model::ReduceLogSum* n) override {
+        result = std::make_unique<ReductionOp<xfn::reduce_log_sum<T>>>(this, n);
+    }
+
+    void visit(model::ReduceLogSumExp* n) override {
+        result = std::make_unique<ReductionOp<xfn::reduce_log_sum_exp<T>>>(this, n);
+    }
+
+    void visit(model::ReduceL1* n) override {
+        result = std::make_unique<ReductionOp<xfn::reduce_l1<T>>>(this, n);
+    }
+
+    void visit(model::ReduceL2* n) override {
+        result = std::make_unique<ReductionOp<xfn::reduce_l2<T>>>(this, n);
+    }
+
+    struct ArgMaxOp : Operator {
+        TensorT<> X;
+        TensorT<int> Y;
+        int axis;
+        bool keepdims;
+
+        ArgMaxOp(OperatorFactory* of, model::ArgMax* n)
+            : X(of->alloc(n->input())),
+              Y(of->alloc<int>(n->output())),
+              axis(n->axis()), keepdims(n->keepdims()) {}
+
+        void evaluate() override {
+            dnn::argmax(X, Y, axis, keepdims);
+        }
+    };
+
+    void visit(model::ArgMax* n) override {
+        result = std::make_unique<ArgMaxOp>(this, n);
+    }
+
+    struct ArgMinOp : Operator {
+        TensorT<> X;
+        TensorT<int> Y;
+        int axis;
+        bool keepdims;
+
+        ArgMinOp(OperatorFactory* of, model::ArgMin* n)
+            : X(of->alloc(n->input())),
+              Y(of->alloc<int>(n->output())),
+              axis(n->axis()), keepdims(n->keepdims()) {}
+
+        void evaluate() override {
+            dnn::argmin(X, Y, axis, keepdims);
+        }
+    };
+
+    void visit(model::ArgMin* n) override {
+        result = std::make_unique<ArgMinOp>(this, n);
     }
 
     struct GemmOp : Operator {
@@ -805,46 +903,6 @@ private:
 
     void visit(model::LRN* n) override {
         result = std::make_unique<LRNOp>(this, n);
-    }
-
-    struct ArgMaxOp : Operator {
-        TensorT<> X;
-        TensorT<int> Y;
-        int axis;
-        bool keepdims;
-
-        ArgMaxOp(OperatorFactory* of, model::ArgMax* n)
-            : X(of->alloc(n->input())),
-              Y(of->alloc<int>(n->output())),
-              axis(n->axis()), keepdims(n->keepdims()) {}
-
-        void evaluate() override {
-            dnn::argmax(X, Y, axis, keepdims);
-        }
-    };
-
-    void visit(model::ArgMax* n) override {
-        result = std::make_unique<ArgMaxOp>(this, n);
-    }
-
-    struct ArgMinOp : Operator {
-        TensorT<> X;
-        TensorT<int> Y;
-        int axis;
-        bool keepdims;
-
-        ArgMinOp(OperatorFactory* of, model::ArgMin* n)
-            : X(of->alloc(n->input())),
-              Y(of->alloc<int>(n->output())),
-              axis(n->axis()), keepdims(n->keepdims()) {}
-
-        void evaluate() override {
-            dnn::argmin(X, Y, axis, keepdims);
-        }
-    };
-
-    void visit(model::ArgMin* n) override {
-        result = std::make_unique<ArgMinOp>(this, n);
     }
 
     struct ReshapeOp : Operator {

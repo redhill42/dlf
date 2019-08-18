@@ -8,48 +8,6 @@
 using namespace dlf;
 
 template <typename T>
-void ExpectEQ(T a, T b) {
-    EXPECT_EQ(a, b);
-}
-
-template <typename T>
-bool isFloatEQ(T a, T b, T eps = T{1e-4}) {
-    if (std::isnan(a))
-        return std::isnan(b);
-    if (std::isinf(a))
-        return std::isinf(b);
-    if (std::signbit(a) != std::signbit(b))
-        return std::abs(a - b) <= eps;
-    if (std::signbit(a)) {
-        a = -a; b = -b;
-    }
-
-    int e = static_cast<int>(std::log10(a));
-    if (e != static_cast<int>(std::log10(b)))
-        return false;
-    T scale = static_cast<T>(std::pow(10, std::abs(e)));
-    return e >= 0
-        ? std::abs(a/scale - b/scale) <= eps
-        : std::abs(a*scale - b*scale) <= eps;
-}
-
-void ExpectEQ(float a, float b) {
-    if (!isFloatEQ(a, b))
-        FAIL() << a << " and " << b << " are not equal";
-}
-
-void ExpectEQ(double a, double b) {
-    if (!isFloatEQ(a, b))
-        FAIL() << a << " and " << b << " are not equal";
-}
-
-template <typename T>
-void ExpectEQ(std::complex<T> a, std::complex<T> b) {
-    ExpectEQ(a.real(), b.real());
-    ExpectEQ(a.imag(), b.imag());
-}
-
-template <typename T>
 void ExpectElementsEQ(const Tensor<T>& a, const Tensor<T>& b) {
     ASSERT_EQ(a.shape(), b.shape());
     for (size_t i = 0; i < a.size(); i++) {

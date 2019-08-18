@@ -639,6 +639,51 @@ inline auto product(First&& first, Rest&&... rest) {
 }
 
 //==-------------------------------------------------------------------------
+// Tensor reduction operations
+//==-------------------------------------------------------------------------
+
+template <typename TensorT, typename Reduction>
+inline enable_if_tensor<TensorT> reduce(
+    const TensorT& X, Reduction reduction,
+    std::vector<int> axes = {}, bool keepdims = false)
+{
+    tensor_type<TensorT> Y;
+    reduce(X, Y, reduction, std::move(axes), keepdims);
+    return Y;
+}
+
+#define DEFINE_REDUCE_OP(name)                                              \
+template <typename TensorT>                                                 \
+inline enable_if_tensor<TensorT, void> name(                                \
+    const TensorT& X, tensor_type<TensorT>& Y,                              \
+    std::vector<int> axes = {}, bool keepdims = false)                      \
+{                                                                           \
+    using T = tensor_value_type<TensorT>;                                   \
+    reduce(X, Y, xfn::name<T>(), std::move(axes), keepdims);                \
+}                                                                           \
+                                                                            \
+template <typename TensorT>                                                 \
+inline enable_if_tensor<TensorT> name(                                      \
+    const TensorT& X, std::vector<int> axes = {}, bool keepdims = false)    \
+{                                                                           \
+    tensor_type<TensorT> Y;                                                 \
+    name(X, Y, std::move(axes), keepdims);                                  \
+    return Y;                                                               \
+}
+
+DEFINE_REDUCE_OP(reduce_max)
+DEFINE_REDUCE_OP(reduce_min)
+DEFINE_REDUCE_OP(reduce_sum)
+DEFINE_REDUCE_OP(reduce_mean)
+DEFINE_REDUCE_OP(reduce_sum_square)
+DEFINE_REDUCE_OP(reduce_log_sum)
+DEFINE_REDUCE_OP(reduce_log_sum_exp)
+DEFINE_REDUCE_OP(reduce_prod)
+DEFINE_REDUCE_OP(reduce_l1)
+DEFINE_REDUCE_OP(reduce_l2)
+#undef DEFINE_REDUCE_OP
+
+//==-------------------------------------------------------------------------
 // Tensor shape operations
 //==-------------------------------------------------------------------------
 

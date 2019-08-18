@@ -182,6 +182,37 @@ TYPED_TEST(PredictTest, Where) {
     }));
 }
 
+TYPED_TEST(PredictTest, Reduce) {
+    using Context = TypeParam;
+    Graph g;
+
+    auto x = g.addInput("X", DataType::FLOAT, {3, 2, 2});
+
+    auto a = g.append<ReduceSum>();
+    a->addInput(x);
+    g.addOutput(a->addOutput("A"));
+
+    auto b = g.append<ReduceSum>()->axes({1});
+    b->addInput(x);
+    g.addOutput(b->addOutput("B"));
+
+    auto c = g.append<ReduceSum>()->axes({1})->keepdims(false);
+    c->addInput(x);
+    g.addOutput(c->addOutput("C"));
+
+    Predictor<Context, float> predictor(g);
+    predictor.set(0, Tensor<float>::range({3, 2, 2}, 1));
+    predictor.predict();
+
+    EXPECT_EQ(predictor.get(0), Tensor<float>({1,1,1}, {78}));
+    EXPECT_EQ(predictor.get(1), Tensor<float>({3,1,2}, {
+        4, 6, 12, 14, 20, 22
+    }));
+    EXPECT_EQ(predictor.get(2), Tensor<float>({3,2}, {
+        4, 6, 12, 14, 20, 22
+    }));
+}
+
 TYPED_PERFORMANCE_TEST(PredictTest, Performance) {
     std::fstream fs("data/resnet18v1.onnx", std::ios::in | std::ios::binary);
     auto g = import_model(fs);
