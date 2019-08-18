@@ -53,49 +53,49 @@ R"(
 
 #define DEFINE_BINARY(name, op)                                             \
 __kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))                   \
-void name(const int x_size, const __global real* restrict xgm,              \
-          const int y_size, const __global real* restrict ygm,              \
-          __global real *zgm)                                               \
+void name(const int x_size, const __global real* restrict xgm, const int x_offset,\
+          const int y_size, const __global real* restrict ygm, const int y_offset,\
+          __global real *zgm, const int z_offset)                           \
 {                                                                           \
   if (x_size == 1) {                                                        \
-    real x_value = xgm[0];                                                  \
+    real x_value = xgm[x_offset];                                           \
     for (int id = get_global_id(0); id<y_size; id += get_global_size(0)) {  \
-      real y_value = ygm[id];                                               \
+      real y_value = ygm[id + y_offset];                                    \
       real z_value;                                                         \
       op(z_value, x_value, y_value);                                        \
-      zgm[id] = z_value;                                                    \
+      zgm[id + z_offset] = z_value;                                         \
     }                                                                       \
   } else if (y_size == 1) {                                                 \
-    real y_value = ygm[0];                                                  \
+    real y_value = ygm[y_offset];                                           \
     for (int id = get_global_id(0); id<x_size; id += get_global_size(0)) {  \
-      real x_value = xgm[id];                                               \
+      real x_value = xgm[id + x_offset];                                    \
       real z_value;                                                         \
       op(z_value, x_value, y_value);                                        \
-      zgm[id] = z_value;                                                    \
+      zgm[id + z_offset] = z_value;                                         \
     }                                                                       \
   } else if (x_size < y_size) {                                             \
     for (int id = get_global_id(0); id<y_size; id += get_global_size(0)) {  \
-      real x_value = xgm[id % x_size];                                      \
-      real y_value = ygm[id];                                               \
+      real x_value = xgm[id % x_size + x_offset];                           \
+      real y_value = ygm[id + y_offset];                                    \
       real z_value;                                                         \
       op(z_value, x_value, y_value);                                        \
-      zgm[id] = z_value;                                                    \
+      zgm[id + z_offset] = z_value;                                         \
     }                                                                       \
   } else if (x_size > y_size) {                                             \
     for (int id = get_global_id(0); id<x_size; id += get_global_size(0)) {  \
-      real x_value = xgm[id];                                               \
-      real y_value = ygm[id % y_size];                                      \
+      real x_value = xgm[id + x_offset];                                    \
+      real y_value = ygm[id % y_size + y_offset];                           \
       real z_value;                                                         \
       op(z_value, x_value, y_value);                                        \
-      zgm[id] = z_value;                                                    \
+      zgm[id + z_offset] = z_value;                                         \
     }                                                                       \
   } else {                                                                  \
     for (int id = get_global_id(0); id<x_size; id += get_global_size(0)) {  \
-      real x_value = xgm[id];                                               \
-      real y_value = ygm[id];                                               \
+      real x_value = xgm[id + x_offset];                                    \
+      real y_value = ygm[id + y_offset];                                    \
       real z_value;                                                         \
       op(z_value, x_value, y_value);                                        \
-      zgm[id] = z_value;                                                    \
+      zgm[id + z_offset] = z_value;                                         \
     }                                                                       \
   }                                                                         \
 }                                                                           \
@@ -104,15 +104,15 @@ __kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))                   \
 void name##Strided(const int n, const int rank, __constant int* shape,      \
                    const __global real* restrict xgm, const int x_offset,   \
                    const __global real* restrict ygm, const int y_offset,   \
-                   __global real* zgm)                                      \
+                   __global real* zgm, const int z_offset)                  \
 {                                                                           \
   for (int id = get_global_id(0); id < n; id += get_global_size(0)) {       \
-    int x_id = x_offset, y_id = y_offset;                                   \
-    unravel2(id, &x_id, &y_id, rank, shape, &shape[rank], &shape[rank*2]);  \
+    int x_id = x_offset, y_id = y_offset, z_id = z_offset;                  \
+    unravel3(id, &x_id, &y_id, &z_id, rank, shape, &shape[rank], &shape[rank*2], &shape[rank*3]);\
     real x_value = xgm[x_id], y_value = ygm[y_id];                          \
     real z_value;                                                           \
     op(z_value, x_value, y_value);                                          \
-    zgm[id] = z_value;                                                      \
+    zgm[z_id] = z_value;                                                    \
   }                                                                         \
 }
 
@@ -155,31 +155,31 @@ void name##Fastest(const int n,                                             \
 
 #define DEFINE_RELATION(name, op)                                           \
 __kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))                   \
-void name(const int x_size, const __global real* restrict xgm,              \
-          const int y_size, const __global real* restrict ygm,              \
-          __global char* zgm)                                               \
+void name(const int x_size, const __global real* restrict xgm, const int x_offset,\
+          const int y_size, const __global real* restrict ygm, const int y_offset,\
+          __global char* zgm, const int z_offset)                           \
 {                                                                           \
   if (x_size == 1) {                                                        \
-    real x_value = xgm[0];                                                  \
+    real x_value = xgm[x_offset];                                           \
     for (int id = get_global_id(0); id<y_size; id += get_global_size(0)) {  \
-      zgm[id] = x_value op ygm[id];                                         \
+      zgm[id + z_offset] = x_value op ygm[id + y_offset];                   \
     }                                                                       \
   } else if (y_size == 1) {                                                 \
-    real y_value = ygm[0];                                                  \
+    real y_value = ygm[y_offset];                                           \
     for (int id = get_global_id(0); id<x_size; id += get_global_size(0)) {  \
-      zgm[id] = xgm[id] op y_value;                                         \
+      zgm[id + z_offset] = xgm[id + x_offset] op y_value;                   \
     }                                                                       \
   } else if (x_size < y_size) {                                             \
     for (int id = get_global_id(0); id<y_size; id += get_global_size(0)) {  \
-      zgm[id] = xgm[id % x_size] op ygm[id];                                \
+      zgm[id + z_offset] = xgm[id % x_size + x_offset] op ygm[id + y_offset];\
     }                                                                       \
   } else if (x_size > y_size) {                                             \
     for (int id = get_global_id(0); id<x_size; id += get_global_size(0)) {  \
-      zgm[id] = xgm[id] op ygm[id % y_size];                                \
+      zgm[id + z_offset] = xgm[id + x_offset] op ygm[id % y_size + y_offset];\
     }                                                                       \
   } else {                                                                  \
     for (int id = get_global_id(0); id<x_size; id += get_global_size(0)) {  \
-      zgm[id] = xgm[id] op ygm[id];                                         \
+      zgm[id + z_offset] = xgm[id + x_offset] op ygm[id + y_offset];        \
     }                                                                       \
   }                                                                         \
 }                                                                           \
@@ -188,12 +188,12 @@ __kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))                   \
 void name##Strided(const int n, const int rank, __constant int* shape,      \
                    const __global real* restrict xgm, const int x_offset,   \
                    const __global real* restrict ygm, const int y_offset,   \
-                   __global char* zgm)                                      \
+                   __global char* zgm, const int z_offset)                  \
 {                                                                           \
   for (int id = get_global_id(0); id < n; id += get_global_size(0)) {       \
-    int x_id = x_offset, y_id = y_offset;                                   \
-    unravel2(id, &x_id, &y_id, rank, shape, &shape[rank], &shape[rank*2]);  \
-    zgm[id] = xgm[x_id] op ygm[y_id];                                       \
+    int x_id = x_offset, y_id = y_offset, z_id = z_offset;                  \
+    unravel3(id, &x_id, &y_id, &z_id, rank, shape, &shape[rank], &shape[rank*2], &shape[rank*3]);\
+    zgm[z_id] = xgm[x_id] op ygm[y_id];                                     \
   }                                                                         \
 }
 

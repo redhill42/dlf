@@ -2,13 +2,29 @@
 // literal). Comment-out this line for syntax-highlighting when developing.
 R"(
 
-#define TRANSFORM(name, op) \
-__kernel __attribute__((reqd_work_group_size(WGS, 1, 1))) \
-void X##name(const int n, const __global real* restrict xgm, __global real* ygm) { \
-  for (int id = get_global_id(0); id < n; id += get_global_size(0)) { \
-    real x = xgm[id]; \
-    ygm[id] = op(x); \
-  } \
+#define TRANSFORM(name, op)                                             \
+__kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))               \
+void X##name(const int n,                                               \
+             const __global real* restrict xgm, const int x_offset,     \
+             __global real* ygm, const int y_offset) {                  \
+  for (int id = get_global_id(0); id < n; id += get_global_size(0)) {   \
+    real x = xgm[id + x_offset];                                        \
+    ygm[id + y_offset] = op(x);                                         \
+  }                                                                     \
+}                                                                       \
+                                                                        \
+__kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))               \
+void X##name##Strided(                                                  \
+    const int n, const int rank, __constant int* shape,                 \
+    const __global real* restrict xgm, const int x_offset,              \
+    __global real* ygm, const int y_offset)                             \
+{                                                                       \
+  for (int id = get_global_id(0); id < n; id += get_global_size(0)) {   \
+    int x_id = x_offset, y_id = y_offset;                               \
+    unravel2(id, &x_id, &y_id, rank, shape, &shape[rank], &shape[rank*2]);\
+    real x = xgm[x_id];                                                 \
+    ygm[y_id] = op(x);                                                  \
+  }                                                                     \
 }
 
 #if INTEGER_PRECISION

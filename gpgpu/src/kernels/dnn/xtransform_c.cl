@@ -5,19 +5,19 @@ R"(
 #define DEFINE_BINARY(name, op)                                             \
 __kernel __attribute__((reqd_work_group_size(COPY_DIMX, COPY_DIMY, 1)))     \
 void name(const int m, const int n, const int channels,                     \
-          const __global real* restrict xgm,                                \
-          const __global real* restrict ygm,                                \
-          __global real* zgm)                                               \
+          const __global real* restrict xgm, const int x_offset,            \
+          const __global real* restrict ygm, const int y_offset,            \
+          __global real* zgm, const int z_offset)                           \
 {                                                                           \
   const int rid = get_global_id(0);                                         \
   if (rid < m) {                                                            \
-    const real y = ygm[rid % channels];                                     \
+    const real y = ygm[rid % channels + y_offset];                          \
     for (int id = get_global_id(1); id < n; id += get_global_size(1)) {     \
       const int offset = rid*n + id;                                        \
-      real x = xgm[offset];                                                 \
+      real x = xgm[offset + x_offset];                                      \
       real z;                                                               \
       op(z, x, y);                                                          \
-      zgm[offset] = z;                                                      \
+      zgm[offset + z_offset] = z;                                           \
     }                                                                       \
   }                                                                         \
 }
@@ -25,16 +25,16 @@ void name(const int m, const int n, const int channels,                     \
 #define DEFINE_RELATION(name, op)                                           \
 __kernel __attribute__((reqd_work_group_size(COPY_DIMX, COPY_DIMY, 1)))     \
 void name(const int m, const int n, const int channels,                     \
-          const __global real* restrict xgm,                                \
-          const __global real* restrict ygm,                                \
-          __global char* zgm)                                               \
+          const __global real* restrict xgm, const int x_offset,            \
+          const __global real* restrict ygm, const int y_offset,            \
+          __global char* zgm, const int z_offset)                           \
 {                                                                           \
   const int rid = get_global_id(0);                                         \
   if (rid < m) {                                                            \
-    const real y = ygm[rid % channels];                                     \
+    const real y = ygm[rid % channels + y_offset];                          \
     for (int id = get_global_id(1); id < n; id += get_global_size(1)) {     \
       const int offset = rid*n + id;                                        \
-      zgm[offset] = xgm[offset] op y;                                       \
+      zgm[offset + z_offset] = xgm[offset + x_offset] op y;                 \
     }                                                                       \
   }                                                                         \
 }

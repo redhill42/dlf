@@ -21,6 +21,9 @@ struct tensor_traits_impl {
 
     template <typename U>
     using tensor_type = void;
+
+    template <typename U>
+    using tensor_view_type = void;
 };
 
 template <typename T>
@@ -32,6 +35,9 @@ struct tensor_traits_impl<Tensor<T>> {
 
     template <typename U>
     using tensor_type = Tensor<std::decay_t<U>>;
+
+    template <typename U>
+    using tensor_view_type = TensorView<std::decay_t<U>>;
 };
 
 template <typename T>
@@ -43,6 +49,9 @@ struct tensor_traits_impl<TensorView<T>> {
 
     template <typename U>
     using tensor_type = Tensor<std::decay_t<U>>;
+
+    template <typename U>
+    using tensor_view_type = TensorView<std::decay_t<U>>;
 };
 
 template <typename T>
@@ -54,6 +63,23 @@ struct tensor_traits_impl<DevTensor<T>> {
 
     template <typename U>
     using tensor_type = DevTensor<std::decay_t<U>>;
+
+    template <typename U>
+    using tensor_view_type = DevTensorView<std::decay_t<U>>;
+};
+
+template <typename T>
+struct tensor_traits_impl<DevTensorView<T>> {
+    using is_tensor = std::true_type;
+    using is_view = std::true_type;
+    using tag = gpu<T>;
+    using value_type = T;
+
+    template <typename U>
+    using tensor_type = DevTensor<std::decay_t<U>>;
+
+    template <typename U>
+    using tensor_view_type = DevTensorView<std::decay_t<U>>;
 };
 } // namespace detail
 
@@ -76,6 +102,9 @@ using tensor_value_type = typename tensor_traits<TensorT>::value_type;
 
 template <typename TensorT, typename U = tensor_value_type<TensorT>>
 using tensor_type = typename tensor_traits<TensorT>::template tensor_type<U>;
+
+template <typename TensorT, typename U = tensor_value_type<TensorT>>
+using tensor_view_type = typename tensor_traits<TensorT>::template tensor_view_type<U>;
 
 template <typename TensorT, typename R = tensor_type<TensorT>>
 using enable_if_tensor = std::enable_if_t<is_tensor<TensorT>::value, R>;
@@ -280,26 +309,13 @@ inline DevTensor<T> operator,(const DevTensor<T>& lhs, const DevTensor<T>& rhs) 
  * by the j dimensions.
  */
 template <typename LHS, typename RHS, typename Fn>
-std::enable_if_t<
-    std::is_same<typename tensor_traits<LHS>::tag, detail::cpu<void>>::value &&
-    std::is_same<typename tensor_traits<RHS>::tag, detail::cpu<void>>::value,
-    tensor_invoke_result<Fn, LHS, RHS>>
+enable_if_tensors<LHS, RHS, Fn>
 cross(const LHS& A, const RHS& B, Fn f) {
     std::vector<int> axesA(B.rank()), axesB(A.rank());
     std::iota(axesA.begin(), axesA.end(), A.rank()); // unsqueeze right
     std::iota(axesB.begin(), axesB.end(), 0);        // unsqueeze left
-    return transform(TensorView<tensor_value_type<LHS>>(A.shape().unsqueeze(axesA), A),
-                     TensorView<tensor_value_type<RHS>>(B.shape().unsqueeze(axesB), B),
-                     f);
-}
-
-template <typename T, typename F>
-DevTensor<T> cross(const DevTensor<T>& A, const DevTensor<T>& B, F f) {
-    std::vector<int> axesA(B.rank()), axesB(A.rank());
-    std::iota(axesA.begin(), axesA.end(), A.rank()); // unsqueeze right
-    std::iota(axesB.begin(), axesB.end(), 0);        // unsqueeze left
-    return transform(DevTensor<T>(A.shape().unsqueeze(axesA), A.data()),
-                     DevTensor<T>(B.shape().unsqueeze(axesB), B.data()),
+    return transform(tensor_view_type<LHS>(A.shape().unsqueeze(axesA), A),
+                     tensor_view_type<RHS>(B.shape().unsqueeze(axesB), B),
                      f);
 }
 
@@ -857,7 +873,7 @@ inline enable_if_tensor<TensorT, void> broadcast(const TensorT& src, TensorT& ds
 
 template <typename TensorT>
 std::enable_if_t<std::is_same<typename tensor_traits<TensorT>::tag, detail::cpu<void>>::value>
-inline where(const Tensor<bool>& C, const TensorT& X, const TensorT& Y, tensor_type<TensorT>& Z) {
+inline where(const tensor_type<TensorT, bool>& C, const TensorT& X, const TensorT& Y, tensor_type<TensorT>& Z) {
     auto z_shape = Shape::broadcast(C, X, Y);
     Z.resize(z_shape);
 
@@ -877,8 +893,11 @@ inline where(const Tensor<bool>& C, const TensorT& X, const TensorT& Y, tensor_t
     });
 }
 
-template <typename T>
-void where(const DevTensor<bool>& C, const DevTensor<T>& X, const DevTensor<T>&Y, DevTensor<T>& Z) {
+template <typename TensorT>
+std::enable_if_t<
+    is_tensor<TensorT>::value &&
+    !std::is_same<typename tensor_traits<TensorT>::tag, detail::cpu<void>>::value>
+inline where(const tensor_type<TensorT, bool>& C, const TensorT& X, const TensorT& Y, tensor_type<TensorT>& Z) {
     auto final_shape = Shape::broadcast(C, X, Y);
     Z.resize(final_shape);
 
@@ -888,9 +907,9 @@ void where(const DevTensor<bool>& C, const DevTensor<T>& X, const DevTensor<T>&Y
 
     gpgpu::dnn::where(
         final_shape.size(), final_shape.rank(),
-        C.data(), 0, c_shape.extents(), c_shape.strides(),
-        X.data(), 0, x_shape.extents(), x_shape.strides(),
-        Y.data(), 0, y_shape.extents(), y_shape.strides(),
+        C.data(), c_shape.offset(), c_shape.extents(), c_shape.strides(),
+        X.data(), x_shape.offset(), x_shape.extents(), x_shape.strides(),
+        Y.data(), y_shape.offset(), y_shape.extents(), y_shape.strides(),
         Z.data(), 0);
 }
 

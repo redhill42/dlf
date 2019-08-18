@@ -20,9 +20,9 @@ static inline bool ends_with(const std::string& str, const std::string& suffix) 
 template <typename T, typename R>
 void Xtransform_b<T, R>::DoTransform(
     const std::string& name,
-    const size_t x_size, const Buffer<T>& x_buffer,
-    const size_t y_size, const Buffer<T>& y_buffer,
-    Buffer<R>& z_buffer)
+    const size_t x_size, const Buffer<T>& x_buffer, const size_t x_offset,
+    const size_t y_size, const Buffer<T>& y_buffer, const size_t y_offset,
+    Buffer<R>& z_buffer, const size_t z_offset)
 {
     const size_t n = std::max(x_size, y_size);
 
@@ -31,13 +31,14 @@ void Xtransform_b<T, R>::DoTransform(
         throw BLASError(StatusCode::kInvalidDimension);
 
     // Tests the vectors for validity
-    TestVectorX(x_size, x_buffer, 0, 1);
-    TestVectorY(y_size, y_buffer, 0, 1);
-    TestVectorY(n, z_buffer, 0, 1); // TODO: Make a TestVectorZ function with error codes
+    TestVectorX(x_size, x_buffer, x_offset, 1);
+    TestVectorY(y_size, y_buffer, y_offset, 1);
+    TestVectorY(n, z_buffer, z_offset, 1); // TODO: Make a TestVectorZ function with error codes
 
     // Determines whether or not the fast-version can be used
     const auto use_faster_kernel = (ends_with(name, "_v")) &&
                                    (x_size == y_size) &&
+                                   (x_offset == 0 && y_offset == 0 && z_offset == 0) &&
                                    IsMultiple(n, db_["WPT"]*db_["VW"]);
     const auto use_fastest_kernel = use_faster_kernel &&
                                     IsMultiple(n, db_["WGS"]*db_["WPT"]*db_["VW"]);
@@ -54,9 +55,9 @@ void Xtransform_b<T, R>::DoTransform(
     if (use_faster_kernel || use_fastest_kernel) {
         kernel.setArguments(static_cast<int>(n), x_buffer, y_buffer, z_buffer);
     } else {
-        kernel.setArguments(static_cast<int>(x_size), x_buffer,
-                            static_cast<int>(y_size), y_buffer,
-                            z_buffer);
+        kernel.setArguments(static_cast<int>(x_size), x_buffer, static_cast<int>(x_offset),
+                            static_cast<int>(y_size), y_buffer, static_cast<int>(y_offset),
+                            z_buffer, static_cast<int>(z_offset));
     }
 
     // Launches the kernel
@@ -77,22 +78,24 @@ void Xtransform_b<T, R>::DoTransform(
 }
 
 template <typename T, typename R>
-void Xtransform_b<T, R>::DoTransform(const std::string& name, const size_t n,
+void Xtransform_b<T, R>::DoTransform(
+    const std::string& name, const size_t n, const std::vector<size_t>& dims,
     const Buffer<T>& x_buffer, const size_t x_offset, const std::vector<size_t>& x_stride,
     const Buffer<T>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_stride,
-    Buffer<R>& z_buffer, const std::vector<size_t>& oshape)
+    Buffer<R>& z_buffer, const size_t z_offset, const std::vector<size_t>& z_stride)
 {
     // Make sure all dimensions are larger than zero
     if (n == 0)
         throw BLASError(StatusCode::kInvalidDimension);
 
     // Create compact buffer to hold strides and shapes
-    auto rank = oshape.size();
+    auto rank = dims.size();
     assert(x_stride.size() == rank && y_stride.size() == rank);
-    std::vector<int> shape_data(rank * 3);
-    std::copy(oshape.begin(), oshape.end(), shape_data.begin());
+    std::vector<int> shape_data(rank * 4);
+    std::copy(dims.begin(), dims.end(), shape_data.begin());
     std::copy(x_stride.begin(), x_stride.end(), shape_data.begin() + rank);
     std::copy(y_stride.begin(), y_stride.end(), shape_data.begin() + rank*2);
+    std::copy(z_stride.begin(), z_stride.end(), shape_data.begin() + rank*3);
     auto shape_buffer = context_.getSharedBuffer<int>(shape_data.data(), shape_data.size(), queue_);
 
     // Retrieves the kernel from the compiled binary
@@ -104,7 +107,7 @@ void Xtransform_b<T, R>::DoTransform(const std::string& name, const size_t n,
                         shape_buffer,
                         x_buffer, static_cast<int>(x_offset),
                         y_buffer, static_cast<int>(y_offset),
-                        z_buffer);
+                        z_buffer, static_cast<int>(z_offset));
 
     // Launches the kernel
     const auto n_ceiled = Ceil(n, db_["WGS"]*db_["WPT"]);

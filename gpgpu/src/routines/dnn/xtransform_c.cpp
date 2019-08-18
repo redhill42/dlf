@@ -14,8 +14,9 @@ template <typename T, typename R>
 void Xtransform_c<T, R>::DoTransform(
     const std::string& name,
     const size_t m, const size_t n, const size_t channels,
-    const Buffer<T>& x_buffer, const Buffer<T>& y_buffer,
-    gpgpu::Buffer<R>& z_buffer)
+    const Buffer<T>& x_buffer, const size_t x_offset,
+    const Buffer<T>& y_buffer, const size_t y_offset,
+    Buffer<R>& z_buffer, const size_t z_offset)
 {
     // Make sure all dimensions are larger than zero
     if (m == 0 || n == 0 || channels == 0)
@@ -28,7 +29,9 @@ void Xtransform_c<T, R>::DoTransform(
     kernel.setArguments(static_cast<int>(m),
                         static_cast<int>(n),
                         static_cast<int>(channels),
-                        x_buffer, y_buffer, z_buffer);
+                        x_buffer, static_cast<int>(x_offset),
+                        y_buffer, static_cast<int>(y_offset),
+                        z_buffer, static_cast<int>(z_offset));
 
     // Launches the kernel
     auto m_ceiled = Ceil(m, db_["COPY_DIMX"]);

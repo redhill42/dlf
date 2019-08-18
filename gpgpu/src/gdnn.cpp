@@ -154,237 +154,339 @@ template void PUBLIC_API split_copy<double2>(const size_t, const size_t, const s
 
 template <typename T>
 void transform(const std::string& name, const size_t n,
-               const Buffer<T>& x_buffer, Buffer<T>& y_buffer,
+               const Buffer<T>& x_buffer, const size_t x_offset,
+               Buffer<T>& y_buffer, const size_t y_offset,
                const Queue& queue, Event* event)
 {
     auto routine = Xtransform<T>(queue, event);
-    routine.DoTransform(name, n, x_buffer, y_buffer);
+    routine.DoTransform(name, n, x_buffer, x_offset, y_buffer, y_offset);
 }
 
 template void PUBLIC_API transform<int16_t>(const std::string&, const size_t,
-                                            const Buffer<int16_t>&, Buffer<int16_t>&,
+                                            const Buffer<int16_t>&, const size_t,
+                                            Buffer<int16_t>&, const size_t,
                                             const Queue&, Event*);
 template void PUBLIC_API transform<int32_t>(const std::string&, const size_t,
-                                            const Buffer<int32_t>&, Buffer<int32_t>&,
+                                            const Buffer<int32_t>&, const size_t,
+                                            Buffer<int32_t>&, const size_t,
                                             const Queue&, Event*);
 template void PUBLIC_API transform<int64_t>(const std::string&, const size_t,
-                                            const Buffer<int64_t>&, Buffer<int64_t>&,
+                                            const Buffer<int64_t>&, const size_t,
+                                            Buffer<int64_t>&, const size_t,
                                             const Queue&, Event*);
 template void PUBLIC_API transform<half>   (const std::string&, const size_t,
-                                            const Buffer<half>&, Buffer<half>&,
+                                            const Buffer<half>&, const size_t,
+                                            Buffer<half>&, const size_t,
                                             const Queue&, Event*);
 template void PUBLIC_API transform<float>  (const std::string&, const size_t,
-                                            const Buffer<float>&, Buffer<float>&,
+                                            const Buffer<float>&, const size_t,
+                                            Buffer<float>&, const size_t,
                                             const Queue&, Event*);
 template void PUBLIC_API transform<double> (const std::string&, const size_t,
-                                            const Buffer<double>&, Buffer<double>&,
+                                            const Buffer<double>&, const size_t,
+                                            Buffer<double>&, const size_t,
                                             const Queue&, Event*);
+
+template <typename T>
+void transform(const std::string& name, size_t n, const std::vector<size_t>& dims,
+               const Buffer<T>& x_buffer, const size_t x_offset, const std::vector<size_t>& x_strides,
+               Buffer<T>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_strides,
+               const Queue& queue, Event* event)
+{
+    auto routine = Xtransform<T>(queue, event);
+    routine.DoTransform(name, n, dims, x_buffer, x_offset, x_strides, y_buffer, y_offset, y_strides);
+}
+
+template void PUBLIC_API transform<int16_t>(
+    const std::string&, const size_t, const std::vector<size_t>&,
+    const Buffer<int16_t>&, const size_t, const std::vector<size_t>&,
+    Buffer<int16_t>&, const size_t, const std::vector<size_t>&,
+    const Queue&, Event*);
+template void PUBLIC_API transform<int32_t>(
+    const std::string&, const size_t, const std::vector<size_t>&,
+    const Buffer<int32_t>&, const size_t, const std::vector<size_t>&,
+    Buffer<int32_t>&, const size_t, const std::vector<size_t>&,
+    const Queue&, Event*);
+template void PUBLIC_API transform<int64_t>(
+    const std::string&, const size_t, const std::vector<size_t>&,
+    const Buffer<int64_t>&, const size_t, const std::vector<size_t>&,
+    Buffer<int64_t>&, const size_t, const std::vector<size_t>&,
+    const Queue&, Event*);
+template void PUBLIC_API transform<half>(
+    const std::string&, const size_t, const std::vector<size_t>&,
+    const Buffer<half>&, const size_t, const std::vector<size_t>&,
+    Buffer<half>&, const size_t, const std::vector<size_t>&,
+    const Queue&, Event*);
+template void PUBLIC_API transform<float>(
+    const std::string&, const size_t, const std::vector<size_t>&,
+    const Buffer<float>&, const size_t, const std::vector<size_t>&,
+    Buffer<float>&, const size_t, const std::vector<size_t>&,
+    const Queue&, Event*);
+template void PUBLIC_API transform<double>(
+    const std::string&, const size_t, const std::vector<size_t>&,
+    const Buffer<double>&, const size_t, const std::vector<size_t>&,
+    Buffer<double>&, const size_t, const std::vector<size_t>&,
+    const Queue&, Event*);
+
+template <typename T>
+void transform(const std::string& name,const T alpha, const T beta, const size_t n,
+               const Buffer<T>& x_buffer, const size_t x_offset,
+               Buffer<T>& y_buffer, const size_t y_offset,
+               const Queue& queue, Event* event)
+{
+    auto routine = Xtransform_p<T>(queue, event);
+    routine.DoTransform(name, alpha, beta, n, x_buffer, x_offset, y_buffer, y_offset);
+}
+
+template void PUBLIC_API transform<half>  (const std::string&, const half, const half, const size_t,
+                                           const Buffer<half>&, const size_t,
+                                           Buffer<half>&, const size_t,
+                                           const Queue&, Event*);
+template void PUBLIC_API transform<float> (const std::string&, const float, const float, const size_t,
+                                           const Buffer<float>&, const size_t,
+                                           Buffer<float>&, const size_t,
+                                           const Queue&, Event*);
+template void PUBLIC_API transform<double>(const std::string&, const double, const double, const size_t,
+                                           const Buffer<double>&, const size_t,
+                                           Buffer<double>&, const size_t,
+                                           const Queue&, Event*);
+
+template <typename T>
+void transform(const std::string& name, const T alpha, const T beta,
+               size_t n, const std::vector<size_t>& dims,
+               const Buffer<T>& x_buffer, const size_t x_offset, const std::vector<size_t>& x_strides,
+               Buffer<T>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_strides,
+               const Queue& queue, Event* event)
+{
+    auto routine = Xtransform_p<T>(queue, event);
+    routine.DoTransform(name, alpha, beta, n, dims, x_buffer, x_offset, x_strides, y_buffer, y_offset, y_strides);
+}
+
+template void PUBLIC_API transform<half>(
+    const std::string&, const half, const half, const size_t, const std::vector<size_t>&,
+    const Buffer<half>&, const size_t, const std::vector<size_t>&,
+    Buffer<half>&, const size_t, const std::vector<size_t>&,
+    const Queue&, Event*);
+template void PUBLIC_API transform<float>(
+    const std::string&, const float, const float, const size_t, const std::vector<size_t>&,
+    const Buffer<float>&, const size_t, const std::vector<size_t>&,
+    Buffer<float>&, const size_t, const std::vector<size_t>&,
+    const Queue&, Event*);
+template void PUBLIC_API transform<double>(
+    const std::string&, const double, const double, const size_t, const std::vector<size_t>&,
+    const Buffer<double>&, const size_t, const std::vector<size_t>&,
+    Buffer<double>&, const size_t, const std::vector<size_t>&,
+    const Queue&, Event*);
 
 template <typename T, typename R>
 void transform(const std::string& name,
-               const size_t x_size, const Buffer<T>& x_buffer,
-               const size_t y_size, const Buffer<T>& y_buffer,
-               Buffer<R>& z_buffer,
+               const size_t x_size, const Buffer<T>& x_buffer, const size_t x_offset,
+               const size_t y_size, const Buffer<T>& y_buffer, const size_t y_offset,
+               Buffer<R>& z_buffer, const size_t z_offset,
                const Queue& queue, Event* event)
 {
     auto routine = Xtransform_b<T,R>(queue, event);
-    routine.DoTransform(name, x_size, x_buffer, y_size, y_buffer, z_buffer);
+    routine.DoTransform(name, x_size, x_buffer, x_offset, y_size, y_buffer, y_offset, z_buffer, z_offset);
 }
 
 template void PUBLIC_API transform<int16_t, int16_t>(
     const std::string&,
-    const size_t, const Buffer<int16_t>&,
-    const size_t, const Buffer<int16_t>&,
-    Buffer<int16_t>&,
+    const size_t, const Buffer<int16_t>&, const size_t,
+    const size_t, const Buffer<int16_t>&, const size_t,
+    Buffer<int16_t>&, const size_t,
     const Queue&, Event*);
 template void PUBLIC_API transform<int32_t, int32_t>(
     const std::string&,
-    const size_t, const Buffer<int32_t>&,
-    const size_t, const Buffer<int32_t>&,
-    Buffer<int32_t>&,
+    const size_t, const Buffer<int32_t>&, const size_t,
+    const size_t, const Buffer<int32_t>&, const size_t,
+    Buffer<int32_t>&, const size_t,
     const Queue&, Event*);
 template void PUBLIC_API transform<int64_t, int64_t>(
     const std::string&,
-    const size_t, const Buffer<int64_t>&,
-    const size_t, const Buffer<int64_t>&,
-    Buffer<int64_t>&,
+    const size_t, const Buffer<int64_t>&, const size_t,
+    const size_t, const Buffer<int64_t>&, const size_t,
+    Buffer<int64_t>&, const size_t,
     const Queue&, Event*);
 template void PUBLIC_API transform<half, half>(
     const std::string&,
-    const size_t, const Buffer<half>&,
-    const size_t, const Buffer<half>&,
-    Buffer<half>&,
+    const size_t, const Buffer<half>&, const size_t,
+    const size_t, const Buffer<half>&, const size_t,
+    Buffer<half>&, const size_t,
     const Queue&, Event*);
 template void PUBLIC_API transform<float, float>(
     const std::string&,
-    const size_t, const Buffer<float>&,
-    const size_t, const Buffer<float>&,
-    Buffer<float>&,
+    const size_t, const Buffer<float>&, const size_t,
+    const size_t, const Buffer<float>&, const size_t,
+    Buffer<float>&, const size_t,
     const Queue&, Event*);
 template void PUBLIC_API transform<double, double>(
     const std::string&,
-    const size_t, const Buffer<double>&,
-    const size_t, const Buffer<double>&,
-    Buffer<double>&,
+    const size_t, const Buffer<double>&, const size_t,
+    const size_t, const Buffer<double>&, const size_t,
+    Buffer<double>&, const size_t,
     const Queue&, Event*);
 template void PUBLIC_API transform<float2, float2>(
     const std::string&,
-    const size_t, const Buffer<float2>&,
-    const size_t, const Buffer<float2>&,
-    Buffer<float2>&,
+    const size_t, const Buffer<float2>&, const size_t,
+    const size_t, const Buffer<float2>&, const size_t,
+    Buffer<float2>&, const size_t,
     const Queue&, Event*);
 template void PUBLIC_API transform<double2, double2>(
     const std::string&,
-    const size_t, const Buffer<double2>&,
-    const size_t, const Buffer<double2>&,
-    Buffer<double2>&,
+    const size_t, const Buffer<double2>&, const size_t,
+    const size_t, const Buffer<double2>&, const size_t,
+    Buffer<double2>&, const size_t,
     const Queue&, Event*);
 
 template void PUBLIC_API transform<int16_t, bool>(
     const std::string&,
-    const size_t, const Buffer<int16_t>&,
-    const size_t, const Buffer<int16_t>&,
-    Buffer<bool>&,
+    const size_t, const Buffer<int16_t>&, const size_t,
+    const size_t, const Buffer<int16_t>&, const size_t,
+    Buffer<bool>&, const size_t,
     const Queue&, Event*);
 template void PUBLIC_API transform<int32_t, bool>(
     const std::string&,
-    const size_t, const Buffer<int32_t>&,
-    const size_t, const Buffer<int32_t>&,
-    Buffer<bool>&,
+    const size_t, const Buffer<int32_t>&, const size_t,
+    const size_t, const Buffer<int32_t>&, const size_t,
+    Buffer<bool>&, const size_t,
     const Queue&, Event*);
 template void PUBLIC_API transform<int64_t, bool>(
     const std::string&,
-    const size_t, const Buffer<int64_t>&,
-    const size_t, const Buffer<int64_t>&,
-    Buffer<bool>&,
+    const size_t, const Buffer<int64_t>&, const size_t,
+    const size_t, const Buffer<int64_t>&, const size_t,
+    Buffer<bool>&, const size_t,
     const Queue&, Event*);
 template void PUBLIC_API transform<half, bool>(
     const std::string&,
-    const size_t, const Buffer<half>&,
-    const size_t, const Buffer<half>&,
-    Buffer<bool>&,
+    const size_t, const Buffer<half>&, const size_t,
+    const size_t, const Buffer<half>&, const size_t,
+    Buffer<bool>&, const size_t,
     const Queue&, Event*);
 template void PUBLIC_API transform<float, bool>(
     const std::string&,
-    const size_t, const Buffer<float>&,
-    const size_t, const Buffer<float>&,
-    Buffer<bool>&,
+    const size_t, const Buffer<float>&, const size_t,
+    const size_t, const Buffer<float>&, const size_t,
+    Buffer<bool>&, const size_t,
     const Queue&, Event*);
 template void PUBLIC_API transform<double, bool>(
     const std::string&,
-    const size_t, const Buffer<double>&,
-    const size_t, const Buffer<double>&,
-    Buffer<bool>&,
+    const size_t, const Buffer<double>&, const size_t,
+    const size_t, const Buffer<double>&, const size_t,
+    Buffer<bool>&, const size_t,
     const Queue&, Event*);
 
 template <typename T, typename R>
-void transform(const std::string& name, const size_t n,
+void transform(const std::string& name, const size_t n, const std::vector<size_t>& dims,
                const Buffer<T>& x_buffer, const size_t x_offset, const std::vector<size_t>& x_stride,
                const Buffer<T>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_stride,
-               Buffer<R>& z_buffer, const std::vector<size_t>& oshape,
+               Buffer<R>& z_buffer, const size_t z_offset, const std::vector<size_t>& z_stride,
                const Queue& queue, Event* event)
 {
     auto routine = Xtransform_b<T,R>(queue, event);
-    routine.DoTransform(name, n,
+    routine.DoTransform(name, n, dims,
         x_buffer, x_offset, x_stride,
         y_buffer, y_offset, y_stride,
-        z_buffer, oshape);
+        z_buffer, z_offset, z_stride);
 }
 
 template void PUBLIC_API transform<int16_t, int16_t>(
-    const std::string&, const size_t,
+    const std::string&, const size_t, const std::vector<size_t>& dims,
     const Buffer<int16_t>&, const size_t, const std::vector<size_t>&,
     const Buffer<int16_t>&, const size_t, const std::vector<size_t>&,
-    Buffer<int16_t>&, const std::vector<size_t>&,
+    Buffer<int16_t>&, const size_t, const std::vector<size_t>&,
     const Queue&, Event*);
 template void PUBLIC_API transform<int32_t, int32_t>(
-    const std::string&, const size_t,
+    const std::string&, const size_t, const std::vector<size_t>& dims,
     const Buffer<int32_t>&, const size_t, const std::vector<size_t>&,
     const Buffer<int32_t>&, const size_t, const std::vector<size_t>&,
-    Buffer<int32_t>&, const std::vector<size_t>&,
+    Buffer<int32_t>&, const size_t, const std::vector<size_t>&,
     const Queue&, Event*);
 template void PUBLIC_API transform<int64_t, int64_t>(
-    const std::string&, const size_t,
+    const std::string&, const size_t, const std::vector<size_t>& dims,
     const Buffer<int64_t>&, const size_t, const std::vector<size_t>&,
     const Buffer<int64_t>&, const size_t, const std::vector<size_t>&,
-    Buffer<int64_t>&, const std::vector<size_t>&,
+    Buffer<int64_t>&, const size_t, const std::vector<size_t>&,
     const Queue&, Event*);
 template void PUBLIC_API transform<half, half>(
-    const std::string&, const size_t,
+    const std::string&, const size_t, const std::vector<size_t>& dims,
     const Buffer<half>&, const size_t, const std::vector<size_t>&,
     const Buffer<half>&, const size_t, const std::vector<size_t>&,
-    Buffer<half>&, const std::vector<size_t>&,
+    Buffer<half>&, const size_t, const std::vector<size_t>&,
     const Queue&, Event*);
 template void PUBLIC_API transform<float, float>(
-    const std::string&, const size_t,
+    const std::string&, const size_t, const std::vector<size_t>& dims,
     const Buffer<float>&, const size_t, const std::vector<size_t>&,
     const Buffer<float>&, const size_t, const std::vector<size_t>&,
-    Buffer<float>&, const std::vector<size_t>&,
+    Buffer<float>&, const size_t, const std::vector<size_t>&,
     const Queue&, Event*);
 template void PUBLIC_API transform<double, double>(
-    const std::string&, const size_t,
+    const std::string&, const size_t, const std::vector<size_t>& dims,
     const Buffer<double>&, const size_t, const std::vector<size_t>&,
     const Buffer<double>&, const size_t, const std::vector<size_t>&,
-    Buffer<double>&, const std::vector<size_t>&,
+    Buffer<double>&, const size_t, const std::vector<size_t>&,
     const Queue&, Event*);
 template void PUBLIC_API transform<float2, float2>(
-    const std::string&, const size_t,
+    const std::string&, const size_t, const std::vector<size_t>& dims,
     const Buffer<float2>&, const size_t, const std::vector<size_t>&,
     const Buffer<float2>&, const size_t, const std::vector<size_t>&,
-    Buffer<float2>&, const std::vector<size_t>&,
+    Buffer<float2>&, const size_t, const std::vector<size_t>&,
     const Queue&, Event*);
 template void PUBLIC_API transform<double2, double2>(
-    const std::string&, const size_t,
+    const std::string&, const size_t, const std::vector<size_t>& dims,
     const Buffer<double2>&, const size_t, const std::vector<size_t>&,
     const Buffer<double2>&, const size_t, const std::vector<size_t>&,
-    Buffer<double2>&, const std::vector<size_t>&,
+    Buffer<double2>&, const size_t, const std::vector<size_t>&,
     const Queue&, Event*);
 
 template void PUBLIC_API transform<int16_t, bool>(
-    const std::string&, const size_t,
+    const std::string&, const size_t, const std::vector<size_t>& dims,
     const Buffer<int16_t>&, const size_t, const std::vector<size_t>&,
     const Buffer<int16_t>&, const size_t, const std::vector<size_t>&,
-    Buffer<bool>&, const std::vector<size_t>&,
+    Buffer<bool>&, const size_t, const std::vector<size_t>&,
     const Queue&, Event*);
 template void PUBLIC_API transform<int32_t, bool>(
-    const std::string&, const size_t,
+    const std::string&, const size_t, const std::vector<size_t>& dims,
     const Buffer<int32_t>&, const size_t, const std::vector<size_t>&,
     const Buffer<int32_t>&, const size_t, const std::vector<size_t>&,
-    Buffer<bool>&, const std::vector<size_t>&,
+    Buffer<bool>&, const size_t, const std::vector<size_t>&,
     const Queue&, Event*);
 template void PUBLIC_API transform<int64_t, bool>(
-    const std::string&, const size_t,
+    const std::string&, const size_t, const std::vector<size_t>& dims,
     const Buffer<int64_t>&, const size_t, const std::vector<size_t>&,
     const Buffer<int64_t>&, const size_t, const std::vector<size_t>&,
-    Buffer<bool>&, const std::vector<size_t>&,
+    Buffer<bool>&, const size_t, const std::vector<size_t>&,
     const Queue&, Event*);
 template void PUBLIC_API transform<half, bool>(
-    const std::string&, const size_t,
+    const std::string&, const size_t, const std::vector<size_t>& dims,
     const Buffer<half>&, const size_t, const std::vector<size_t>&,
     const Buffer<half>&, const size_t, const std::vector<size_t>&,
-    Buffer<bool>&, const std::vector<size_t>&,
+    Buffer<bool>&, const size_t, const std::vector<size_t>&,
     const Queue&, Event*);
 template void PUBLIC_API transform<float, bool>(
-    const std::string&, const size_t,
+    const std::string&, const size_t, const std::vector<size_t>& dims,
     const Buffer<float>&, const size_t, const std::vector<size_t>&,
     const Buffer<float>&, const size_t, const std::vector<size_t>&,
-    Buffer<bool>&, const std::vector<size_t>&,
+    Buffer<bool>&, const size_t, const std::vector<size_t>&,
     const Queue&, Event*);
 template void PUBLIC_API transform<double, bool>(
-    const std::string&, const size_t,
+    const std::string&, const size_t, const std::vector<size_t>& dims,
     const Buffer<double>&, const size_t, const std::vector<size_t>&,
     const Buffer<double>&, const size_t, const std::vector<size_t>&,
-    Buffer<bool>&, const std::vector<size_t>&,
+    Buffer<bool>&, const size_t, const std::vector<size_t>&,
     const Queue&, Event*);
 
 template <typename T, typename R>
 void transform(const std::string& name,
                const size_t m, const size_t n, const size_t channels,
-               const Buffer<T>& x_buffer, const Buffer<T>& y_buffer, Buffer<R>& z_buffer,
+               const Buffer<T>& x_buffer, const size_t x_offset,
+               const Buffer<T>& y_buffer, const size_t y_offset,
+               Buffer<R>& z_buffer, const size_t z_offset,
                const Queue& queue, Event* event)
 {
 #if HAS_CUDA
-    if (name == "add_v" && IsCUDA(queue.context().device()) && x_buffer.handle() == z_buffer.handle()) {
+    if (name == "add_v" && IsCUDA(queue.context().device()) &&
+        x_buffer.handle() == z_buffer.handle() &&
+        x_offset == 0 && y_offset == 0 && z_offset == 0) {
         auto y_desc = TensorDescriptor<T>(1, channels, 1, 1);
         auto z_desc = TensorDescriptor<T>(m/channels, channels, 1, n);
         T alpha = 1, beta = 1;
@@ -397,113 +499,108 @@ void transform(const std::string& name,
 #endif
 
     auto routine = Xtransform_c<T,R>(queue, event);
-    routine.DoTransform(name, m, n, channels, x_buffer, y_buffer, z_buffer);
+    routine.DoTransform(name, m, n, channels, x_buffer, x_offset, y_buffer, y_offset, z_buffer, z_offset);
 }
 
 template void PUBLIC_API transform<int16_t, int16_t>(
     const std::string&,
     const size_t, const size_t, const size_t,
-    const Buffer<int16_t>&, const Buffer<int16_t>&,
-    Buffer<int16_t>&,
+    const Buffer<int16_t>&, const size_t,
+    const Buffer<int16_t>&, const size_t,
+    Buffer<int16_t>&, const size_t,
     const Queue&, Event*);
 template void PUBLIC_API transform<int32_t, int32_t>(
     const std::string&,
     const size_t, const size_t, const size_t,
-    const Buffer<int32_t>&, const Buffer<int32_t>&,
-    Buffer<int32_t>&,
+    const Buffer<int32_t>&, const size_t,
+    const Buffer<int32_t>&, const size_t,
+    Buffer<int32_t>&, const size_t,
     const Queue&, Event*);
 template void PUBLIC_API transform<int64_t, int64_t>(
     const std::string&,
     const size_t, const size_t, const size_t,
-    const Buffer<int64_t>&, const Buffer<int64_t>&,
-    Buffer<int64_t>&,
+    const Buffer<int64_t>&, const size_t,
+    const Buffer<int64_t>&, const size_t,
+    Buffer<int64_t>&, const size_t,
     const Queue&, Event*);
 template void PUBLIC_API transform<half, half>(
     const std::string&,
     const size_t, const size_t, const size_t,
-    const Buffer<half>&, const Buffer<half>&,
-    Buffer<half>&,
+    const Buffer<half>&, const size_t,
+    const Buffer<half>&, const size_t,
+    Buffer<half>&, const size_t,
     const Queue&, Event*);
 template void PUBLIC_API transform<float, float>(
     const std::string&,
     const size_t, const size_t, const size_t,
-    const Buffer<float>&, const Buffer<float>&,
-    Buffer<float>&,
+    const Buffer<float>&, const size_t,
+    const Buffer<float>&, const size_t,
+    Buffer<float>&, const size_t,
     const Queue&, Event*);
 template void PUBLIC_API transform<double, double>(
     const std::string&,
     const size_t, const size_t, const size_t,
-    const Buffer<double>&, const Buffer<double>&,
-    Buffer<double>&,
+    const Buffer<double>&, const size_t,
+    const Buffer<double>&, const size_t,
+    Buffer<double>&, const size_t,
     const Queue&, Event*);
 template void PUBLIC_API transform<float2, float2>(
     const std::string&,
     const size_t, const size_t, const size_t,
-    const Buffer<float2>&, const Buffer<float2>&,
-    Buffer<float2>&,
+    const Buffer<float2>&, const size_t,
+    const Buffer<float2>&, const size_t,
+    Buffer<float2>&, const size_t,
     const Queue&, Event*);
 template void PUBLIC_API transform<double2, double2>(
     const std::string&,
     const size_t, const size_t, const size_t,
-    const Buffer<double2>&, const Buffer<double2>&,
-    Buffer<double2>&,
+    const Buffer<double2>&, const size_t,
+    const Buffer<double2>&, const size_t,
+    Buffer<double2>&, const size_t,
     const Queue&, Event*);
 
 template void PUBLIC_API transform<int16_t, bool>(
     const std::string&,
     const size_t, const size_t, const size_t,
-    const Buffer<int16_t>&, const Buffer<int16_t>&,
-    Buffer<bool>&,
+    const Buffer<int16_t>&, const size_t,
+    const Buffer<int16_t>&, const size_t,
+    Buffer<bool>&, const size_t,
     const Queue&, Event*);
 template void PUBLIC_API transform<int32_t, bool>(
     const std::string&,
     const size_t, const size_t, const size_t,
-    const Buffer<int32_t>&, const Buffer<int32_t>&,
-    Buffer<bool>&,
+    const Buffer<int32_t>&, const size_t,
+    const Buffer<int32_t>&, const size_t,
+    Buffer<bool>&, const size_t,
     const Queue&, Event*);
 template void PUBLIC_API transform<int64_t, bool>(
     const std::string&,
     const size_t, const size_t, const size_t,
-    const Buffer<int64_t>&, const Buffer<int64_t>&,
-    Buffer<bool>&,
+    const Buffer<int64_t>&, const size_t,
+    const Buffer<int64_t>&, const size_t,
+    Buffer<bool>&, const size_t,
     const Queue&, Event*);
 template void PUBLIC_API transform<half, bool>(
     const std::string&,
     const size_t, const size_t, const size_t,
-    const Buffer<half>&, const Buffer<half>&,
-    Buffer<bool>&,
+    const Buffer<half>&, const size_t,
+    const Buffer<half>&, const size_t,
+    Buffer<bool>&, const size_t,
     const Queue&, Event*);
 template void PUBLIC_API transform<float, bool>(
     const std::string&,
     const size_t, const size_t, const size_t,
-    const Buffer<float>&, const Buffer<float>&,
-    Buffer<bool>&,
+    const Buffer<float>&, const size_t,
+    const Buffer<float>&, const size_t,
+    Buffer<bool>&, const size_t,
     const Queue&, Event*);
 template void PUBLIC_API transform<double, bool>(
     const std::string&,
     const size_t, const size_t, const size_t,
-    const Buffer<double>&, const Buffer<double>&,
-    Buffer<bool>&,
+    const Buffer<double>&, const size_t,
+    const Buffer<double>&, const size_t,
+    Buffer<bool>&, const size_t,
     const Queue&, Event*);
-
-template <typename T>
-void transform(const std::string& name, const size_t n, const T alpha, const T beta,
-               const Buffer<T>& x_buffer, Buffer<T>& y_buffer,
-               const Queue& queue, Event* event)
-{
-    auto routine = Xtransform_p<T>(queue, event);
-    routine.DoTransform(name, n, alpha, beta, x_buffer, y_buffer);
-}
-
-template void PUBLIC_API transform<half>  (const std::string&, const size_t, const half, const half,
-                                           const Buffer<half>&, Buffer<half>&,
-                                           const Queue&, Event*);
-template void PUBLIC_API transform<float> (const std::string&, const size_t, const float, const float,
-                                           const Buffer<float>&, Buffer<float>&,
-                                           const Queue&, Event*);
-template void PUBLIC_API transform<double>(const std::string&, const size_t, const double, const double,
-                                           const Buffer<double>&, Buffer<double>&,
-                                           const Queue&, Event*);
 
 template <typename T>
 void batch_norm(const std::vector<size_t>& dims,

@@ -331,7 +331,6 @@ public: // Shape operations
     TensorView<T> broadcast(const Shape& to) const;
     TensorView<T> transpose(const std::vector<size_t>& perm) const;
     TensorView<T> transpose() const;
-    TensorView<T> operator~() const;
     TensorView<T> slice(const std::vector<SliceDim>& dims) const;
     TensorView<T> diagonal() const;
 
@@ -339,6 +338,14 @@ public: // Shape operations
     std::enable_if_t<cxx::conjunction<std::is_integral<Args>...>::value, TensorView<T>>
     transpose(Args... args) const {
         return transpose({static_cast<size_t>(args)...});
+    }
+
+    TensorView<T> operator~() const {
+        return transpose();
+    }
+
+    TensorView<T> operator[](const std::vector<SliceDim>& dims) const {
+        return slice(dims);
     }
 };
 
@@ -396,6 +403,7 @@ public: // Attributes
     }
 
     operator Tensor<T>() const { return Tensor<T>(*this); }
+    Tensor<T> reorder() const { return Tensor<T>(*this); }
 
 public: // Operations
     template <typename F>
@@ -421,7 +429,6 @@ public: // Shape operations
     TensorView<T> broadcast(const Shape& to) const;
     TensorView<T> transpose(const std::vector<size_t>& perm) const;
     TensorView<T> transpose() const;
-    TensorView<T> operator~() const;
     TensorView<T> slice(const std::vector<SliceDim>& dims) const;
     TensorView<T> diagonal() const;
 
@@ -429,6 +436,14 @@ public: // Shape operations
     std::enable_if_t<cxx::conjunction<std::is_integral<Args>...>::value, TensorView<T>>
     transpose(Args... args) const {
         return transpose({static_cast<size_t>(args)...});
+    }
+
+    TensorView<T> operator~() const {
+        return transpose();
+    }
+
+    TensorView<T> operator[](const std::vector<SliceDim>& dims) const {
+        return slice(dims);
     }
 };
 
@@ -477,7 +492,7 @@ Tensor<T>::Tensor(Shape shape, std::shared_ptr<T> data)
 }
 
 template <typename T>
-Tensor<T>::Tensor(const TensorView<T>& view) : Shaped(view.shape()) {
+Tensor<T>::Tensor(const TensorView<T>& view) {
     init();
     reorder(view, *this);
 }
@@ -937,6 +952,7 @@ inline void reorder(const Tensor<T>& src, const Shape& src_shape, Tensor<T>& dst
 
 template <typename T>
 inline void reorder(const Tensor<T>& src, const Shape& src_shape, Tensor<T>& dst) {
+    dst.resize(src_shape);
     reorder(src, src_shape, dst, dst.shape());
 }
 
@@ -952,6 +968,7 @@ inline void reorder(const TensorView<T>& src, TensorView<T>&& dst) {
 
 template <typename T>
 inline void reorder(const TensorView<T>& src, Tensor<T>& dst) {
+    dst.resize(src.shape());
     impl::reorder(src.shape(), src.data(), src.size(), dst.shape(), dst.data());
 }
 
@@ -1262,11 +1279,6 @@ inline TensorView<T> Tensor<T>::transpose() const {
 }
 
 template <typename T>
-inline TensorView<T> Tensor<T>::operator~() const {
-    return transpose();
-}
-
-template <typename T>
 inline TensorView<T> TensorView<T>::transpose(const std::vector<size_t>& perm) const {
     return TensorView<T>(shape().transpose(perm), *this);
 }
@@ -1274,11 +1286,6 @@ inline TensorView<T> TensorView<T>::transpose(const std::vector<size_t>& perm) c
 template <typename T>
 inline TensorView<T> TensorView<T>::transpose() const {
     return TensorView<T>(shape().transpose(), *this);
-}
-
-template <typename T>
-inline TensorView<T> TensorView<T>::operator~() const {
-    return transpose();
 }
 
 template <typename T>

@@ -10,8 +10,9 @@ public:
 
     void DoTransform(const std::string& name,
         const size_t m, const size_t n, const size_t channels,
-        const Buffer<T>& x_buffer, const Buffer<T>& y_buffer,
-        Buffer<R>& z_buffer);
+        const Buffer<T>& x_buffer, const size_t x_offset,
+        const Buffer<T>& y_buffer, const size_t y_offset,
+        Buffer<R>& z_buffer, const size_t z_offset);
 };
 
 }} // namespace gpgpu::dnn

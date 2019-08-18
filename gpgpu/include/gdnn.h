@@ -28,32 +28,50 @@ void split_copy(const size_t n, const size_t offset, const size_t block, const s
 
 template <typename T>
 void transform(const std::string& name, const size_t n,
-               const Buffer<T>& x_buffer, Buffer<T>& y_buffer,
+               const Buffer<T>& x_buffer, const size_t x_offset,
+               Buffer<T>& y_buffer, const size_t y_offset,
                const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 template <typename T>
-void transform(const std::string& name, const size_t n, const T alpha, const T beta,
-               const Buffer<T>& x_buffer, Buffer<T>& y_buffer,
+void transform(const std::string& name, const size_t n, const std::vector<size_t>& dims,
+               const Buffer<T>& x_buffer, const size_t x_offset, const std::vector<size_t>& x_strides,
+               Buffer<T>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_strides,
+               const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
+
+template <typename T>
+void transform(const std::string& name, const T alpha, const T beta,
+               const size_t n,
+               const Buffer<T>& x_buffer, const size_t x_offset,
+               Buffer<T>& y_buffer, const size_t y_offset,
+               const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
+
+template <typename T>
+void transform(const std::string& name, const T alpha, const T beta,
+               const size_t n, const std::vector<size_t>& dims,
+               const Buffer<T>& x_buffer, const size_t x_offset, const std::vector<size_t>& x_strides,
+               Buffer<T>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_strides,
                const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 template <typename T, typename R>
 void transform(const std::string& name,
-               const size_t x_size, const Buffer<T>& x_buffer,
-               const size_t y_size, const Buffer<T>& y_buffer,
-               Buffer<R>& z_buffer,
+               const size_t x_size, const Buffer<T>& x_buffer, const size_t x_offset,
+               const size_t y_size, const Buffer<T>& y_buffer, const size_t y_offset,
+               Buffer<R>& z_buffer, const size_t z_offset,
                const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 template <typename T, typename R>
-void transform(const std::string& name, const size_t n,
+void transform(const std::string& name, const size_t n, const std::vector<size_t>& dims,
                const Buffer<T>& x_buffer, const size_t x_offset, const std::vector<size_t>& x_stride,
                const Buffer<T>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_stride,
-               Buffer<R>& z_buffer, const std::vector<size_t>& oshape,
+               Buffer<R>& z_buffer, const size_t z_offset, const std::vector<size_t>& z_stride,
                const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 template <typename T, typename R>
 void transform(const std::string& name,
                const size_t m, const size_t n, const size_t channels,
-               const Buffer<T>& x_buffer, const Buffer<T>& y_buffer, Buffer<R>& z_buffer,
+               const Buffer<T>& x_buffer, const size_t x_offset,
+               const Buffer<T>& y_buffer, const size_t y_offset,
+               Buffer<R>& z_buffer, const size_t z_offset,
                const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 template <typename T>

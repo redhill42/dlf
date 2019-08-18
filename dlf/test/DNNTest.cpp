@@ -65,7 +65,7 @@ static void transform_test(const std::string& name, Unary op) {
     auto dev_A = DevTensor<T>(A);
     auto dev_B = DevTensor<T>(B);
 
-    gpgpu::dnn::transform(name, dev_A.size(), dev_A.data(), dev_B.data());
+    gpgpu::dnn::transform(name, dev_A.size(), dev_A.data(), 0, dev_B.data(), 0);
     dev_B.readTo(B);
 
     SCOPED_TRACE(name);

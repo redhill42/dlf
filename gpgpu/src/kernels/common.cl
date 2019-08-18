@@ -337,6 +337,19 @@ INLINE_FUNC void unravel2(int id, int* x_id, int* y_id, const int rank,
   }
 }
 
+INLINE_FUNC void unravel3(int id, int* x_id, int* y_id, int* z_id, const int rank,
+    __constant int* dim, __constant int* x_stride, __constant int* y_stride, __constant int* z_stride)
+{
+  for (int i = rank; --i >= 0; ) {
+    int tmp = id / dim[i];
+    int coord = id - tmp * dim[i];
+    *x_id += coord * x_stride[i];
+    *y_id += coord * y_stride[i];
+    *z_id += coord * z_stride[i];
+    id = tmp;
+  }
+}
+
 // =================================================================================================
 
 // End of the C++11 raw string literal

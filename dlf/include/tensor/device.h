@@ -8,12 +8,16 @@
 
 namespace dlf {
 
+template <typename T> class DevTensorView;
+
 /**
  * A tensor which data allocated from compute devices such as GPU.
  */
 template <typename T>
 class DevTensor : public Shaped {
     gpgpu::Buffer<T> m_data;
+
+    friend class DevTensorView<T>;
 
 public:
     DevTensor() = default;
@@ -46,6 +50,9 @@ public:
     DevTensor(DevTensor&&) = default;
     DevTensor& operator=(DevTensor&&) = default;
 
+    explicit DevTensor(const DevTensorView<T>& src);
+    DevTensor& operator=(const DevTensorView<T>& src);
+
     DevTensor& resize(const Shape& shape) {
         if (empty()) {
             Shaped::resize(shape);
@@ -62,6 +69,7 @@ public:
         return resize({static_cast<size_t>(args)...});
     }
 
+public:
     /**
      * Read data from device.
      */
@@ -150,16 +158,28 @@ public: // Shape operations
     using Shaped::squeeze;
     using Shaped::unsqueeze;
 
-    DevTensor<T> broadcast(const Shape& to) const;
-    DevTensor<T> transpose(const std::vector<size_t>& perm) const;
-    DevTensor<T> transpose() const;
-    DevTensor<T> operator~() const;
-    DevTensor<T> slice(const std::vector<SliceDim>& dims) const;
+    DevTensorView<T> broadcast(const Shape& to) const;
+    DevTensorView<T> transpose(const std::vector<size_t>& perm) const;
+    DevTensorView<T> transpose() const;
+    DevTensorView<T> slice(const std::vector<SliceDim>& dims) const;
+    DevTensorView<T> diagonal() const;
 
     template <typename... Args>
-    std::enable_if_t<cxx::conjunction<std::is_integral<Args>...>::value, DevTensor<T>>
+    std::enable_if_t<cxx::conjunction<std::is_integral<Args>...>::value, DevTensorView<T>>
     transpose(Args... args) const {
         return transpose({static_cast<size_t>(args)...});
+    }
+
+    /**
+     * We use ~ operator to represent tensor transposition instead of bitwise-not
+     * operator.
+     */
+    DevTensorView<T> operator~() const {
+        return transpose();
+    }
+
+    DevTensorView<T> operator[](const std::vector<SliceDim>& dims) const {
+        return slice(dims);
     }
 };
 
@@ -168,24 +188,205 @@ inline DevTensor<T> dev(const Tensor<T>& host) {
     return DevTensor<T>(host);
 }
 
+template <typename T>
+class DevTensorView : public Shaped {
+    gpgpu::Buffer<T> m_data;
+
+public:
+    DevTensorView(Shape shape, const DevTensor<T>& src);
+    DevTensorView(Shape shape, const DevTensorView<T>& src);
+
+public:
+    gpgpu::Buffer<T>& data() noexcept {
+        return m_data;
+    }
+
+    const gpgpu::Buffer<T>& data() const noexcept {
+        return m_data;
+    }
+
+    operator DevTensor<T>() const {
+        return DevTensor<T>(*this);
+    }
+
+    DevTensor<T> reorder() const {
+        return DevTensor<T>(*this);
+    }
+
+    Tensor<T> read() const {
+        return DevTensor<T>(*this).read();
+    }
+
+public: // Shape operations
+    DevTensorView<T> broadcast(const Shape& to) const;
+    DevTensorView<T> transpose(const std::vector<size_t>& perm) const;
+    DevTensorView<T> transpose() const;
+    DevTensorView<T> slice(const std::vector<SliceDim>& dims) const;
+    DevTensorView<T> diagonal() const;
+
+    template <typename... Args>
+    std::enable_if_t<cxx::conjunction<std::is_integral<Args>...>::value, DevTensorView<T>>
+    transpose(Args... args) const {
+        return transpose({static_cast<size_t>(args)...});
+    }
+
+    DevTensorView<T> operator~() const {
+        return transpose();
+    }
+
+    DevTensorView<T> operator[](const std::vector<SliceDim>& dims) const {
+        return slice(dims);
+    }
+};
+
+template <typename T>
+DevTensorView<T>::DevTensorView(Shape shape, const DevTensor<T>& src)
+    : Shaped(std::move(shape), true),
+      m_data(src.m_data)
+{}
+
+template <typename T>
+DevTensorView<T>::DevTensorView(Shape shape, const DevTensorView<T>& src)
+    : Shaped(std::move(shape), true),
+      m_data(src.m_data)
+{}
+
+template <typename T>
+DevTensor<T>::DevTensor(const DevTensorView<T>& src) {
+    reorder(src, *this);
+}
+
+template <typename T>
+DevTensor<T>& DevTensor<T>::operator=(const DevTensorView<T>& src) {
+    if (size() != src.size())
+        m_data = gpgpu::current::context().createBuffer<T>(src.size());
+    Shaped::resize(src.shape());
+    reorder(src, *this);
+    return *this;
+}
+
 //==-------------------------------------------------------------------------
 // DevTensor unary transformations
 //==-------------------------------------------------------------------------
+
+namespace detail {
+template <typename TensorX, typename TensorY>
+void transform(const std::string& name, const TensorX& X, TensorY& Y) {
+    assert(X.shape() == Y.shape());
+    if (X.shape().is_contiguous() && Y.shape().is_contiguous()) {
+        gpgpu::dnn::transform(name, X.size(),
+                              X.data(), X.shape().offset(),
+                              Y.data(), Y.shape().offset());
+    } else {
+        gpgpu::dnn::transform(name, X.size(), X.shape().extents(),
+                              X.data(), X.shape().offset(), X.shape().strides(),
+                              Y.data(), Y.shape().offset(), Y.shape().strides());
+    }
+}
+
+template <typename T, typename TensorX, typename TensorY>
+void transform(const std::string name, const T alpha, const T beta,
+               const TensorX& X, TensorY& Y)
+{
+    assert(X.shape() == Y.shape());
+    if (X.shape().is_contiguous() && Y.shape().is_contiguous()) {
+        gpgpu::dnn::transform(name, alpha, beta, X.size(),
+                              X.data(), X.shape().offset(),
+                              Y.data(), Y.shape().offset());
+    } else {
+        gpgpu::dnn::transform(name, alpha, beta, X.size(), X.shape().extents(),
+                              X.data(), X.shape().offset(), X.shape().strides(),
+                              Y.data(), Y.shape().offset(), Y.shape().strides());
+    }
+}
+} // namespace detail
 
 template <typename T, typename Fn>
 std::enable_if_t<!std::is_base_of<xfn::parameterized_function<T>, Fn>::value, DevTensor<T>&>
 inline transformTo(const DevTensor<T>& X, DevTensor<T>& Y, Fn) {
     Y.resize(X.shape());
-    gpgpu::dnn::transform(Fn::name, X.size(), X.data(), Y.data());
+    detail::transform(Fn::name, X, Y);
     return Y;
+}
+
+template <typename T, typename Fn>
+std::enable_if_t<!std::is_base_of<xfn::parameterized_function<T>, Fn>::value, DevTensorView<T>&>
+inline transformTo(const DevTensor<T>& X, DevTensorView<T>& Y, Fn) {
+    assert(Y.shape() == X.shape());
+    detail::transform(Fn::name, X, Y);
+    return Y;
+}
+
+template <typename T, typename Fn>
+std::enable_if_t<!std::is_base_of<xfn::parameterized_function<T>, Fn>::value, DevTensorView<T>&>
+inline transformTo(const DevTensor<T>& X, DevTensorView<T>&& Y, Fn fn) {
+    return transformTo(X, Y, fn);
+}
+
+template <typename T, typename Fn>
+std::enable_if_t<!std::is_base_of<xfn::parameterized_function<T>, Fn>::value, DevTensor<T>&>
+inline transformTo(const DevTensorView<T>& X, DevTensor<T>& Y, Fn) {
+    Y.resize(X.shape());
+    detail::transform(Fn::name, X, Y);
+    return Y;
+}
+
+template <typename T, typename Fn>
+std::enable_if_t<!std::is_base_of<xfn::parameterized_function<T>, Fn>::value, DevTensorView<T>&>
+inline transformTo(const DevTensorView<T>& X, DevTensorView<T>& Y, Fn) {
+    assert(Y.shape() == X.shape());
+    detail::transform(Fn::name, X, Y);
+    return Y;
+}
+
+template <typename T, typename Fn>
+std::enable_if_t<!std::is_base_of<xfn::parameterized_function<T>, Fn>::value, DevTensorView<T>&>
+inline transformTo(const DevTensorView<T>& X, DevTensorView<T>&& Y, Fn fn) {
+    return transformTo(X, Y, fn);
 }
 
 template <typename T, typename Fn>
 std::enable_if_t<std::is_base_of<xfn::parameterized_function<T>, Fn>::value, DevTensor<T>&>
 inline transformTo(const DevTensor<T>& X, DevTensor<T>& Y, Fn fn) {
     Y.resize(X.shape());
-    gpgpu::dnn::transform(Fn::name, X.size(), fn.alpha, fn.beta, X.data(), Y.data());
+    detail::transform(Fn::name, fn.alpha, fn.beta, X, Y);
     return Y;
+}
+
+template <typename T, typename Fn>
+std::enable_if_t<std::is_base_of<xfn::parameterized_function<T>, Fn>::value, DevTensorView<T>&>
+inline transformTo(const DevTensor<T>& X, DevTensorView<T>& Y, Fn fn) {
+    assert(Y.shape() == X.shape());
+    detail::transform(Fn::name, fn.alpha, fn.beta, X, Y);
+    return Y;
+}
+
+template <typename T, typename Fn>
+std::enable_if_t<std::is_base_of<xfn::parameterized_function<T>, Fn>::value, DevTensorView<T>&>
+inline transformTo(const DevTensor<T>& X, DevTensorView<T>&& Y, Fn fn) {
+    return transformTo(X, Y, fn);
+}
+
+template <typename T, typename Fn>
+std::enable_if_t<std::is_base_of<xfn::parameterized_function<T>, Fn>::value, DevTensor<T>&>
+inline transformTo(const DevTensorView<T>& X, DevTensor<T>& Y, Fn fn) {
+    Y.resize(X.shape());
+    detail::transform(Fn::name, fn.alpha, fn.beta, X, Y);
+    return Y;
+}
+
+template <typename T, typename Fn>
+std::enable_if_t<std::is_base_of<xfn::parameterized_function<T>, Fn>::value, DevTensorView<T>&>
+inline transformTo(const DevTensorView<T>& X, DevTensorView<T>& Y, Fn fn) {
+    assert(Y.shape() == X.shape());
+    detail::transform(Fn::name, fn.alpha, fn.beta, X, Y);
+    return Y;
+}
+
+template <typename T, typename Fn>
+std::enable_if_t<std::is_base_of<xfn::parameterized_function<T>, Fn>::value, DevTensorView<T>&>
+inline transformTo(const DevTensorView<T>& X, DevTensorView<T>&& Y, Fn fn) {
+    return transformTo(X, Y, fn);
 }
 
 template <typename T, typename Fn>
@@ -200,28 +401,68 @@ inline DevTensor<T> transform(DevTensor<T>&& X, Fn fn) {
     return std::move(transformTo(X, X, fn));
 }
 
-template <typename T>
-void reorder(const DevTensor<T>& src, const Shape& src_shape, DevTensor<T>& dst, const Shape& dst_shape) {
+template <typename T, typename Fn>
+inline DevTensor<T> transform(const DevTensorView<T>& X, Fn fn) {
+    DevTensor<T> Y;
+    transformTo(X, Y, fn);
+    return Y;
+}
+
+namespace detail {
+template <typename Src, typename Dst>
+void reorder(const Src& src, const Shape& src_shape, Dst& dst, const Shape& dst_shape) {
     assert(src_shape == dst_shape);
 
     if (src_shape.is_contiguous() && dst_shape.is_contiguous() &&
         src.data() == dst.data() && src_shape.offset() == dst_shape.offset())
         return;
 
-    if (src.shape().is_tail(src_shape) && dst_shape.is_contiguous()) {
+    if (src.shape().is_tail(src_shape) && src_shape.is_contiguous() && dst_shape.is_contiguous()) {
         gpgpu::dnn::copy(src.size(), src.data(), src_shape.offset(),
-                         dst_shape.size(), dst.data(), dst_shape.offset());
-        return;
+                         dst.size(), dst.data(), dst_shape.offset());
+    } else {
+        gpgpu::dnn::copy(src_shape.size(), src_shape.extents(),
+                         src.data(), src_shape.offset(), src_shape.strides(),
+                         dst.data(), dst_shape.offset(), dst_shape.strides());
     }
+}
+} // namespace detail
 
-    gpgpu::dnn::copy(src_shape.size(), src_shape.extents(),
-                     src.data(), src_shape.offset(), src_shape.strides(),
-                     dst.data(), dst_shape.offset(), dst_shape.strides());
+template <typename T>
+inline void reorder(const DevTensor<T>& src, const Shape& src_shape, DevTensor<T>& dst, const Shape& dst_shape) {
+    detail::reorder(src, src_shape, dst, dst_shape);
 }
 
 template <typename T>
-void reorder(const DevTensor<T>& src, const Shape& src_shape, DevTensor<T>& dst) {
+inline void reorder(const DevTensor<T>& src, const Shape& src_shape, DevTensor<T>& dst) {
+    dst.resize(src_shape);
     reorder(src, src_shape, dst, dst.shape());
+}
+
+template <typename T>
+inline void reorder(const DevTensorView<T>& src, DevTensorView<T>& dst) {
+    detail::reorder(src, src.shape(), dst, dst.shape());
+}
+
+template <typename T>
+inline void reorder(const DevTensorView<T>& src, DevTensorView<T>&& dst) {
+    detail::reorder(src, src.shape(), dst, dst.shape());
+}
+
+template <typename T>
+inline void reorder(const DevTensorView<T>& src, DevTensor<T>& dst) {
+    dst.resize(src.shape());
+    detail::reorder(src, src.shape(), dst, dst.shape());
+}
+
+template <typename T>
+inline void reorder(const DevTensor<T>& src, DevTensorView<T>& dst) {
+    detail::reorder(src, src.shape(), dst, dst.shape());
+}
+
+template <typename T>
+inline void reorder(const DevTensor<T>& src, DevTensorView<T>&& dst) {
+    detail::reorder(src, src.shape(), dst, dst.shape());
 }
 
 template <typename T>
@@ -242,52 +483,152 @@ template <typename T> struct is_relop<xfn::less_equal<T>>    : public std::true_
 template <typename T> struct is_relop<xfn::greater<T>>       : public std::true_type {};
 template <typename T> struct is_relop<xfn::greater_equal<T>> : public std::true_type {};
 
-template <typename T, typename Fn>
-DevTensor<std::conditional_t<is_relop<Fn>::value, bool, T>>&
-transformTo(const DevTensor<T>& A, const DevTensor<T>& B,
-            DevTensor<std::conditional_t<is_relop<Fn>::value, bool, T>>& C,
-            Fn fn)
+namespace detail {
+template <typename T, typename R>
+void transform(const std::string& name,
+               const Shape& shape_A, const gpgpu::Buffer<T>& data_A,
+               const Shape& shape_B, const gpgpu::Buffer<T>& data_B,
+               const Shape& shape_C, gpgpu::Buffer<R>& data_C)
 {
-    Shape final_shape = Shape::broadcast(A, B);
-    C.resize(final_shape);
+    if (shape_A.is_contiguous() && shape_B.is_contiguous() && shape_C.is_contiguous()) {
+        if (shape_A.is_tail(shape_B) || shape_B.is_tail(shape_A)) {
+            gpgpu::dnn::transform(name,
+                                  shape_A.size(), data_A, shape_A.offset(),
+                                  shape_B.size(), data_B, shape_B.offset(),
+                                  data_C, shape_C.offset());
+            return;
+        }
 
-    if (A.shape().is_tail(B.shape()) || B.shape().is_tail(A.shape())) {
-        gpgpu::dnn::transform(Fn::name, A.size(), A.data(), B.size(), B.data(), C.data());
-        return C;
+        int axis = shape_A.find_channel_axis(shape_B);
+        if (axis != -1) {
+            size_t m = shape_A.partial_size(0, axis+1);
+            size_t n = shape_A.size() / m;
+            gpgpu::dnn::transform(name, m, n, shape_B.size(),
+                                  data_A, shape_A.offset(),
+                                  data_B, shape_B.offset(),
+                                  data_C, shape_C.offset());
+            return;
+        }
     }
 
-    int axis = A.shape().find_channel_axis(B.shape());
-    if (axis != -1) {
-        transformChannel(A, B, C, axis, fn);
-        return C;
-    }
+    auto sA = shape_A.broadcast(shape_C);
+    auto sB = shape_B.broadcast(shape_C);
+    gpgpu::dnn::transform(name, shape_C.size(), shape_C.extents(),
+                          data_A, sA.offset(), sA.strides(),
+                          data_B, sB.offset(), sB.strides(),
+                          data_C, shape_C.offset(), shape_C.strides());
+}
 
-    auto shape_A = A.shape().broadcast(final_shape);
-    auto shape_B = B.shape().broadcast(final_shape);
-    gpgpu::dnn::transform(Fn::name, final_shape.size(),
-                          A.data(), shape_A.offset(), shape_A.strides(),
-                          B.data(), shape_B.offset(), shape_B.strides(),
-                          C.data(), final_shape.extents());
+template <typename TensorA, typename TensorB, typename R>
+DevTensor<R>& transform(const std::string& name, const TensorA& A, const TensorB& B, DevTensor<R>& C) {
+    C.resize(Shape::broadcast(A, B));
+    transform(name, A.shape(), A.data(), B.shape(), B.data(), C.shape(), C.data());
     return C;
 }
 
+template <typename TensorA, typename TensorB, typename R>
+DevTensorView<R>& transform(const std::string& name, const TensorA& A, const TensorB& B, DevTensorView<R>& C) {
+    if (C.shape() != Shape::broadcast(A, B))
+        throw shape_error("incompatible shape");
+    transform(name, A.shape(), A.data(), B.shape(), B.data(), C.shape(), C.data());
+    return C;
+}
+} // namespace detail
+
 template <typename T, typename Fn>
-void transformChannel(
-    const DevTensor<T>& A, const DevTensor<T>& B,
-    DevTensor<std::conditional_t<is_relop<Fn>::value, bool, T>>& C,
-    size_t axis, Fn)
+inline DevTensor<std::conditional_t<is_relop<Fn>::value, bool, T>>&
+transformTo(const DevTensor<T>& A, const DevTensor<T>& B,
+    DevTensor<std::conditional_t<is_relop<Fn>::value, bool, T>>& C, Fn)
 {
-    assert(B.is_vector() || A.shape().find_channel_axis(B.shape()) == axis);
-    assert(axis < A.rank());
-    assert(A.extent(axis) == B.size());
-    assert(C.shape() == A.shape());
+    return detail::transform(Fn::name, A, B, C);
+}
 
-    size_t m = 1;
-    for (int i = 0; i <= axis; i++)
-        m *= A.extent(i);
-    size_t n = A.size() / m;
+template <typename T, typename Fn>
+inline DevTensorView<std::conditional_t<is_relop<Fn>::value, bool, T>>&
+transformTo(const DevTensor<T>& A, const DevTensor<T>& B,
+    DevTensorView<std::conditional_t<is_relop<Fn>::value, bool, T>>& C, Fn)
+{
+    return detail::transform(Fn::name, A, B, C);
+}
 
-    gpgpu::dnn::transform(Fn::name, m, n, B.size(), A.data(), B.data(), C.data());
+template <typename T, typename Fn>
+inline DevTensorView<std::conditional_t<is_relop<Fn>::value, bool, T>>&
+transformTo(const DevTensor<T>& A, const DevTensor<T>& B,
+    DevTensorView<std::conditional_t<is_relop<Fn>::value, bool, T>>&& C, Fn)
+{
+    return detail::transform(Fn::name, A, B, C);
+}
+
+template <typename T, typename Fn>
+inline DevTensor<std::conditional_t<is_relop<Fn>::value, bool, T>>&
+transformTo(const DevTensorView<T>& A, const DevTensor<T>& B,
+    DevTensor<std::conditional_t<is_relop<Fn>::value, bool, T>>& C, Fn)
+{
+    return detail::transform(Fn::name, A, B, C);
+}
+
+template <typename T, typename Fn>
+inline DevTensorView<std::conditional_t<is_relop<Fn>::value, bool, T>>&
+transformTo(const DevTensorView<T>& A, const DevTensor<T>& B,
+    DevTensorView<std::conditional_t<is_relop<Fn>::value, bool, T>>& C, Fn)
+{
+    return detail::transform(Fn::name, A, B, C);
+}
+
+template <typename T, typename Fn>
+inline DevTensorView<std::conditional_t<is_relop<Fn>::value, bool, T>>&
+transformTo(const DevTensorView<T>& A, const DevTensor<T>& B,
+    DevTensorView<std::conditional_t<is_relop<Fn>::value, bool, T>>&& C, Fn)
+{
+    return detail::transform(Fn::name, A, B, C);
+}
+
+template <typename T, typename Fn>
+inline DevTensor<std::conditional_t<is_relop<Fn>::value, bool, T>>&
+transformTo(const DevTensor<T>& A, const DevTensorView<T>& B,
+    DevTensor<std::conditional_t<is_relop<Fn>::value, bool, T>>& C, Fn)
+{
+    return detail::transform(Fn::name, A, B, C);
+}
+
+template <typename T, typename Fn>
+inline DevTensorView<std::conditional_t<is_relop<Fn>::value, bool, T>>&
+transformTo(const DevTensor<T>& A, const DevTensorView<T>& B,
+    DevTensorView<std::conditional_t<is_relop<Fn>::value, bool, T>>& C, Fn)
+{
+    return detail::transform(Fn::name, A, B, C);
+}
+
+template <typename T, typename Fn>
+inline DevTensorView<std::conditional_t<is_relop<Fn>::value, bool, T>>&
+transformTo(const DevTensor<T>& A, const DevTensorView<T>& B,
+    DevTensorView<std::conditional_t<is_relop<Fn>::value, bool, T>>&& C, Fn)
+{
+    return detail::transform(Fn::name, A, B, C);
+}
+
+template <typename T, typename Fn>
+inline DevTensor<std::conditional_t<is_relop<Fn>::value, bool, T>>&
+transformTo(const DevTensorView<T>& A, const DevTensorView<T>& B,
+    DevTensor<std::conditional_t<is_relop<Fn>::value, bool, T>>& C, Fn)
+{
+    return detail::transform(Fn::name, A, B, C);
+}
+
+template <typename T, typename Fn>
+inline DevTensorView<std::conditional_t<is_relop<Fn>::value, bool, T>>&
+transformTo(const DevTensorView<T>& A, const DevTensorView<T>& B,
+    DevTensorView<std::conditional_t<is_relop<Fn>::value, bool, T>>& C, Fn)
+{
+    return detail::transform(Fn::name, A, B, C);
+}
+
+template <typename T, typename Fn>
+inline DevTensorView<std::conditional_t<is_relop<Fn>::value, bool, T>>&
+transformTo(const DevTensorView<T>& A, const DevTensorView<T>& B,
+    DevTensorView<std::conditional_t<is_relop<Fn>::value, bool, T>>&& C, Fn)
+{
+    return detail::transform(Fn::name, A, B, C);
 }
 
 template <typename T, typename Fn>
@@ -327,15 +668,73 @@ inline transform(DevTensor<T>&& A, DevTensor<T>&& B, Fn fn) {
         return transform(A, B, fn);
 }
 
+template <typename T, typename Fn>
+inline auto transform(const DevTensorView<T>& A, const DevTensor<T>& B, Fn fn) {
+    DevTensor<std::conditional_t<is_relop<Fn>::value, bool, T>> C;
+    transformTo(A, B, C, fn);
+    return C;
+}
+
+template <typename T, typename Fn>
+std::enable_if_t<!is_relop<Fn>::value, DevTensor<T>>
+inline transform(const DevTensorView<T>& A, DevTensor<T>&& B, Fn fn) {
+    if (B.shape() == Shape::broadcast(A, B))
+        return std::move(transformTo(A, B, B, fn));
+    else
+        return transform(A, B, fn);
+}
+
+template <typename T, typename Fn>
+inline auto transform(const DevTensor<T>& A, const DevTensorView<T>& B, Fn fn) {
+    DevTensor<std::conditional_t<is_relop<Fn>::value, bool, T>> C;
+    transformTo(A, B, C, fn);
+    return C;
+}
+
+template <typename T, typename Fn>
+std::enable_if_t<!is_relop<Fn>::value, DevTensor<T>>
+inline transform(DevTensor<T>&& A, const DevTensorView<T>& B, Fn fn) {
+    if (A.shape() == Shape::broadcast(A, B))
+        return std::move(transformTo(A, B, A, fn));
+    else
+        return transform(A, B, fn);
+}
+
+template <typename T, typename Fn>
+inline auto transform(const DevTensorView<T>& A, const DevTensorView<T>& B, Fn fn) {
+    DevTensor<std::conditional_t<is_relop<Fn>::value, bool, T>> C;
+    transformTo(A, B, C, fn);
+    return C;
+}
+
+template <typename T, typename Fn>
+void transformChannel(
+    const DevTensor<T>& A, const DevTensor<T>& B,
+    DevTensor<std::conditional_t<is_relop<Fn>::value, bool, T>>& C,
+    size_t axis, Fn)
+{
+    assert(B.is_vector() || A.shape().find_channel_axis(B.shape()) == axis);
+    assert(axis < A.rank());
+    assert(A.extent(axis) == B.size());
+    assert(C.shape() == A.shape());
+
+    size_t m = A.shape().partial_size(0, axis+1);
+    size_t n = A.size() / m;
+    gpgpu::dnn::transform(Fn::name, m, n, B.size(), A.data(), 0, B.data(), 0, C.data(), 0);
+}
+
 //==-------------------------------------------------------------------------
 // DevTensor shape operations
 //==-------------------------------------------------------------------------
 
 template <typename T>
-inline DevTensor<T> DevTensor<T>::broadcast(const Shape& to) const {
-    DevTensor<T> ret(to);
-    reorder(*this, shape().broadcast(to), ret);
-    return ret;
+inline DevTensorView<T> DevTensor<T>::broadcast(const Shape& to) const {
+    return DevTensorView<T>(shape().broadcast(to), *this);
+}
+
+template <typename T>
+inline DevTensorView<T> DevTensorView<T>::broadcast(const Shape& to) const {
+    return DevTensorView<T>(shape().broadcast(to), *this);
 }
 
 template <typename T>
@@ -355,35 +754,53 @@ void transpose(const DevTensor<T>& src, DevTensor<T>& dst, const std::vector<siz
 }
 
 template <typename T>
-inline DevTensor<T> DevTensor<T>::transpose(const std::vector<size_t>& perm) const {
-    DevTensor<T> ret;
-    ::dlf::transpose(*this, ret, perm);
-    return ret;
+inline DevTensorView<T> DevTensor<T>::transpose(const std::vector<size_t>& perm) const {
+    return DevTensorView<T>(shape().transpose(perm), *this);
 }
 
 template <typename T>
-DevTensor<T> DevTensor<T>::transpose() const {
-    Shape transpose_shape = shape().transpose();
-    DevTensor<T> ret(transpose_shape);
-    reorder(*this, transpose_shape, ret);
-    return ret;
-}
-
-/**
- * We use ~ operator to represent tensor transposition instead of bitwise not
- * operator.
- */
-template <typename T>
-inline DevTensor<T> DevTensor<T>::operator~() const {
-    return transpose();
+DevTensorView<T> DevTensor<T>::transpose() const {
+    return DevTensorView<T>(shape().transpose(), *this);
 }
 
 template <typename T>
-DevTensor<T> DevTensor<T>::slice(const std::vector<SliceDim>& dims) const {
-    Shape slice_shape = shape().slice(dims);
-    DevTensor<T> ret(slice_shape);
-    reorder(*this, slice_shape, ret);
-    return ret;
+inline DevTensorView<T> DevTensorView<T>::transpose(const std::vector<size_t>& perm) const {
+    return DevTensorView<T>(shape().transpose(perm), *this);
+}
+
+template <typename T>
+DevTensorView<T> DevTensorView<T>::transpose() const {
+    return DevTensorView<T>(shape().transpose(), *this);
+}
+
+template <typename T>
+DevTensorView<T> DevTensor<T>::slice(const std::vector<SliceDim>& dims) const {
+    return DevTensorView<T>(shape().slice(dims), *this);
+}
+
+template <typename T>
+DevTensorView<T> DevTensorView<T>::slice(const std::vector<SliceDim>& dims) const {
+    return DevTensorView<T>(shape().slice(dims), *this);
+}
+
+template <typename T>
+DevTensorView<T> DevTensor<T>::diagonal() const {
+    return DevTensorView<T>(shape().diagonal(), *this);
+}
+
+template <typename T>
+DevTensorView<T> DevTensorView<T>::diagonal() const {
+    return DevTensorView<T>(shape().diagonal(), *this);
+}
+
+template <typename T>
+inline DevTensorView<T> squeeze(const DevTensorView<T>& src, const std::vector<int>& axes = {}) {
+    return DevTensorView<T>(src.shape().squeeze(axes), src);
+}
+
+template <typename T>
+inline DevTensorView<T> unsqueeze(const DevTensorView<T>& src, const std::vector<int>& axes) {
+    return DevTensorView<T>(src.shape().unsqueeze(axes), src);
 }
 
 //==-------------------------------------------------------------------------
