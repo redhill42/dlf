@@ -73,9 +73,11 @@ TRANSFORM_X(atanh)
 TRANSFORM_X(erf)
 
 #define reciprocal(x) (ONE/(x))
+#define square(x) (x*x)
 #define sigmoid(x) (ONE/(ONE+exp(-x)))
 
 TRANSFORM(reciprocal, reciprocal)
+TRANSFORM(square, square)
 TRANSFORM(sigmoid, sigmoid)
 #endif
 

@@ -686,7 +686,7 @@ private:
               axis(n->axis()), keepdims(n->keepdims()) {}
 
         void evaluate() override {
-            dnn::argmax(X, Y, axis, keepdims);
+            argmax(X, Y, axis, keepdims);
         }
     };
 
@@ -706,7 +706,7 @@ private:
               axis(n->axis()), keepdims(n->keepdims()) {}
 
         void evaluate() override {
-            dnn::argmin(X, Y, axis, keepdims);
+            argmin(X, Y, axis, keepdims);
         }
     };
 

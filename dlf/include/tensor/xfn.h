@@ -68,6 +68,7 @@ DEFINE_UNARY_FUNCTION(floor, std::floor(x))
 DEFINE_UNARY_FUNCTION(ceil, std::ceil(x))
 DEFINE_UNARY_FUNCTION(round, std::round(x))
 DEFINE_UNARY_FUNCTION(sqrt, std::sqrt(x))
+DEFINE_UNARY_FUNCTION(square, x*x)
 DEFINE_UNARY_FUNCTION(exp, std::exp(x))
 DEFINE_UNARY_FUNCTION(log, std::log(x))
 DEFINE_UNARY_FUNCTION(sin, std::sin(x))
@@ -466,6 +467,28 @@ struct reduce_l2 : reduce_sum_square<T> {
     static constexpr auto name = "reduce_l2";
     static constexpr T post(const T& acc, const int) {
         return std::sqrt(acc);
+    }
+};
+
+struct reduce_all {
+    static constexpr auto name = "reduce_all";
+    static constexpr bool identity = true;
+    constexpr bool operator()(const bool acc, const bool x) const {
+        return acc && x;
+    }
+    static constexpr bool post(const bool acc, const int) {
+        return acc;
+    }
+};
+
+struct reduce_any {
+    static constexpr auto name = "reduce_all";
+    static constexpr bool identity = false;
+    constexpr bool operator()(const bool acc, const bool x) const {
+        return acc || x;
+    }
+    static constexpr bool post(const bool acc, const int) {
+        return acc;
     }
 };
 

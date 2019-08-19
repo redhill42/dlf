@@ -873,66 +873,66 @@ TEST(DNNTest, ArgMax) {
         17, 19, 13,  1
     });
 
-    EXPECT_EQ(dnn::argmax(X, 0), Tensor<int>({1, 3, 4}, {
+    EXPECT_EQ(argmax(X, 0), Tensor<int>({1, 3, 4}, {
         1, 0, 1, 0,
         0, 0, 0, 1,
         0, 0, 1, 0
     }));
 
-    EXPECT_EQ(dnn::argmax(dev(X), 0).read(), Tensor<int>({1, 3, 4}, {
+    EXPECT_EQ(argmax(dev(X), 0).read(), Tensor<int>({1, 3, 4}, {
         1, 0, 1, 0,
         0, 0, 0, 1,
         0, 0, 1, 0
     }));
 
-    EXPECT_EQ(dnn::argmax(X, 0, false), Tensor<int>({3, 4}, {
+    EXPECT_EQ(argmax(X, 0, false), Tensor<int>({3, 4}, {
         1, 0, 1, 0,
         0, 0, 0, 1,
         0, 0, 1, 0
     }));
 
-    EXPECT_EQ(dnn::argmax(dev(X), 0, false).read(), Tensor<int>({3, 4}, {
+    EXPECT_EQ(argmax(dev(X), 0, false).read(), Tensor<int>({3, 4}, {
         1, 0, 1, 0,
         0, 0, 0, 1,
         0, 0, 1, 0
     }));
 
-    EXPECT_EQ(dnn::argmax(X, 1), Tensor<int>({2, 1, 4}, {
+    EXPECT_EQ(argmax(X, 1), Tensor<int>({2, 1, 4}, {
         0, 0, 1, 0,
         0, 2, 2, 0
     }));
 
-    EXPECT_EQ(dnn::argmax(dev(X), 1).read(), Tensor<int>({2, 1, 4}, {
+    EXPECT_EQ(argmax(dev(X), 1).read(), Tensor<int>({2, 1, 4}, {
         0, 0, 1, 0,
         0, 2, 2, 0
     }));
 
-    EXPECT_EQ(dnn::argmax(X, 1, false), Tensor<int>({2, 4}, {
+    EXPECT_EQ(argmax(X, 1, false), Tensor<int>({2, 4}, {
         0, 0, 1, 0,
         0, 2, 2, 0
     }));
 
-    EXPECT_EQ(dnn::argmax(dev(X), 1, false).read(), Tensor<int>({2, 4}, {
+    EXPECT_EQ(argmax(dev(X), 1, false).read(), Tensor<int>({2, 4}, {
         0, 0, 1, 0,
         0, 2, 2, 0
     }));
 
-    EXPECT_EQ(dnn::argmax(X, 2), Tensor<int>({2, 3, 1}, {
+    EXPECT_EQ(argmax(X, 2), Tensor<int>({2, 3, 1}, {
         1, 0, 1,
         0, 0, 1
     }));
 
-    EXPECT_EQ(dnn::argmax(dev(X), 2).read(), Tensor<int>({2, 3, 1}, {
+    EXPECT_EQ(argmax(dev(X), 2).read(), Tensor<int>({2, 3, 1}, {
         1, 0, 1,
         0, 0, 1
     }));
 
-    EXPECT_EQ(dnn::argmax(X, 2, false), Tensor<int>({2, 3}, {
+    EXPECT_EQ(argmax(X, 2, false), Tensor<int>({2, 3}, {
         1, 0, 1,
         0, 0, 1
     }));
 
-    EXPECT_EQ(dnn::argmax(dev(X), 2, false).read(), Tensor<int>({2, 3}, {
+    EXPECT_EQ(argmax(dev(X), 2, false).read(), Tensor<int>({2, 3}, {
         1, 0, 1,
         0, 0, 1
     }));
@@ -949,66 +949,66 @@ TEST(DNNTest, ArgMin) {
          1, 16, 11, 13
     });
 
-    EXPECT_EQ(dnn::argmin(X, 0), Tensor<int>({1, 3, 4}, {
+    EXPECT_EQ(argmin(X, 0), Tensor<int>({1, 3, 4}, {
         0, 1, 0, 1,
         1, 1, 1, 0,
         1, 1, 1, 0
     }));
 
-    EXPECT_EQ(dnn::argmin(dev(X), 0).read(), Tensor<int>({1, 3, 4}, {
+    EXPECT_EQ(argmin(dev(X), 0).read(), Tensor<int>({1, 3, 4}, {
         0, 1, 0, 1,
         1, 1, 1, 0,
         1, 1, 1, 0
     }));
 
-    EXPECT_EQ(dnn::argmin(X, 0, false), Tensor<int>({3, 4}, {
+    EXPECT_EQ(argmin(X, 0, false), Tensor<int>({3, 4}, {
         0, 1, 0, 1,
         1, 1, 1, 0,
         1, 1, 1, 0
     }));
 
-    EXPECT_EQ(dnn::argmin(dev(X), 0, false).read(), Tensor<int>({3, 4}, {
+    EXPECT_EQ(argmin(dev(X), 0, false).read(), Tensor<int>({3, 4}, {
         0, 1, 0, 1,
         1, 1, 1, 0,
         1, 1, 1, 0
     }));
 
-    EXPECT_EQ(dnn::argmin(X, 1), Tensor<int>({2, 1, 4}, {
+    EXPECT_EQ(argmin(X, 1), Tensor<int>({2, 1, 4}, {
         0, 0, 0, 2,
         2, 1, 1, 0
     }));
 
-    EXPECT_EQ(dnn::argmin(dev(X), 1).read(), Tensor<int>({2, 1, 4}, {
+    EXPECT_EQ(argmin(dev(X), 1).read(), Tensor<int>({2, 1, 4}, {
         0, 0, 0, 2,
         2, 1, 1, 0
     }));
 
-    EXPECT_EQ(dnn::argmin(X, 1, false), Tensor<int>({2, 4}, {
+    EXPECT_EQ(argmin(X, 1, false), Tensor<int>({2, 4}, {
         0, 0, 0, 2,
         2, 1, 1, 0
     }));
 
-    EXPECT_EQ(dnn::argmin(dev(X), 1, false).read(), Tensor<int>({2, 4}, {
+    EXPECT_EQ(argmin(dev(X), 1, false).read(), Tensor<int>({2, 4}, {
         0, 0, 0, 2,
         2, 1, 1, 0
     }));
 
-    EXPECT_EQ(dnn::argmin(X, 2), Tensor<int>({2, 3, 1}, {
+    EXPECT_EQ(argmin(X, 2), Tensor<int>({2, 3, 1}, {
         0, 1, 3,
         3, 1, 0
     }));
 
-    EXPECT_EQ(dnn::argmin(dev(X), 2).read(), Tensor<int>({2, 3, 1}, {
+    EXPECT_EQ(argmin(dev(X), 2).read(), Tensor<int>({2, 3, 1}, {
         0, 1, 3,
         3, 1, 0
     }));
 
-    EXPECT_EQ(dnn::argmin(X, 2, false), Tensor<int>({2, 3}, {
+    EXPECT_EQ(argmin(X, 2, false), Tensor<int>({2, 3}, {
         0, 1, 3,
         3, 1, 0
     }));
 
-    EXPECT_EQ(dnn::argmin(dev(X), 2, false).read(), Tensor<int>({2, 3}, {
+    EXPECT_EQ(argmin(dev(X), 2, false).read(), Tensor<int>({2, 3}, {
         0, 1, 3,
         3, 1, 0
     }));

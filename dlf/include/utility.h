@@ -17,6 +17,8 @@ template <typename... B>
 using conjunction = std::conjunction<B...>;
 template <typename... B>
 using disjunction = std::disjunction<B...>;
+template <typename B>
+using negation = std::negation<B>;
 #else
 template <class...> struct conjunction;
 template <> struct conjunction<> : std::true_type {};
@@ -35,6 +37,9 @@ struct disjunction<B0, B1> : std::conditional<B0::value, B0, B1>::type {};
 template <class B0, class B1, class B2, class... Bn>
 struct disjunction<B0, B1, B2, Bn...>
     : std::conditional<B0::value, B0, disjunction<B1, B2, Bn...>>::type {};
+
+template <class T>
+struct negation : std::conditional<T::value, std::false_type, std::true_type>::type {};
 #endif
 
 #if __cplusplus >= 201703L
