@@ -161,6 +161,9 @@ public: // Shape operations
     DevTensorView<T> broadcast(const Shape& to) const;
     DevTensorView<T> transpose(const std::vector<size_t>& perm) const;
     DevTensorView<T> transpose() const;
+    DevTensorView<T> slice(
+        const std::vector<int>& starts, const std::vector<int>& ends,
+        const std::vector<int>& axes, const std::vector<int>& steps) const;
     DevTensorView<T> slice(const std::vector<SliceDim>& dims) const;
     DevTensorView<T> diagonal() const;
 
@@ -221,6 +224,9 @@ public: // Shape operations
     DevTensorView<T> broadcast(const Shape& to) const;
     DevTensorView<T> transpose(const std::vector<size_t>& perm) const;
     DevTensorView<T> transpose() const;
+    DevTensorView<T> slice(
+        const std::vector<int>& starts, const std::vector<int>& ends,
+        const std::vector<int>& axes, const std::vector<int>& steps) const;
     DevTensorView<T> slice(const std::vector<SliceDim>& dims) const;
     DevTensorView<T> diagonal() const;
 
@@ -306,8 +312,24 @@ DevTensorView<T> DevTensorView<T>::transpose() const {
 }
 
 template <typename T>
+inline DevTensorView<T> DevTensor<T>::slice(
+    const std::vector<int>& starts, const std::vector<int>& ends,
+    const std::vector<int>& axes, const std::vector<int>& steps) const
+{
+    return DevTensorView<T>(shape().slice(starts, ends, axes, steps), *this);
+}
+
+template <typename T>
 DevTensorView<T> DevTensor<T>::slice(const std::vector<SliceDim>& dims) const {
     return DevTensorView<T>(shape().slice(dims), *this);
+}
+
+template <typename T>
+inline DevTensorView<T> DevTensorView<T>::slice(
+    const std::vector<int>& starts, const std::vector<int>& ends,
+    const std::vector<int>& axes, const std::vector<int>& steps) const
+{
+    return DevTensorView<T>(shape().slice(starts, ends, axes, steps), *this);
 }
 
 template <typename T>

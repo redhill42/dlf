@@ -16,14 +16,6 @@ class Xcopy: public blas::Routine {
               const size_t n, const std::vector<size_t>& dims,
               const Buffer<T>& x_buffer, const size_t x_offset, const std::vector<size_t>& x_stride,
               Buffer<T>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_stride);
-
-  void DoConcatCopy(const size_t n,
-              const size_t offset, const size_t block, const size_t stride,
-              const Buffer<T>& x_buffer, Buffer<T>& y_buffer);
-
-  void DoSplitCopy(const size_t n,
-              const size_t offset, const size_t block, const size_t stride,
-              const Buffer<T>& x_buffer, Buffer<T>& y_buffer);
 };
 
 }} // namespace gpgpu::dnn

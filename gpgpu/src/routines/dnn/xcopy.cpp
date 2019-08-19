@@ -102,62 +102,6 @@ void Xcopy<T>::DoCopyStrided(const size_t n, const std::vector<size_t>& dims,
     RunKernel(kernel, queue_, device_, global, local, event_);
 }
 
-template <typename T>
-void Xcopy<T>::DoConcatCopy(const size_t n,
-                            const size_t offset, const size_t block, const size_t stride,
-                            const Buffer<T>& x_buffer, Buffer<T>& y_buffer)
-{
-    // Make sure all dimensions are larger than zero
-    if (n == 0) throw BLASError(StatusCode::kInvalidDimension);
-
-    // Tests the vectors for validity
-    TestVectorX(n, x_buffer, 0, 1);
-
-    // Retrieves the kernel from the compiled binary
-    auto kernel = program_.getKernel("Xconcat_copy");
-
-    // Sets the kernel arguments
-    kernel.setArguments(static_cast<int>(n),
-                        static_cast<int>(offset),
-                        static_cast<int>(block),
-                        static_cast<int>(stride),
-                        x_buffer, y_buffer);
-
-    // Launches the kernel
-    auto n_ceiled = Ceil(n, db_["WGS"]*db_["WPT"]);
-    auto global = std::vector<size_t>{n_ceiled/db_["WPT"]};
-    auto local = std::vector<size_t>{db_["WGS"]};
-    RunKernel(kernel, queue_, device_, global, local, event_);
-}
-
-template <typename T>
-void Xcopy<T>::DoSplitCopy(const size_t n,
-                           const size_t offset, const size_t block, const size_t stride,
-                           const Buffer<T>& x_buffer, Buffer<T>& y_buffer)
-{
-    // Make sure all dimensions are larger than zero
-    if (n == 0) throw BLASError(StatusCode::kInvalidDimension);
-
-    // Tests the vectors for validity
-    TestVectorX(n, x_buffer, 0, 1);
-
-    // Retrieves the kernel from the compiled binary
-    auto kernel = program_.getKernel("Xsplit_copy");
-
-    // Sets the kernel arguments
-    kernel.setArguments(static_cast<int>(n),
-                        static_cast<int>(offset),
-                        static_cast<int>(block),
-                        static_cast<int>(stride),
-                        x_buffer, y_buffer);
-
-    // Launches the kernel
-    auto n_ceiled = Ceil(n, db_["WGS"]*db_["WPT"]);
-    auto global = std::vector<size_t>{n_ceiled/db_["WPT"]};
-    auto local = std::vector<size_t>{db_["WGS"]};
-    RunKernel(kernel, queue_, device_, global, local, event_);
-}
-
 template class Xcopy<int16_t>;
 template class Xcopy<int32_t>;
 template class Xcopy<int64_t>;

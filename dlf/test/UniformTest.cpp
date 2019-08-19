@@ -385,6 +385,18 @@ TEST(UniformTest, ConcatCPU) {
              7,  8, -10, -11, -12,   4,   3,   2,   1
         }));
     }
+
+    {
+        auto A = Tensor<int>::range({2, 3, 4}, 1);
+        auto B = Tensor<int>::range({4, 3, 2}, 1);
+        auto C = concat(1, A.transpose(), B);
+        EXPECT_EQ(C, Tensor<int>({4, 6, 2}, {
+            1, 13, 5, 17,  9, 21,  1,  2,  3,  4,  5,  6,
+            2, 14, 6, 18, 10, 22,  7,  8,  9, 10, 11, 12,
+            3, 15, 7, 19, 11, 23, 13, 14, 15, 16, 17, 18,
+            4, 16, 8, 20, 12, 24, 19, 20, 21, 22, 23, 24
+        }));
+    }
 }
 
 TEST(UniformTest, ConcatGPU) {
@@ -433,6 +445,18 @@ TEST(UniformTest, ConcatGPU) {
              7,  8, -10, -11, -12,   4,   3,   2,   1
         }));
     }
+
+    {
+        auto A = dev(Tensor<int>::range({2, 3, 4}, 1));
+        auto B = dev(Tensor<int>::range({4, 3, 2}, 1));
+        auto C = concat(1, A.transpose(), B);
+        EXPECT_EQ(C.read(), Tensor<int>({4, 6, 2}, {
+            1, 13, 5, 17,  9, 21,  1,  2,  3,  4,  5,  6,
+            2, 14, 6, 18, 10, 22,  7,  8,  9, 10, 11, 12,
+            3, 15, 7, 19, 11, 23, 13, 14, 15, 16, 17, 18,
+            4, 16, 8, 20, 12, 24, 19, 20, 21, 22, 23, 24
+        }));
+    }
 }
 
 TEST(UniformTest, SplitCPU) {
@@ -455,6 +479,11 @@ TEST(UniformTest, SplitCPU) {
             43, 44, 45, 46, 47, 48,
             49, 50, 51, 52, 53, 54
         }));
+
+        auto splits = split(X, 0, {2, 3, 4});
+        EXPECT_EQ(splits[0], A);
+        EXPECT_EQ(splits[1], B);
+        EXPECT_EQ(splits[2], C);
     }
 
     /*
@@ -508,6 +537,11 @@ TEST(UniformTest, SplitCPU) {
             49, 50, 51,
             52, 53, 54
         }));
+
+        auto splits = split(X, 1, {2, 3, 4});
+        EXPECT_EQ(splits[0], A);
+        EXPECT_EQ(splits[1], B);
+        EXPECT_EQ(splits[2], C);
     }
 
     /*
@@ -536,6 +570,11 @@ TEST(UniformTest, SplitCPU) {
             24, 25, 26, 27, 33, 34, 35, 36,
             42, 43, 44, 45, 51, 52, 53, 54
         }));
+
+        auto splits = split(X, 2, {2, 3, 4});
+        EXPECT_EQ(splits[0], A);
+        EXPECT_EQ(splits[1], B);
+        EXPECT_EQ(splits[2], C);
     }
 }
 
@@ -559,6 +598,11 @@ TEST(UniformTest, SplitGPU) {
             43, 44, 45, 46, 47, 48,
             49, 50, 51, 52, 53, 54
         }));
+
+        auto splits = split(X, 0, {2, 3, 4});
+        EXPECT_EQ(splits[0].read(), A.read());
+        EXPECT_EQ(splits[1].read(), B.read());
+        EXPECT_EQ(splits[2].read(), C.read());
     }
 
     /*
@@ -611,6 +655,11 @@ TEST(UniformTest, SplitGPU) {
             49, 50, 51,
             52, 53, 54
         }));
+
+        auto splits = split(X, 1, {2, 3, 4});
+        EXPECT_EQ(splits[0].read(), A.read());
+        EXPECT_EQ(splits[1].read(), B.read());
+        EXPECT_EQ(splits[2].read(), C.read());
     }
 
     /*
@@ -639,6 +688,11 @@ TEST(UniformTest, SplitGPU) {
             24, 25, 26, 27, 33, 34, 35, 36,
             42, 43, 44, 45, 51, 52, 53, 54
         }));
+
+        auto splits = split(X, 2, {2, 3, 4});
+        EXPECT_EQ(splits[0].read(), A.read());
+        EXPECT_EQ(splits[1].read(), B.read());
+        EXPECT_EQ(splits[2].read(), C.read());
     }
 }
 
