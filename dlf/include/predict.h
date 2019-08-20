@@ -794,7 +794,7 @@ private:
                 .pads(n->pads())
                 .strides(n->strides())
                 .dilations(n->dilations())) {}
-        void evaluate() override { dnn::maxpool(X, Y, filter); }
+        void evaluate() override { dnn::max_pooling(X, Y, filter); }
     };
 
     void visit(model::MaxPool* n) override {
@@ -811,7 +811,7 @@ private:
                 .pads(n->pads())
                 .strides(n->strides())),
               count_include_pad(n->count_include_pad()) {}
-        void evaluate() override { dnn::avgpool(X, Y, filter, count_include_pad); }
+        void evaluate() override { dnn::average_pooling(X, Y, filter, count_include_pad); }
     };
 
     void visit(model::AveragePool* n) override {
@@ -827,7 +827,7 @@ private:
                 .pads(n->pads())
                 .strides(n->strides())),
               p(n->get_i("p", 2)) {}
-        void evaluate() override { dnn::lppool(X, Y, filter, p); }
+        void evaluate() override { dnn::lp_pooling(X, Y, filter, p); }
     };
 
     void visit(model::LpPool* n) override {
@@ -838,7 +838,7 @@ private:
         TensorT<> X, Y;
         GlobalMaxPoolOp(OperatorFactory* of, model::GlobalMaxPool* n)
             : X(of->alloc(n->input())), Y(of->alloc(n->output())) {}
-        void evaluate() override { dnn::global_maxpool(X, Y); }
+        void evaluate() override { dnn::global_max_pooling(X, Y); }
     };
 
     void visit(model::GlobalMaxPool* n) override {
@@ -849,7 +849,7 @@ private:
         TensorT<> X, Y;
         GlobalAveragePoolOp(OperatorFactory* of, model::GlobalAveragePool* n)
             : X(of->alloc(n->input())), Y(of->alloc(n->output())) {}
-        void evaluate() override { dnn::global_avgpool(X, Y); }
+        void evaluate() override { dnn::global_average_pooling(X, Y); }
     };
 
     void visit(model::GlobalAveragePool* n) override {
@@ -862,7 +862,7 @@ private:
             : X(of->alloc(n->input())),
               Y(of->alloc(n->output())),
               p(n->get_i("p", 2)) {}
-        void evaluate() override { dnn::global_lppool(X, Y, p); }
+        void evaluate() override { dnn::global_lp_pooling(X, Y, p); }
     };
 
     void visit(model::GlobalLpPool* n) override {

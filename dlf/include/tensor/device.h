@@ -129,6 +129,11 @@ public:
         }
     }
 
+public:
+    const Shape& original_shape() const {
+        return shape();
+    }
+
     /**
      * Get the underlying device buffer.
      */
@@ -193,6 +198,7 @@ inline DevTensor<T> dev(const Tensor<T>& host) {
 
 template <typename T>
 class DevTensorView : public Shaped {
+    Shape m_original_shape;
     gpgpu::Buffer<T> m_data;
 
 public:
@@ -200,6 +206,10 @@ public:
     DevTensorView(Shape shape, const DevTensorView<T>& src);
 
 public:
+    const Shape& original_shape() const noexcept {
+        return m_original_shape;
+    }
+
     gpgpu::Buffer<T>& data() noexcept {
         return m_data;
     }
@@ -248,12 +258,14 @@ public: // Shape operations
 template <typename T>
 DevTensorView<T>::DevTensorView(Shape shape, const DevTensor<T>& src)
     : Shaped(std::move(shape), true),
+      m_original_shape(src.original_shape()),
       m_data(src.m_data)
 {}
 
 template <typename T>
 DevTensorView<T>::DevTensorView(Shape shape, const DevTensorView<T>& src)
     : Shaped(std::move(shape), true),
+      m_original_shape(src.original_shape()),
       m_data(src.m_data)
 {}
 

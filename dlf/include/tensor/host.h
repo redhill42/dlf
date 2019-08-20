@@ -257,6 +257,13 @@ public: // Constructors
 
 public: // Attributes
     /**
+     * The original shape is same as this tensor's shape.
+     */
+    const Shape& original_shape() const {
+        return shape();
+    }
+
+    /**
      * Returns the raw data elements.
      */
     T* data() noexcept {
@@ -354,6 +361,7 @@ public: // Shape operations
 
 template <typename T>
 class TensorView : public Shaped {
+    Shape m_original_shape;
     T* m_data;
     std::shared_ptr<T> m_alloc_data;
 
@@ -390,6 +398,10 @@ public: // Container View
     const_reverse_iterator crend() const { return rend(); }
 
 public: // Attributes
+    const Shape& original_shape() const {
+        return m_original_shape;
+    }
+
     T* data() noexcept { return m_data; }
     const T* data() const noexcept { return m_data; }
 
@@ -651,6 +663,7 @@ inline Tensor<T> Tensor<T>::operator[](int index) {
 template <typename T>
 TensorView<T>::TensorView(Shape shape, const Tensor<T>& src)
     : Shaped(std::move(shape), true),
+      m_original_shape(src.original_shape()),
       m_data(src.m_data),
       m_alloc_data(src.m_alloc_data)
 {}
@@ -658,6 +671,7 @@ TensorView<T>::TensorView(Shape shape, const Tensor<T>& src)
 template <typename T>
 TensorView<T>::TensorView(Shape shape, const TensorView<T>& src)
     : Shaped(std::move(shape), true),
+      m_original_shape(src.original_shape()),
       m_data(src.m_data),
       m_alloc_data(src.m_alloc_data)
 {}

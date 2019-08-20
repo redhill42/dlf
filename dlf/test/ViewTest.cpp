@@ -124,3 +124,49 @@ TEST(ViewTest, FillDiagonal) {
         13, 14, 15,  0,
     }));
 }
+
+TEST(ViewTest, AsStrided) {
+    auto sudoku = Tensor<int>({9, 9}, {
+        2, 8, 7, 1, 6, 5, 9, 4, 3,
+        9, 5, 4, 7, 3, 2, 1, 6, 8,
+        6, 1, 3, 8, 4, 9, 7, 5, 2,
+        8, 7, 9, 6, 5, 1, 2, 3, 4,
+        4, 2, 1, 3, 9, 8, 6, 7, 5,
+        3, 6, 5, 4, 2, 7, 8, 9, 1,
+        1, 9, 8, 5, 7, 3, 4, 2, 6,
+        5, 4, 2, 9, 1, 6, 3, 8, 7,
+        7, 3, 6, 2, 8, 4, 5, 1, 9
+    });
+
+    auto squares = as_strided(sudoku, {3, 3, 3, 3}, {27, 3, 9, 1});
+    EXPECT_EQ(squares, Tensor<int>({3, 3, 3, 3}, {
+        2, 8, 7, 9, 5, 4, 6, 1, 3,
+        1, 6, 5, 7, 3, 2, 8, 4, 9,
+        9, 4, 3, 1, 6, 8, 7, 5, 2,
+        8, 7, 9, 4, 2, 1, 3, 6, 5,
+        6, 5, 1, 3, 9, 8, 4, 2, 7,
+        2, 3, 4, 6, 7, 5, 8, 9, 1,
+        1, 9, 8, 5, 4, 2, 7, 3, 6,
+        5, 7, 3, 9, 1, 6, 2, 8, 4,
+        4, 2, 6, 3, 8, 7, 5, 1, 9
+    }));
+
+    EXPECT_EQ(as_strided(dev(sudoku), {3, 3, 3, 3}, {27, 3, 9, 1}).read(), squares);
+}
+
+TEST(ViewTest, SlidingWindow) {
+    auto X = Tensor<int>::range({1, 1, 4, 4}, 0);
+    auto Y = as_strided(X, {2,2,3,3}, {4,1,4,1});
+
+    EXPECT_EQ(Y, Tensor<int>({2,2,3,3}, {
+        0,  1,  2,  4,  5,  6,  8,  9, 10,
+        1,  2,  3,  5,  6,  7,  9, 10, 11,
+        4,  5,  6,  8,  9, 10, 12, 13, 14,
+        5,  6,  7,  9, 10, 11, 13, 14, 15
+    }));
+
+    EXPECT_EQ(as_strided(dev(X), {2,2,3,3}, {4,1,4,1}).read(), Y);
+
+    EXPECT_EQ(reduce_mean(Y, {2,3}, true).transpose(2,3,0,1),
+              dnn::average_pooling(X, dnn::Filter2D(X.shape(), {1,1,3,3}), false));
+}

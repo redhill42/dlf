@@ -123,7 +123,6 @@ void batch_norm(const Tensor<T>& X, Tensor<T>& Y,
                 const Tensor<T>& mean, const Tensor<T>& var,
                 const T epsilon = T(1e-5))
 {
-    assert(X.shape() == Y.shape());
     auto batches  = X.extent(0);
     auto channels = X.extent(1);
     auto spatial  = X.size() / (batches * channels);
@@ -132,6 +131,8 @@ void batch_norm(const Tensor<T>& X, Tensor<T>& Y,
     assert(bias.is_vector() && bias.extent(0) == channels);
     assert(mean.is_vector() && mean.extent(0) == channels);
     assert(var.is_vector() && var.extent(0) == channels);
+
+    Y.resize(X.shape());
 
     const T* x = X.data();
           T* y = Y.data();
@@ -164,23 +165,35 @@ void batch_norm(const DevTensor<T>& X, DevTensor<T>& Y,
                 const DevTensor<T>& mean, const DevTensor<T>& var,
                 const T epsilon = T(1e-5))
 {
-    assert(X.shape() == Y.shape());
     assert(scale.is_vector() && scale.extent(0) == X.extent(1));
     assert(bias.is_vector() && bias.extent(0) == X.extent(1));
     assert(mean.is_vector() && mean.extent(0) == X.extent(1));
     assert(var.is_vector() && var.extent(0) == X.extent(1));
 
+    Y.resize(X.shape());
     gpgpu::dnn::batch_norm(X.shape().extents(), X.data(), Y.data(),
                            scale.data(), bias.data(), mean.data(),
                            var.data(), epsilon);
+}
+
+template <typename TensorT>
+enable_if_non_view_tensor<TensorT>
+batch_norm(const TensorT& X,
+           const TensorT& scale, const TensorT& bias,
+           const TensorT& mean, const TensorT& var,
+           const tensor_value_type<TensorT> epsilon = 1e-5)
+{
+    TensorT Y{};
+    batch_norm(X, Y, scale, bias, mean, var, epsilon);
+    return Y;
 }
 
 template <typename T>
 void lrn(const Tensor<T>& X, Tensor<T>& Y, const int n,
          const T alpha = 0.00001, const T beta = 0.75, const T bias = 1.0)
 {
-    assert(X.shape() == Y.shape());
     assert(n > 0);
+    Y.resize(X.shape());
 
     tbb::parallel_for(tbb::blocked_range<int>(0, X.stride(1), 256), [=, &X, &Y](auto r) {
         const int B = X.extent(0);
@@ -214,9 +227,21 @@ template <typename T>
 void lrn(const DevTensor<T>& X, DevTensor<T>& Y, const int nsize,
          const T alpha = 0.00001, const T beta = 0.75, const T bias = 1.0)
 {
-    assert(X.shape() == Y.shape());
     assert(nsize > 0);
+    Y.resize(X.shape());
     gpgpu::dnn::lrn(X.shape().extents(), X.data(), Y.data(), nsize, alpha, beta, bias);
+}
+
+template <typename TensorT>
+enable_if_non_view_tensor<TensorT>
+lrn(const TensorT& X, const int nsize,
+    const tensor_value_type<TensorT> alpha = 0.00001,
+    const tensor_value_type<TensorT> beta = 0.75,
+    const tensor_value_type<TensorT> bias = 1.0)
+{
+    TensorT Y{};
+    lrn(X, Y, nsize, alpha, beta, bias);
+    return Y;
 }
 
 template <typename T>
@@ -271,7 +296,7 @@ void conv2d(const Tensor<T>& X, const Tensor<T>& W, Tensor<T>& Y, const Filter2D
 {
     assert(X.shape() == filter.input_shape());
     assert(W.shape() == filter.kernel_shape());
-    assert(Y.shape() == filter.output_shape());
+    Y.resize(filter.output_shape());
 
     const auto group = filter.group();
     const auto m = filter.num_kernels() / group;
@@ -322,7 +347,7 @@ void conv2d(const DevTensor<T>& X, const DevTensor<T>& W, DevTensor<T>& Y,
 {
     assert(X.shape() == filter.input_shape());
     assert(W.shape() == filter.kernel_shape());
-    assert(Y.shape() == filter.output_shape());
+    Y.resize(filter.output_shape());
     gpgpu::dnn::conv2d(filter.batches(), filter.channels(),
                        filter.height(), filter.width(),
                        filter.output_h(), filter.output_w(),
@@ -334,6 +359,14 @@ void conv2d(const DevTensor<T>& X, const DevTensor<T>& W, DevTensor<T>& Y,
                        filter.dilation_h(), filter.dilation_w(),
                        X.data(), W.data(), Y.data(),
                        work == nullptr ? nullptr : &work->data());
+}
+
+template <typename TensorT>
+enable_if_non_view_tensor<TensorT>
+conv2d(const TensorT& X, const TensorT& W, const Filter2D& filter, TensorT* work = nullptr) {
+    TensorT Y{};
+    conv2d(X, W, Y, filter, work);
+    return Y;
 }
 
 template <typename T>
@@ -416,7 +449,10 @@ void global_pooling(const Tensor<T>& X, Tensor<T>& Y, const T identity,
     assert(X.rank() == Y.rank());
     auto M = X.extent(0) * X.extent(1);
     auto N = X.size() / M;
-    assert(Y.size() == M);
+
+    auto output_shape = X.shape().extents();
+    std::fill(output_shape.begin()+2, output_shape.end(), 1);
+    Y.resize(Shape{output_shape});
 
     size_t grainsize = std::max(size_t(1), GRAINSIZE / N);
     auto x_buffer = X.data();
@@ -441,9 +477,9 @@ void global_pooling(const Tensor<T>& X, Tensor<T>& Y, const T identity,
 } // namespace detail
 
 template <typename T>
-void maxpool(const Tensor<T>& X, Tensor<T>& Y, const Filter2D& filter) {
+void max_pooling(const Tensor<T>& X, Tensor<T>& Y, const Filter2D& filter) {
     assert(X.shape() == filter.input_shape());
-    assert(Y.shape() == filter.output_shape());
+    Y.resize(filter.output_shape());
     detail::pooling(X.data(), Y.data(), filter, false,
                     std::numeric_limits<T>::lowest(),
                     [](auto acc, auto x) { return std::max(acc, x); },
@@ -451,9 +487,9 @@ void maxpool(const Tensor<T>& X, Tensor<T>& Y, const Filter2D& filter) {
 }
 
 template <typename T>
-void maxpool(const DevTensor<T>& X, DevTensor<T>& Y, const Filter2D& filter) {
+void max_pooling(const DevTensor<T>& X, DevTensor<T>& Y, const Filter2D& filter) {
     assert(X.shape() == filter.input_shape());
-    assert(Y.shape() == filter.output_shape());
+    Y.resize(filter.output_shape());
     gpgpu::dnn::maxpool(filter.batches(), filter.channels(),
                         filter.height(), filter.width(),
                         filter.output_h(), filter.output_w(),
@@ -465,18 +501,26 @@ void maxpool(const DevTensor<T>& X, DevTensor<T>& Y, const Filter2D& filter) {
                         X.data(), Y.data());
 }
 
+template <typename TensorT>
+enable_if_non_view_tensor<TensorT>
+max_pooling(const TensorT& X, const Filter2D& filter) {
+    tensor_type<TensorT> Y{};
+    max_pooling(X, Y, filter);
+    return Y;
+}
+
 template <typename T>
-void avgpool(const Tensor<T>& X, Tensor<T>& Y, const Filter2D& filter, bool count_include_pad) {
+void average_pooling(const Tensor<T>& X, Tensor<T>& Y, const Filter2D& filter, bool count_include_pad) {
     assert(X.shape() == filter.input_shape());
-    assert(Y.shape() == filter.output_shape());
+    Y.resize(filter.output_shape());
     detail::pooling(X.data(), Y.data(), filter, count_include_pad,
                     T{}, std::plus<T>(), std::divides<>());
 }
 
 template <typename T>
-void avgpool(const DevTensor<T>& X, DevTensor<T>& Y, const Filter2D& filter, bool count_include_pad) {
+void average_pooling(const DevTensor<T>& X, DevTensor<T>& Y, const Filter2D& filter, bool count_include_pad) {
     assert(X.shape() == filter.input_shape());
-    assert(Y.shape() == filter.output_shape());
+    Y.resize(filter.output_shape());
     gpgpu::dnn::avgpool(filter.batches(), filter.channels(),
                         filter.height(), filter.width(),
                         filter.output_h(), filter.output_w(),
@@ -489,11 +533,20 @@ void avgpool(const DevTensor<T>& X, DevTensor<T>& Y, const Filter2D& filter, boo
                         X.data(), Y.data());
 }
 
+template <typename TensorT>
+enable_if_non_view_tensor<TensorT>
+inline average_pooling(const TensorT& X, const Filter2D& filter, bool count_include_pad) {
+    tensor_type<TensorT> Y{};
+    average_pooling(X, Y, filter, count_include_pad);
+    return Y;
+}
+
 template <typename T>
-void lppool(const Tensor<T>& X, Tensor<T>& Y, const Filter2D& filter, const int p) {
+void lp_pooling(const Tensor<T>& X, Tensor<T>& Y, const Filter2D& filter, const int p) {
     assert(X.shape() == filter.input_shape());
-    assert(Y.shape() == filter.output_shape());
     assert(p > 0);
+
+    Y.resize(filter.output_shape());
 
     switch (p) {
     case 1:
@@ -531,9 +584,9 @@ void lppool(const Tensor<T>& X, Tensor<T>& Y, const Filter2D& filter, const int 
 }
 
 template <typename T>
-void lppool(const DevTensor<T>& X, DevTensor<T>& Y, const Filter2D& filter, int p) {
+void lp_pooling(const DevTensor<T>& X, DevTensor<T>& Y, const Filter2D& filter, int p) {
     assert(X.shape() == filter.input_shape());
-    assert(Y.shape() == filter.output_shape());
+    Y.resize(filter.output_shape());
     gpgpu::dnn::lppool(filter.batches(), filter.channels(),
                        filter.height(), filter.width(),
                        filter.output_h(), filter.output_w(),
@@ -545,8 +598,16 @@ void lppool(const DevTensor<T>& X, DevTensor<T>& Y, const Filter2D& filter, int 
                        p, X.data(), Y.data());
 }
 
+template <typename TensorT>
+enable_if_non_view_tensor<TensorT>
+lp_pooling(const TensorT& X, const Filter2D& filter, int p) {
+    tensor_type<TensorT> Y{};
+    lppool(X, Y, filter, p);
+    return Y;
+}
+
 template <typename T>
-void global_maxpool(const Tensor<T>& X, Tensor<T>& Y) {
+void global_max_pooling(const Tensor<T>& X, Tensor<T>& Y) {
     detail::global_pooling(
         X, Y, std::numeric_limits<T>::lowest(),
         [](auto acc, auto x){ return std::max(acc, x); },
@@ -555,14 +616,22 @@ void global_maxpool(const Tensor<T>& X, Tensor<T>& Y) {
 }
 
 template <typename T>
-void global_maxpool(const DevTensor<T>& input, DevTensor<T>& output) {
+void global_max_pooling(const DevTensor<T>& input, DevTensor<T>& output) {
     auto h = input.extent(2), w = input.extent(3);
     auto filter = Filter2D(input.shape(), h, w).strides(h, w);
-    maxpool(input, output, filter);
+    max_pooling(input, output, filter);
+}
+
+template <typename TensorT>
+enable_if_non_view_tensor<TensorT>
+global_max_pooling(const TensorT& X) {
+    TensorT Y{};
+    global_max_pooling(X, Y);
+    return Y;
 }
 
 template <typename T>
-void global_avgpool(const Tensor<T>& X, Tensor<T>& Y) {
+void global_average_pooling(const Tensor<T>& X, Tensor<T>& Y) {
     detail::global_pooling(
         X, Y, T{},
         std::plus<T>(),
@@ -571,14 +640,22 @@ void global_avgpool(const Tensor<T>& X, Tensor<T>& Y) {
 }
 
 template <typename T>
-void global_avgpool(const DevTensor<T>& input, DevTensor<T>& output) {
-    auto h = input.extent(2), w = input.extent(3);
-    auto filter = Filter2D(input.shape(), h, w).strides(h, w);
-    avgpool(input, output, filter, false);
+void global_average_pooling(const DevTensor<T>& X, DevTensor<T>& Y) {
+    auto h = X.extent(2), w = X.extent(3);
+    auto filter = Filter2D(X.shape(), h, w).strides(h, w);
+    average_pooling(X, Y, filter, false);
+}
+
+template <typename TensorT>
+enable_if_non_view_tensor<TensorT>
+global_average_pooling(const TensorT& X) {
+    TensorT Y{};
+    global_average_pooling(X, Y);
+    return Y;
 }
 
 template <typename T>
-void global_lppool(const Tensor<T>& X, Tensor<T>& Y, const int p) {
+void global_lp_pooling(const Tensor<T>& X, Tensor<T>& Y, const int p) {
     assert(p > 0);
 
     switch (p) {
@@ -617,10 +694,18 @@ void global_lppool(const Tensor<T>& X, Tensor<T>& Y, const int p) {
 }
 
 template <typename T>
-void global_lppool(const DevTensor<T>& input, DevTensor<T>& output, int p) {
+void global_lp_pooling(const DevTensor<T>& input, DevTensor<T>& output, int p) {
     auto h = input.extent(2), w = input.extent(3);
     auto filter = Filter2D(input.shape(), h, w).strides(h, w);
-    lppool(input, output, filter, p);
+    lp_pooling(input, output, filter, p);
+}
+
+template <typename TensorT>
+enable_if_non_view_tensor<TensorT>
+global_lp_pooling(const TensorT& X, int p) {
+    TensorT Y{};
+    global_lp_pooling(X, Y, p);
+    return Y;
 }
 
 template <typename T>
@@ -673,17 +758,30 @@ void softmax(const DevTensor<T>& X, DevTensor<T>& Y, int axis = 1) {
     gpgpu::dnn::softmax(m, n, X.data(), Y.data());
 }
 
-template <typename TensorT>
-enable_if_non_view_tensor<TensorT> softmax(TensorT&& X, int axis = 1) {
-    if (std::is_rvalue_reference<decltype(X)>::value) {
-        auto Y = std::move(X);
-        softmax(Y, Y, axis);
-        return Y;
-    } else {
-        tensor_type<TensorT> Y{};
-        softmax(X, Y, axis);
-        return Y;
-    }
+template <typename T>
+Tensor<T> softmax(const Tensor<T>& X, int axis = 1) {
+    Tensor<T> Y{};
+    softmax(X, Y, axis);
+    return Y;
+}
+
+template <typename T>
+Tensor<T> softmax(Tensor<T>&& X, int axis = 1) {
+    softmax(X, X, axis);
+    return std::move(X);
+}
+
+template <typename T>
+DevTensor<T> softmax(const DevTensor<T>& X, int axis = 1) {
+    DevTensor<T> Y{};
+    softmax(X, Y, axis);
+    return Y;
+}
+
+template <typename T>
+DevTensor<T> softmax(DevTensor<T>&& X, int axis = 1) {
+    softmax(X, X, axis);
+    return std::move(X);
 }
 
 template <typename T>
@@ -736,17 +834,30 @@ void logsoftmax(const DevTensor<T>& X, DevTensor<T>& Y, int axis = 1) {
     gpgpu::dnn::logsoftmax(m, n, X.data(), Y.data());
 }
 
-template <typename TensorT>
-enable_if_non_view_tensor<TensorT> logsoftmax(TensorT&& X, int axis = 1) {
-    if (std::is_rvalue_reference<decltype(X)>::value) {
-        auto Y = std::move(X);
-        logsoftmax(Y, Y, axis);
-        return Y;
-    } else {
-        tensor_type<TensorT> Y{};
-        logsoftmax(X, Y, axis);
-        return Y;
-    }
+template <typename T>
+Tensor<T> logsoftmax(const Tensor<T>& X, int axis = 1) {
+    Tensor<T> Y{};
+    logsoftmax(X, Y, axis);
+    return Y;
+}
+
+template <typename T>
+Tensor<T> logsoftmax(Tensor<T>&& X, int axis = 1) {
+    logsoftmax(X, X, axis);
+    return std::move(X);
+}
+
+template <typename T>
+DevTensor<T> logsoftmax(const DevTensor<T>& X, int axis = 1) {
+    DevTensor<T> Y{};
+    logsoftmax(X, Y, axis);
+    return Y;
+}
+
+template <typename T>
+DevTensor<T> logsoftmax(DevTensor<T>&& X, int axis = 1) {
+    logsoftmax(X, X, axis);
+    return std::move(X);
 }
 
 template <typename T>
@@ -796,17 +907,30 @@ void hardmax(const DevTensor<T>& X, DevTensor<T>& Y, int axis = 1) {
     gpgpu::dnn::hardmax(m, n, X.data(), Y.data());
 }
 
-template <typename TensorT>
-enable_if_non_view_tensor<TensorT> hardmax(TensorT&& X, int axis = 1) {
-    if (std::is_rvalue_reference<decltype(X)>::value) {
-        auto Y = std::move(X);
-        hardmax(Y, Y, axis);
-        return Y;
-    } else {
-        tensor_type<TensorT> Y{};
-        hardmax(X, Y, axis);
-        return Y;
-    }
+template <typename T>
+Tensor<T> hardmax(const Tensor<T>& X, int axis = 1) {
+    Tensor<T> Y{};
+    hardmax(X, Y, axis);
+    return Y;
+}
+
+template <typename T>
+Tensor<T> hardmax(Tensor<T>&& X, int axis = 1) {
+    hardmax(X, X, axis);
+    return std::move(X);
+}
+
+template <typename T>
+DevTensor<T> hardmax(const DevTensor<T>& X, int axis = 1) {
+    DevTensor<T> Y{};
+    hardmax(X, Y, axis);
+    return Y;
+}
+
+template <typename T>
+DevTensor<T> hardmax(DevTensor<T>&& X, int axis = 1) {
+    hardmax(X, X, axis);
+    return std::move(X);
 }
 
 template <typename TensorT>

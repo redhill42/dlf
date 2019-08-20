@@ -7,57 +7,51 @@ namespace dlf {
 //==-------------------------------------------------------------------------
 
 namespace detail {
-template <typename T>
-void reorder(const Shape& src_shape, const T* src_data, const size_t src_size,
-             const Shape& dst_shape, T* dst_data)
-{
+template <typename Src, typename Dst>
+std::enable_if_t<is_cpu_tensor<Src>::value && is_cpu_tensor<Dst>::value>
+inline reorder(const Src& src, const Shape& src_shape, Dst& dst, const Shape& dst_shape) {
     assert(src_shape == dst_shape);
+    using T = tensor_value_type<Src>;
 
     if (dst_shape.is_contiguous()) {
-        if (src_size == 1) {
-            std::fill(dst_data + dst_shape.offset(),
-                      dst_data + dst_shape.offset() + dst_shape.size(),
-                      src_data[src_shape.offset()]);
+        if (src.original_shape().size() == 1) {
+            std::fill(dst.data() + dst_shape.offset(),
+                      dst.data() + dst_shape.offset() + dst_shape.size(),
+                      *src.data());
             return;
         }
 
         if (src_shape.is_contiguous()) {
-            if (src_data != dst_data || src_shape.offset() != dst_shape.offset()) {
-                par::copy(src_data + src_shape.offset(),
-                          src_data + src_shape.offset() + src_shape.size(),
-                          dst_data + dst_shape.offset());
+            if (src.data() != dst.data() || src_shape.offset() != dst_shape.offset()) {
+                par::copy(src.data() + src_shape.offset(),
+                          src.data() + src_shape.offset() + src_shape.size(),
+                          dst.data() + dst_shape.offset());
             }
             return;
         }
 
-        par::copy(const_shaped_iterator<T>(src_shape, src_data, 0),
-                  const_shaped_iterator<T>(src_shape, src_data, src_shape.size()),
-                  dst_data + dst_shape.offset());
+        par::copy(const_shaped_iterator<T>(src_shape, src.data(), 0),
+                  const_shaped_iterator<T>(src_shape, src.data(), src_shape.size()),
+                  dst.data() + dst_shape.offset());
     } else {
-        if (src_size == 1) {
-            std::fill(shaped_iterator<T>(dst_shape, dst_data, 0),
-                      shaped_iterator<T>(dst_shape, dst_data, dst_shape.size()),
-                      src_data[src_shape.offset()]);
+        if (src.original_shape().size() == 1) {
+            std::fill(shaped_iterator<T>(dst_shape, dst.data(), 0),
+                      shaped_iterator<T>(dst_shape, dst.data(), dst_shape.size()),
+                      *src.data());
             return;
         }
 
         if (src_shape.is_contiguous()) {
-            par::copy(src_data + src_shape.offset(),
-                      src_data + src_shape.offset() + src_shape.size(),
-                      shaped_iterator<T>(dst_shape, dst_data, 0));
+            par::copy(src.data() + src_shape.offset(),
+                      src.data() + src_shape.offset() + src_shape.size(),
+                      shaped_iterator<T>(dst_shape, dst.data(), 0));
             return;
         }
 
-        par::copy(const_shaped_iterator<T>(src_shape, src_data, 0),
-                  const_shaped_iterator<T>(src_shape, src_data, src_shape.size()),
-                  shaped_iterator<T>(dst_shape, dst_data, 0));
+        par::copy(const_shaped_iterator<T>(src_shape, src.data(), 0),
+                  const_shaped_iterator<T>(src_shape, src.data(), src_shape.size()),
+                  shaped_iterator<T>(dst_shape, dst.data(), 0));
     }
-}
-
-template <typename Src, typename Dst>
-std::enable_if_t<is_cpu_tensor<Src>::value && is_cpu_tensor<Dst>::value>
-inline reorder(const Src& src, const Shape& src_shape, Dst& dst, const Shape& dst_shape) {
-    reorder(src_shape, src.data(), src.size(), dst_shape, dst.data());
 }
 } // namespace impl
 
@@ -75,8 +69,8 @@ reorder(const Src& src, const Shape& src_shape, Dst& dst, const Shape& dst_shape
         src.data() == dst.data() && src_shape.offset() == dst_shape.offset())
         return;
 
-    if (src.shape().is_tail(src_shape) && src_shape.is_contiguous() && dst_shape.is_contiguous()) {
-        gpgpu::dnn::copy(src.size(), src.data(), src_shape.offset(),
+    if (src.original_shape().is_tail(src_shape) && dst_shape.is_contiguous()) {
+        gpgpu::dnn::copy(src.original_shape().size(), src.data(), src_shape.offset(),
                          dst_shape.size(), dst.data(), dst_shape.offset());
     } else {
         gpgpu::dnn::copy(src_shape.size(), src_shape.extents(),
@@ -217,6 +211,36 @@ flip(const TensorT& X, int axis) {
 
     int dim = X.extent(axis);
     return X.slice({-1}, {-dim-1}, {axis}, {-1});
+}
+
+/**
+ * as_strided creates a view into the tensor given the exact strides and shape.
+ * This means it manipulates the internal data structure of tensor and, if done
+ * incorrectly, the tensor elements can point to invalid memory and can corrupt
+ * results or crash your program. It is advisable to always use the original
+ * strides when calculating new strides to avoid reliance on a contiguous
+ * memory layout.
+ *
+ * Furthermore, tensors created with this function often contain self overlapping
+ * memory, so that two elements are identical. Vectorized write operations on
+ * such tensor will typically be unpredictable. They may even given different
+ * results for small, large, or transposed tensors.
+ *
+ * For these reasons it is advisable to avoid as_strided when possible.
+ *
+ * @param X the tensor to create a view
+ * @param shape the shape of the new tensor
+ * @param strides the strides of the new tensor
+ * @return the tensor view
+ */
+template <typename TensorT>
+enable_if_tensor<TensorT, tensor_view_type<TensorT>>
+inline as_strided(
+    const TensorT& X,
+    const std::vector<size_t>& shape,
+    const std::vector<size_t>& strides)
+{
+    return tensor_view_type<TensorT>(Shape::as_strided(shape, strides), X);
 }
 
 //==-------------------------------------------------------------------------

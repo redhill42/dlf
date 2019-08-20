@@ -258,12 +258,12 @@ void transform(const Shape& shape_A, const T* data_A, const size_t size_A,
         if (sB.is_contiguous()) {
             par::transform(data_B + sB.offset(), data_B + sB.offset() + sB.size(),
                            begin_C,
-                           [x = data_A[shape_A.offset()], f](auto& y){ return f(x, y); });
+                           [x = *data_A, f](auto& y){ return f(x, y); });
         } else {
             par::transform(const_shaped_iterator<U>(sB, data_B, 0),
                            const_shaped_iterator<U>(sB, data_B, sB.size()),
                            begin_C,
-                           [x = data_A[shape_A.offset()], f](auto& y){ return f(x, y); });
+                           [x = *data_A, f](auto& y){ return f(x, y); });
         }
         return;
     }
@@ -272,12 +272,12 @@ void transform(const Shape& shape_A, const T* data_A, const size_t size_A,
         if (sA.is_contiguous()) {
             par::transform(data_A + sA.offset(), data_A + sA.offset() + sA.size(),
                            begin_C,
-                           [y = data_B[shape_B.offset()], f](auto& x){ return f(x, y); });
+                           [y = *data_B, f](auto& x){ return f(x, y); });
         } else {
             par::transform(const_shaped_iterator<T>(sA, data_A, 0),
                            const_shaped_iterator<T>(sA, data_A, sA.size()),
                            begin_C,
-                           [y = data_B[shape_B.offset()], f](auto& x){ return f(x, y); });
+                           [y = *data_B, f](auto& x){ return f(x, y); });
         }
         return;
     }
@@ -426,7 +426,8 @@ std::enable_if_t<
             LHS>>::value,
     RET&>
 inline transformTo(const LHS& A, const RHS& B, RET&& C, F f) {
-    return detail::transform(A.shape(), A.data(), A.size(), B.shape(), B.data(), B.size(), C, f);
+    return detail::transform(A.shape(), A.data(), A.original_shape().size(),
+                             B.shape(), B.data(), B.original_shape().size(), C, f);
 }
 
 template <typename LHS, typename RHS, typename RET, typename F>

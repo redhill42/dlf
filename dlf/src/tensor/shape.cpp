@@ -47,6 +47,20 @@ void Shape::init() noexcept {
     m_offset = 0;
 }
 
+Shape Shape::as_strided(const std::vector<size_t>& extents, const std::vector<size_t>& strides) {
+    assert(extents.size() == strides.size());
+    std::vector<dim_t> dims(extents.size());
+
+    for (size_t i = 0; i < extents.size(); ++i) {
+        assert(extents[i] != 0);
+        dims[i].extent = extents[i];
+        dims[i].stride = strides[i];
+    }
+
+    auto size = std::accumulate(extents.begin(), extents.end(), 1, std::multiplies<>());
+    return Shape(std::move(dims), size, 0);
+}
+
 size_t Shape::partial_size(size_t start, size_t end) const noexcept {
     assert(start >= 0 && start <= rank());
     assert(end >= start && end <= rank());
