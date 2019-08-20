@@ -138,18 +138,15 @@ template <typename LHS, typename RHS, typename Fn, typename R = tensor_invoke_re
 using enable_if_tensors =
     std::enable_if_t<
         is_same_tensor<LHS, RHS>::value ||
-        is_tensor<LHS>::value ||
-        is_tensor<RHS>::value, R>;
+        (is_tensor<LHS>::value ^ is_tensor<RHS>::value),
+    R>;
 
 template <typename LHS, typename RHS, typename Fn, typename R = tensor_invoke_result<Fn, LHS, RHS>>
 using enable_if_non_view_tensors =
     std::enable_if_t<
-        !is_tensor_view<LHS>::value &&
-        !is_tensor_view<RHS>::value &&
-        (is_same_tensor<LHS, RHS>::value ||
-         is_tensor<LHS>::value ||
-         is_tensor<RHS>::value),
-        R>;
+        !is_tensor_view<LHS>::value && !is_tensor_view<RHS>::value &&
+        (is_same_tensor<LHS, RHS>::value || (is_tensor<LHS>::value ^ is_tensor<RHS>::value)),
+    R>;
 
 template <typename TensorT, typename U>
 inline tensor_type<TensorT, U> tensor_scalar(U&& value) {

@@ -303,6 +303,9 @@ void XgemmBatched<T>::BatchedGemmDirect(const size_t m, const size_t n, const si
 // =================================================================================================
 
 // Compiles the templated class
+template class XgemmBatched<int16_t>;
+template class XgemmBatched<int32_t>;
+template class XgemmBatched<int64_t>;
 template class XgemmBatched<half>;
 template class XgemmBatched<float>;
 template class XgemmBatched<double>;

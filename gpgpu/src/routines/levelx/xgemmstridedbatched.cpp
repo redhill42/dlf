@@ -74,12 +74,14 @@ void XgemmStridedBatched<T>::DoGemmStridedBatched(const Layout layout, const Tra
                              a_do_transpose, b_do_transpose, c_do_transpose, a_conjugate, b_conjugate,
                              gemm_kernel_id);
 
+#ifndef NDEBUG
   // Tests the matrices for validity
   for (auto batch = size_t{0}; batch < batch_count; ++batch) {
     TestMatrixA(a_one, a_two, a_buffer, a_offset + a_stride * batch, a_ld);
     TestMatrixB(b_one, b_two, b_buffer, b_offset + b_stride * batch, b_ld);
     TestMatrixC(c_one, c_two, c_buffer, c_offset + c_stride * batch, c_ld);
   }
+#endif
 
   // Selects which version of the batched GEMM to run
   if (do_gemm_direct) { // single generic kernel
@@ -262,6 +264,9 @@ void XgemmStridedBatched<T>::BatchedGemmDirect(const size_t m, const size_t n, c
 // =================================================================================================
 
 // Compiles the templated class
+template class XgemmStridedBatched<int16_t>;
+template class XgemmStridedBatched<int32_t>;
+template class XgemmStridedBatched<int64_t>;
 template class XgemmStridedBatched<half>;
 template class XgemmStridedBatched<float>;
 template class XgemmStridedBatched<double>;

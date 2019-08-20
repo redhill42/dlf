@@ -89,8 +89,10 @@ public:
     /**
      * Returns number of elements in a given dimension.
      */
-    size_t extent(size_t dim) const noexcept {
-        return m_dims[dim].extent;
+    size_t extent(int axis) const noexcept {
+        if (axis < 0) axis += rank();
+        assert(axis >= 0 && axis < rank());
+        return m_dims[axis].extent;
     }
 
     /**
@@ -107,8 +109,10 @@ public:
     /**
      * Returns the stride in a given dimension.
      */
-    size_t stride(size_t dim) const noexcept {
-        return m_dims[dim].stride;
+    size_t stride(int axis) const noexcept {
+        if (axis < 0) axis += rank();
+        assert(axis >= 0 && axis < rank());
+        return m_dims[axis].stride;
     }
 
     /**
@@ -337,15 +341,15 @@ public:
     /**
      * Returns number of elements in a given dimension.
      */
-    size_t extent(size_t dim) const noexcept {
-        return m_shape.extent(dim);
+    size_t extent(int axis) const noexcept {
+        return m_shape.extent(axis);
     }
 
     /**
      * Returns the stride in a given dimension.
      */
-    size_t stride(size_t dim) const noexcept {
-        return m_shape.stride(dim);
+    size_t stride(int axis) const noexcept {
+        return m_shape.stride(axis);
     }
 
     /**
@@ -388,6 +392,13 @@ public:
      */
     bool is_square() const noexcept {
         return is_matrix() && extent(0) == extent(1);
+    }
+
+    /**
+     * Returns true if last two dimension of then tensor is equal.
+     */
+    bool is_inner_square() const noexcept {
+        return rank() >= 2 && extent(rank()-1) == extent(rank()-2);
     }
 
 protected:

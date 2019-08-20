@@ -418,30 +418,21 @@ static void dot_test() {
     {
         Tensor<T> a({3}, {1, 2, 3});
         Tensor<T> b({3}, {4, 5, 6});
-        Tensor<T> c({1}, {42});
         EXPECT_EQ(dot(a, b), Tensor<T>({1}, {32})); // computed by WolframAlpha
-        dot(a, b, &c);
-        EXPECT_EQ(c, Tensor<T>({1}, {32}));
     }
 
     // Vector . Matrix
     {
         Tensor<T> a({3}, {1, 2, 3});
         Tensor<T> b({{3, 2}, {4, 5, 6, 7, 8, 9}});
-        Tensor<T> c({2}, {17, 53});
         EXPECT_EQ(dot(a, b), Tensor<T>({2}, {40, 46})); // computed by WolframAlpha
-        dot(a, b, &c);
-        EXPECT_EQ(c, Tensor<T>({2}, {40, 46}));
     }
 
     // Matrix . Vector
     {
         Tensor<T> a({2, 3}, {1, 2, 3, 4, 5, 6});
         Tensor<T> b({3}, {7, 8, 9});
-        Tensor<T> c({2}, {17, 53});
         EXPECT_EQ(dot(a, b), Tensor<T>({2}, {50, 122})); // computed by WolframAlpha
-        dot(a, b, &c);
-        EXPECT_EQ(c, Tensor<T>({2}, {50, 122}));
     }
 
     // Matrix . Matrix
@@ -461,22 +452,14 @@ static void dot_test() {
             3, 8, 8, 5
         });
 
-        Tensor<T> c({3, 4}, {
-            1,  2,  3,  4,
-            5,  6,  7,  8,
-            9, 10, 11, 12
-        });
-
         // computed by WolframAlpha
-        Tensor<T> d({3, 4}, {
+        Tensor<T> c({3, 4}, {
             230, 254, 116, 199,
             219, 236, 201, 252,
             173, 148, 155, 167
         });
 
-        EXPECT_EQ(dot(a, b), d);
-        dot(a, b, &c);
-        EXPECT_EQ(c, d);
+        EXPECT_EQ(dot(a, b), c);
     }
 }
 
@@ -497,6 +480,7 @@ TEST_F(TensorTest, VectorOuter) {
         3, 6, 9, 12
     });
     EXPECT_EQ(cross(A, B), C);
+    EXPECT_EQ(cross(dev(A), dev(B)).read(), C);
 }
 
 TEST_F(TensorTest, MatrixOuter) {

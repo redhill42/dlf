@@ -170,16 +170,7 @@ static void vector_dot_vector_test() {
     auto A = Tensor<T>({4}, {2, 7, 3, 4});
     auto B = Tensor<T>({4}, {4, 1, 9, 6});
     auto R = Tensor<T>({1}, {66});
-
-    auto dev_A = DevTensor<T>(A);
-    auto dev_B = DevTensor<T>(B);
-    auto dev_C = DevTensor<T>({1});
-
-    dot(dev_A, dev_B, &dev_C);
-    EXPECT_EQ(dev_C.read(), R);
-
-    auto dev_T = dot(dev_A, dev_B);
-    EXPECT_EQ(dev_T.read(), R);
+    EXPECT_EQ(dot(dev(A), dev(B)).read(), R);
 
 }
 TEST_F(GPGPUTest, VectorDotVector) {
@@ -187,6 +178,7 @@ TEST_F(GPGPUTest, VectorDotVector) {
         vector_dot_vector_test<float>();
         vector_dot_vector_test<int32_t>();
         vector_dot_vector_test<int64_t>();
+        vector_dot_vector_test<std::complex<float>>();
     });
 }
 
@@ -195,16 +187,7 @@ static void matrix_dot_vector_test() {
     auto A = Tensor<T>({2, 3}, {2, 7, 3, 5, 9, 6});
     auto B = Tensor<T>({3}, {9, 6, 7});
     auto R = Tensor<T>({2}, {81, 141});
-
-    auto dev_A = DevTensor<T>(A);
-    auto dev_B = DevTensor<T>(B);
-    auto dev_C = DevTensor<T>({2});
-
-    dot(dev_A, dev_B, &dev_C);
-    EXPECT_EQ(dev_C.read(), R);
-
-    auto dev_T = dot(dev_A, dev_B);
-    EXPECT_EQ(dev_T.read(), R);
+    EXPECT_EQ(dot(dev(A), dev(B)).read(), R);
 }
 
 TEST_F(GPGPUTest, MatrixDotVector) {
@@ -212,6 +195,7 @@ TEST_F(GPGPUTest, MatrixDotVector) {
          matrix_dot_vector_test<float>();
          matrix_dot_vector_test<int32_t>();
          matrix_dot_vector_test<int64_t>();
+         matrix_dot_vector_test<std::complex<float>>();
     });
 }
 
@@ -220,23 +204,15 @@ static void vector_dot_matrix_test() {
     auto A = Tensor<T>({3}, {9, 6, 7});
     auto B = Tensor<T>({3, 2}, {2, 7, 3, 5, 9, 6});
     auto R = Tensor<T>({2}, {99, 135});
-
-    auto dev_A = DevTensor<T>(A);
-    auto dev_B = DevTensor<T>(B);
-    auto dev_C = DevTensor<T>({2});
-
-    dot(dev_A, dev_B, &dev_C);
-    EXPECT_EQ(dev_C.read(), R);
-
-    auto dev_T = dot(dev_A, dev_B);
-    EXPECT_EQ(dev_T.read(), R);
+    EXPECT_EQ(dot(dev(A), dev(B)).read(), R);
 }
 
-TEST_F(GPGPUTest, VectorDoMatrix) {
+TEST_F(GPGPUTest, VectorDotMatrix) {
     doTest([]() {
         vector_dot_matrix_test<float>();
         vector_dot_matrix_test<int32_t>();
         vector_dot_matrix_test<int64_t>();
+        vector_dot_matrix_test<std::complex<float>>();
     });
 }
 
@@ -245,16 +221,7 @@ static void matrix_dot_matrix_test() {
     auto A = Tensor<T>({2, 3}, {2, 7, 3, 5, 9, 6});
     auto B = Tensor<T>({3, 2}, {2, 7, 3, 5, 9, 6});
     auto R = Tensor<T>({2, 2}, {52, 67, 91, 116});
-
-    auto dev_A = DevTensor<T>(A);
-    auto dev_B = DevTensor<T>(B);
-    auto dev_C = DevTensor<T>({2, 2});
-
-    dot(dev_A, dev_B, &dev_C);
-    EXPECT_EQ(dev_C.read(), R);
-
-    auto dev_T = dot(dev_A, dev_B);
-    EXPECT_EQ(dev_T.read(), R);
+    EXPECT_EQ(dot(dev(A), dev(B)).read(), R);
 }
 
 TEST_F(GPGPUTest, MatrixDotMatrix) {
@@ -262,6 +229,7 @@ TEST_F(GPGPUTest, MatrixDotMatrix) {
         matrix_dot_matrix_test<float>();
         matrix_dot_matrix_test<int32_t>();
         matrix_dot_matrix_test<int64_t>();
+        matrix_dot_matrix_test<std::complex<float>>();
     });
 }
 
@@ -467,39 +435,6 @@ TEST_F(GPGPUTest, Xaxpy) {
     });
 }
 
-TEST_F(GPGPUTest, Xdot) {
-    SCOPED_TRACE("Xdot");
-    doTest([]() {
-        blas_level1_r_test<float>(
-            [](auto N, auto& A, auto& B) {
-                return cblas::dot(N, A.data(), 1, B.data(), 1);
-            },
-            [&](auto N, auto& A, auto& B, auto& R) {
-                gblas::dot(N, A.data(), 1, B.data(), 1, R.data());
-            });
-
-        blas_level1_r_test<int32_t>(
-            [](auto N, auto& A, auto& B) {
-                Tensor<int32_t> C({1});
-                dot(A, B, &C);
-                return C(0);
-            },
-            [&](auto N, auto& A, auto& B, auto& R) {
-                gblas::dot(N, A.data(), 1, B.data(), 1, R.data());
-            });
-
-        blas_level1_r_test<int64_t>(
-            [](auto N, auto& A, auto& B) {
-                Tensor<int64_t> C({1});
-                dot(A, B, &C);
-                return C(0);
-            },
-            [&](auto N, auto& A, auto& B, auto& R) {
-                gblas::dot(N, A.data(), 1, B.data(), 1, R.data());
-            });
-    });
-}
-
 TEST_F(GPGPUTest, Xnrm2) {
     SCOPED_TRACE("Xnrm2");
     doTest([]() {
@@ -599,12 +534,9 @@ TEST(GPGPU, MultipleThreadContextActivation) {
     auto B = Tensor<int>::random({N}, -N, N).cast<float>();
 
     auto task = [&]() {
-        auto dev_R = DevTensor<float>({1});
         auto dev_A = DevTensor<float>(A);
         auto dev_B = DevTensor<float>(B);
-
-        dot(dev_A, dev_B, &dev_R);
-        return dev_R.read()(0);
+        return dot(dev_A, dev_B).read()(0);
     };
 
     auto r1 = std::async(std::launch::async, task);

@@ -104,6 +104,18 @@ inline double dot(size_t N, const double* X, size_t incX, const double* Y, size_
     return cblas_ddot(N, X, incX, Y, incY);
 }
 
+inline std::complex<float> dot(size_t N, const std::complex<float>* X, size_t incX, const std::complex<float>* Y, size_t incY) {
+    std::complex<float> R;
+    cblas_cdotu_sub(N, X, incX, Y, incY, &R);
+    return R;
+}
+
+inline std::complex<double> dot(size_t N, const std::complex<double>* X, size_t incX, const std::complex<double>* Y, size_t incY) {
+    std::complex<double> R;
+    cblas_zdotu_sub(N, X, incX, Y, incY, &R);
+    return R;
+}
+
 inline float nrm2(size_t N, float* X, size_t incX) {
     return cblas_snrm2(N, X, incX);
 }

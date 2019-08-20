@@ -19,6 +19,7 @@
 #include <cstdlib> // For size_t
 #include <string> // For OverrideParameters function
 #include <unordered_map> // For OverrideParameters function
+#include <complex>
 
 #include "gpgpu.h"
 
@@ -290,6 +291,26 @@ inline void dotu(const size_t n,
                  const Buffer<T>& y_buffer, const size_t y_inc,
                  Buffer<T>& dot_buffer,
                  const Queue& queue = gpgpu::current::queue(), Event* event = nullptr)
+{
+    dotu(n, x_buffer, 0, x_inc, y_buffer, 0, y_inc, dot_buffer, 0, queue, event);
+}
+
+template <typename T>
+inline void dot(const size_t n,
+                const Buffer<std::complex<T>>& x_buffer, const size_t x_offset, const size_t x_inc,
+                const Buffer<std::complex<T>>& y_buffer, const size_t y_offset, const size_t y_inc,
+                Buffer<std::complex<T>>& dot_buffer, const size_t dot_offset,
+                const Queue& queue = gpgpu::current::queue(), Event* event = nullptr)
+{
+    dotu(n, x_buffer, x_offset, x_inc, y_buffer, y_offset, y_inc, dot_buffer, dot_offset, queue, event);
+}
+
+template <typename T>
+inline void dot(const size_t n,
+                const Buffer<std::complex<T>>& x_buffer, const size_t x_inc,
+                const Buffer<std::complex<T>>& y_buffer, const size_t y_inc,
+                Buffer<std::complex<T>>& dot_buffer,
+                const Queue& queue = gpgpu::current::queue(), Event* event = nullptr)
 {
     dotu(n, x_buffer, 0, x_inc, y_buffer, 0, y_inc, dot_buffer, 0, queue, event);
 }

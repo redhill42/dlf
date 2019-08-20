@@ -751,23 +751,6 @@ void convWithIm2Col(
     auto k = channels * kernel_h * kernel_w / group;
     auto n = output_h * output_w;
 
-    std::vector<size_t> w_offsets(batches*group);
-    std::vector<size_t> x_offsets(batches*group);
-    std::vector<size_t> y_offsets(batches*group);
-    std::vector<T> alpha(batches*group);
-    std::vector<T> beta(batches*group);
-
-    for (size_t i = 0; i < batches; i++) {
-        for (size_t j = 0; j < group; j++) {
-            auto b = i * group + j;
-            w_offsets[b] = j * m * k;
-            x_offsets[b] = b * k * n;
-            y_offsets[b] = b * m * n;
-            alpha[b] = T{1};
-            beta[b] = T{0};
-        }
-    }
-
     const Buffer<T>* x_buffer;
     Buffer<T> temp_buffer;
 
@@ -793,14 +776,29 @@ void convWithIm2Col(
         x_buffer = work_buffer;
     }
 
-    gemmBatched(gpgpu::blas::Layout::RowMajor,
-                gpgpu::blas::Transpose::NoTrans,
-                gpgpu::blas::Transpose::NoTrans,
-                m, n, k, &alpha[0],
-                kernel_buffer, &w_offsets[0], k,
-                *x_buffer, &x_offsets[0], n,
-                &beta[0], result_buffer, &y_offsets[0], n,
-                batches * group);
+    if (group == 1) {
+        gemmStridedBatched(gpgpu::blas::Layout::RowMajor,
+                           gpgpu::blas::Transpose::NoTrans,
+                           gpgpu::blas::Transpose::NoTrans,
+                           m, n, k, T{1},
+                           kernel_buffer, 0, k, 0,
+                           *x_buffer, 0, n, k*n,
+                           T{0}, result_buffer, 0, n, m*n,
+                           batches,
+                           queue, event);
+    } else {
+        for (size_t b = 0; b < batches; b++) {
+            gemmStridedBatched(gpgpu::blas::Layout::RowMajor,
+                               gpgpu::blas::Transpose::NoTrans,
+                               gpgpu::blas::Transpose::NoTrans,
+                               m, n, k, T{1},
+                               kernel_buffer, 0, k, m*k,
+                               *x_buffer, b*group*k*n, n, k*n,
+                               T{0}, result_buffer, b*group*m*n, n, m*n,
+                               group,
+                               queue, event);
+        }
+    }
 }
 
 } // anonymous namespace
@@ -849,17 +847,16 @@ void conv2d(const size_t batches, const size_t channels,
             pad_top, pad_left, stride_h, stride_w, dilation_h, dilation_w,
             im_buffer, kernel_buffer, result_buffer, work_buffer,
             queue, event);
-        return;
+    } else {
+        convgemm(KernelMode::CrossCorrelation,
+                 batches, channels,
+                 height, width, output_h, output_w,
+                 num_kernels, kernel_h, kernel_w,
+                 pad_top, pad_left, stride_h, stride_w,
+                 dilation_h, dilation_w,
+                 im_buffer, 0, kernel_buffer, 0, result_buffer, 0,
+                 work_buffer, queue, event);
     }
-
-    convgemm(KernelMode::CrossCorrelation,
-             batches, channels,
-             height, width, output_h, output_w,
-             num_kernels, kernel_h, kernel_w,
-             pad_top, pad_left, stride_h, stride_w,
-             dilation_h, dilation_w,
-             im_buffer, 0, kernel_buffer, 0, result_buffer, 0,
-             work_buffer, queue, event);
 }
 
 template void PUBLIC_API conv2d<float> (const size_t, const size_t,

@@ -469,11 +469,25 @@ void dotu(const size_t n,
           const Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
           Buffer<T>& r_buffer, const size_t r_offset,
           const Queue& queue, Event* event) {
-    auto routine = Xdotu<T>(queue, event);
-    routine.DoDotu(n,
-                   x_buffer, x_offset, x_inc,
-                   y_buffer, y_offset, y_inc,
-                   r_buffer, r_offset);
+    dispatch<T>(queue,
+        OPENCL(
+            auto routine = Xdotu<T>(queue, event);
+            routine.DoDotu(n,
+                           x_buffer, x_offset, x_inc,
+                           y_buffer, y_offset, y_inc,
+                           r_buffer, r_offset);
+        ),
+        CUDA(
+            auto x = cuBuffer::unwrap(x_buffer) + x_offset;
+            auto y = cuBuffer::unwrap(y_buffer) + y_offset;
+            auto r = cuBuffer::unwrap(r_buffer) + r_offset;
+
+            cublasPointerMode_t mode;
+            cublasGetPointerMode(h, &mode);
+            cublasSetPointerMode(h, cublasPointerMode_t::CUBLAS_POINTER_MODE_DEVICE);
+            cublasDotEx(h, n, x, t, x_inc, y, t, y_inc, r, t, t);
+            cublasSetPointerMode(h, mode);
+        ));
 }
 
 template void PUBLIC_API dotu<float2> (const size_t,
@@ -1900,12 +1914,22 @@ void gemm(const Layout layout, const Transpose a_transpose, const Transpose b_tr
 
             if (layout == Layout::RowMajor) {
                 cublasGemmEx(h, CudaOp(b_transpose), CudaOp(a_transpose),
-                             n, m, k, &alpha, b, t, b_ld, a, t, a_ld, &beta, c, t, c_ld, t,
-                             cublasGemmAlgo_t::CUBLAS_GEMM_DFALT);
+                             n, m, k,
+                             &alpha,
+                             b, t, b_ld,
+                             a, t, a_ld,
+                             &beta,
+                             c, t, c_ld,
+                             t, cublasGemmAlgo_t::CUBLAS_GEMM_DFALT);
             } else {
                 cublasGemmEx(h, CudaOp(a_transpose), CudaOp(b_transpose),
-                             m, n, k, &alpha, a, t, a_ld, b, t, b_ld, &beta, c, t, c_ld, t,
-                             cublasGemmAlgo_t::CUBLAS_GEMM_DFALT);
+                             m, n, k,
+                             &alpha,
+                             a, t, a_ld,
+                             b, t, b_ld,
+                             &beta,
+                             c, t, c_ld,
+                             t, cublasGemmAlgo_t::CUBLAS_GEMM_DFALT);
             }
         ));
 }
@@ -2745,6 +2769,116 @@ template void PUBLIC_API axpyBatched<half>   (const size_t, const half*,
 //---------------------------------------------------------------------------
 // Batched version of GEMM: SGEMMBATCHED/DGEMMBATCHED/CGEMMBATCHED/ZGEMMBATCHED/HGEMMBATCHED
 
+#if HAS_CUDA
+#if CUBLAS_VER_MAJOR >= 10
+template <typename T>
+inline void cublasGemmBatched(
+    cublasHandle_t handle, cublasOperation_t transa, cublasOperation_t transb,
+    int m, int n, int k,
+    const T* alpha,
+    const T* const Aarray[], cudaDataType Atype, int lda,
+    const T* const Barray[], cudaDataType Btype, int ldb,
+    const T* beta,
+    T* const Carray[], cudaDataType Ctype,  int ldc,
+    int batchCount, cudaDataType computeType, cublasGemmAlgo_t algo)
+{
+    cublasGemmBatchedEx(
+        handle, transa, transb,
+        m, n, k,
+        reinterpret_cast<const void*>(alpha),
+        reinterpret_cast<const void* const*>(Aarray), Atype, lda,
+        reinterpret_cast<const void* const*>(Barray), Btype, ldb,
+        reinterpret_cast<const void*>(beta),
+        reinterpret_cast<void* const*>(Carray), Ctype, ldc,
+        batchCount, computeType, algo);
+}
+#else
+inline void cublasGemmBatched(
+    cublasHandle_t handle, cublasOperation_t transa, cublasOperation_t transb,
+    int m, int n, int k,
+    const float* alpha,
+    const float* Aarray[], cudaDataType, int lda,
+    const float*  Barray[], cudaDataType, int ldb,
+    const float* beta,
+    float* Carray[], cudaDataType, int ldc,
+    int batchCount, cudaDataType, cublasGemmAlgo_t)
+{
+    cublasSgemmBatched(
+        handle, transa, transb,
+        m, n, k,
+        alpha,
+        Aarray, lda,
+        Barray, ldb,
+        beta,
+        Carray, ldc,
+        batchCount);
+}
+
+inline void cublasGemmBatched(
+    cublasHandle_t handle, cublasOperation_t transa, cublasOperation_t transb,
+    int m, int n, int k,
+    const double* alpha,
+    const double* Aarray[], cudaDataType, int lda,
+    const double* Barray[], cudaDataType, int ldb,
+    const double* beta,
+    double* Carray[], cudaDataType, int ldc,
+    int batchCount, cudaDataType, cublasGemmAlgo_t)
+{
+    cublasDgemmBatched(
+        handle, transa, transb,
+        m, n, k,
+        alpha,
+        Aarray, lda,
+        Barray, ldb,
+        beta,
+        Carray, ldc,
+        batchCount);
+}
+
+inline void cublasGemmBatched(
+    cublasHandle_t handle, cublasOperation_t transa, cublasOperation_t transb,
+    int m, int n, int k,
+    const float2* alpha,
+    const float2* Aarray[], cudaDataType, int lda,
+    const float2* Barray[], cudaDataType, int ldb,
+    const float2* beta,
+    float2* Carray[], cudaDataType, int ldc,
+    int batchCount, cudaDataType, cublasGemmAlgo_t)
+{
+    cublasCgemmBatched(
+        handle, transa, transb,
+        m, n, k,
+        reinterpret_cast<const cuComplex*>(alpha),
+        reinterpret_cast<const cuComplex**>(Aarray), lda,
+        reinterpret_cast<const cuComplex**>(Barray), ldb,
+        reinterpret_cast<const cuComplex*>(beta),
+        reinterpret_cast<cuComplex**>(Carray), ldc,
+        batchCount);
+}
+
+inline void cublasGemmBatched(
+    cublasHandle_t handle, cublasOperation_t transa, cublasOperation_t transb,
+    int m, int n, int k,
+    const double2* alpha,
+    const double2* Aarray[], cudaDataType, int lda,
+    const double2* Barray[], cudaDataType, int ldb,
+    const double2* beta,
+    double2* Carray[], cudaDataType, int ldc,
+    int batchCount, cudaDataType, cublasGemmAlgo_t)
+{
+    cublasZgemmBatched(
+        handle, transa, transb,
+        m, n, k,
+        reinterpret_cast<const cuDoubleComplex*>(alpha),
+        reinterpret_cast<const cuDoubleComplex**>(Aarray), lda,
+        reinterpret_cast<const cuDoubleComplex**>(Barray), ldb,
+        reinterpret_cast<const cuDoubleComplex*>(beta),
+        reinterpret_cast<cuDoubleComplex**>(Carray), ldc,
+        batchCount);
+}
+#endif
+#endif
+
 template <typename T>
 void gemmBatched(const Layout layout, const Transpose a_transpose, const Transpose b_transpose,
                  const size_t m, const size_t n, const size_t k,
@@ -2754,30 +2888,108 @@ void gemmBatched(const Layout layout, const Transpose a_transpose, const Transpo
                  const T* betas,
                  Buffer<T>& c_buffer, const size_t* c_offsets, const size_t c_ld,
                  const size_t batch_count,
-                 const Queue& queue, Event* event) {
-    auto routine = XgemmBatched<T>(queue, event);
-    auto alphas_cpp = std::vector<T>();
-    auto betas_cpp = std::vector<T>();
-    auto a_offsets_cpp = std::vector<size_t>();
-    auto b_offsets_cpp = std::vector<size_t>();
-    auto c_offsets_cpp = std::vector<size_t>();
-    for (auto batch = size_t{0}; batch < batch_count; ++batch) {
-        alphas_cpp.push_back(alphas[batch]);
-        betas_cpp.push_back(betas[batch]);
-        a_offsets_cpp.push_back(a_offsets[batch]);
-        b_offsets_cpp.push_back(b_offsets[batch]);
-        c_offsets_cpp.push_back(c_offsets[batch]);
-    }
-    routine.DoGemmBatched(layout, a_transpose, b_transpose,
-                          m, n, k,
-                          alphas_cpp,
-                          a_buffer, a_offsets_cpp, a_ld,
-                          b_buffer, b_offsets_cpp, b_ld,
-                          betas_cpp,
-                          c_buffer, c_offsets_cpp, c_ld,
-                          batch_count);
+                 const Queue& queue, Event* event)
+{
+    dispatch<T>(queue,
+        OPENCL(
+            auto alphas_cpp = std::vector<T>();
+            auto betas_cpp = std::vector<T>();
+            auto a_offsets_cpp = std::vector<size_t>();
+            auto b_offsets_cpp = std::vector<size_t>();
+            auto c_offsets_cpp = std::vector<size_t>();
+
+            for (auto batch = size_t{0}; batch < batch_count; ++batch) {
+                alphas_cpp.push_back(alphas[batch]);
+                betas_cpp.push_back(betas[batch]);
+                a_offsets_cpp.push_back(a_offsets[batch]);
+                b_offsets_cpp.push_back(b_offsets[batch]);
+                c_offsets_cpp.push_back(c_offsets[batch]);
+            }
+
+            auto routine = XgemmBatched<T>(queue, event);
+            routine.DoGemmBatched(layout, a_transpose, b_transpose,
+                                  m, n, k,
+                                  alphas_cpp,
+                                  a_buffer, a_offsets_cpp, a_ld,
+                                  b_buffer, b_offsets_cpp, b_ld,
+                                  betas_cpp,
+                                  c_buffer, c_offsets_cpp, c_ld,
+                                  batch_count);
+        ),
+        CUDA(
+            auto A = cuBuffer::unwrap(a_buffer);
+            auto B = cuBuffer::unwrap(b_buffer);
+            auto C = cuBuffer::unwrap(c_buffer);
+
+            auto Aarray = std::vector<const T*>();
+            auto Barray = std::vector<const T*>();
+            auto Carray = std::vector<T*>();
+
+            for (auto batch = size_t{0}; batch < batch_count; ++batch) {
+                Aarray.push_back(A + a_offsets[batch]);
+                Barray.push_back(B + b_offsets[batch]);
+                Carray.push_back(C + c_offsets[batch]);
+            }
+
+            auto AarrayBuffer = queue.context().createBuffer<const T*>(batch_count);
+            auto BarrayBuffer = queue.context().createBuffer<const T*>(batch_count);
+            auto CarrayBuffer = queue.context().createBuffer<T*>(batch_count);
+
+            AarrayBuffer.write(queue, Aarray.data(), batch_count);
+            BarrayBuffer.write(queue, Barray.data(), batch_count);
+            CarrayBuffer.write(queue, Carray.data(), batch_count);
+
+            if (layout == Layout::RowMajor) {
+                cublasGemmBatched(
+                    h, CudaOp(b_transpose), CudaOp(a_transpose),
+                    n, m, k,
+                    alphas,
+                    cuBuffer::unwrap(BarrayBuffer), t, b_ld,
+                    cuBuffer::unwrap(AarrayBuffer), t, a_ld,
+                    betas,
+                    cuBuffer::unwrap(CarrayBuffer), t, c_ld, batch_count,
+                    t, cublasGemmAlgo_t::CUBLAS_GEMM_DFALT);
+            } else {
+                cublasGemmBatched(
+                    h, CudaOp(a_transpose), CudaOp(b_transpose),
+                    m, n, k,
+                    alphas,
+                    cuBuffer::unwrap(AarrayBuffer), t, a_ld,
+                    cuBuffer::unwrap(BarrayBuffer), t, b_ld,
+                    betas,
+                    cuBuffer::unwrap(CarrayBuffer), t, c_ld, batch_count,
+                    t, cublasGemmAlgo_t::CUBLAS_GEMM_DFALT);
+            }
+        ));
 }
 
+template void PUBLIC_API gemmBatched<int16_t>(const Layout, const Transpose, const Transpose,
+                                              const size_t, const size_t, const size_t,
+                                              const int16_t*,
+                                              const Buffer<int16_t>&, const size_t*, const size_t,
+                                              const Buffer<int16_t>&, const size_t*, const size_t,
+                                              const int16_t*,
+                                              Buffer<int16_t>&, const size_t*, const size_t,
+                                              const size_t,
+                                              const Queue&, Event*);
+template void PUBLIC_API gemmBatched<int32_t>(const Layout, const Transpose, const Transpose,
+                                              const size_t, const size_t, const size_t,
+                                              const int32_t*,
+                                              const Buffer<int32_t>&, const size_t*, const size_t,
+                                              const Buffer<int32_t>&, const size_t*, const size_t,
+                                              const int32_t*,
+                                              Buffer<int32_t>&, const size_t*, const size_t,
+                                              const size_t,
+                                              const Queue&, Event*);
+template void PUBLIC_API gemmBatched<int64_t>(const Layout, const Transpose, const Transpose,
+                                              const size_t, const size_t, const size_t,
+                                              const int64_t*,
+                                              const Buffer<int64_t>&, const size_t*, const size_t,
+                                              const Buffer<int64_t>&, const size_t*, const size_t,
+                                              const int64_t*,
+                                              Buffer<int64_t>&, const size_t*, const size_t,
+                                              const size_t,
+                                              const Queue&, Event*);
 template void PUBLIC_API gemmBatched<float>  (const Layout, const Transpose, const Transpose,
                                               const size_t, const size_t, const size_t,
                                               const float*,
@@ -2827,6 +3039,94 @@ template void PUBLIC_API gemmBatched<half>   (const Layout, const Transpose, con
 //---------------------------------------------------------------------------
 // StridedBatched version of GEMM: SGEMMSTRIDEDBATCHED/DGEMMSTRIDEDBATCHED/CGEMMSTRIDEDBATCHED/ZGEMMSTRIDEDBATCHED/HGEMMSTRIDEDBATCHED
 
+#if HAS_CUDA
+#if CUBLAS_VER_MAJOR < 10
+inline void cublasGemmStridedBatchedEx(
+    cublasHandle_t handle, cublasOperation_t transa, cublasOperation_t transb,
+    int m, int n, int k,
+    const float* alpha,
+    const float* A, cudaDataType, int lda, long long int strideA,
+    const float* B, cudaDataType, int ldb, long long int strideB,
+    const float* beta,
+    float* C, cudaDataType, int ldc, long long int strideC,
+    int batchCount, cudaDataType, cublasGemmAlgo_t)
+{
+    cublasSgemmStridedBatched(
+        handle, transa, transb,
+        m, n, k,
+        alpha,
+        A, lda, strideA,
+        B, ldb, strideB,
+        beta,
+        C, ldc, strideC,
+        batchCount);
+}
+
+inline void cublasGemmStridedBatchedEx(
+    cublasHandle_t handle, cublasOperation_t transa, cublasOperation_t transb,
+    int m, int n, int k,
+    const double* alpha,
+    const double* A, cudaDataType, int lda, long long int strideA,
+    const double* B, cudaDataType, int ldb, long long int strideB,
+    const double* beta,
+    double* C, cudaDataType, int ldc, long long int strideC,
+    int batchCount, cudaDataType, cublasGemmAlgo_t)
+{
+    cublasDgemmStridedBatched(
+        handle, transa, transb,
+        m, n, k,
+        alpha,
+        A, lda, strideA,
+        B, ldb, strideB,
+        beta,
+        C, ldc, strideC,
+        batchCount);
+}
+
+inline void cublasGemmStridedBatchedEx(
+    cublasHandle_t handle, cublasOperation_t transa, cublasOperation_t transb,
+    int m, int n, int k,
+    const float2* alpha,
+    const float2* A, cudaDataType, int lda, long long int strideA,
+    const float2* B, cudaDataType, int ldb, long long int strideB,
+    const float2* beta,
+    float2* C, cudaDataType, int ldc, long long int strideC,
+    int batchCount, cudaDataType, cublasGemmAlgo_t)
+{
+    cublasCgemmStridedBatched(
+        handle, transa, transb,
+        m, n, k,
+        reinterpret_cast<const cuComplex*>(alpha),
+        reinterpret_cast<const cuComplex*>(A), lda, strideA,
+        reinterpret_cast<const cuComplex*>(B), ldb, strideB,
+        reinterpret_cast<const cuComplex*>(beta),
+        reinterpret_cast<cuComplex*>(C), ldc, strideC,
+        batchCount);
+}
+
+inline void cublasGemmStridedBatchedEx(
+    cublasHandle_t handle, cublasOperation_t transa, cublasOperation_t transb,
+    int m, int n, int k,
+    const double2* alpha,
+    const double2* A, cudaDataType, int lda, long long int strideA,
+    const double2* B, cudaDataType, int ldb, long long int strideB,
+    const double2* beta,
+    double2* C, cudaDataType, int ldc, long long int strideC,
+    int batchCount, cudaDataType, cublasGemmAlgo_t)
+{
+    cublasZgemmStridedBatched(
+        handle, transa, transb,
+        m, n, k,
+        reinterpret_cast<const cuDoubleComplex*>(alpha),
+        reinterpret_cast<const cuDoubleComplex*>(A), lda, strideA,
+        reinterpret_cast<const cuDoubleComplex*>(B), ldb, strideB,
+        reinterpret_cast<const cuDoubleComplex*>(beta),
+        reinterpret_cast<cuDoubleComplex*>(C), ldc, strideC,
+        batchCount);
+}
+#endif
+#endif
+
 template <typename T>
 void gemmStridedBatched(const Layout layout, const Transpose a_transpose, const Transpose b_transpose,
                         const size_t m, const size_t n, const size_t k,
@@ -2837,17 +3137,75 @@ void gemmStridedBatched(const Layout layout, const Transpose a_transpose, const 
                         Buffer<T>& c_buffer, const size_t c_offset, const size_t c_ld, const size_t c_stride,
                         const size_t batch_count,
                         const Queue& queue, Event* event) {
-    auto routine = XgemmStridedBatched<T>(queue, event);
-    routine.DoGemmStridedBatched(layout, a_transpose, b_transpose,
-                                 m, n, k,
-                                 alpha,
-                                 a_buffer, a_offset, a_ld, a_stride,
-                                 b_buffer, b_offset, b_ld, b_stride,
-                                 beta,
-                                 c_buffer, c_offset, c_ld, c_stride,
-                                 batch_count);
+    dispatch<T>(queue,
+        OPENCL(
+            auto routine = XgemmStridedBatched<T>(queue, event);
+            routine.DoGemmStridedBatched(
+                layout, a_transpose, b_transpose,
+                m, n, k,
+                alpha,
+                a_buffer, a_offset, a_ld, a_stride,
+                b_buffer, b_offset, b_ld, b_stride,
+                beta,
+                c_buffer, c_offset, c_ld, c_stride,
+                batch_count);
+        ),
+        CUDA(
+            auto a = cuBuffer::unwrap(a_buffer) + a_offset;
+            auto b = cuBuffer::unwrap(b_buffer) + b_offset;
+            auto c = cuBuffer::unwrap(c_buffer) + c_offset;
+
+            if (layout == Layout::RowMajor) {
+                cublasGemmStridedBatchedEx(
+                    h, CudaOp(b_transpose), CudaOp(a_transpose),
+                    n, m, k,
+                    &alpha,
+                    b, t, b_ld, b_stride,
+                    a, t, a_ld, a_stride,
+                    &beta,
+                    c, t, c_ld, c_stride, batch_count,
+                    t, cublasGemmAlgo_t::CUBLAS_GEMM_DFALT);
+            } else {
+                cublasGemmStridedBatchedEx(
+                    h, CudaOp(a_transpose), CudaOp(b_transpose),
+                    m, n, k,
+                    &alpha,
+                    a, t, a_ld, a_stride,
+                    b, t, b_ld, b_stride,
+                    &beta,
+                    c, t, c_ld, c_stride, batch_count,
+                    t, cublasGemmAlgo_t::CUBLAS_GEMM_DFALT);
+            }
+        ));
 }
 
+template void PUBLIC_API gemmStridedBatched<int16_t>(const Layout, const Transpose, const Transpose,
+                                                     const size_t, const size_t, const size_t,
+                                                     const int16_t,
+                                                     const Buffer<int16_t>&, const size_t, const size_t, const size_t,
+                                                     const Buffer<int16_t>&, const size_t, const size_t, const size_t,
+                                                     const int16_t,
+                                                     Buffer<int16_t>&, const size_t, const size_t, const size_t,
+                                                     const size_t,
+                                                     const Queue&, Event*);
+template void PUBLIC_API gemmStridedBatched<int32_t>(const Layout, const Transpose, const Transpose,
+                                                     const size_t, const size_t, const size_t,
+                                                     const int32_t,
+                                                     const Buffer<int32_t>&, const size_t, const size_t, const size_t,
+                                                     const Buffer<int32_t>&, const size_t, const size_t, const size_t,
+                                                     const int32_t,
+                                                     Buffer<int32_t>&, const size_t, const size_t, const size_t,
+                                                     const size_t,
+                                                     const Queue&, Event*);
+template void PUBLIC_API gemmStridedBatched<int64_t>(const Layout, const Transpose, const Transpose,
+                                                     const size_t, const size_t, const size_t,
+                                                     const int64_t,
+                                                     const Buffer<int64_t>&, const size_t, const size_t, const size_t,
+                                                     const Buffer<int64_t>&, const size_t, const size_t, const size_t,
+                                                     const int64_t,
+                                                     Buffer<int64_t>&, const size_t, const size_t, const size_t,
+                                                     const size_t,
+                                                     const Queue&, Event*);
 template void PUBLIC_API gemmStridedBatched<float>  (const Layout, const Transpose, const Transpose,
                                                      const size_t, const size_t, const size_t,
                                                      const float,
