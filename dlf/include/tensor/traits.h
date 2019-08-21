@@ -118,6 +118,10 @@ using tensor_type = typename tensor_traits<TensorT>::template tensor_type<U>;
 template <typename TensorT, typename U = tensor_value_type<TensorT>>
 using tensor_view_type = typename tensor_traits<TensorT>::template tensor_view_type<U>;
 
+template <typename X, typename Y>
+using is_exactly_same_tensor = cxx::conjunction<
+    is_same_tensor<X, Y>, std::is_same<tensor_value_type<X>, tensor_value_type<Y>>>;
+
 template <typename TensorT, typename R = tensor_type<TensorT>>
 using enable_if_tensor = std::enable_if_t<is_tensor<TensorT>::value, R>;
 

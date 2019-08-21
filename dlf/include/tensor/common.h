@@ -268,25 +268,51 @@ bool is_contiguous_strides(const Shape& shape) {
 template <typename T>
 std::enable_if_t<cblas::RequireBlasType<T>>
 matmul_cpu(int m, int n, int k,
-           const T* A, int lda,
-           const T* B, int ldb,
+           const T* A, int lda, int incA,
+           const T* B, int ldb, int incB,
            T* C, int ldc)
 {
     if (m == 1 && n == 1) {
-        *C = cblas::dot(k, A, 1, B, 1);
-    } else {
-        cblas::gemm(
-            cblas::Layout::RowMajor,
-            cblas::Transpose::NoTrans, cblas::Transpose::NoTrans,
-            m, n, k, 1.0, A, lda, B, ldb, 0.0, C, ldc);
+        *C = cblas::dot(k, A, incA, B, ldb);
+        return;
     }
+
+    auto transA = cblas::Transpose::NoTrans;
+    if (incA != 1) {
+        assert(lda == 1);
+        transA = cblas::Transpose::Trans;
+        lda = incA;
+    }
+
+    if (n == 1) {
+        auto layout = transA == cblas::Transpose::NoTrans
+            ? cblas::Layout::RowMajor
+            : cblas::Layout::ColMajor;
+        cblas::gemv(layout, cblas::Transpose::NoTrans,
+                    m, k,
+                    T{1},
+                    A, lda, B, ldb,
+                    T{0},
+                    C, 1);
+        return;
+    }
+
+    auto transB = cblas::Transpose::NoTrans;
+    if (incB != 1) {
+        assert(ldb == 1);
+        transB = cblas::Transpose::Trans;
+        ldb = incB;
+    }
+
+    cblas::gemm(cblas::Layout::RowMajor, transA, transB,
+                m, n, k, T{1}, A, lda, B, ldb, T{0}, C, ldc);
 }
 
 template <typename T>
 std::enable_if_t<!cblas::RequireBlasType<T>>
 matmul_cpu(int m, int n, int k,
-           const T* A, int lda,
-           const T* B, int ldb,
+           const T* A, int lda, int incA,
+           const T* B, int ldb, int incB,
            T* C, int ldc)
 {
     if (m == 1 && n == 1) {
@@ -294,10 +320,10 @@ matmul_cpu(int m, int n, int k,
             tbb::blocked_range<size_t>(0, k, GRAINSIZE),
             T{},
             [=](auto r, T sum) {
-                auto px = A + r.begin();
-                auto py = B + r.begin();
-                for (size_t k = r.size(); k-- != 0; )
-                    sum += *px++ * *py++;
+                auto px = A + r.begin()*incA;
+                auto py = B + r.begin()*ldb;
+                for (size_t k = r.size(); k-- != 0; px += incA, py += ldb)
+                    sum += *px * *py;
                 return sum;
             },
             std::plus<T>());
@@ -307,8 +333,8 @@ matmul_cpu(int m, int n, int k,
                 for (size_t j = r.cols().begin(); j != r.cols().end(); j++) {
                     T v{};
                     for (size_t t = 0; t < k; t++)
-                        v += A[i * lda + t] * B[t * ldb + j];
-                    C[i * ldc + j] = std::move(v);
+                        v += A[i*lda + t*incA] * B[t*ldb + j*incB];
+                    C[i*ldc + j] = std::move(v);
                 }
             }
         });
@@ -317,20 +343,20 @@ matmul_cpu(int m, int n, int k,
 
 template <typename T>
 void matmul(int m, int n, int k,
-            const Shape& shapeA, const T* A, int lda,
-            const Shape& shapeB, const T* B, int ldb,
+            const Shape& shapeA, const T* A, int lda, int incA,
+            const Shape& shapeB, const T* B, int ldb, int incB,
             T* C, int ldc,
             int batch_size)
 {
     if (batch_size == 1) {
-        matmul_cpu(m, n, k, A+shapeA.offset(), lda, B+shapeB.offset(), ldb, C, ldc);
+        matmul_cpu(m, n, k, A+shapeA.offset(), lda, incA, B+shapeB.offset(), ldb, incB, C, ldc);
     } else {
         tbb::parallel_for(tbb::blocked_range<int>(0, batch_size, 16), [=](auto r) {
             for (int p = r.begin(); p < r.end(); p++) {
                 matmul_cpu(
                     m, n, k,
-                    A + batch_offset(shapeA, p), lda,
-                    B + batch_offset(shapeB, p), ldb,
+                    A + batch_offset(shapeA, p), lda, incA,
+                    B + batch_offset(shapeB, p), ldb, incB,
                     C + p*m*n, ldc);
             }
         });
@@ -339,31 +365,60 @@ void matmul(int m, int n, int k,
 
 template <typename T>
 void matmul(int m, int n, int k,
-            const Shape& shapeA, const gpgpu::Buffer<T>& A, int lda,
-            const Shape& shapeB, const gpgpu::Buffer<T>& B, int ldb,
+            const Shape& shapeA, const gpgpu::Buffer<T>& A, int lda, int incA,
+            const Shape& shapeB, const gpgpu::Buffer<T>& B, int ldb, int incB,
             gpgpu::Buffer<T>& C, int ldc,
             int batch_size)
 {
-    constexpr auto RowMajor = gpgpu::blas::Layout::RowMajor;
-    constexpr auto NoTrans = gpgpu::blas::Transpose::NoTrans;
+    if (batch_size == 1 && m == 1 && n == 1) {
+        gblas::dot(
+            k,
+            A, shapeA.offset(), incA,
+            B, shapeB.offset(), ldb,
+            C, 0);
+        return;
+    }
+
+    auto transA = gblas::Transpose::NoTrans;
+    if (incA != 1) {
+        assert(lda == 1);
+        transA = gblas::Transpose::Trans;
+        lda = incA;
+    }
+
+    if (batch_size == 1 && n == 1) {
+        auto layout = transA == gblas::Transpose::NoTrans
+            ? gblas::Layout::RowMajor
+            : gblas::Layout::ColMajor;
+        gblas::gemv(layout, gblas::Transpose::NoTrans,
+                    m, k,
+                    T{1},
+                    A, shapeA.offset(), lda,
+                    B, shapeB.offset(), ldb,
+                    T{0},
+                    C, 0, 1);
+        return;
+    }
+
+    auto transB = gblas::Transpose::NoTrans;
+    if (incB != 1) {
+        assert(ldb == 1);
+        transB = gblas::Transpose::Trans;
+        ldb = incB;
+    }
 
     if (batch_size == 1) {
-        if (m == 1 && n == 1) {
-            gpgpu::blas::dot(
-                k,
-                A, shapeA.offset(), shapeA.stride(-1),
-                B, shapeB.offset(), shapeB.stride(-2),
-                C, 0);
-        } else {
-            gpgpu::blas::gemm(
-                RowMajor, NoTrans, NoTrans,
-                m, n, k,
-                T{1}, A, lda, B, ldb,
-                T{0}, C, ldc);
-        }
+        gblas::gemm(
+            gblas::Layout::RowMajor, transA, transB,
+            m, n, k,
+            T{1},
+            A, shapeA.offset(), lda,
+            B, shapeB.offset(), ldb,
+            T{0},
+            C, 0, ldc);
     } else if (is_contiguous_strides(shapeA) && is_contiguous_strides(shapeB)) {
-        gpgpu::blas::gemmStridedBatched(
-            RowMajor, NoTrans, NoTrans,
+        gblas::gemmStridedBatched(
+            gblas::Layout::RowMajor, transA, transB,
             m, n, k,
             T{1},
             A, shapeA.offset(), lda, shapeA.stride(-3),
@@ -386,8 +441,8 @@ void matmul(int m, int n, int k,
             c_offsets[p] = p*m*n;
         }
 
-        gpgpu::blas::gemmBatched(
-            RowMajor, NoTrans, NoTrans,
+        gblas::gemmBatched(
+            gblas::Layout::RowMajor, transA, transB,
             m, n, k,
             &alphas[0],
             A, &a_offsets[0], lda,
@@ -418,23 +473,65 @@ void matmul(int m, int n, int k,
  * multiplying a stack of matrices with a vector will result in a stack of
  * vectors, but matmul will not recognize it as such.
  */
-template <typename TensorT>
-enable_if_non_view_tensor<TensorT, tensor_type<TensorT>&>
-matmul(const TensorT& A, const TensorT& B, tensor_type<TensorT>& C) {
+template <typename LHS, typename RHS>
+std::enable_if_t<is_exactly_same_tensor<LHS, RHS>::value, tensor_type<LHS>&>
+matmul(const LHS& A, const RHS& B, tensor_type<LHS>& C) {
     Shape shapeA = A.shape();
     Shape shapeB = B.shape();
     Shape shapeC;
 
+    // broadcast and normalize on input shapes
     int batch_size = detail::matmul_broadcast(shapeA, shapeB, shapeC);
 
     int m = shapeA.extent(-2);
     int k = shapeA.extent(-1);
     int n = shapeB.extent(-1);
 
-    int lda = std::max<int>(shapeA.stride(-2), k);
-    int ldb = std::max<int>(shapeB.stride(-2), n);
-    int ldc = std::max<int>(shapeC.stride(-2), n);
+    int lda = shapeA.stride(-2);
+    int ldb = shapeB.stride(-2);
+    int ldc = shapeC.stride(-2);
+    int incA = shapeA.stride(-1);
+    int incB = shapeB.stride(-1);
 
+    if (lda == 0 && m == 1)
+        lda = k;
+    if (ldb == 0 && k == 1)
+        ldb = n;
+    if (incA == 0 && k == 1)
+        incA = 1;
+    if (incB == 0 && n == 1)
+        incB = 1;
+
+    // blas cannot do gemm on non-contiguous shape, reorder if necessary
+    auto dataA = A.data();
+    auto dataB = B.data();
+    tensor_type<LHS> tmpA{};
+    tensor_type<RHS> tmpB{};
+
+    if (m != 1 || n != 1) {
+        bool reordered = false;
+        if ((incA != 1 && lda != 1) || (incA == 0 || lda == 0)) {
+            reorder(A, tmpA);
+            shapeA = tmpA.shape();
+            dataA = tmpA.data();
+            lda = k;
+            incA = 1;
+            reordered = true;
+        }
+        if ((incB != 1 && ldb != 1) || (incB == 0 || ldb == 0)) {
+            reorder(B, tmpB);
+            shapeB = tmpB.shape();
+            dataB = tmpB.data();
+            ldb = n;
+            incB = 1;
+            reordered = true;
+        }
+        if (reordered) {
+            batch_size = detail::matmul_broadcast(shapeA, shapeB, shapeC);
+        }
+    }
+
+    // remove 1 from final shape if one of input tensors is a vector
     if (A.rank() == 1)
         shapeC = shapeC.squeeze(-2);
     if (B.rank() == 1)
@@ -443,19 +540,21 @@ matmul(const TensorT& A, const TensorT& B, tensor_type<TensorT>& C) {
         shapeC = Shape({1});
     C.resize(shapeC);
 
+    // do batched matrix multiplication
     detail::matmul(
         m, n, k,
-        shapeA, A.data(), lda,
-        shapeB, B.data(), ldb,
+        shapeA, dataA, lda, incA,
+        shapeB, dataB, ldb, incB,
         C.data(), ldc,
         batch_size);
 
     return C;
 }
 
-template <typename TensorT>
-inline enable_if_non_view_tensor<TensorT> matmul(const TensorT& A, const TensorT& B) {
-    TensorT C;
+template <typename LHS, typename RHS>
+std::enable_if_t<is_exactly_same_tensor<LHS, RHS>::value, tensor_type<LHS>>
+inline matmul(const LHS& A, const RHS& B) {
+    tensor_type<LHS> C{};
     matmul(A, B, C);
     return C;
 }
@@ -465,7 +564,7 @@ inline enable_if_non_view_tensor<TensorT> matmul(const TensorT& A, const TensorT
 //==-------------------------------------------------------------------------
 
 template <typename TensorT>
-enable_if_non_view_tensor<TensorT> matpow(TensorT&& A, long n) {
+enable_if_tensor<TensorT> matpow(TensorT&& A, long n) {
     if (!A.is_inner_square())
         throw shape_error("matpow: square matrix required");
     if (n < 0)
@@ -477,7 +576,7 @@ enable_if_non_view_tensor<TensorT> matpow(TensorT&& A, long n) {
         return std::forward<TensorT>(A);
     n--;
 
-    auto x = std::forward<TensorT>(A);
+    tensor_type<TensorT> x = std::forward<TensorT>(A);
     auto y = x, t = x;
     while (n > 0) {
         if (n & 1)
@@ -492,12 +591,12 @@ enable_if_non_view_tensor<TensorT> matpow(TensorT&& A, long n) {
 // Dot product
 //==-------------------------------------------------------------------------
 
-template <typename TensorT>
-inline enable_if_non_view_tensor<TensorT>
-dot(const TensorT& A, const TensorT& B) {
+template <typename LHS, typename RHS>
+std::enable_if_t<is_exactly_same_tensor<LHS, RHS>::value, tensor_type<LHS>>
+dot(const LHS& A, const RHS& B) {
     if (A.rank() > 2 || B.rank() > 2)
         throw shape_error("dot: unsupported tensor shape");
-    TensorT C{};
+    tensor_type<LHS> C{};
     matmul(A, B, C);
     return C;
 }
@@ -512,9 +611,9 @@ namespace dot_product {
  * instead of
  *     auto z = x, y
  */
-template <typename TensorT>
-enable_if_non_view_tensor<TensorT>
-inline operator,(const TensorT& lhs, const TensorT& rhs) {
+template <typename LHS, typename RHS>
+std::enable_if_t<is_exactly_same_tensor<LHS, RHS>::value, tensor_type<LHS>>
+inline operator,(const LHS& lhs, const RHS& rhs) {
     return dot(lhs, rhs);
 }
 } // namespace dot_product
