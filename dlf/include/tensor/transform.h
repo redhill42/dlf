@@ -234,7 +234,7 @@ void transformChannel(const Shape& shape_A, const T* data_A,
         auto pz = begin_C + offset;
         for (int id = r.rows().begin(); id < r.rows().end(); id++) {
             auto y = py[id % shape_B.size()];
-            std::transform(px, px+r.cols().size(), pz, [=](auto x){ return f(x, y); });
+            std::transform(px, px+r.cols().size(), pz, [&](auto x){ return f(x, y); });
             px += n, pz += n;
         }
     });

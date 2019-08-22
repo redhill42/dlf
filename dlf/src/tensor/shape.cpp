@@ -20,8 +20,9 @@ Shape& Shape::operator=(Shape&& rhs) {
     return *this;
 }
 
-void Shape::init(const std::vector<size_t>& extents) noexcept {
+void Shape::init(const std::vector<size_t>& extents, size_t offset) noexcept {
     m_dims.resize(extents.size());
+    m_offset = offset;
 
     if (extents.empty()) {
         m_size = 0;
@@ -35,7 +36,6 @@ void Shape::init(const std::vector<size_t>& extents) noexcept {
         }
         m_size = size;
     }
-    m_offset = 0;
 }
 
 void Shape::init() noexcept {
@@ -193,7 +193,10 @@ Shape Shape::reshape(const std::vector<int>& new_shape) const {
 
     if (size() != new_size)
         throw shape_error("reshape: incompatible shape");
-    return Shape(std::move(dims));
+
+    Shape res;
+    res.init(std::move(dims), offset());
+    return res;
 }
 
 Shape Shape::flatten(int axis) const {
@@ -201,9 +204,9 @@ Shape Shape::flatten(int axis) const {
     if (axis < 0 || axis > rank())
         throw shape_error("flatten: invalid axis");
 
-    size_t rows = partial_size(0, axis);
-    size_t cols = partial_size(axis, rank());
-    return Shape(rows, cols);
+    int rows = partial_size(0, axis);
+    int cols = partial_size(axis, rank());
+    return reshape({rows, cols});
 }
 
 Shape Shape::squeeze(const std::vector<int> axes) const {

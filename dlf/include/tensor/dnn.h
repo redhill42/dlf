@@ -934,8 +934,8 @@ DevTensor<T> hardmax(DevTensor<T>&& X, int axis = 1) {
 }
 
 template <typename TensorT>
-enable_if_non_view_tensor<TensorT, void>
-space_to_depth(const TensorT& X, TensorT& Y, int blocksize) {
+enable_if_tensor<TensorT, void>
+space_to_depth(TensorT&& X, tensor_type<TensorT>& Y, int blocksize) {
     if (blocksize <= 0)
         throw shape_error("space_to_depth: blocksize has incorrect value");
     if (X.rank() != 4)
@@ -945,27 +945,27 @@ space_to_depth(const TensorT& X, TensorT& Y, int blocksize) {
     if (h % blocksize != 0 || w % blocksize != 0)
         throw shape_error("space_to_depth: blocksize has incorrect value");
 
-    auto x_shape = X.shape();
-    x_shape = x_shape.reshape(n, c, h/blocksize, blocksize, w/blocksize, blocksize);
-    x_shape = x_shape.transpose(0, 3, 5, 1, 2, 4);
+    auto x_view = reshape(std::forward<TensorT>(X),
+        {n, c, h/blocksize, blocksize, w/blocksize, blocksize});
+    x_view = x_view.transpose(0, 3, 5, 1, 2, 4);
 
     Y.resize(n, c*blocksize*blocksize, h/blocksize, w/blocksize);
     Y.reshape(n, blocksize, blocksize, c, h/blocksize, w/blocksize);
-    reorder(X, x_shape, Y);
+    reorder(x_view, Y);
     Y.reshape(n, c*blocksize*blocksize, h/blocksize, w/blocksize);
 }
 
 template <typename TensorT>
-enable_if_non_view_tensor<TensorT>
-space_to_depth(const TensorT& X, int blocksize) {
-    TensorT Y;
-    space_to_depth(X, Y, blocksize);
+enable_if_tensor<TensorT>
+inline space_to_depth(TensorT&& X, int blocksize) {
+    tensor_type<TensorT> Y{};
+    space_to_depth(std::forward<TensorT>(X), Y, blocksize);
     return Y;
 }
 
 template <typename TensorT>
-enable_if_non_view_tensor<TensorT, void>
-depth_to_space(const TensorT& X, TensorT& Y, int blocksize, std::string mode = "DCR") {
+enable_if_tensor<TensorT, void>
+depth_to_space(TensorT&& X, tensor_type<TensorT>& Y, int blocksize, std::string mode = "DCR") {
     if (blocksize <= 0)
         throw shape_error("depth_to_space: blocksize has incorrect value");
     if (X.rank() != 4)
@@ -977,26 +977,28 @@ depth_to_space(const TensorT& X, TensorT& Y, int blocksize, std::string mode = "
     if (c % (blocksize*blocksize) != 0)
         throw shape_error("depth_to_space: blocksize has incorrect value");
 
-    auto x_shape = X.shape();
+    tensor_view_type<TensorT> x_view;
     if (mode == "DCR") {
-        x_shape = x_shape.reshape(n, blocksize, blocksize, c/(blocksize*blocksize), h, w);
-        x_shape = x_shape.transpose(0, 3, 4, 1, 5, 2);
+        x_view = reshape(std::forward<TensorT>(X),
+            {n, blocksize, blocksize, c/(blocksize*blocksize), h, w});
+        x_view = x_view.transpose(0, 3, 4, 1, 5, 2);
     } else {
-        x_shape = x_shape.reshape(n, c/(blocksize*blocksize), blocksize, blocksize, h, w);
-        x_shape = x_shape.transpose(0, 1, 4, 2, 5, 3);
+        x_view = reshape(std::forward<TensorT>(X),
+            {n, c/(blocksize*blocksize), blocksize, blocksize, h, w});
+        x_view = x_view.transpose(0, 1, 4, 2, 5, 3);
     }
 
     Y.resize(n, c/(blocksize*blocksize), h*blocksize, w*blocksize);
     Y.reshape(n, c/(blocksize*blocksize), h, blocksize, w, blocksize);
-    reorder(X, x_shape, Y);
+    reorder(x_view, Y);
     Y.reshape(n, c/(blocksize*blocksize), h*blocksize, w*blocksize);
 }
 
 template <typename TensorT>
-enable_if_non_view_tensor<TensorT>
-depth_to_space(const TensorT& X, int blocksize, std::string mode = "DCR") {
-    TensorT Y;
-    depth_to_space(X, Y, blocksize, mode);
+enable_if_tensor<TensorT>
+inline depth_to_space(TensorT&& X, int blocksize, std::string mode = "DCR") {
+    tensor_type<TensorT> Y{};
+    depth_to_space(std::forward<TensorT>(X), Y, blocksize, mode);
     return Y;
 }
 

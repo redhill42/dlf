@@ -40,7 +40,7 @@ class Shape final {
     Shape(std::vector<dim_t>&& dims, size_t size, size_t offset)
         : m_dims(std::move(dims)), m_size(size), m_offset(offset) {}
 
-    void init(const std::vector<size_t>& extents) noexcept;
+    void init(const std::vector<size_t>& extents, size_t offset = 0) noexcept;
     void init() noexcept;
 
     friend class Shaped;

@@ -720,14 +720,8 @@ tensordot(const LHS& A, const RHS& B, std::vector<int> axes_a, std::vector<int> 
         }
     }
 
-    auto at = tensor_type<LHS>{};
-    reorder(A.transpose(newaxes_a), at);
-    at.reshape(M, K);
-
-    auto bt = tensor_type<RHS>{};
-    reorder(B.transpose(newaxes_b), bt);
-    bt.reshape(P, N);
-
+    auto at = reshape(A.transpose(newaxes_a), {M, K});
+    auto bt = reshape(B.transpose(newaxes_b), {P, N});
     auto res = matmul(at, bt);
     res.reshape(out_dims);
     return res;

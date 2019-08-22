@@ -127,19 +127,31 @@ inline reshape(const TensorT& src, TensorT& dst) {
 }
 
 template <typename TensorT>
-enable_if_tensor<TensorT>
-inline reshape(TensorT&& tensor, const std::vector<int>& new_shape) {
-    tensor_type<TensorT> ret = std::forward<TensorT>(tensor);
-    ret.reshape(new_shape);
-    return ret;
+enable_if_tensor<TensorT, tensor_view_type<TensorT>>
+reshape(const TensorT& X, const std::vector<int>& dims) {
+    Shape shape = X.shape();
+    if (shape.is_contiguous()) {
+        return tensor_view_type<TensorT>(shape.reshape(dims), X);
+    } else {
+        tensor_type<TensorT> Y{};
+        reorder(X, Y);
+        Y.reshape(dims);
+        return Y.view();
+    }
 }
 
 template <typename TensorT>
-enable_if_tensor<TensorT>
-inline flatten(TensorT&& tensor, int axis) {
-    tensor_type<TensorT> ret = std::forward<TensorT>(tensor);
-    ret.flatten(axis);
-    return ret;
+enable_if_tensor<TensorT, tensor_view_type<TensorT>>
+flatten(const TensorT& X, int axis) {
+    Shape shape = X.shape();
+    if (shape.is_contiguous()) {
+        return tensor_view_type<TensorT>(shape.flatten(axis), X);
+    } else {
+        tensor_type<TensorT> Y{};
+        reorder(X, Y);
+        Y.flatten(axis);
+        return Y.view();
+    }
 }
 
 template <typename TensorT>

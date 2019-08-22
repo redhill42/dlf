@@ -149,6 +149,13 @@ public:
     }
 
     /**
+     * Returns a view of this tensor.
+     */
+    DevTensorView<T> view() const {
+        return DevTensorView<T>(shape(), *this);
+    }
+
+    /**
      * Create a scalar.
      */
     static DevTensor scalar(const T& value) {
@@ -210,6 +217,7 @@ class DevTensorView : public Shaped {
     gpgpu::Buffer<T> m_data;
 
 public:
+    DevTensorView() = default;
     DevTensorView(Shape shape, const DevTensor<T>& src);
     DevTensorView(Shape shape, const DevTensorView<T>& src);
 

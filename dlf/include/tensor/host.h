@@ -300,6 +300,13 @@ public: // Attributes
      */
     Tensor<T> operator[](int index);
 
+    /**
+     * Returns a view of this tensor.
+     */
+    TensorView<T> view() const {
+        return TensorView<T>(shape(), *this);
+    }
+
 public: // Transformations
     /**
      * Transform tensor's elements by applying a unary function on tensor's elements.
@@ -366,6 +373,7 @@ class TensorView : public Shaped {
     std::shared_ptr<T> m_alloc_data;
 
 public:
+    TensorView() = default;
     TensorView(Shape shape, const Tensor<T>& src);
     TensorView(Shape shape, const TensorView<T>& src);
 
@@ -928,7 +936,7 @@ inline TensorView<T> Tensor<T>::diagonal(int offset, int axis1, int axis2) const
 
 template <typename T>
 inline TensorView<T> TensorView<T>::diagonal(int offset, int axis1, int axis2) const {
-    return TensorView<T>(shape().diagonal(), *this);
+    return TensorView<T>(shape().diagonal(offset, axis1, axis2), *this);
 }
 
 template <typename T>
