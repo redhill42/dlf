@@ -96,13 +96,11 @@ TEST(ViewTest, AggregateOnView) {
     EXPECT_EQ(dev_Y.read(), Y);
 }
 
-TEST(ViewTest, UpdateView) {
+TEST(ViewTest, UpdateOnView) {
     auto X = Tensor<int>::range({4, 4}, 1);
-    auto Y = X.slice({{1,3}, {1,3}});
     auto dev_X = dev(X);
-    auto dev_Y = dev_X.slice({{1,3}, {1,3}});
 
-    Y *= 2;
+    X[{{1,3}, {1,3}}] *= 2;
     EXPECT_EQ(X, Tensor<int>({4, 4}, {
          1,  2,  3,  4,
          5, 12, 14,  8,
@@ -110,7 +108,7 @@ TEST(ViewTest, UpdateView) {
         13, 14, 15, 16
     }));
 
-    dev_Y *= 2;
+    dev_X[{{1,3}, {1,3}}] *= 2;
     EXPECT_EQ(dev_X.read(), X);
 }
 

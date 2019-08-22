@@ -1719,14 +1719,14 @@ TEST(UniformTest, WhereExpr_GPU) {
 TEST(UniformTest, WhereView_CPU) {
     auto condition = Tensor<bool>({2}, {true, false});
     auto X = Tensor<int>({4, 2}, {1, 2, 3, 4, 5, 6, 7, 8});
-    auto Z = where(condition, X[{{0,2}}], X[{{2,4}}]);
+    auto Z = where(condition[{{0,2}}], X[{{0,2}}], X[{{2,4}}]);
     EXPECT_EQ(Z, Tensor<int>({2, 2}, {1, 6, 3, 8}));
 }
 
 TEST(UniformTest, WhereView_GPU) {
     auto condition = dev(Tensor<bool>({2}, {true, false}));
     auto X = dev(Tensor<int>({4, 2}, {1, 2, 3, 4, 5, 6, 7, 8}));
-    auto Z = where(condition, X[{{0,2}}], X[{{2,4}}]);
+    auto Z = where(condition[{{0,2}}], X[{{0,2}}], X[{{2,4}}]);
     EXPECT_EQ(Z.read(), Tensor<int>({2, 2}, {1, 6, 3, 8}));
 }
 

@@ -567,9 +567,21 @@ inline operator op##=(LHS& lhs, RHS&& rhs) {                                    
 }                                                                                   \
                                                                                     \
 template <typename LHS, typename RHS>                                               \
+std::enable_if_t<is_same_tensor<LHS, RHS>::value, LHS>                              \
+inline operator op##=(LHS&& lhs, RHS&& rhs) {                                       \
+    return std::move(operator op##=(lhs, std::forward<RHS>(rhs)));                  \
+}                                                                                   \
+                                                                                    \
+template <typename LHS, typename RHS>                                               \
 std::enable_if_t<is_tensor<LHS>::value && !is_tensor<RHS>::value, LHS&>             \
 inline operator op##=(LHS& lhs, RHS&& rhs) {                                        \
     return operator op##=(lhs, tensor_scalar<LHS>(std::forward<RHS>(rhs)));         \
+}                                                                                   \
+                                                                                    \
+template <typename LHS, typename RHS>                                               \
+std::enable_if_t<is_tensor<LHS>::value && !is_tensor<RHS>::value, LHS>              \
+inline operator op##=(LHS&& lhs, RHS&& rhs) {                                       \
+    return std::move(operator op##=(lhs, std::forward<RHS>(rhs)));                  \
 }                                                                                   \
                                                                                     \
 template <typename LHS, typename RHS>                                               \
@@ -637,19 +649,22 @@ pow(LHS&& lhs, RHS&& rhs) {
 }
 
 //==-------------------------------------------------------------------------
-// Tensor tenary operations
+// Tensor ternary operations
 //==-------------------------------------------------------------------------
 
-template <typename TensorT>
-std::enable_if_t<is_cpu_tensor<TensorT>::value>
-inline where(const tensor_type<TensorT, bool>& C, const TensorT& X, const TensorT& Y, tensor_type<TensorT>& Z) {
+template <typename TensorC, typename TensorX, typename TensorY>
+std::enable_if_t<
+    is_cpu_tensor<TensorX>::value &&
+    is_exactly_same_tensor<TensorX, TensorY>::value &&
+    is_exactly_same_tensor<TensorC, tensor_type<TensorX, bool>>::value>
+inline where(const TensorC& C, const TensorX& X, const TensorY& Y, tensor_type<TensorX>& Z) {
     auto z_shape = Shape::broadcast(C, X, Y);
     Z.resize(z_shape);
 
     auto c_shape = C.shape().broadcast(z_shape);
     auto x_shape = X.shape().broadcast(z_shape);
     auto y_shape = Y.shape().broadcast(z_shape);
-    using T = tensor_value_type<TensorT>;
+    using T = tensor_value_type<TensorX>;
 
     tbb::parallel_for(tbb::blocked_range<size_t>(0, Z.size(), GRAINSIZE), [&](auto r) {
         auto c_it = const_shaped_iterator<bool>(c_shape, C.data(), r.begin());
@@ -662,9 +677,12 @@ inline where(const tensor_type<TensorT, bool>& C, const TensorT& X, const Tensor
     });
 }
 
-template <typename TensorT>
-std::enable_if_t<is_gpu_tensor<TensorT>::value>
-inline where(const tensor_type<TensorT, bool>& C, const TensorT& X, const TensorT& Y, tensor_type<TensorT>& Z) {
+template <typename TensorC, typename TensorX, typename TensorY>
+std::enable_if_t<
+    is_gpu_tensor<TensorX>::value &&
+    is_exactly_same_tensor<TensorX, TensorY>::value &&
+    is_exactly_same_tensor<TensorC, tensor_type<TensorX, bool>>::value>
+inline where(const TensorC& C, const TensorX& X, const TensorY& Y, tensor_type<TensorX>& Z) {
     auto final_shape = Shape::broadcast(C, X, Y);
     Z.resize(final_shape);
 
@@ -680,9 +698,13 @@ inline where(const tensor_type<TensorT, bool>& C, const TensorT& X, const Tensor
         Z.data(), 0);
 }
 
-template <typename TensorT>
-enable_if_tensor<TensorT> where(const tensor_type<TensorT,bool>& C, const TensorT& X, const TensorT& Y) {
-    tensor_type<TensorT> Z{};
+template <typename TensorC, typename TensorX, typename TensorY>
+std::enable_if_t<
+    is_exactly_same_tensor<TensorX, TensorY>::value &&
+    is_exactly_same_tensor<TensorC, tensor_type<TensorX, bool>>::value,
+    tensor_type<TensorX>>
+where(const TensorC& C, const TensorX& X, const TensorY& Y) {
+    tensor_type<TensorX> Z{};
     where(C, X, Y, Z);
     return Z;
 }
