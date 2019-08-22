@@ -185,6 +185,7 @@ public: // Shape operations
         const std::vector<int>& starts, const std::vector<int>& ends,
         const std::vector<int>& axes, const std::vector<int>& steps) const;
     DevTensorView<T> slice(const std::vector<SliceDim>& dims) const;
+    DevTensorView<T> slice(const char* spec) const;
     DevTensorView<T> diagonal(int offset = 0, int axis1 = -2, int axis2 = -1) const;
 
     template <typename... Args>
@@ -203,6 +204,10 @@ public: // Shape operations
 
     DevTensorView<T> operator[](const std::vector<SliceDim>& dims) const {
         return slice(dims);
+    }
+
+    DevTensorView<T> operator[](const char* spec) const {
+        return slice(spec);
     }
 };
 
@@ -254,6 +259,7 @@ public: // Shape operations
         const std::vector<int>& starts, const std::vector<int>& ends,
         const std::vector<int>& axes, const std::vector<int>& steps) const;
     DevTensorView<T> slice(const std::vector<SliceDim>& dims) const;
+    DevTensorView<T> slice(const char* spec) const;
     DevTensorView<T> diagonal(int offset = 0, int axis1 = -2, int axis2 = -1) const;
 
     template <typename... Args>
@@ -268,6 +274,10 @@ public: // Shape operations
 
     DevTensorView<T> operator[](const std::vector<SliceDim>& dims) const {
         return slice(dims);
+    }
+
+    DevTensorView<T> operator[](const char* spec) const {
+        return slice(spec);
     }
 };
 
@@ -348,8 +358,13 @@ inline DevTensorView<T> DevTensor<T>::slice(
 }
 
 template <typename T>
-DevTensorView<T> DevTensor<T>::slice(const std::vector<SliceDim>& dims) const {
+inline DevTensorView<T> DevTensor<T>::slice(const std::vector<SliceDim>& dims) const {
     return DevTensorView<T>(shape().slice(dims), *this);
+}
+
+template <typename T>
+inline DevTensorView<T> DevTensor<T>::slice(const char* spec) const {
+    return DevTensorView<T>(shape().slice(spec), *this);
 }
 
 template <typename T>
@@ -361,8 +376,13 @@ inline DevTensorView<T> DevTensorView<T>::slice(
 }
 
 template <typename T>
-DevTensorView<T> DevTensorView<T>::slice(const std::vector<SliceDim>& dims) const {
+inline DevTensorView<T> DevTensorView<T>::slice(const std::vector<SliceDim>& dims) const {
     return DevTensorView<T>(shape().slice(dims), *this);
+}
+
+template <typename T>
+inline DevTensorView<T> DevTensorView<T>::slice(const char* spec) const {
+    return DevTensorView<T>(shape().slice(spec), *this);
 }
 
 template <typename T>

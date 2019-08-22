@@ -349,6 +349,7 @@ public: // Shape operations
         const std::vector<int>& starts, const std::vector<int>& ends,
         const std::vector<int>& axes, const std::vector<int>& steps) const;
     TensorView<T> slice(const std::vector<SliceDim>& dims) const;
+    TensorView<T> slice(const char* spec) const;
     TensorView<T> diagonal(int offset = 0, int axis1 = -2, int axis2 = -1) const;
 
     template <typename... Args>
@@ -363,6 +364,10 @@ public: // Shape operations
 
     TensorView<T> operator[](const std::vector<SliceDim>& dims) const {
         return slice(dims);
+    }
+
+    TensorView<T> operator[](const char* spec) const {
+        return slice(spec);
     }
 };
 
@@ -456,6 +461,7 @@ public: // Shape operations
         const std::vector<int>& starts, const std::vector<int>& ends,
         const std::vector<int>& axes, const std::vector<int>& steps) const;
     TensorView<T> slice(const std::vector<SliceDim>& dims) const;
+    TensorView<T> slice(const char* spec) const;
     TensorView<T> diagonal(int offset = 0, int axis1 = -2, int axis2 = -1) const;
 
     template <typename... Args>
@@ -470,6 +476,10 @@ public: // Shape operations
 
     TensorView<T> operator[](const std::vector<SliceDim>& dims) const {
         return slice(dims);
+    }
+
+    TensorView<T> operator[](const char* spec) const {
+        return slice(spec);
     }
 };
 
@@ -917,6 +927,11 @@ inline TensorView<T> Tensor<T>::slice(const std::vector<SliceDim>& dims) const {
 }
 
 template <typename T>
+inline TensorView<T> Tensor<T>::slice(const char* spec) const {
+    return TensorView<T>(shape().slice(spec), *this);
+}
+
+template <typename T>
 inline TensorView<T> TensorView<T>::slice(
     const std::vector<int>& starts, const std::vector<int>& ends,
     const std::vector<int>& axes, const std::vector<int>& steps) const
@@ -927,6 +942,11 @@ inline TensorView<T> TensorView<T>::slice(
 template <typename T>
 inline TensorView<T> TensorView<T>::slice(const std::vector<SliceDim>& dims) const {
     return TensorView<T>(shape().slice(dims), *this);
+}
+
+template <typename T>
+inline TensorView<T> TensorView<T>::slice(const char* spec) const {
+    return TensorView<T>(shape().slice(spec), *this);
 }
 
 template <typename T>

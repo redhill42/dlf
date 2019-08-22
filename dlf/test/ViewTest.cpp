@@ -10,7 +10,7 @@ TEST(ViewTest, TransformTensorToView) {
     auto dev_X = dev(X);
     auto dev_Y = dev(Y);
 
-    transformTo(X, Y.slice({{1,3}, {1,3}}).transpose(), xfn::negate<>());
+    transformTo(X, Y["1:3, 1:3"].transpose(), xfn::negate<>());
     EXPECT_EQ(Y, Tensor<int>({4, 4}, {
          1,  2,  3,  4,
          5, -1, -3,  8,
@@ -18,7 +18,7 @@ TEST(ViewTest, TransformTensorToView) {
         13, 14, 15, 16
     }));
 
-    transformTo(dev_X, dev_Y.slice({{1,3}, {1,3}}).transpose(), xfn::negate<>());
+    transformTo(dev_X, dev_Y["1:3, 1:3"].transpose(), xfn::negate<>());
     EXPECT_EQ(dev_Y.read(), Y);
 }
 
@@ -29,13 +29,13 @@ TEST(ViewTest, TransformViewToTensor) {
     auto dev_X = dev(X);
     auto dev_Y = dev(Y);
 
-    transformTo(X.slice({{1,3}, {1,3}}).transpose(), Y, xfn::negate<>());
+    transformTo(X["1:3, 1:3"].transpose(), Y, xfn::negate<>());
     EXPECT_EQ(Y, Tensor<int>({2, 2}, {
         -6, -10,
         -7, -11
     }));
 
-    transformTo(dev_X.slice({{1,3}, {1,3}}).transpose(), dev_Y, xfn::negate<>());
+    transformTo(dev_X["1:3, 1:3"].transpose(), dev_Y, xfn::negate<>());
     EXPECT_EQ(dev_Y.read(), Y);
 }
 
@@ -46,7 +46,7 @@ TEST(ViewTest, TransformViewToView) {
     auto dev_X = dev(X);
     auto dev_Y = dev(Y);
 
-    transformTo(X.slice({{1,3}, {1,3}}).transpose(), Y.slice({{0,2}, {0,2}}), xfn::negate<>());
+    transformTo(X["1:3, 1:3"].transpose(), Y["0:2, 0:2"], xfn::negate<>());
     EXPECT_EQ(Y, Tensor<int>({4, 4}, {
         -6, -10,  3,  4,
         -7, -11,  7,  8,
@@ -54,45 +54,33 @@ TEST(ViewTest, TransformViewToView) {
         13,  14, 15, 16
     }));
 
-    transformTo(dev_X.slice({{1,3}, {1,3}}).transpose(), dev_Y.slice({{0,2}, {0,2}}), xfn::negate<>());
+    transformTo(dev_X["1:3, 1:3"].transpose(), dev_Y["0:2, 0:2"], xfn::negate<>());
     EXPECT_EQ(dev_Y.read(), Y);
 }
 
 TEST(ViewTest, CalculateOnView) {
     auto X = Tensor<int>::range({4, 4}, 1);
-    auto Y = X.slice({{0,2}, {0,2}}) +
-             X.slice({{0,2}, {2,4}}) +
-             X.slice({{2,4}, {0,2}}) +
-             X.slice({{2,4}, {2,4}});
+    auto Y = X["0:2, 0:2"] + X["0:2, 2:4"] + X["2:4, 0:2"] + X["2:4, 2:4"];
     EXPECT_EQ(Y, Tensor<int>({2, 2}, {
         24, 28,
         40, 44
     }));
 
     auto dev_X = dev(X);
-    auto dev_Y = dev_X.slice({{0,2}, {0,2}}) +
-                 dev_X.slice({{0,2}, {2,4}}) +
-                 dev_X.slice({{2,4}, {0,2}}) +
-                 dev_X.slice({{2,4}, {2,4}});
+    auto dev_Y = dev_X["0:2, 0:2"] + dev_X["0:2, 2:4"] + dev_X["2:4, 0:2"] + dev_X["2:4, 2:4"];
     EXPECT_EQ(dev_Y.read(), Y);
 }
 
 TEST(ViewTest, AggregateOnView) {
     auto X = Tensor<int>::range({4, 4}, 1);
-    auto Y = sum(X.slice({{0,2}, {0,2}}),
-                 X.slice({{0,2}, {2,4}}),
-                 X.slice({{2,4}, {0,2}}),
-                 X.slice({{2,4}, {2,4}}));
+    auto Y = sum(X["0:2, 0:2"], X["0:2, 2:4"], X["2:4, 0:2"], X["2:4, 2:4"]);
     EXPECT_EQ(Y, Tensor<int>({2, 2}, {
         24, 28,
         40, 44
     }));
 
     auto dev_X = dev(X);
-    auto dev_Y = sum(dev_X.slice({{0,2}, {0,2}}),
-                     dev_X.slice({{0,2}, {2,4}}),
-                     dev_X.slice({{2,4}, {0,2}}),
-                     dev_X.slice({{2,4}, {2,4}}));
+    auto dev_Y = sum(dev_X["0:2, 0:2"], dev_X["0:2, 2:4"], dev_X["2:4, 0:2"], dev_X["2:4, 2:4"]);
     EXPECT_EQ(dev_Y.read(), Y);
 }
 
@@ -100,7 +88,7 @@ TEST(ViewTest, UpdateOnView) {
     auto X = Tensor<int>::range({4, 4}, 1);
     auto dev_X = dev(X);
 
-    X[{{1,3}, {1,3}}] *= 2;
+    X["1:3, 1:3"] *= 2;
     EXPECT_EQ(X, Tensor<int>({4, 4}, {
          1,  2,  3,  4,
          5, 12, 14,  8,
@@ -108,7 +96,7 @@ TEST(ViewTest, UpdateOnView) {
         13, 14, 15, 16
     }));
 
-    dev_X[{{1,3}, {1,3}}] *= 2;
+    dev_X["1:3, 1:3"] *= 2;
     EXPECT_EQ(dev_X.read(), X);
 }
 

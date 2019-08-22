@@ -217,6 +217,7 @@ public:
      * Numpy style slice.
      */
     Shape slice(const std::vector<SliceDim>& dims) const;
+    Shape slice(const char* spec) const;
 
     /**
      * Returns the diagonal shape.

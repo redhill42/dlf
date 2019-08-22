@@ -33,7 +33,7 @@ TEST(UniformTest, BroadcastTransform) {
 TEST(UniformTest, BroadcastTransformOnView) {
     auto X = Tensor<float>::range({2, 3, 2, 2}, 1);
     auto Y = Tensor<float>({6, 1, 1}, {4, 5, 6, 1, 2, 3});
-    auto Z = X + Y.slice({{3,6}});
+    auto Z = X + Y["3:6"];
     EXPECT_EQ(Z, Tensor<float>({2, 3, 2, 2}, {
          2,  3,  4,  5,
          7,  8,  9, 10,
@@ -44,7 +44,7 @@ TEST(UniformTest, BroadcastTransformOnView) {
         24, 25, 26, 27
     }));
 
-    auto dev_Z = dev(X) + dev(Y).slice({{3,6}});
+    auto dev_Z = dev(X) + dev(Y)["3:6"];
     EXPECT_EQ(dev_Z.read(), Z);
 }
 
@@ -338,8 +338,8 @@ TYPED_TEST(MatMulTest, Broadcast4DBothSide) {
 
 TYPED_TEST(MatMulTest, Slice) {
     auto X = Tensor<TypeParam>::range({7, 9}, 1);
-    auto A = X[{{0, 3}, {0, 4}}]; // 2x3x4
-    auto B = X[{{3, 7}, {4, 9}}]; // 2x4x5
+    auto A = X["0:3, 0:4"]; // 2x3x4
+    auto B = X["3:7, 4:9"]; // 2x4x5
     auto C = Tensor<TypeParam>({3, 5}, {
          500,  510,  520,  530,  540,
         2138, 2184, 2230, 2276, 2322,
@@ -349,15 +349,15 @@ TYPED_TEST(MatMulTest, Slice) {
     EXPECT_EQ(matmul(A, B), C);
 
     auto dev_X = dev(X);
-    auto dev_A = dev_X[{{0, 3}, {0, 4}}];
-    auto dev_B = dev_X[{{3, 7}, {4, 9}}];
+    auto dev_A = dev_X["0:3, 0:4"]; // 2x3x4
+    auto dev_B = dev_X["3:7, 4:9"]; // 2x4x5
     EXPECT_EQ(matmul(dev_A, dev_B).read(), C);
 }
 
 TYPED_TEST(MatMulTest, BatchedSlice) {
     auto X = Tensor<TypeParam>::range({2, 7, 9}, 1);
-    auto A = X[{{}, {0, 3}, {0, 4}}]; // 2x3x4
-    auto B = X[{{}, {3, 7}, {4, 9}}]; // 2x4x5
+    auto A = X[":, 0:3, 0:4"]; // 2x3x4
+    auto B = X[":, 3:7, 4:9"]; // 2x4x5
     auto C = Tensor<TypeParam>({2, 3, 5}, {
          500,  510,  520,  530,  540,
         2138, 2184, 2230, 2276, 2322,
@@ -371,15 +371,15 @@ TYPED_TEST(MatMulTest, BatchedSlice) {
     EXPECT_EQ(matmul(A, B), C);
 
     auto dev_X = dev(X);
-    auto dev_A = dev_X[{{}, {0, 3}, {0, 4}}];
-    auto dev_B = dev_X[{{}, {3, 7}, {4, 9}}];
+    auto dev_A = dev_X[":, 0:3, 0:4"]; // 2x3x4
+    auto dev_B = dev_X[":, 3:7, 4:9"]; // 2x4x5
     EXPECT_EQ(matmul(dev_A, dev_B).read(), C);
 }
 
 TYPED_TEST(MatMulTest, NonContiguousSlice) {
     auto X = Tensor<TypeParam>::range({2, 8, 8}, 1);
-    auto A = X[{{}, {0,7,2}, {0,7,2}}];
-    auto B = X[{{}, {1,8,2}, {1,8,2}}];
+    auto A = X[":, 0:7:2, 0:7:2"];
+    auto B = X[":, 1:8:2, 1:8:2"];
     auto C = Tensor<TypeParam>({2, 4, 4}, {
          704,   736,   768,   800,
         2880,  3040,  3200,  3360,
@@ -395,15 +395,15 @@ TYPED_TEST(MatMulTest, NonContiguousSlice) {
     EXPECT_EQ(matmul(A, B), C);
 
     auto dev_X = dev(X);
-    auto dev_A = dev_X[{{}, {0,7,2}, {0,7,2}}];
-    auto dev_B = dev_X[{{}, {1,8,2}, {1,8,2}}];
+    auto dev_A = dev_X[":, 0:7:2, 0:7:2"];
+    auto dev_B = dev_X[":, 1:8:2, 1:8:2"];
     EXPECT_EQ(matmul(dev_A, dev_B).read(), C);
 }
 
 TYPED_TEST(MatMulTest, NonContiguousSliceWithBroadcast) {
     auto X = Tensor<TypeParam>::range({2, 8, 8}, 1);
-    auto A = X[{{}, {0,7,2}, {0,7,2}}];
-    auto B = X[{{1,2}, {1,8,2}, {1,8,2}}];
+    auto A = X[":, 0:7:2, 0:7:2"];
+    auto B = X["1, 1:8:2, 1:8:2"];
     auto C = Tensor<TypeParam>({2, 4, 4}, {
          1728,  1760,  1792,  1824,
          8000,  8160,  8320,  8480,
@@ -419,16 +419,16 @@ TYPED_TEST(MatMulTest, NonContiguousSliceWithBroadcast) {
     EXPECT_EQ(matmul(A, B), C);
 
     auto dev_X = dev(X);
-    auto dev_A = dev_X[{{}, {0,7,2}, {0,7,2}}];
-    auto dev_B = dev_X[{{1,2}, {1,8,2}, {1,8,2}}];
+    auto dev_A = dev_X[":, 0:7:2, 0:7:2"];
+    auto dev_B = dev_X["1, 1:8:2, 1:8:2"];
     EXPECT_EQ(matmul(dev_A, dev_B).read(), C);
 }
 
 TYPED_TEST(MatMulTest, NonContiguousNonSquareSlice) {
     auto X = Tensor<TypeParam>::range({2, 6, 8}, 1);
     auto Y = Tensor<TypeParam>::range({2, 8, 10}, 1);
-    auto A = X[{{}, {0,6,2}, {0,8,2}}]; // 2*3*4
-    auto B = Y[{{}, {0,8,2}, {0,10,2}}]; // 2*4*5
+    auto A = X[":, 0:6:2, 0:8:2"];  // 2x3x4
+    auto B = Y[":, 0:8:2, 0:10:2"]; // 2x4x5
     auto C = Tensor<TypeParam>({2, 3, 5}, {
           696,   728,   760,   792,   824,
          2680,  2840,  3000,  3160,  3320,
@@ -443,18 +443,18 @@ TYPED_TEST(MatMulTest, NonContiguousNonSquareSlice) {
 
     auto dev_X = dev(X);
     auto dev_Y = dev(Y);
-    auto dev_A = dev_X[{{}, {0,6,2}, {0,8,2}}];
-    auto dev_B = dev_Y[{{}, {0,8,2}, {0,10,2}}];
+    auto dev_A = dev_X[":, 0:6:2, 0:8:2"];  // 2x3x4
+    auto dev_B = dev_Y[":, 0:8:2, 0:10:2"]; // 2x4x5
     EXPECT_EQ(matmul(dev_A, dev_B).read(), C);
 }
 
 TYPED_TEST(MatMulTest, NonContiguousVector) {
     auto X = Tensor<TypeParam>::range({8}, 1);
     auto Y = Tensor<TypeParam>({1}, {100});
-    EXPECT_EQ(matmul(X[{{0,7,2}}], X[{{1,8,2}}]), Y);
+    EXPECT_EQ(matmul(X["0:7:2"], X["1:8:2"]), Y);
 
     auto dev_X = dev(X);
-    EXPECT_EQ(matmul(dev_X[{{0,7,2}}], dev_X[{{1,8,2}}]).read(), Y);
+    EXPECT_EQ(matmul(dev_X["0:7:2"], dev_X["1:8:2"]).read(), Y);
 }
 
 TYPED_TEST(MatMulTest, Transpose) {
@@ -527,8 +527,8 @@ TYPED_TEST(MatMulTest, MatrixAndVectorView) {
          60, 140, 220,
     });
 
-    EXPECT_EQ(matmul(A, B[{{0,4}, {1,2}}]), C);
-    EXPECT_EQ(matmul(dev(A), dev(B)[{{0,4}, {1,2}}]).read(), C);
+    EXPECT_EQ(matmul(A, B["0:4, 1"]), C);
+    EXPECT_EQ(matmul(dev(A), dev(B)["0:4, 1"]).read(), C);
 }
 
 TYPED_TEST(MatMulTest, BatchedMatrixAndVectorView) {
@@ -539,8 +539,8 @@ TYPED_TEST(MatMulTest, BatchedMatrixAndVectorView) {
         300, 380, 460
     });
 
-    EXPECT_EQ(matmul(A, B[{{0,4}, {1,2}}]), C);
-    EXPECT_EQ(matmul(dev(A), dev(B)[{{0,4}, {1,2}}]).read(), C);
+    EXPECT_EQ(matmul(A, B["0:4, 1"]), C);
+    EXPECT_EQ(matmul(dev(A), dev(B)["0:4, 1"]).read(), C);
 }
 
 TYPED_TEST(MatMulTest, TransposedMaxtrixAndVectorView) {
@@ -550,8 +550,8 @@ TYPED_TEST(MatMulTest, TransposedMaxtrixAndVectorView) {
         140, 160, 180,
     });
 
-    EXPECT_EQ(matmul(A.transpose(), B[{{0,4}, {1,2}}]), C);
-    EXPECT_EQ(matmul(dev(A).transpose(), dev(B)[{{0,4}, {1,2}}]).read(), C);
+    EXPECT_EQ(matmul(A.transpose(), B["0:4, 1"]), C);
+    EXPECT_EQ(matmul(dev(A).transpose(), dev(B)["0:4, 1"]).read(), C);
 }
 
 TYPED_TEST(MatMulTest, BatchedTransposedMaxtrixAndVectorView) {
@@ -562,8 +562,8 @@ TYPED_TEST(MatMulTest, BatchedTransposedMaxtrixAndVectorView) {
         380, 400, 420
     });
 
-    EXPECT_EQ(matmul(A.transpose(0,2,1), B[{{0,4}, {1,2}}]), C);
-    EXPECT_EQ(matmul(dev(A).transpose(0,2,1), dev(B)[{{0,4}, {1,2}}]).read(), C);
+    EXPECT_EQ(matmul(A.transpose(0,2,1), B["0:4, 1"]), C);
+    EXPECT_EQ(matmul(dev(A).transpose(0,2,1), dev(B)["0:4, 1"]).read(), C);
 }
 
 TYPED_TEST(MatMulTest, ScalarBroadcast) {
@@ -1320,8 +1320,8 @@ TEST(UniformTest, Slice) {
         230, 231, 232, 233, 234,
     });
 
-    EXPECT_EQ(X.slice({{2, 5}, {3, 7}, {}}), Y);
-    EXPECT_EQ(dev(X).slice({{2, 5}, {3, 7}, {}}).read(), Y);
+    EXPECT_EQ(X["2:5, 3:7, :"], Y);
+    EXPECT_EQ(dev(X)["2:5, 3:7, :"].read(), Y);
 }
 
 TEST(UniformTest, SliceWithStep) {
@@ -1352,14 +1352,14 @@ TEST(UniformTest, SliceWithStep) {
         215, 216, 217, 218, 219,
     });
 
-    EXPECT_EQ(X.slice({{2, 5}, {3, 7, 2}}), Y2);
-    EXPECT_EQ(dev(X).slice({{2, 5}, {3, 7, 2}}).read(), Y2);
-    EXPECT_EQ(X.slice({{2, 5}, {3, 7, 3}}), Y3);
-    EXPECT_EQ(dev(X).slice({{2, 5}, {3, 7, 3}}).read(), Y3);
-    EXPECT_EQ(X.slice({{2, 5}, {3, 7, 4}}), Y4);
-    EXPECT_EQ(dev(X).slice({{2, 5}, {3, 7, 4}}).read(), Y4);
-    EXPECT_EQ(X.slice({{2, 5}, {3, 7, 5}}), Y4);
-    EXPECT_EQ(dev(X).slice({{2, 5}, {3, 7, 5}}).read(), Y4);
+    EXPECT_EQ(X["2:5, 3:7:2"], Y2);
+    EXPECT_EQ(dev(X)["2:5, 3:7:2"].read(), Y2);
+    EXPECT_EQ(X["2:5, 3:7:3"], Y3);
+    EXPECT_EQ(dev(X)["2:5, 3:7:3"].read(), Y3);
+    EXPECT_EQ(X["2:5, 3:7:4"], Y4);
+    EXPECT_EQ(dev(X)["2:5, 3:7:4"].read(), Y4);
+    EXPECT_EQ(X["2:5, 3:7:5"], Y4);
+    EXPECT_EQ(dev(X)["2:5, 3:7:5"].read(), Y4);
 }
 
 TEST(UniformTest, SliceWithNegativeStep) {
@@ -1406,16 +1406,16 @@ TEST(UniformTest, SliceWithNegativeStep) {
         235, 236, 237, 238, 239,
     });
 
-    EXPECT_EQ(X.slice({{2, 5}, {7, 3, -1}}), Y1);
-    EXPECT_EQ(dev(X).slice({{2, 5}, {7, 3, -1}}).read(), Y1);
-    EXPECT_EQ(X.slice({{2, 5}, {7, 3, -2}}), Y2);
-    EXPECT_EQ(dev(X).slice({{2, 5}, {7, 3, -2}}).read(), Y2);
-    EXPECT_EQ(X.slice({{2, 5}, {7, 3, -3}}), Y3);
-    EXPECT_EQ(dev(X).slice({{2, 5}, {7, 3, -3}}).read(), Y3);
-    EXPECT_EQ(X.slice({{2, 5}, {7, 3, -4}}), Y4);
-    EXPECT_EQ(dev(X).slice({{2, 5}, {7, 3, -4}}).read(), Y4);
-    EXPECT_EQ(X.slice({{2, 5}, {7, 3, -5}}), Y4);
-    EXPECT_EQ(dev(X).slice({{2, 5}, {7, 3, -5}}).read(), Y4);
+    EXPECT_EQ(X["2:5, 7:3:-1"], Y1);
+    EXPECT_EQ(dev(X)["2:5, 7:3:-1"].read(), Y1);
+    EXPECT_EQ(X["2:5, 7:3:-2"], Y2);
+    EXPECT_EQ(dev(X)["2:5, 7:3:-2"].read(), Y2);
+    EXPECT_EQ(X["2:5, 7:3:-3"], Y3);
+    EXPECT_EQ(dev(X)["2:5, 7:3:-3"].read(), Y3);
+    EXPECT_EQ(X["2:5, 7:3:-4"], Y4);
+    EXPECT_EQ(dev(X)["2:5, 7:3:-4"].read(), Y4);
+    EXPECT_EQ(X["2:5, 7:3:-5"], Y4);
+    EXPECT_EQ(dev(X)["2:5, 7:3:-5"].read(), Y4);
 }
 
 TEST(UniformTest, SliceOfSlice) {
@@ -1431,13 +1431,13 @@ TEST(UniformTest, SliceOfSlice) {
         225, 226, 227, 228, 229
     }));
 
-    EXPECT_EQ((X[{{2,5}, {3,7}}][{{1,3}, {1,3}}]), Y);
+    EXPECT_EQ(X["2:5, 3:7"]["1:3, 1:3"], Y);
 
     auto dev_X = dev(X);
     auto dev_Y = DevTensor<float>({2, 2, 5});
     reorder(dev_X, shape, dev_Y);
     EXPECT_EQ(dev_Y.read(), Y);
-    EXPECT_EQ((dev_X[{{2,5}, {3,7}}][{{1,3}, {1,3}}]).read(), Y);
+    EXPECT_EQ(dev_X["2:5, 3:7"]["1:3, 1:3"].read(), Y);
 }
 
 TEST(UniformTest, SliceAndTranspose) {
@@ -1474,13 +1474,13 @@ TEST(UniformTest, SliceAndTranspose) {
         134, 184, 234,
     }));
 
-    EXPECT_EQ(X.slice({{2,5}, {3,7}}).transpose(), Y);
+    EXPECT_EQ(X["2:5, 3:7"].transpose(), Y);
 
     auto dev_X = dev(X);
     auto dev_Y = DevTensor<float>({5, 4, 3});
     reorder(dev_X, shape, dev_Y);
     EXPECT_EQ(dev_Y.read(), Y);
-    EXPECT_EQ(dev_X.slice({{2,5}, {3,7}}).transpose().read(), Y);
+    EXPECT_EQ(dev_X["2:5, 3:7"].transpose().read(), Y);
 }
 
 TEST(UniformTest, CopyNonContiguousSlice) {
@@ -1501,12 +1501,12 @@ TEST(UniformTest, CopyNonContiguousSlice) {
         30, 31, 32, 33, 34, 31, 32, 33, 38, 39
     }));
 
-    reorder(X1[{{}, {}, {1,4}}], X1[{{}, {}, {5,8}}]);
+    reorder(X1[":, :, 1:4"], X1[":, :, 5:8"]);
     EXPECT_EQ(X1, X);
 
     reorder(dev_X, src_shape, dev_X, dst_shape);
     EXPECT_EQ(dev_X.read(), X);
-    reorder(dev_X1[{{}, {}, {1,4}}], dev_X1[{{}, {}, {5,8}}]);
+    reorder(dev_X1[":, :, 1:4"], dev_X1[":, :, 5:8"]);
     EXPECT_EQ(dev_X1.read(), X);
 }
 
@@ -1531,13 +1531,13 @@ TEST(UniformTest, CopyContiguousSlice) {
         30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
     }));
 
-    reorder(X1.slice({{1,2}}), X1.slice({{2,3}}));
+    reorder(X1["1"], X1["2"]);
     EXPECT_EQ(X1, X);
 
     reorder(dev_X, src_shape, dev_X, dst_shape);
     EXPECT_EQ(dev_X.read(), X);
 
-    reorder(dev_X1[{{1,2}}], dev_X1[{{2,3}}]);
+    reorder(dev_X1["1"], dev_X1["2"]);
     EXPECT_EQ(dev_X1.read(), X);
 }
 
@@ -1568,13 +1568,13 @@ TEST(UniformTest, CopyToSlice) {
     reorder(Y, Y.shape(), X, shape);
     EXPECT_EQ(X, R);
 
-    reorder(Y, X1[{{1,3}, {1,3}, {1,3}}]);
+    reorder(Y, X1["1:3, 1:3, 1:3"]);
     EXPECT_EQ(X1, R);
 
     reorder(dev_Y, dev_Y.shape(), dev_X, shape);
     EXPECT_EQ(dev_X.read(), R);
 
-    reorder(dev_Y, dev_X1[{{1,3}, {1,3}, {1,3}}]);
+    reorder(dev_Y, dev_X1["1:3, 1:3, 1:3"]);
     EXPECT_EQ(dev_X1.read(), R);
 }
 
@@ -1608,13 +1608,13 @@ TEST(UniformTest, BroadcastCopyToSlice) {
     reorder(X, src_shape, Y, dst_shape);
     EXPECT_EQ(Y, R);
 
-    reorder(X1.broadcast({1, 3, 5}), Y1.slice({{1,2}}));
+    reorder(X1.broadcast({1, 3, 5}), Y1["1"]);
     EXPECT_EQ(Y1, R);
 
     reorder(dev_X, src_shape, dev_Y, dst_shape);
     EXPECT_EQ(dev_Y.read(), R);
 
-    reorder(dev_X1.broadcast({1,3,5}), dev_Y1.slice({{1,2}}));
+    reorder(dev_X1.broadcast({1,3,5}), dev_Y1["1"]);
     EXPECT_EQ(dev_Y1.read(), R);
 }
 
@@ -1638,7 +1638,7 @@ TEST(UniformTest, BroadcastSlice) {
         1, 2, 1, 2, 5, 6, 5, 6
     }));
 
-    reorder(X.broadcast({2,3,4}).slice({{}, {1,3}, {1,3}}), Y1);
+    reorder(X.broadcast({2,3,4})[":, 1:3, 1:3"], Y1);
     EXPECT_EQ(Y1, Y);
 
     auto dev_X = dev(X);
@@ -1647,7 +1647,7 @@ TEST(UniformTest, BroadcastSlice) {
     EXPECT_EQ(dev_Y.read(), Y);
 
     auto dev_Y1 = DevTensor<float>({2, 2, 2});
-    reorder(dev_X.broadcast({2,3,4}).slice({{}, {1,3}, {1,3}}), dev_Y1);
+    reorder(dev_X.broadcast({2,3,4})[":, 1:3, 1:3"], dev_Y1);
     EXPECT_EQ(dev_Y1.read(), Y);
 }
 
@@ -1676,7 +1676,7 @@ TEST(UniformTest, SliceBroadcast) {
         21, 21, 21, 21
     }));
 
-    reorder(X[{{}, {}, {1,2}}].broadcast({2,3,4}), Y1);
+    reorder(X[":, :, 1"].broadcast({2,3,4}), Y1);
     EXPECT_EQ(Y1, Y);
 
     auto dev_X = dev(X);
@@ -1685,7 +1685,7 @@ TEST(UniformTest, SliceBroadcast) {
     EXPECT_EQ(dev_Y.read(), Y);
 
     auto dev_Y1 = DevTensor<float>({2, 3, 4});
-    reorder(dev_X[{{}, {}, {1,2}}].broadcast({2,3,4}), dev_Y1);
+    reorder(dev_X[":, :, 1"].broadcast({2,3,4}), dev_Y1);
     EXPECT_EQ(dev_Y1.read(), Y);
 }
 
@@ -1838,14 +1838,14 @@ TEST(UniformTest, WhereExpr_GPU) {
 TEST(UniformTest, WhereView_CPU) {
     auto condition = Tensor<bool>({2}, {true, false});
     auto X = Tensor<int>({4, 2}, {1, 2, 3, 4, 5, 6, 7, 8});
-    auto Z = where(condition[{{0,2}}], X[{{0,2}}], X[{{2,4}}]);
+    auto Z = where(condition["0:2"], X["0:2"], X["2:4"]);
     EXPECT_EQ(Z, Tensor<int>({2, 2}, {1, 6, 3, 8}));
 }
 
 TEST(UniformTest, WhereView_GPU) {
     auto condition = dev(Tensor<bool>({2}, {true, false}));
     auto X = dev(Tensor<int>({4, 2}, {1, 2, 3, 4, 5, 6, 7, 8}));
-    auto Z = where(condition[{{0,2}}], X[{{0,2}}], X[{{2,4}}]);
+    auto Z = where(condition["0:2"], X["0:2"], X["2:4"]);
     EXPECT_EQ(Z.read(), Tensor<int>({2, 2}, {1, 6, 3, 8}));
 }
 

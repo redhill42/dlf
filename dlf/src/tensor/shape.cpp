@@ -443,6 +443,11 @@ Shape Shape::slice(const std::vector<SliceDim>& dims) const {
     return slice(starts, ends, axes, steps);
 }
 
+Shape Shape::slice(const char* spec) const {
+    extern std::vector<SliceDim> parse_slice_range(const char* spec, size_t rank);
+    return slice(parse_slice_range(spec, rank()));
+}
+
 Shape Shape::diagonal(int offset, int axis1, int axis2) const {
     if (rank() < 2)
         throw shape_error("diagonal: requires at least rank-2");
