@@ -157,6 +157,14 @@ public:
         return res;
     }
 
+    /**
+     * Fill the tensor with a scalar value.
+     */
+    DevTensor& fill(const T& value) {
+        reorder(scalar(value).broadcast(shape()), *this);
+        return *this;
+    }
+
 public: // Shape operations
     using Shaped::reshape;
     using Shaped::flatten;
@@ -170,7 +178,7 @@ public: // Shape operations
         const std::vector<int>& starts, const std::vector<int>& ends,
         const std::vector<int>& axes, const std::vector<int>& steps) const;
     DevTensorView<T> slice(const std::vector<SliceDim>& dims) const;
-    DevTensorView<T> diagonal() const;
+    DevTensorView<T> diagonal(int offset = 0, int axis1 = -2, int axis2 = -1) const;
 
     template <typename... Args>
     std::enable_if_t<cxx::conjunction<std::is_integral<Args>...>::value, DevTensorView<T>>
@@ -238,7 +246,7 @@ public: // Shape operations
         const std::vector<int>& starts, const std::vector<int>& ends,
         const std::vector<int>& axes, const std::vector<int>& steps) const;
     DevTensorView<T> slice(const std::vector<SliceDim>& dims) const;
-    DevTensorView<T> diagonal() const;
+    DevTensorView<T> diagonal(int offset = 0, int axis1 = -2, int axis2 = -1) const;
 
     template <typename... Args>
     std::enable_if_t<cxx::conjunction<std::is_integral<Args>...>::value, DevTensorView<T>>
@@ -350,13 +358,13 @@ DevTensorView<T> DevTensorView<T>::slice(const std::vector<SliceDim>& dims) cons
 }
 
 template <typename T>
-DevTensorView<T> DevTensor<T>::diagonal() const {
-    return DevTensorView<T>(shape().diagonal(), *this);
+DevTensorView<T> DevTensor<T>::diagonal(int offset, int axis1, int axis2) const {
+    return DevTensorView<T>(shape().diagonal(offset, axis1, axis2), *this);
 }
 
 template <typename T>
-DevTensorView<T> DevTensorView<T>::diagonal() const {
-    return DevTensorView<T>(shape().diagonal(), *this);
+DevTensorView<T> DevTensorView<T>::diagonal(int offset, int axis1, int axis2) const {
+    return DevTensorView<T>(shape().diagonal(offset, axis1, axis2), *this);
 }
 
 template <typename T>

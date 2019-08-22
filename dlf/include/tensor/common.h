@@ -646,4 +646,53 @@ inline cross(const LHS& lhs, const RHS& rhs) {
     return cross(lhs, rhs, xfn::multiplies<>());
 }
 
+//==-------------------------------------------------------------------------
+// Linear algebra operations
+//==-------------------------------------------------------------------------
+
+/**
+ * Return a batched diagonal tensor with a given batched diagonal values.
+ *
+ * Given a diagonal, this operation returns a tensor with the diagonal and
+ * everything else padded with zeros. The diagonal is computed as follows:
+ *
+ * Assume diagonal has k dimensions [I, J, K, ..., N], then the output is
+ * a tensor of rank k+1 with dimensions [I, J, K, ..., N, N] where:
+ *
+ * output[i, j, k, ..., m, n] = 1{m=n} * diagonal[i, j, k, ..., n].
+ */
+template <typename TensorT>
+enable_if_tensor<TensorT> diag(const TensorT& diagonal) {
+    auto dims = diagonal.shape().extents();
+    dims.push_back(dims[dims.size()-1]);
+
+    tensor_type<TensorT> result(Shape{dims});
+    result.fill(0);
+    reorder(diagonal, result.diagonal());
+    return result;
+}
+
+/**
+ * Return the sum along diagonals of the array.
+ *
+ * If X is 2-D, the sum along its diagonal with the given offset is returned.
+ *
+ * If X has more than two dimensions, then the axes specified by axis1 and
+ * axis2 are used to determine the 2-D sub-matrices whose traces are returned.
+ * The shape of the resulting array is the same as that of with axis1 and axis2
+ * removed.
+ *
+ * @param X Input tensor, from which the diagonals are taken.
+ * @param offset Offset of the diagonal from the main diagonal. Can be both
+ *        positive and negative. Defaults to 0.
+ * @param axis1, axis2
+ *        Axes to be used as the first and second axis of the 2-D sub-matrices
+ *        from which the diagonals should be taken. Defaults are the last two
+ *        axes of X.
+ */
+template <typename TensorT>
+enable_if_tensor<TensorT> trace(const TensorT& X, int offset = 0, int axis1 = -2, int axis2 = -1) {
+    return reduce_sum(X.diagonal(offset, axis1, axis2), {-1}, false);
+}
+
 } // namespace dlf

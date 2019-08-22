@@ -219,10 +219,25 @@ public:
     Shape slice(const std::vector<SliceDim>& dims) const;
 
     /**
-     * Returns the diagonal shape. The original shape must have same extent
-     * on all axes.
+     * Returns the diagonal shape.
+     *
+     * This the shape is 2-D, returns the diagonal of the shape with the given
+     * offset. If the shape has more then two dimensions, then the axes
+     * specified by axis1 and axis2 are used to determine the 2-D sub matrix
+     * whose diagonal is returned. The shape of the resulting tensor can be
+     * determined by removing axis1 and axis2 and appending an index to the
+     * right equal to the size of the resulting diagonals.
+     *
+     * @param offset Offsets of the diagonal from the main diagonal. Can be
+     *        positive or negative. Defaults to main diagonal (0).
+     * @param axis1 Axis to be used as the first axis of the 2-D sub-matrix
+     *        from which the diagonals should be taken. Defaults to last of
+     *        second axis (-2).
+     * @param axis2 Axis to be used as the second axis of the 2-D sub-matrix
+     *        from which the diagonals should be taken. Defaults to the last
+     *        axis (-1).
      */
-    Shape diagonal() const;
+    Shape diagonal(int offset = 0, int axis1 = -2, int axis2 = -1) const;
 
     /**
      * Returns the axis that make the give shape to be the channel of this shape.

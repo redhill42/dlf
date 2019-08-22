@@ -440,17 +440,47 @@ Shape Shape::slice(const std::vector<SliceDim>& dims) const {
     return slice(starts, ends, axes, steps);
 }
 
-Shape Shape::diagonal() const {
-    auto extent = this->extent(0);
-    auto stride = this->stride(0);
+Shape Shape::diagonal(int offset, int axis1, int axis2) const {
+    if (rank() < 2)
+        throw shape_error("diagonal: requires at least rank-2");
+    if (axis1 < 0) axis1 += rank();
+    if (axis1 < 0 || axis1 >= rank())
+        throw shape_error("diagonal: invalid axis1 value");
+    if (axis2 < 0) axis2 += rank();
+    if (axis2 < 0 || axis2 >= rank())
+        throw shape_error("diagonal: invalid axis2 value");
+    if (axis1 == axis2)
+        throw shape_error("diagonal: the axis1 and axis2 should not have the same value");
 
-    for (int i = 1; i < rank(); i++) {
-        if (extent != this->extent(i))
-            throw shape_error("diagonal: the input shape must have same extent on all axes");
-        stride += this->stride(i);
+    int k = std::min(extent(axis1), extent(axis2));
+    if ((k -= std::abs(offset)) <= 0) {
+        throw shape_error("diagonal: invalid offset value");
     }
 
-    return Shape({{extent, stride}}, extent, offset());
+    auto s = stride(axis1) + stride(axis2);
+    size_t shape_offset;
+    if (offset >= 0) {
+        shape_offset = this->offset() + offset * stride(axis2);
+    } else {
+        shape_offset = this->offset() - offset * stride(axis1);
+    }
+
+    // transpose axis1 and axis2 to end of shape
+    std::vector<size_t> perm;
+    size_t shape_size = k;
+    for (size_t i = 0; i < rank(); i++) {
+        if (i != axis1 && i != axis2) {
+            perm.push_back(i);
+            shape_size *= extent(i);
+        }
+    }
+    perm.push_back(axis1);
+    perm.push_back(axis2);
+
+    auto dims = transpose(perm).m_dims;
+    dims.erase(dims.end()-2, dims.end());
+    dims.push_back({static_cast<size_t>(k), s});
+    return Shape(std::move(dims), shape_size, shape_offset);
 }
 
 std::ostream& operator<<(std::ostream& os, const Shape& shape) {

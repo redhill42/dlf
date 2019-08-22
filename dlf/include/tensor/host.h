@@ -342,7 +342,7 @@ public: // Shape operations
         const std::vector<int>& starts, const std::vector<int>& ends,
         const std::vector<int>& axes, const std::vector<int>& steps) const;
     TensorView<T> slice(const std::vector<SliceDim>& dims) const;
-    TensorView<T> diagonal() const;
+    TensorView<T> diagonal(int offset = 0, int axis1 = -2, int axis2 = -1) const;
 
     template <typename... Args>
     std::enable_if_t<cxx::conjunction<std::is_integral<Args>...>::value, TensorView<T>>
@@ -448,7 +448,7 @@ public: // Shape operations
         const std::vector<int>& starts, const std::vector<int>& ends,
         const std::vector<int>& axes, const std::vector<int>& steps) const;
     TensorView<T> slice(const std::vector<SliceDim>& dims) const;
-    TensorView<T> diagonal() const;
+    TensorView<T> diagonal(int offset = 0, int axis1 = -2, int axis2 = -1) const;
 
     template <typename... Args>
     std::enable_if_t<cxx::conjunction<std::is_integral<Args>...>::value, TensorView<T>>
@@ -922,12 +922,12 @@ inline TensorView<T> TensorView<T>::slice(const std::vector<SliceDim>& dims) con
 }
 
 template <typename T>
-inline TensorView<T> Tensor<T>::diagonal() const {
-    return TensorView<T>(shape().diagonal(), *this);
+inline TensorView<T> Tensor<T>::diagonal(int offset, int axis1, int axis2) const {
+    return TensorView<T>(shape().diagonal(offset, axis1, axis2), *this);
 }
 
 template <typename T>
-inline TensorView<T> TensorView<T>::diagonal() const {
+inline TensorView<T> TensorView<T>::diagonal(int offset, int axis1, int axis2) const {
     return TensorView<T>(shape().diagonal(), *this);
 }
 
