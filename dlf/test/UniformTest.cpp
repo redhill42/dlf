@@ -635,6 +635,92 @@ TEST(UniformTest, Dot) {
     EXPECT_EQ(dot(dev(A), dev(B)).read(), C);
 }
 
+TEST(UniformTest, TensorDotSimple) {
+    auto A = Tensor<float>::range({3,4,5}, 0);
+    auto B = Tensor<float>::range({4,3,2}, 0);
+    auto C = Tensor<float>({5, 2}, {
+        4400, 4730,
+        4532, 4874,
+        4664, 5018,
+        4796, 5162,
+        4928, 5306
+    });
+
+    EXPECT_EQ(tensordot(A, B, {1,0}, {0,1}), C);
+    EXPECT_EQ(tensordot(dev(A), dev(B), {1,0}, {0,1}).read(), C);
+}
+
+/**
+ * An extended example taking advantage of the overloading of + and *.
+ */
+struct Value {
+    int n; char c;
+    std::string s;
+
+    Value() = default;
+    Value(int n) : n(n) {}
+    Value(char c) : c(c) {}
+    Value(std::string s) : s(std::move(s)) {}
+    Value(const char* s) : s(s) {}
+};
+
+inline Value operator*(const Value& n, const Value& c) {
+    return std::string(n.n, c.c);
+}
+
+inline Value operator+(const Value& a, const Value& b) {
+    return a.s + b.s;
+}
+
+inline Value& operator+=(Value& a, const Value& b) {
+    a.s += b.s;
+    return a;
+}
+
+inline bool operator==(const Value& a, const Value& b) {
+    return a.s == b.s;
+}
+
+inline std::ostream& operator<<(std::ostream& out, const Value& s) {
+    return out << s.s;
+}
+
+TEST(UniformTest, TensorDotExt) {
+    auto a = Tensor<Value>({2, 2, 2}, {1, 2, 3, 4, 5, 6, 7, 8});
+    auto A = Tensor<Value>({2, 2}, {'a', 'b', 'c', 'd'});
+
+    EXPECT_EQ(tensordot(a, A), Tensor<Value>({2}, {
+        "abbcccdddd", "aaaaabbbbbbcccccccdddddddd"
+    }));
+    EXPECT_EQ(tensordot(a, A, 1), Tensor<Value>({2, 2, 2}, {
+        "acc", "bdd",
+        "aaacccc", "bbbdddd",
+        "aaaaacccccc", "bbbbbdddddd",
+        "aaaaaaacccccccc", "bbbbbbbdddddddd"
+    }));
+    EXPECT_EQ(tensordot(a, A, {0}, {1}), Tensor<Value>({2, 2, 2}, {
+        "abbbbb", "cddddd",
+        "aabbbbbb", "ccdddddd",
+        "aaabbbbbbb", "cccddddddd",
+        "aaaabbbbbbbb", "ccccdddddddd"
+    }));
+    EXPECT_EQ(tensordot(a, A, {2}, {1}), Tensor<Value>({2, 2, 2}, {
+        "abb", "cdd",
+        "aaabbbb", "cccdddd",
+        "aaaaabbbbbb", "cccccdddddd",
+        "aaaaaaabbbbbbbb", "cccccccdddddddd"
+    }));
+    EXPECT_EQ(tensordot(a, A, {0,1}, {0,1}), Tensor<Value>({2}, {
+        "abbbcccccddddddd", "aabbbbccccccdddddddd",
+    }));
+    EXPECT_EQ(tensordot(a, A, {2,1}, {1,0}), Tensor<Value>({2}, {
+        "acccbbdddd", "aaaaacccccccbbbbbbdddddddd",
+    }));
+
+    EXPECT_EQ(tensordot(a, A, 0), cross(a, A));
+    EXPECT_EQ(tensordot(a, A, 1), dot(a, A));
+}
+
 TEST(UniformTest, MatPowCPU) {
     auto A = Tensor<int>({2, 2}, {1, 1, 1, 0});
     EXPECT_EQ(matpow(A, 0)(0, 0), 1);
