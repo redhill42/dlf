@@ -1,5 +1,7 @@
 #pragma once
 
+#include <unordered_set>
+
 namespace dlf {
 
 //==-------------------------------------------------------------------------
@@ -213,18 +215,6 @@ slice(const TensorT& X, TensorT& Y, const std::vector<SliceDim>& dims) {
     reorder(X.slice(dims), Y);
 }
 
-template <typename TensorT>
-enable_if_tensor<TensorT, tensor_view_type<TensorT>>
-flip(const TensorT& X, int axis) {
-    auto rank = X.rank();
-    if (axis < 0) axis += rank;
-    if (axis < 0 || axis >= rank)
-        throw shape_error("flip: invalid axis value");
-
-    int dim = X.extent(axis);
-    return X.slice({-1}, {-dim-1}, {axis}, {-1});
-}
-
 /**
  * as_strided creates a view into the tensor given the exact strides and shape.
  * This means it manipulates the internal data structure of tensor and, if done
@@ -253,6 +243,166 @@ inline as_strided(
     const std::vector<size_t>& strides)
 {
     return tensor_view_type<TensorT>(Shape::as_strided(shape, strides), X);
+}
+
+//==-------------------------------------------------------------------------
+// Convenient routines
+//==-------------------------------------------------------------------------
+
+namespace detail {
+template <int = 0>
+void norm_axis(const int rank, int& axis) {
+    if (axis < 0) axis += rank;
+    if (axis < 0 || axis >= rank)
+        throw shape_error("axis has incorrect value");
+}
+
+template <int = 0>
+void norm_axes(const int rank, int& axis1, int& axis2, bool allow_duplicates = false) {
+    if (axis1 < 0) axis1 += rank;
+    if (axis1 < 0 || axis1 >= rank)
+        throw shape_error("axis1 has incorrect value");
+    if (axis2 < 0) axis2 += rank;
+    if (axis2 < 0 || axis2 >= rank)
+        throw shape_error("axis2 has incorrect value");
+    if (!allow_duplicates && axis1 == axis2)
+        throw shape_error("axis1 and axis2 must have different value");
+}
+
+template <int = 0>
+void norm_axes(const int rank, std::vector<int>& axes, bool allow_duplicates = false) {
+    for (auto& k : axes) {
+        norm_axis(rank, k);
+    }
+
+    if (!allow_duplicates) {
+        std::unordered_set<int> unique_axes;
+        for (auto k : axes) {
+            if (unique_axes.find(k) != unique_axes.end())
+                throw shape_error("axes has duplicates");
+            unique_axes.insert(k);
+        }
+    }
+}
+} // namespace detail
+
+/**
+ * Move axes of a tensor to new positions. Other axes remain in their original
+ * order.
+ *
+ * @param X The tensor whose axes should be reordered.
+ * @param source Original positions of the axes to move. These must be unique.
+ * @param destination  Destination positions for each of the original axes.
+ *        These must also be unique.
+ * @return Tensor with moved axes. This tensor is a view of the input tensor.
+ */
+template <typename TensorT>
+enable_if_tensor<TensorT, tensor_view_type<TensorT>>
+moveaxis(const TensorT& X, std::vector<int> source, std::vector<int> destination) {
+    detail::norm_axes(X.rank(), source);
+    detail::norm_axes(X.rank(), destination);
+    if (source.size() != destination.size())
+        throw shape_error("moveaxis: source and destination axes must have the same number of elements");
+
+    std::vector<size_t> order;
+    for (int k = 0; k < X.rank(); ++k) {
+        if (std::find(source.begin(), source.end(), k) == source.end())
+            order.push_back(k);
+    }
+    for (int k = 0; k < X.rank(); ++k) {
+        auto it = std::find(destination.begin(), destination.end(), k);
+        if (it != destination.end())
+            order.insert(order.begin()+k, source[it - destination.begin()]);
+    }
+    return X.transpose(order);
+}
+
+template <typename TensorT>
+enable_if_tensor<TensorT, tensor_view_type<TensorT>>
+moveaxis(const TensorT& X, const int source, const int destination) {
+    return moveaxis(X, std::vector<int>{source}, std::vector<int>{destination});
+}
+
+/**
+ * Interchange two axes of a tensor.
+ *
+ * @param X Input tensor.
+ * @param axis1 First axis
+ * @param axis2 Second axis
+ */
+template <typename TensorT>
+enable_if_tensor<TensorT, tensor_view_type<TensorT>>
+swapaxes(const TensorT& X, int axis1, int axis2) {
+    detail::norm_axes(X.rank(), axis1, axis2);
+    std::vector<size_t> order(X.rank());
+    std::iota(order.begin(), order.end(), 0);
+    order[axis1] = axis2;
+    order[axis2] = axis1;
+    return X.transpose(order);
+}
+
+/**
+ * Reverse the order of elements in a tensor along the given axis.
+ *
+ * The shape of the array is preserved, but the elements are reordered.
+ *
+ * @param X Input tensor.
+ * @param axes Axes along which to flip over. The default, empty axes, will flip
+ *        over all of the axes of the input tensor.
+ */
+template <typename TensorT>
+enable_if_tensor<TensorT, tensor_view_type<TensorT>>
+flip(const TensorT& X, std::vector<int> axes = {}) {
+    // normalize axes
+    if (axes.empty()) {
+        axes.resize(X.rank());
+        std::iota(axes.begin(), axes.end(), 0);
+    } else {
+        detail::norm_axes(X.rank(), axes, true);
+    }
+
+    std::vector<SliceDim> range;
+    for (int k = 0; k < X.rank(); ++k) {
+        if (std::find(axes.begin(), axes.end(), k) != axes.end()) {
+            range.push_back({-1, std::numeric_limits<int>::lowest(), -1});
+        } else {
+            range.push_back({});
+        }
+    }
+    return X.slice(range);
+}
+
+template <typename TensorT>
+enable_if_tensor<TensorT, tensor_view_type<TensorT>>
+inline flip(const TensorT& X, const int axis) {
+    return flip(X, std::vector<int>{axis});
+}
+
+/**
+ * Rotate a tensor by 90 degrees in the plane specified by axes.
+ *
+ * Rotation direction is from the first towards the second axis.
+ *
+ * @param X Tensor of two or more dimensions.
+ * @param axis1, axis2
+ *        The tensor is rotated in the plane defined by the axes.
+ *        Axes must be different.
+ * @param k Number of times the tensor is rotated by 90 degrees.
+ */
+template <typename TensorT>
+enable_if_tensor<TensorT, tensor_view_type<TensorT>>
+inline rot90(const TensorT& X, int k = 1, int axis1 = -2, int axis2 = -1) {
+    detail::norm_axes(X.rank(), axis1, axis2);
+    switch (k % 4) {
+    default: // k == 0
+        return X.view();
+    case 1:
+        return swapaxes(flip(X, axis2), axis1, axis2);
+    case 2:
+        return flip(flip(X, axis1), axis2);
+    case 3:
+        return flip(swapaxes(X, axis1, axis2), axis2);
+    }
 }
 
 //==-------------------------------------------------------------------------
@@ -292,11 +442,7 @@ concat(int axis, const std::vector<const TensorT*>& inputs, tensor_type<TensorT>
         throw std::logic_error("concat: no input tensors");
 
     auto dims = inputs[0]->shape().extents();
-    auto rank = dims.size();
-
-    if (axis < 0) axis += rank;
-    if (axis < 0 || axis >= rank)
-        throw shape_error("concat: invalid axis value");
+    detail::norm_axis(dims.size(), axis);
 
     dims[axis] = 0;
     for (auto t : inputs)
@@ -314,15 +460,11 @@ concat(int axis, const std::vector<const TensorT*>& inputs, tensor_type<TensorT>
 template <typename TensorT, typename... Tensors>
 std::enable_if_t<
     is_tensor<TensorT>::value &&
-    cxx::conjunction<is_same_tensor<TensorT, Tensors>...>::value &&
-    cxx::conjunction<std::is_same<tensor_value_type<TensorT>, tensor_value_type<Tensors>>...>::value,
+    cxx::conjunction<is_exactly_same_tensor<TensorT, Tensors>...>::value,
     tensor_type<TensorT>
 >
 concat(int axis, const TensorT& first, const Tensors&... rest) {
-    auto rank = first.rank();
-    if (axis < 0) axis += rank;
-    if (axis < 0 || axis >= rank)
-        throw shape_error("concat: invalid axis value");
+    detail::norm_axis(first.rank(), axis);
 
     auto dims = first.shape().extents();
     concat_detail::check_input_shapes(axis, dims, rest...);
@@ -336,9 +478,7 @@ template <typename TensorT>
 enable_if_tensor<TensorT, void>
 split(int axis, const TensorT& input, const std::vector<tensor_type<TensorT>*>& outputs) {
     auto rank = input.rank();
-    if (axis < 0) axis += rank;
-    if (axis < 0 || axis >= rank)
-        throw shape_error("split: invalid axis value");
+    detail::norm_axis(rank, axis);
 
     size_t dim_sum = 0;
     for (auto t : outputs) {
@@ -367,10 +507,7 @@ split(int axis, const TensorT& input, const std::vector<tensor_type<TensorT>*>& 
 template <typename TensorT>
 enable_if_tensor<TensorT, std::vector<tensor_view_type<TensorT>>>
 split(const TensorT& input, int axis, const std::vector<size_t>& splits) {
-    auto rank = input.rank();
-    if (axis < 0) axis += rank;
-    if (axis < 0 || axis >= rank)
-        throw shape_error("split: invalid axis value");
+    detail::norm_axis(input.rank(), axis);
     if (std::accumulate(splits.begin(), splits.end(), 0, std::plus<>()) != input.extent(axis))
         throw shape_error("split: invalid splits");
 
@@ -388,11 +525,7 @@ template <typename TensorT>
 enable_if_tensor<TensorT, std::vector<tensor_view_type<TensorT>>>
 split(const TensorT& input, int axis, int n_split) {
     assert(n_split > 0);
-
-    auto rank = input.rank();
-    if (axis < 0) axis += rank;
-    if (axis < 0 || axis >= rank)
-        throw shape_error("split: invalid axis value");
+    detail::norm_axis(input.rank(), axis);
 
     int split_dim = input.extent(axis);
     int chunk_size = split_dim / n_split;

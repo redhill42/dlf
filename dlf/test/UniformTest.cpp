@@ -1807,6 +1807,78 @@ TYPED_TEST(TransposeTest, TransposePerm_GPU) {
     EXPECT_EQ(A.transpose(0, 2, 1).read(), B2);
 }
 
+TEST(UniformTest, MoveAxis) {
+    auto X = Tensor<int>({3, 4, 5, 6});
+    EXPECT_EQ(moveaxis(X, 0, -1).shape(), Shape(4, 5, 6, 3));
+    EXPECT_EQ(moveaxis(X, -1, 0).shape(), Shape(6, 3, 4, 5));
+    EXPECT_EQ(moveaxis(X, {0,-1}, {-1,0}).shape(), Shape({6, 4, 5, 3}));
+    EXPECT_EQ(moveaxis(X, {0,1}, {-1,-2}).shape(), Shape(5, 6, 4, 3));
+    EXPECT_EQ(moveaxis(X, {0,3}, {-1,2}).shape(), Shape(4, 5, 6, 3));
+}
+
+TYPED_TEST(TransposeTest, SwapAxes) {
+    auto A = Tensor<TypeParam>::range({2, 2, 2}, 0);
+    auto B = Tensor<TypeParam>({2, 2, 2}, {0, 4, 2, 6, 1, 5, 3, 7});
+    EXPECT_EQ(swapaxes(A, 0, 2), B);
+    EXPECT_EQ(swapaxes(dev(A), 0, 2).read(), B);
+}
+
+TEST(UniformTest, Flip) {
+    auto A = Tensor<float>::range({2, 2, 2}, 0);
+
+    EXPECT_EQ(flip(A, 0), Tensor<float>({2, 2, 2}, {
+        4, 5, 6, 7, 0, 1, 2, 3
+    }));
+    EXPECT_EQ(flip(A, 1), Tensor<float>({2, 2, 2}, {
+        2, 3, 0, 1, 6, 7, 4, 5
+    }));
+    EXPECT_EQ(flip(A), Tensor<float>({2, 2, 2}, {
+        7, 6, 5, 4, 3, 2, 1, 0
+    }));
+    EXPECT_EQ(flip(A, {0, 2}), Tensor<float>({2, 2, 2}, {
+        5, 4, 7, 6, 1, 0, 3, 2
+    }));
+
+    auto B = Tensor<int>::random({3, 4, 5}, 0, 100);
+    EXPECT_EQ(flip(B, 2), B[":,:,::-1"]);
+}
+
+TEST(UniformTest, Rot90) {
+    auto A = Tensor<float>({2, 2}, {1, 2, 3, 4});
+    EXPECT_EQ(rot90(A), Tensor<float>({2, 2}, {2, 4, 1, 3}));
+    EXPECT_EQ(rot90(A, 2), Tensor<float>({2, 2}, {4, 3, 2, 1}));
+    EXPECT_EQ(rot90(A, 3), Tensor<float>({2, 2}, {3, 1, 4, 2}));
+    EXPECT_EQ(rot90(A, 4), Tensor<float>({2, 2}, {1, 2, 3, 4}));
+
+    auto B = Tensor<float>::range({2, 3, 4}, 0);
+    EXPECT_EQ(rot90(B, 1, 0, 1), Tensor<float>({3, 2, 4}, {
+        8,  9, 10, 11, 20, 21, 22, 23,
+        4,  5,  6,  7, 16, 17, 18, 19,
+        0,  1,  2,  3, 12, 13, 14, 15
+    }));
+    EXPECT_EQ(rot90(B, 1, 1, 0), Tensor<float>({3, 2, 4}, {
+        12, 13, 14, 15,  0,  1,  2,  3,
+        16, 17, 18, 19,  4,  5,  6,  7,
+        20, 21, 22, 23,  8,  9, 10, 11
+    }));
+    EXPECT_EQ(rot90(B, 1, 0, 2), Tensor<float>({4, 3, 2}, {
+         3, 15,  7, 19, 11, 23,  2, 14,  6, 18, 10, 22,
+         1, 13,  5, 17,  9, 21,  0, 12,  4, 16,  8, 20,
+    }));
+    EXPECT_EQ(rot90(B, 1, 2, 0), Tensor<float>({4, 3, 2}, {
+        12,  0, 16,  4, 20,  8, 13,  1, 17,  5, 21,  9,
+        14,  2, 18,  6, 22, 10, 15,  3, 19,  7, 23, 11
+    }));
+    EXPECT_EQ(rot90(B, 1, 1, 2), Tensor<float>({2, 4, 3}, {
+         3,  7, 11,  2,  6, 10,  1,  5,  9,  0,  4,  8,
+        15, 19, 23, 14, 18, 22, 13, 17, 21, 12, 16, 20
+    }));
+    EXPECT_EQ(rot90(B, 1, 2, 1), Tensor<float>({2, 4, 3}, {
+         8,  4,  0,  9,  5,  1, 10,  6,  2, 11,  7,  3,
+        20, 16, 12, 21, 17, 13, 22, 18, 14, 23, 19, 15
+    }));
+}
+
 TEST(UniformTest, Where_CPU) {
     auto condition = Tensor<bool>({2}, {true, false});
     auto X = Tensor<int>({2, 2}, {1, 2, 3, 4});
