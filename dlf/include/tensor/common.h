@@ -560,9 +560,10 @@ inline matmul(const LHS& A, const RHS& B) {
 }
 
 //==-------------------------------------------------------------------------
-// Matrix exponentiation
-//==-------------------------------------------------------------------------
 
+/**
+ * Matrix exponentiation.
+ */
 template <typename TensorT>
 enable_if_tensor<TensorT> matpow(TensorT&& A, long n) {
     if (!A.is_inner_square())
@@ -588,16 +589,46 @@ enable_if_tensor<TensorT> matpow(TensorT&& A, long n) {
 }
 
 //==-------------------------------------------------------------------------
-// Dot product
-//==-------------------------------------------------------------------------
 
+/**
+ * Dot product of two tensors. Specifically,
+ *
+ *  - If both A and B are 1-D tensors, it is inner product of vectors (without
+ *    complex conjugation).
+ *
+ *  - If both A and B are 2-D tensors, it is matrix multiplication, but using
+ *    matmul is preferred.
+ *
+ *  - If either A and B is 0-D (scalar), it is equivalent to multiply and using
+ *    A * B is preferred.
+ *
+ *  - If A is an N-D tensor and B is a 1-D tensor, it is a sum product over the
+ *    last axis of A and B.
+ *
+ *  - If A is an N-D tensor and B is a M-D tensor (where M>=2), it is sum product
+ *    over the last axis of A and the second-to-last axis of B:
+ *
+ *    dot(a, b)[i,j,k,m] = sum(a[i,j,:] * b[k,:,m])
+ *
+ * @tparam LHS
+ * @tparam RHS
+ */
 template <typename LHS, typename RHS>
 std::enable_if_t<is_exactly_same_tensor<LHS, RHS>::value, tensor_type<LHS>>
 dot(const LHS& A, const RHS& B) {
-    if (A.rank() > 2 || B.rank() > 2)
-        throw shape_error("dot: unsupported tensor shape");
-    tensor_type<LHS> C{};
-    matmul(A, B, C);
+    if (A.is_scalar() || B.is_scalar())
+        return A * B;
+    if (A.rank() <= 2 && B.rank() <= 2)
+        return matmul(A, B);
+
+    std::vector<int> pads;
+    for (int i = 0; i < B.rank()-1; i++) {
+        pads.push_back(i + A.rank() - 1);
+    }
+
+    auto vA = tensor_view_type<LHS>(A.shape().unsqueeze(pads), A);
+    auto C = matmul(std::move(vA), B);
+    C.squeeze(-2);
     return C;
 }
 
@@ -618,8 +649,6 @@ inline operator,(const LHS& lhs, const RHS& rhs) {
 }
 } // namespace dot_product
 
-//==-------------------------------------------------------------------------
-// Cross product
 //==-------------------------------------------------------------------------
 
 /**
