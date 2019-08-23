@@ -55,13 +55,7 @@ inline reorder(const Src& src, const Shape& src_shape, Dst& dst, const Shape& ds
                   shaped_iterator<T>(dst_shape, dst.data(), 0));
     }
 }
-} // namespace impl
 
-//==-------------------------------------------------------------------------
-// DevTensor reorder operations
-//==-------------------------------------------------------------------------
-
-namespace detail {
 template <typename Src, typename Dst>
 std::enable_if_t<is_gpu_tensor<Src>::value && is_gpu_tensor<Dst>::value>
 reorder(const Src& src, const Shape& src_shape, Dst& dst, const Shape& dst_shape) {
@@ -81,10 +75,6 @@ reorder(const Src& src, const Shape& src_shape, Dst& dst, const Shape& dst_shape
     }
 }
 } // namespace detail
-
-//==-------------------------------------------------------------------------
-// Uniform reorder operations
-//==-------------------------------------------------------------------------
 
 template <typename TensorT>
 enable_if_non_view_tensor<TensorT, void>
@@ -119,6 +109,47 @@ inline reorder(const TensorT& src, tensor_view_type<TensorT>&& dst) {
 }
 
 //==-------------------------------------------------------------------------
+// Reshape operations
+//==-------------------------------------------------------------------------
+
+namespace detail {
+template <typename TensorT>
+enable_if_tensor<TensorT, tensor_view_type<TensorT>>
+reshape(const TensorT& X, const Shape& new_shape) {
+    if (X.shape().is_contiguous()) {
+        return tensor_view_type<TensorT>(new_shape, X);
+    }
+
+    tensor_type<TensorT> Y{};
+    reorder(X, Y);
+    Y.reshape(new_shape);
+    return Y.view();
+}
+} // namespace detail
+
+template <typename TensorT>
+inline auto reshape(TensorT&& X, const std::vector<int>& dims) {
+    return detail::reshape(std::forward<TensorT>(X), X.shape().reshape(dims));
+}
+
+template <typename TensorT>
+inline auto flatten(TensorT&& X, int axis) {
+    return detail::reshape(std::forward<TensorT>(X), X.shape().flatten(axis));
+}
+
+template <typename TensorT>
+inline auto squeeze(TensorT&& X, const std::vector<int>& axes = {}) {
+    return detail::reshape(std::forward<TensorT>(X), X.shape().squeeze(axes));
+}
+
+template <typename TensorT>
+inline auto unsqueeze(TensorT&& X, const std::vector<int>& axes) {
+    return detail::reshape(std::forward<TensorT>(X), X.shape().unsqueeze(axes));
+}
+
+//==-------------------------------------------------------------------------
+// Reorder operations used by DNN
+//==-------------------------------------------------------------------------
 
 template <typename TensorT>
 enable_if_non_view_tensor<TensorT, void>
@@ -129,52 +160,8 @@ inline reshape(const TensorT& src, TensorT& dst) {
 }
 
 template <typename TensorT>
-enable_if_tensor<TensorT, tensor_view_type<TensorT>>
-reshape(const TensorT& X, const std::vector<int>& dims) {
-    Shape shape = X.shape();
-    if (shape.is_contiguous()) {
-        return tensor_view_type<TensorT>(shape.reshape(dims), X);
-    } else {
-        tensor_type<TensorT> Y{};
-        reorder(X, Y);
-        Y.reshape(dims);
-        return Y.view();
-    }
-}
-
-template <typename TensorT>
-enable_if_tensor<TensorT, tensor_view_type<TensorT>>
-flatten(const TensorT& X, int axis) {
-    Shape shape = X.shape();
-    if (shape.is_contiguous()) {
-        return tensor_view_type<TensorT>(shape.flatten(axis), X);
-    } else {
-        tensor_type<TensorT> Y{};
-        reorder(X, Y);
-        Y.flatten(axis);
-        return Y.view();
-    }
-}
-
-template <typename TensorT>
-enable_if_non_view_tensor<TensorT>
-inline squeeze(TensorT&& tensor, const std::vector<int>& axes = {}) {
-    tensor_type<TensorT> ret = std::forward<TensorT>(tensor);
-    ret.squeeze(axes);
-    return ret;
-}
-
-template <typename TensorT>
-enable_if_non_view_tensor<TensorT>
-inline unsqueeze(TensorT&& tensor, const std::vector<int>& axes) {
-    tensor_type<TensorT> ret = std::forward<TensorT>(tensor);
-    ret.unsqueeze(axes);
-    return ret;
-}
-
-template <typename TensorT>
-inline enable_if_tensor<TensorT, void>
-broadcast(const TensorT& src, TensorT& dst) {
+enable_if_non_view_tensor<TensorT, void>
+inline broadcast(const TensorT& src, TensorT& dst) {
     reorder(src.broadcast(dst.shape()), dst);
 }
 
@@ -200,20 +187,23 @@ void transpose(const DevTensor<T>& src, DevTensor<T>& dst, const std::vector<siz
 }
 
 template <typename TensorT>
-enable_if_tensor<TensorT, void>
-slice(const TensorT& X, TensorT& Y,
-      const std::vector<int>& starts, const std::vector<int>& ends,
-      const std::vector<int>& axes, const std::vector<int>& steps)
+enable_if_non_view_tensor<TensorT, void>
+inline slice(const TensorT& src, TensorT& dst,
+             const std::vector<int>& starts, const std::vector<int>& ends,
+             const std::vector<int>& axes, const std::vector<int>& steps)
 {
-    Shape slice_shape = X.shape().slice(starts, ends, axes, steps);
-    reorder(X, slice_shape, Y);
+    reorder(src.slice(starts, ends, axes, steps), dst);
 }
 
 template <typename TensorT>
-enable_if_tensor<TensorT, void>
-slice(const TensorT& X, TensorT& Y, const std::vector<SliceDim>& dims) {
-    reorder(X.slice(dims), Y);
+enable_if_non_view_tensor<TensorT, void>
+inline slice(const TensorT& src, TensorT& dst, const std::vector<SliceDim>& dims) {
+    reorder(src.slice(dims), dst);
 }
+
+//==-------------------------------------------------------------------------
+// Advanced reorder operations
+//==-------------------------------------------------------------------------
 
 /**
  * as_strided creates a view into the tensor given the exact strides and shape.
@@ -391,7 +381,7 @@ inline flip(const TensorT& X, const int axis) {
  */
 template <typename TensorT>
 enable_if_tensor<TensorT, tensor_view_type<TensorT>>
-inline rot90(const TensorT& X, int k = 1, int axis1 = -2, int axis2 = -1) {
+rot90(const TensorT& X, int k = 1, int axis1 = -2, int axis2 = -1) {
     detail::norm_axes(X.rank(), axis1, axis2);
     switch (k % 4) {
     default: // k == 0
@@ -405,6 +395,8 @@ inline rot90(const TensorT& X, int k = 1, int axis1 = -2, int axis2 = -1) {
     }
 }
 
+//==-------------------------------------------------------------------------
+// Concat and split
 //==-------------------------------------------------------------------------
 
 namespace concat_detail {

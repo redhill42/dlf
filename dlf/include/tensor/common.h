@@ -173,7 +173,7 @@ gemm(const tensor_value_type<TensorT>& alpha, const TensorT& A, const TensorT& B
         std::swap(p, n);
     assert(k == p);
 
-    tensor_type<TensorT> Y = C.broadcast({m, n});
+    auto Y = C.broadcast({m, n}).copy();
     gemm(alpha, A, B, beta, &Y, transA, transB, work);
     return Y;
 }

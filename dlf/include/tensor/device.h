@@ -243,6 +243,11 @@ inline DevTensor<T> dev(const Tensor<T>& host) {
 }
 
 template <typename T>
+inline DevTensor<T> dev(const TensorView<T>& host) {
+    return DevTensor<T>(host.reorder());
+}
+
+template <typename T>
 class DevTensorView : public Shaped {
     Shape m_original_shape;
     gpgpu::Buffer<T> m_data;
@@ -265,16 +270,24 @@ public:
         return m_data;
     }
 
-    operator DevTensor<T>() const {
+    DevTensor<T> copy() const {
         return DevTensor<T>(*this);
     }
 
     DevTensor<T> reorder() const {
-        return DevTensor<T>(*this);
+        if (shape().is_contiguous() && shape().offset() == 0) {
+            return DevTensor<T>(shape(), m_data);
+        } else {
+            return copy();
+        }
+    }
+
+    operator DevTensor<T>() const {
+        return reorder();
     }
 
     Tensor<T> read() const {
-        return DevTensor<T>(*this).read();
+        return reorder().read();
     }
 
     DevTensorView& fill(const T& value);
@@ -391,16 +404,6 @@ DevTensor<T> DevTensor<T>::identity(Shape shape, const T& value) {
     DevTensor res(std::move(shape), T{});
     res.diagonal().fill(value);
     return res;
-}
-
-template <typename T>
-inline DevTensorView<T> squeeze(const DevTensorView<T>& src, const std::vector<int>& axes = {}) {
-    return DevTensorView<T>(src.shape().squeeze(axes), src);
-}
-
-template <typename T>
-inline DevTensorView<T> unsqueeze(const DevTensorView<T>& src, const std::vector<int>& axes) {
-    return DevTensorView<T>(src.shape().unsqueeze(axes), src);
 }
 
 } // namespace dlf

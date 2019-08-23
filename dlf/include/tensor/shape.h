@@ -442,10 +442,19 @@ protected:
         resize(m_shape.reshape(new_shape));
     }
 
+    void reshape(std::initializer_list<int> il) {
+        reshape(std::vector<int>(il));
+    }
+
     template <typename... Args>
     std::enable_if_t<cxx::conjunction<std::is_integral<Args>...>::value>
     reshape(Args... args) {
-        reshape({static_cast<int>(args)...});
+        reshape(std::vector<int>{static_cast<int>(args)...});
+    }
+
+    void reshape(const Shape& new_shape) {
+        auto dims = new_shape.extents();
+        reshape(std::vector<int>{dims.begin(), dims.end()});
     }
 
     /**

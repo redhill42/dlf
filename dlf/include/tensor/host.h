@@ -436,8 +436,30 @@ public: // Attributes
         return data()[shape().offset({static_cast<size_t>(args)...})];
     }
 
-    operator Tensor<T>() const { return Tensor<T>(*this); }
-    Tensor<T> reorder() const { return Tensor<T>(*this); }
+    /**
+     * Returns a deep copy of this view.
+     */
+    Tensor<T> copy() const {
+        return Tensor<T>(*this);
+    }
+
+    /**
+     * Returns a shallow copy of the view if the view is contiguous, otherwise,
+     * a deep copy is returned.
+     */
+    Tensor<T> reorder() const {
+        if (shape().is_contiguous()) {
+            Tensor<T> res(shape(), m_alloc_data);
+            res.m_data = m_data + shape().offset();
+            return res;
+        } else {
+            return copy();
+        }
+    }
+
+    operator Tensor<T>() const {
+        return reorder();
+    }
 
 public: // Operations
     template <typename F>
@@ -564,7 +586,6 @@ Tensor<T>::Tensor(Shape shape, std::shared_ptr<T> data)
 
 template <typename T>
 Tensor<T>::Tensor(const TensorView<T>& view) {
-    init();
     reorder(view, *this);
 }
 
@@ -903,16 +924,6 @@ inline void flat_copy(const Tensor<T>& src, Tensor<T>& dst) {
     if (src.data() != dst.data()) {
         par::copy(src.begin(), src.end(), dst.begin());
     }
-}
-
-template <typename T>
-inline TensorView<T> squeeze(const TensorView<T>& src, const std::vector<int>& axes = {}) {
-    return TensorView<T>(src.shape().squeeze(axes), src);
-}
-
-template <typename T>
-inline TensorView<T> unsqueeze(const TensorView<T>& src, const std::vector<int>& axes) {
-    return TensorView<T>(src.shape().unsqueeze(axes), src);
 }
 
 } // namespace dlf

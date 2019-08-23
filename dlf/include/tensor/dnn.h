@@ -772,6 +772,11 @@ Tensor<T> softmax(Tensor<T>&& X, int axis = 1) {
 }
 
 template <typename T>
+inline Tensor<T> softmax(const TensorView<T>& X, int axis = 1) {
+    return softmax(X.reorder(), axis);
+}
+
+template <typename T>
 DevTensor<T> softmax(const DevTensor<T>& X, int axis = 1) {
     DevTensor<T> Y{};
     softmax(X, Y, axis);
@@ -782,6 +787,11 @@ template <typename T>
 DevTensor<T> softmax(DevTensor<T>&& X, int axis = 1) {
     softmax(X, X, axis);
     return std::move(X);
+}
+
+template <typename T>
+inline DevTensor<T> softmax(const DevTensorView<T>& X, int axis = 1) {
+    return softmax(X.reorder(), axis);
 }
 
 template <typename T>
@@ -848,6 +858,11 @@ Tensor<T> logsoftmax(Tensor<T>&& X, int axis = 1) {
 }
 
 template <typename T>
+inline Tensor<T> logsoftmax(const TensorView<T>& X, int axis = 1) {
+    return logsoftmax(X.reorder(), axis);
+}
+
+template <typename T>
 DevTensor<T> logsoftmax(const DevTensor<T>& X, int axis = 1) {
     DevTensor<T> Y{};
     logsoftmax(X, Y, axis);
@@ -858,6 +873,11 @@ template <typename T>
 DevTensor<T> logsoftmax(DevTensor<T>&& X, int axis = 1) {
     logsoftmax(X, X, axis);
     return std::move(X);
+}
+
+template <typename T>
+inline DevTensor<T> logsoftmax(const DevTensorView<T>& X, int axis = 1) {
+    return logsoftmax(X.reorder(), axis);
 }
 
 template <typename T>
@@ -921,6 +941,11 @@ Tensor<T> hardmax(Tensor<T>&& X, int axis = 1) {
 }
 
 template <typename T>
+inline Tensor<T> hardmax(const TensorView<T>& X, int axis = 1) {
+    return hardmax(X.reorder(), axis);
+}
+
+template <typename T>
 DevTensor<T> hardmax(const DevTensor<T>& X, int axis = 1) {
     DevTensor<T> Y{};
     hardmax(X, Y, axis);
@@ -933,6 +958,22 @@ DevTensor<T> hardmax(DevTensor<T>&& X, int axis = 1) {
     return std::move(X);
 }
 
+template <typename T>
+inline DevTensor<T> hardmax(const DevTensorView<T>& X, int axis = 1) {
+    return hardmax(X.reorder(), axis);
+}
+
+/**
+ * Rearranges blocks of spatial data into depth. More specifically, this op
+ * outputs a copy of the input tensor where values from the height and width
+ * dimensions are moved to the depth dimension.
+ *
+ * @param X Input tensor of [N,C,H,W], where N is the batch axis, C is the
+ *        channel or depth, H is the height and W is the width.
+ * @param Y Output tensor of [N, C*blocksize*blocksize, H/blocksize,
+ *        W/blocksize].
+ * @param blocksize Blocks of [blocksize,blocksize] are moved.
+ */
 template <typename TensorT>
 enable_if_tensor<TensorT, void>
 space_to_depth(TensorT&& X, tensor_type<TensorT>& Y, int blocksize) {
@@ -945,13 +986,12 @@ space_to_depth(TensorT&& X, tensor_type<TensorT>& Y, int blocksize) {
     if (h % blocksize != 0 || w % blocksize != 0)
         throw shape_error("space_to_depth: blocksize has incorrect value");
 
-    auto x_view = reshape(std::forward<TensorT>(X),
-        {n, c, h/blocksize, blocksize, w/blocksize, blocksize});
-    x_view = x_view.transpose(0, 3, 5, 1, 2, 4);
-
     Y.resize(n, c*blocksize*blocksize, h/blocksize, w/blocksize);
     Y.reshape(n, blocksize, blocksize, c, h/blocksize, w/blocksize);
-    reorder(x_view, Y);
+
+    auto x_view = reshape(std::forward<TensorT>(X),
+        {n, c, h/blocksize, blocksize, w/blocksize, blocksize});
+    reorder(x_view.transpose(0, 3, 5, 1, 2, 4), Y);
     Y.reshape(n, c*blocksize*blocksize, h/blocksize, w/blocksize);
 }
 
@@ -963,6 +1003,37 @@ inline space_to_depth(TensorT&& X, int blocksize) {
     return Y;
 }
 
+/**
+ * Rearranges (permutes) data from depth into blocks of spatial data. This is
+ * reverse transformation of space_to_depth. More specifically, this op outputs
+ * a copy of the input tensor where values from the depth dimension are moved
+ * in spatial blocks to the height and width dimensions. By default, mode = DCR.
+ * In the DCR mode, elements along the depth dimension from the input tensor are
+ * rearranged in the following order: depth, column, and then row. The output Y
+ * is computed from the input X as below:
+ *
+ *   n, c, h, w = X.shape
+ *   tmp = reshape(X, (n, blocksize, blocksize, c/blocksize^2, h, w))
+ *   tmp = transpose(tmp, (0, 3, 4, 1, 5, 2))
+ *   Y = reshape(tmp, (b, c/blocksize^2, h*blocksize, w*blocksize))
+ *
+ * In the CRD mode, elements along the depth dimension from the input tensor are
+ * rearranged in the following order: column, row, and the depth. The output Y
+ * is computed from the input X as below:
+ *
+ *   n, c, h, w = X.shape
+ *   tmp = reshape(X, (n, c/blocksize^2, blocksize, blocksize, h, w))
+ *   tmp = transpose(tmp, (0, 1, 4, 2, 5, 3))
+ *   Y = reshape(tmp, (n, c/blocksize^2, h*blocksize, w*blocksize))
+ *
+ * @param X Input tensor of [N,C,H,W], where N is the batch axis, C is the channel
+ *        or depth, H is the height and W is the width.
+ * @param Y Output tensor of [N, C/(blocksize*blocksize), H*blocksize,
+ *        W*blocksize].
+ * @param blocksize Blocks of [blocksize,blocksize] are moved.
+ * @param mode DCR (default) for depth-column-row order re-arrangement. Use CRD
+ *        for column-row-depth order.
+ */
 template <typename TensorT>
 enable_if_tensor<TensorT, void>
 depth_to_space(TensorT&& X, tensor_type<TensorT>& Y, int blocksize, std::string mode = "DCR") {
@@ -977,21 +1048,20 @@ depth_to_space(TensorT&& X, tensor_type<TensorT>& Y, int blocksize, std::string 
     if (c % (blocksize*blocksize) != 0)
         throw shape_error("depth_to_space: blocksize has incorrect value");
 
-    tensor_view_type<TensorT> x_view;
-    if (mode == "DCR") {
-        x_view = reshape(std::forward<TensorT>(X),
-            {n, blocksize, blocksize, c/(blocksize*blocksize), h, w});
-        x_view = x_view.transpose(0, 3, 4, 1, 5, 2);
-    } else {
-        x_view = reshape(std::forward<TensorT>(X),
-            {n, c/(blocksize*blocksize), blocksize, blocksize, h, w});
-        x_view = x_view.transpose(0, 1, 4, 2, 5, 3);
-    }
-
     Y.resize(n, c/(blocksize*blocksize), h*blocksize, w*blocksize);
     Y.reshape(n, c/(blocksize*blocksize), h, blocksize, w, blocksize);
-    reorder(x_view, Y);
-    Y.reshape(n, c/(blocksize*blocksize), h*blocksize, w*blocksize);
+
+    if (mode == "DCR") {
+        auto x_view = reshape(std::forward<TensorT>(X),
+            {n, blocksize, blocksize, c/(blocksize*blocksize), h, w});
+        reorder(x_view.transpose(0, 3, 4, 1, 5, 2), Y);
+        Y.reshape(n, c/(blocksize*blocksize), h*blocksize, w*blocksize);
+    } else {
+        auto x_view = reshape(std::forward<TensorT>(X),
+            {n, c/(blocksize*blocksize), blocksize, blocksize, h, w});
+        reorder(x_view.transpose(0, 1, 4, 2, 5, 3), Y);
+        Y.reshape(n, c/(blocksize*blocksize), h*blocksize, w*blocksize);
+    }
 }
 
 template <typename TensorT>
