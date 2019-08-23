@@ -78,6 +78,7 @@
 
 // DNN includes
 #include "routines/dnn/xcopy.hpp"
+#include "routines/dnn/xfill.hpp"
 #include "routines/dnn/xtransform.hpp"
 #include "routines/dnn/xtransform_b.hpp"
 #include "routines/dnn/xtransform_c.hpp"

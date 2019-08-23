@@ -31,7 +31,7 @@ class Tensor : public Shaped {
     std::shared_ptr<T> m_alloc_data;
 
     void init() {
-        m_alloc_data = std::shared_ptr<T>(new T[size()](), std::default_delete<T[]>());
+        m_alloc_data = std::shared_ptr<T>(new T[size()], std::default_delete<T[]>());
         m_data = m_alloc_data.get();
     }
 
@@ -109,6 +109,14 @@ public: // Constructors
     explicit Tensor(Shape shape);
 
     /**
+     * Construct a tensor with given dimensions and fill with constant value.
+     *
+     * @param shape then tensor shape
+     * @param initial the initial value
+     */
+    explicit Tensor(Shape shape, const T& initial);
+
+    /**
      * Construct a tensor with input iterator denoted by [begin,end).
      *
      * @param shape the tensor dimensions
@@ -116,7 +124,7 @@ public: // Constructors
      * @param end the end of input iterator
      */
     template <typename It>
-    Tensor(Shape shape, It begin, RequireInputIterator<It> end);
+    explicit Tensor(Shape shape, It begin, RequireInputIterator<It> end);
 
     /**
      * Construct a tensor with an initializer list.
@@ -135,7 +143,7 @@ public: // Constructors
      * @param shape the tensor dimensions.
      * @param data the preallocated tensor data.
      */
-    Tensor(Shape shape, std::shared_ptr<T> data);
+    explicit Tensor(Shape shape, std::shared_ptr<T> data);
 
     /**
      * Construct a tensor from a tensor view. The contents of the tensor view is
@@ -164,32 +172,14 @@ public: // Constructors
     static Tensor scalar(const T& value);
 
     /**
-     * Build the tensor with given generator function.
-     *
-     * @param shape the tensor dimension
-     * @param f the generator function
-     * @return the generated tensor
-     */
-    template <typename F>
-    static Tensor build(Shape shape, F f);
-
-    /**
-     * Fill tensor with generator function.
-     *
-     * @param f the generator function
-     */
-    template <typename F>
-    Tensor& generate(F f);
-
-    /**
-     * Create an n by n identity tensor.
+     * Create an identity tensor.
      *
      * @param r the tensor rank
      * @param n the tensor dimension
      * @param value the identity value
      * @return the identity tensor
      */
-    static Tensor identity(size_t r, size_t n, const T& value = T{1});
+    static Tensor identity(Shape shape, const T& value = T{1});
 
     /**
      * Create a tensor with values starting from n.
@@ -198,32 +188,26 @@ public: // Constructors
      * @param n the starting value in the tensor data.
      * @param step the increment step
      */
-    static Tensor range(Shape shape, T n, T step = T{1});
+    static Tensor range(Shape shape, T n = T{0}, T step = T{1});
 
     /**
-     * Create a tensor that fill with constant value.
+     * Fill tensor with generator function.
      *
-     * @param shape the tensor dimension
-     * @param value the constant value
+     * @param f the generator function
      */
-    static Tensor fill(Shape shape, const T& value);
+    template <typename F>
+    Tensor& generate(F f) &;
+
+    template <typename F>
+    Tensor generate(F f) &&;
 
     /**
      * Fill the tensor with a scalar value.
      *
      * @param value the constant scalar value.
      */
-    Tensor& fill(const T& value);
-
-    /**
-     * Create a tensor filled with random data.
-     *
-     * @param shape the tensor dimension
-     * @param low the lowest random value
-     * @param high the highest random value
-     * @return a tensor that filled with random data.
-     */
-    static Tensor random(Shape shape, T low, T high);
+    Tensor& fill(const T& value) &;
+    Tensor fill(const T& value) &&;
 
     /**
      * Fill the tensor with random data.
@@ -231,7 +215,8 @@ public: // Constructors
      * @param low the lowest random value
      * @param high the highest random value
      */
-    Tensor& random(T low, T high);
+    Tensor& random(T low, T high) &;
+    Tensor random(T low, T high) &&;
 
     // Copy and move constructors/assignments.
     Tensor(const Tensor& t);
@@ -342,15 +327,13 @@ public: // Shape operations
     using Shaped::squeeze;
     using Shaped::unsqueeze;
 
-    TensorView<T> broadcast(const Shape& to) const;
-    TensorView<T> transpose(const std::vector<size_t>& perm) const;
-    TensorView<T> transpose() const;
-    TensorView<T> slice(
-        const std::vector<int>& starts, const std::vector<int>& ends,
-        const std::vector<int>& axes, const std::vector<int>& steps) const;
-    TensorView<T> slice(const std::vector<SliceDim>& dims) const;
-    TensorView<T> slice(const char* spec) const;
-    TensorView<T> diagonal(int offset = 0, int axis1 = -2, int axis2 = -1) const;
+    TensorView<T> broadcast(const Shape& to) const {
+        return TensorView<T>(shape().broadcast(to), *this);
+    }
+
+    TensorView<T> transpose(const std::vector<size_t>& perm) const {
+        return TensorView<T>(shape().transpose(perm), *this);
+    }
 
     template <typename... Args>
     std::enable_if_t<cxx::conjunction<std::is_integral<Args>...>::value, TensorView<T>>
@@ -358,16 +341,39 @@ public: // Shape operations
         return transpose({static_cast<size_t>(args)...});
     }
 
+    TensorView<T> transpose() const {
+        return TensorView<T>(shape().transpose(), *this);
+    }
+
     TensorView<T> operator~() const {
         return transpose();
+    }
+
+    TensorView<T> slice(
+        const std::vector<int>& starts, const std::vector<int>& ends,
+        const std::vector<int>& axes, const std::vector<int>& steps) const
+    {
+        return TensorView<T>(shape().slice(starts, ends, axes, steps), *this);
+    }
+
+    TensorView<T> slice(const std::vector<SliceDim>& dims) const {
+        return TensorView<T>(shape().slice(dims), *this);
     }
 
     TensorView<T> operator[](const std::vector<SliceDim>& dims) const {
         return slice(dims);
     }
 
+    TensorView<T> slice(const char* spec) const {
+        return TensorView<T>(shape().slice(spec), *this);
+    }
+
     TensorView<T> operator[](const char* spec) const {
         return slice(spec);
+    }
+
+    TensorView<T> diagonal(int offset = 0, int axis1 = -2, int axis2 = -1) const {
+        return TensorView<T>(shape().diagonal(offset, axis1, axis2), *this);
     }
 };
 
@@ -454,15 +460,13 @@ public: // Operations
     TensorView& random(T low, T high);
 
 public: // Shape operations
-    TensorView<T> broadcast(const Shape& to) const;
-    TensorView<T> transpose(const std::vector<size_t>& perm) const;
-    TensorView<T> transpose() const;
-    TensorView<T> slice(
-        const std::vector<int>& starts, const std::vector<int>& ends,
-        const std::vector<int>& axes, const std::vector<int>& steps) const;
-    TensorView<T> slice(const std::vector<SliceDim>& dims) const;
-    TensorView<T> slice(const char* spec) const;
-    TensorView<T> diagonal(int offset = 0, int axis1 = -2, int axis2 = -1) const;
+    TensorView<T> broadcast(const Shape& to) const {
+        return TensorView<T>(shape().broadcast(to), *this);
+    }
+
+    TensorView<T> transpose(const std::vector<size_t>& perm) const {
+        return TensorView<T>(shape().transpose(perm), *this);
+    }
 
     template <typename... Args>
     std::enable_if_t<cxx::conjunction<std::is_integral<Args>...>::value, TensorView<T>>
@@ -470,16 +474,39 @@ public: // Shape operations
         return transpose({static_cast<size_t>(args)...});
     }
 
+    TensorView<T> transpose() const {
+        return TensorView<T>(shape().transpose(), *this);
+    }
+
     TensorView<T> operator~() const {
         return transpose();
+    }
+
+    TensorView<T> slice(
+        const std::vector<int>& starts, const std::vector<int>& ends,
+        const std::vector<int>& axes, const std::vector<int>& steps) const
+    {
+        return TensorView<T>(shape().slice(starts, ends, axes, steps), *this);
+    }
+
+    TensorView<T> slice(const std::vector<SliceDim>& dims) const {
+        return TensorView<T>(shape().slice(dims), *this);
     }
 
     TensorView<T> operator[](const std::vector<SliceDim>& dims) const {
         return slice(dims);
     }
 
+    TensorView<T> slice(const char* spec) const {
+        return TensorView<T>(shape().slice(spec), *this);
+    }
+
     TensorView<T> operator[](const char* spec) const {
         return slice(spec);
+    }
+
+    TensorView<T> diagonal(int offset = 0, int axis1 = -2, int axis2 = -1) const {
+        return TensorView<T>(shape().diagonal(offset, axis1, axis2), *this);
     }
 };
 
@@ -492,6 +519,14 @@ Tensor<T>::Tensor(Shape shape)
     : Shaped(std::move(shape))
 {
     init();
+}
+
+template <typename T>
+Tensor<T>::Tensor(Shape shape, const T& initial)
+    : Shaped(std::move(shape))
+{
+    init();
+    fill(initial);
 }
 
 template <typename T>
@@ -546,29 +581,9 @@ inline Tensor<T> Tensor<T>::scalar(const T& value) {
 }
 
 template <typename T>
-template <typename F>
-inline Tensor<T>& Tensor<T>::generate(F f) {
-    std::generate(begin(), end(), f);
-    return *this;
-}
-
-template <typename T>
-template <typename F>
-inline Tensor<T> Tensor<T>::build(Shape shape, F f) { // NOLINT(performance-unnecessary-value-param)
-    Tensor<T> res(std::move(shape));
-    res.generate(f);
-    return res;
-}
-
-template <typename T>
-Tensor<T> Tensor<T>::identity(size_t r, size_t n, const T& value) {
-    Tensor<T> res(Shape(std::vector<size_t>(r, n)));
-    size_t k = 1, stride = 0;
-    for (int i = 0; i < r; i++)
-        stride += k, k *= n;
-    T* p = res.data();
-    for (size_t i = 0; i < n; i++, p += stride)
-        *p = value;
+Tensor<T> Tensor<T>::identity(Shape shape, const T& value) {
+    Tensor res(std::move(shape), T{});
+    res.diagonal().fill(value);
     return res;
 }
 
@@ -582,23 +597,29 @@ Tensor<T> Tensor<T>::range(Shape shape, T n, T step) {
 }
 
 template <typename T>
-inline Tensor<T>& Tensor<T>::fill(const T& value) {
+template <typename F>
+inline Tensor<T>& Tensor<T>::generate(F f) & {
+    std::generate(begin(), end(), f);
+    return *this;
+}
+
+template <typename T>
+template <typename F>
+inline Tensor<T> Tensor<T>::generate(F f) && {
+    std::generate(begin(), end(), f);
+    return std::move(*this);
+}
+
+template <typename T>
+inline Tensor<T>& Tensor<T>::fill(const T& value) & {
     std::fill(begin(), end(), value);
     return *this;
 }
 
 template <typename T>
-inline Tensor<T> Tensor<T>::fill(Shape shape, const T& value) {
-    Tensor<T> res(std::move(shape));
-    res.fill(value);
-    return res;
-}
-
-template <typename T>
-inline Tensor<T> Tensor<T>::random(Shape shape, T low, T high) {
-    Tensor<T> res(std::move(shape));
-    res.random(low, high);
-    return res;
+inline Tensor<T> Tensor<T>::fill(const T& value) && {
+    std::fill(begin(), end(), value);
+    return std::move(*this);
 }
 
 template <typename T>
@@ -763,8 +784,13 @@ TensorT& randomize_detail<double>::randomize(TensorT& t, double low, double high
 }
 
 template <typename T>
-inline Tensor<T>& Tensor<T>::random(T low, T high) {
+inline Tensor<T>& Tensor<T>::random(T low, T high) & {
     return randomize_detail<T>::randomize(*this, low, high);
+}
+
+template <typename T>
+inline Tensor<T> Tensor<T>::random(T low, T high) && {
+    return std::move(randomize_detail<T>::randomize(*this, low, high));
 }
 
 template <typename T>
@@ -877,86 +903,6 @@ inline void flat_copy(const Tensor<T>& src, Tensor<T>& dst) {
     if (src.data() != dst.data()) {
         par::copy(src.begin(), src.end(), dst.begin());
     }
-}
-
-//==-------------------------------------------------------------------------
-// Tensor shape operations
-//==-------------------------------------------------------------------------
-
-template <typename T>
-inline TensorView<T> Tensor<T>::broadcast(const Shape& to) const {
-    return TensorView<T>(shape().broadcast(to), *this);
-}
-
-template <typename T>
-inline TensorView<T> TensorView<T>::broadcast(const Shape& to) const {
-    return TensorView<T>(shape().broadcast(to), *this);
-}
-
-template <typename T>
-inline TensorView<T> Tensor<T>::transpose(const std::vector<size_t>& perm) const {
-    return TensorView<T>(shape().transpose(perm), *this);
-}
-
-template <typename T>
-inline TensorView<T> Tensor<T>::transpose() const {
-    return TensorView<T>(shape().transpose(), *this);
-}
-
-template <typename T>
-inline TensorView<T> TensorView<T>::transpose(const std::vector<size_t>& perm) const {
-    return TensorView<T>(shape().transpose(perm), *this);
-}
-
-template <typename T>
-inline TensorView<T> TensorView<T>::transpose() const {
-    return TensorView<T>(shape().transpose(), *this);
-}
-
-template <typename T>
-inline TensorView<T> Tensor<T>::slice(
-    const std::vector<int>& starts, const std::vector<int>& ends,
-    const std::vector<int>& axes, const std::vector<int>& steps) const
-{
-    return TensorView<T>(shape().slice(starts, ends, axes, steps), *this);
-}
-
-template <typename T>
-inline TensorView<T> Tensor<T>::slice(const std::vector<SliceDim>& dims) const {
-    return TensorView<T>(shape().slice(dims), *this);
-}
-
-template <typename T>
-inline TensorView<T> Tensor<T>::slice(const char* spec) const {
-    return TensorView<T>(shape().slice(spec), *this);
-}
-
-template <typename T>
-inline TensorView<T> TensorView<T>::slice(
-    const std::vector<int>& starts, const std::vector<int>& ends,
-    const std::vector<int>& axes, const std::vector<int>& steps) const
-{
-    return TensorView<T>(shape().slice(starts, ends, axes, steps), *this);
-}
-
-template <typename T>
-inline TensorView<T> TensorView<T>::slice(const std::vector<SliceDim>& dims) const {
-    return TensorView<T>(shape().slice(dims), *this);
-}
-
-template <typename T>
-inline TensorView<T> TensorView<T>::slice(const char* spec) const {
-    return TensorView<T>(shape().slice(spec), *this);
-}
-
-template <typename T>
-inline TensorView<T> Tensor<T>::diagonal(int offset, int axis1, int axis2) const {
-    return TensorView<T>(shape().diagonal(offset, axis1, axis2), *this);
-}
-
-template <typename T>
-inline TensorView<T> TensorView<T>::diagonal(int offset, int axis1, int axis2) const {
-    return TensorView<T>(shape().diagonal(offset, axis1, axis2), *this);
 }
 
 template <typename T>

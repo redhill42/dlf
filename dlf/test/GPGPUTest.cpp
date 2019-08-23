@@ -308,8 +308,8 @@ void blas_level1_test(CBlas&& cblas, GBlas&& gblas) {
     } while (a == 0 || a == 1);
     T alpha = static_cast<T>(a);
 
-    auto A = Tensor<int>::random({N}, -N, N).cast<T>();
-    auto B = Tensor<int>::random({N}, -N, N).cast<T>();
+    auto A = Tensor<int>({N}).random(-N, N).cast<T>();
+    auto B = Tensor<int>({N}).random(-N, N).cast<T>();
 
     auto dev_A = DevTensor<T>(A);
     auto dev_B = DevTensor<T>(B);
@@ -323,8 +323,8 @@ void blas_level1_test(CBlas&& cblas, GBlas&& gblas) {
 
 template <typename T, int N = 10, typename CBlas, typename GBlas>
 void blas_level1_r_test(CBlas&& cblas, GBlas&& gblas) {
-    auto A = Tensor<int>::random({N}, -N, N).cast<T>();
-    auto B = Tensor<int>::random({N}, -N, N).cast<T>();
+    auto A = Tensor<int>({N}).random(-N, N).cast<T>();
+    auto B = Tensor<int>({N}).random(-N, N).cast<T>();
 
     auto dev_A = DevTensor<T>(A);
     auto dev_B = DevTensor<T>(B);
@@ -530,8 +530,8 @@ TEST_F(GPGPUTest, ParseDeviceFilter) {
 
 TEST(GPGPU, MultipleThreadContextActivation) {
     constexpr int N = 100;
-    auto A = Tensor<int>::random({N}, -N, N).cast<float>();
-    auto B = Tensor<int>::random({N}, -N, N).cast<float>();
+    auto A = Tensor<int>({N}).random(-N, N).cast<float>();
+    auto B = Tensor<int>({N}).random(-N, N).cast<float>();
 
     auto task = [&]() {
         auto dev_A = DevTensor<float>(A);

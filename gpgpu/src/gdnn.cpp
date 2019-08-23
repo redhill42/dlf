@@ -85,6 +85,73 @@ template void PUBLIC_API copy<double2>(const size_t, const std::vector<size_t>&,
                                        const Queue&, Event*);
 
 template <typename T>
+void fill(const size_t n, Buffer<T>& x_buffer, const size_t x_offset, const T value,
+          const Queue& queue, Event* event)
+{
+    auto routine = Xfill<T>(queue, event);
+    routine.DoFill(n, x_buffer, x_offset, value);
+}
+
+template void PUBLIC_API fill<int16_t>(const size_t, Buffer<int16_t>&, const size_t, const int16_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API fill<int32_t>(const size_t, Buffer<int32_t>&, const size_t, const int32_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API fill<int64_t>(const size_t, Buffer<int64_t>&, const size_t, const int64_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API fill<half>   (const size_t, Buffer<half>&, const size_t, const half,
+                                       const Queue&, Event*);
+template void PUBLIC_API fill<float>  (const size_t, Buffer<float>&, const size_t, const float,
+                                       const Queue&, Event*);
+template void PUBLIC_API fill<double> (const size_t, Buffer<double>&, const size_t, const double,
+                                       const Queue&, Event*);
+template void PUBLIC_API fill<float2> (const size_t, Buffer<float2>&, const size_t, const float2,
+                                       const Queue&, Event*);
+template void PUBLIC_API fill<double2>(const size_t, Buffer<double2>&, const size_t, const double2,
+                                       const Queue&, Event*);
+
+template <typename T>
+void fill(const size_t n, const std::vector<size_t>& dims, const std::vector<size_t>& strides,
+          Buffer<T>& x_buffer, const size_t x_offset, const T value,
+          const Queue& queue, Event* event)
+{
+    auto routine = Xfill<T>(queue, event);
+    routine.DoFillStrided(n, dims, strides, x_buffer, x_offset, value);
+}
+
+template void PUBLIC_API fill<int16_t>(const size_t, const std::vector<size_t>&,
+                                       const std::vector<size_t>&,
+                                       Buffer<int16_t>&, const size_t, const int16_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API fill<int32_t>(const size_t, const std::vector<size_t>&,
+                                       const std::vector<size_t>&,
+                                       Buffer<int32_t>&, const size_t, const int32_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API fill<int64_t>(const size_t, const std::vector<size_t>&,
+                                       const std::vector<size_t>&,
+                                       Buffer<int64_t>&, const size_t, const int64_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API fill<half>   (const size_t, const std::vector<size_t>&,
+                                       const std::vector<size_t>&,
+                                       Buffer<half>&, const size_t, const half,
+                                       const Queue&, Event*);
+template void PUBLIC_API fill<float>  (const size_t, const std::vector<size_t>&,
+                                       const std::vector<size_t>&,
+                                       Buffer<float>&, const size_t, const float,
+                                       const Queue&, Event*);
+template void PUBLIC_API fill<double> (const size_t, const std::vector<size_t>&,
+                                       const std::vector<size_t>&,
+                                       Buffer<double>&, const size_t, const double,
+                                       const Queue&, Event*);
+template void PUBLIC_API fill<float2> (const size_t, const std::vector<size_t>&,
+                                       const std::vector<size_t>&,
+                                       Buffer<float2>&, const size_t, const float2,
+                                       const Queue&, Event*);
+template void PUBLIC_API fill<double2> (const size_t, const std::vector<size_t>&,
+                                       const std::vector<size_t>&,
+                                       Buffer<double2>&, const size_t, const double2,
+                                       const Queue&, Event*);
+
+template <typename T>
 void transform(const std::string& name, const size_t n,
                const Buffer<T>& x_buffer, const size_t x_offset,
                Buffer<T>& y_buffer, const size_t y_offset,

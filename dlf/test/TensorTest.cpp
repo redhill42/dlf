@@ -69,12 +69,6 @@ TEST_F(TensorTest, Init) {
     EXPECT_THAT(t1, ElementsAreArray(data1));
 }
 
-TEST_F(TensorTest, InitializedToZero) {
-    Tensor<int32_t> t({2,2,2});
-    ASSERT_EQ(t.size(), 8);
-    EXPECT_THAT(t, Each(0));
-}
-
 TEST_F(TensorTest, Wrap) {
     int32_t data[2*3*4] = {0};
     auto t = Tensor<int32_t>::wrap({2,3,4}, data);
@@ -709,7 +703,7 @@ TEST_F(TensorTest, Relu) {
     using testing::Ge;
 
     // fill a tensor with random numbers in [-500,500]
-    auto in = Tensor<int32_t>::random({100, 100}, -500, 500);
+    auto in = Tensor<int32_t>({100, 100}).random(-500, 500);
 
     // relu with 100 as max value
     auto out = transform(in, Relu<double>(100.0));

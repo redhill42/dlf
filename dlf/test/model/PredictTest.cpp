@@ -100,7 +100,7 @@ TYPED_TEST(PredictTest, Conv) {
     g.addOutput(x->addOutput("Y"));
 
     auto X = Tensor<float>::range({1, 1, 5, 5}, 0);
-    auto W = Tensor<float>::fill({1, 1, 3, 3}, 1);
+    auto W = Tensor<float>({1, 1, 3, 3}, 1);
 
     Predictor<Context, float> predictor(g);
     predictor.set(0, X);
@@ -220,7 +220,7 @@ TYPED_PERFORMANCE_TEST(PredictTest, Performance) {
 
     Predictor<TypeParam, float> pred(std::move(g));
 
-    auto input = Tensor<float>::random({1, 3, 224, 224}, 0, 1);
+    auto input = Tensor<float>({1, 3, 224, 224}).random(0, 1);
     pred.set(0, input);
     pred.predict(); // warm up
     pred.get(0);

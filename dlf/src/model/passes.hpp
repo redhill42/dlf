@@ -175,7 +175,7 @@ public:
             Bc = conv->B()->initializer().decode<T>();
             assert(Bc.shape() == scale.shape());
         } else {
-            Bc = Tensor<T>::fill(scale.shape(), T{});
+            Bc = Tensor<T>(scale.shape(), T{});
         }
 
         // do computation

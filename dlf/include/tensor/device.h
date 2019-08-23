@@ -22,16 +22,21 @@ class DevTensor : public Shaped {
 public:
     DevTensor() = default;
 
-    explicit DevTensor(Shape shape) : Shaped(std::move(shape)){
+    explicit DevTensor(Shape shape) : Shaped(std::move(shape)) {
         m_data = gpgpu::current::context().createBuffer<T>(size());
     }
 
-    DevTensor(const Tensor<T>& host) : Shaped(host.shape()) {
+    explicit DevTensor(Shape shape, const T& initial) : Shaped(std::move(shape)) {
+        m_data = gpgpu::current::context().createBuffer<T>(size());
+        fill(initial);
+    }
+
+    explicit DevTensor(const Tensor<T>& host) : Shaped(host.shape()) {
         m_data = gpgpu::current::context().createBuffer<T>(size());
         m_data.write(gpgpu::current::queue(), host.data(), host.size());
     }
 
-    DevTensor(Shape shape, gpgpu::Buffer<T> data)
+    explicit DevTensor(Shape shape, gpgpu::Buffer<T> data)
         : Shaped(std::move(shape)), m_data(std::move(data))
     {}
 
@@ -164,13 +169,17 @@ public:
         return res;
     }
 
+public:
     /**
-     * Fill the tensor with a scalar value.
+     * Fill data fill scalar value.
      */
-    DevTensor& fill(const T& value) {
-        reorder(scalar(value).broadcast(shape()), *this);
-        return *this;
-    }
+    DevTensor& fill(const T& value) &;
+    DevTensor fill(const T& value) &&;
+
+    /**
+     * Create an identity tensor.
+     */
+    static DevTensor identity(Shape shape, const T& value = T{1});
 
 public: // Shape operations
     using Shaped::reshape;
@@ -178,15 +187,13 @@ public: // Shape operations
     using Shaped::squeeze;
     using Shaped::unsqueeze;
 
-    DevTensorView<T> broadcast(const Shape& to) const;
-    DevTensorView<T> transpose(const std::vector<size_t>& perm) const;
-    DevTensorView<T> transpose() const;
-    DevTensorView<T> slice(
-        const std::vector<int>& starts, const std::vector<int>& ends,
-        const std::vector<int>& axes, const std::vector<int>& steps) const;
-    DevTensorView<T> slice(const std::vector<SliceDim>& dims) const;
-    DevTensorView<T> slice(const char* spec) const;
-    DevTensorView<T> diagonal(int offset = 0, int axis1 = -2, int axis2 = -1) const;
+    DevTensorView<T> broadcast(const Shape& to) const {
+        return DevTensorView<T>(shape().broadcast(to), *this);
+    }
+
+    DevTensorView<T> transpose(const std::vector<size_t>& perm) const {
+        return DevTensorView<T>(shape().transpose(perm), *this);
+    }
 
     template <typename... Args>
     std::enable_if_t<cxx::conjunction<std::is_integral<Args>...>::value, DevTensorView<T>>
@@ -194,20 +201,39 @@ public: // Shape operations
         return transpose({static_cast<size_t>(args)...});
     }
 
-    /**
-     * We use ~ operator to represent tensor transposition instead of bitwise-not
-     * operator.
-     */
+    DevTensorView<T> transpose() const {
+        return DevTensorView<T>(shape().transpose(), *this);
+    }
+
     DevTensorView<T> operator~() const {
         return transpose();
+    }
+
+    DevTensorView<T> slice(
+        const std::vector<int>& starts, const std::vector<int>& ends,
+        const std::vector<int>& axes, const std::vector<int>& steps) const
+    {
+        return DevTensorView<T>(shape().slice(starts, ends, axes, steps), *this);
+    }
+
+    DevTensorView<T> slice(const std::vector<SliceDim>& dims) const {
+        return DevTensorView<T>(shape().slice(dims), *this);
     }
 
     DevTensorView<T> operator[](const std::vector<SliceDim>& dims) const {
         return slice(dims);
     }
 
+    DevTensorView<T> slice(const char* spec) const {
+        return DevTensorView<T>(shape().slice(spec), *this);
+    }
+
     DevTensorView<T> operator[](const char* spec) const {
         return slice(spec);
+    }
+
+    DevTensorView<T> diagonal(int offset = 0, int axis1 = -2, int axis2 = -1) const {
+        return DevTensorView<T>(shape().diagonal(offset, axis1, axis2), *this);
     }
 };
 
@@ -251,16 +277,16 @@ public:
         return DevTensor<T>(*this).read();
     }
 
+    DevTensorView& fill(const T& value);
+
 public: // Shape operations
-    DevTensorView<T> broadcast(const Shape& to) const;
-    DevTensorView<T> transpose(const std::vector<size_t>& perm) const;
-    DevTensorView<T> transpose() const;
-    DevTensorView<T> slice(
-        const std::vector<int>& starts, const std::vector<int>& ends,
-        const std::vector<int>& axes, const std::vector<int>& steps) const;
-    DevTensorView<T> slice(const std::vector<SliceDim>& dims) const;
-    DevTensorView<T> slice(const char* spec) const;
-    DevTensorView<T> diagonal(int offset = 0, int axis1 = -2, int axis2 = -1) const;
+    DevTensorView<T> broadcast(const Shape& to) const {
+        return DevTensorView<T>(shape().broadcast(to), *this);
+    }
+
+    DevTensorView<T> transpose(const std::vector<size_t>& perm) const {
+        return DevTensorView<T>(shape().transpose(perm), *this);
+    }
 
     template <typename... Args>
     std::enable_if_t<cxx::conjunction<std::is_integral<Args>...>::value, DevTensorView<T>>
@@ -268,16 +294,39 @@ public: // Shape operations
         return transpose({static_cast<size_t>(args)...});
     }
 
+    DevTensorView<T> transpose() const {
+        return DevTensorView<T>(shape().transpose(), *this);
+    }
+
     DevTensorView<T> operator~() const {
         return transpose();
+    }
+
+    DevTensorView<T> slice(
+        const std::vector<int>& starts, const std::vector<int>& ends,
+        const std::vector<int>& axes, const std::vector<int>& steps) const
+    {
+        return DevTensorView<T>(shape().slice(starts, ends, axes, steps), *this);
+    }
+
+    DevTensorView<T> slice(const std::vector<SliceDim>& dims) const {
+        return DevTensorView<T>(shape().slice(dims), *this);
     }
 
     DevTensorView<T> operator[](const std::vector<SliceDim>& dims) const {
         return slice(dims);
     }
 
+    DevTensorView<T> slice(const char* spec) const {
+        return DevTensorView<T>(shape().slice(spec), *this);
+    }
+
     DevTensorView<T> operator[](const char* spec) const {
         return slice(spec);
+    }
+
+    DevTensorView<T> diagonal(int offset = 0, int axis1 = -2, int axis2 = -1) const {
+        return DevTensorView<T>(shape().diagonal(offset, axis1, axis2), *this);
     }
 };
 
@@ -315,84 +364,33 @@ inline void flat_copy(const DevTensor<T>& src, DevTensor<T>& dst) {
     src.copyToAsync(dst);
 }
 
-//==-------------------------------------------------------------------------
-// DevTensor shape operations
-//==-------------------------------------------------------------------------
-
 template <typename T>
-inline DevTensorView<T> DevTensor<T>::broadcast(const Shape& to) const {
-    return DevTensorView<T>(shape().broadcast(to), *this);
+inline DevTensor<T>& DevTensor<T>::fill(const T& value) & {
+    gpgpu::dnn::fill(size(), data(), 0, value);
+    return *this;
 }
 
 template <typename T>
-inline DevTensorView<T> DevTensorView<T>::broadcast(const Shape& to) const {
-    return DevTensorView<T>(shape().broadcast(to), *this);
+inline DevTensor<T> DevTensor<T>::fill(const T& value) && {
+    gpgpu::dnn::fill(size(), data(), 0, value);
+    return std::move(*this);
 }
 
 template <typename T>
-inline DevTensorView<T> DevTensor<T>::transpose(const std::vector<size_t>& perm) const {
-    return DevTensorView<T>(shape().transpose(perm), *this);
+DevTensorView<T>& DevTensorView<T>::fill(const T& value) {
+    if (shape().is_contiguous()) {
+        gpgpu::dnn::fill(size(), data(), shape().offset(), value);
+    } else {
+        gpgpu::dnn::fill(size(), shape().extents(), shape().strides(), data(), shape().offset(), value);
+    }
+    return *this;
 }
 
 template <typename T>
-DevTensorView<T> DevTensor<T>::transpose() const {
-    return DevTensorView<T>(shape().transpose(), *this);
-}
-
-template <typename T>
-inline DevTensorView<T> DevTensorView<T>::transpose(const std::vector<size_t>& perm) const {
-    return DevTensorView<T>(shape().transpose(perm), *this);
-}
-
-template <typename T>
-DevTensorView<T> DevTensorView<T>::transpose() const {
-    return DevTensorView<T>(shape().transpose(), *this);
-}
-
-template <typename T>
-inline DevTensorView<T> DevTensor<T>::slice(
-    const std::vector<int>& starts, const std::vector<int>& ends,
-    const std::vector<int>& axes, const std::vector<int>& steps) const
-{
-    return DevTensorView<T>(shape().slice(starts, ends, axes, steps), *this);
-}
-
-template <typename T>
-inline DevTensorView<T> DevTensor<T>::slice(const std::vector<SliceDim>& dims) const {
-    return DevTensorView<T>(shape().slice(dims), *this);
-}
-
-template <typename T>
-inline DevTensorView<T> DevTensor<T>::slice(const char* spec) const {
-    return DevTensorView<T>(shape().slice(spec), *this);
-}
-
-template <typename T>
-inline DevTensorView<T> DevTensorView<T>::slice(
-    const std::vector<int>& starts, const std::vector<int>& ends,
-    const std::vector<int>& axes, const std::vector<int>& steps) const
-{
-    return DevTensorView<T>(shape().slice(starts, ends, axes, steps), *this);
-}
-
-template <typename T>
-inline DevTensorView<T> DevTensorView<T>::slice(const std::vector<SliceDim>& dims) const {
-    return DevTensorView<T>(shape().slice(dims), *this);
-}
-
-template <typename T>
-inline DevTensorView<T> DevTensorView<T>::slice(const char* spec) const {
-    return DevTensorView<T>(shape().slice(spec), *this);
-}
-
-template <typename T>
-DevTensorView<T> DevTensor<T>::diagonal(int offset, int axis1, int axis2) const {
-    return DevTensorView<T>(shape().diagonal(offset, axis1, axis2), *this);
-}
-
-template <typename T>
-DevTensorView<T> DevTensorView<T>::diagonal(int offset, int axis1, int axis2) const {
-    return DevTensorView<T>(shape().diagonal(offset, axis1, axis2), *this);
+DevTensor<T> DevTensor<T>::identity(Shape shape, const T& value) {
+    DevTensor res(std::move(shape), T{});
+    res.diagonal().fill(value);
+    return res;
 }
 
 template <typename T>

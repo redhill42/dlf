@@ -1839,7 +1839,7 @@ TEST(UniformTest, Flip) {
         5, 4, 7, 6, 1, 0, 3, 2
     }));
 
-    auto B = Tensor<int>::random({3, 4, 5}, 0, 100);
+    auto B = Tensor<int>({3, 4, 5}).random(0, 100);
     EXPECT_EQ(flip(B, 2), B[":,:,::-1"]);
 }
 
@@ -2097,7 +2097,7 @@ TEST(UniformTest, ReduceProd_GPU) {
 }
 
 TEST(UniformTest, ReduceL1) {
-    auto X = Tensor<float>::random({3, 2, 2}, -10, 10);
+    auto X = Tensor<float>({3, 2, 2}).random(-10, 10);
     EXPECT_EQ(reduce_l1(X, {1}), reduce_sum(abs(X), {1}));
 }
 
@@ -2111,7 +2111,7 @@ TEST(UniformTest, ReduceL1_GPU) {
 }
 
 TEST(UniformTest, ReduceL2) {
-    auto X = Tensor<float>::random({3, 2, 2}, -10, 10);
+    auto X = Tensor<float>({3, 2, 2}).random(-10, 10);
     EXPECT_EQ(reduce_l2(X, {1}), sqrt(reduce_sum(X*X, {1})));
 }
 

@@ -572,7 +572,7 @@ enable_if_tensor<TensorT> matpow(TensorT&& A, long n) {
         throw std::logic_error("matpow: negative exponentiation is not supported");
 
     if (n == 0)
-        return Tensor<tensor_value_type<TensorT>>::identity(2, A.extent(0)); // FIXME
+        return tensor_type<TensorT>::identity(A.shape());
     if (n == 1)
         return std::forward<TensorT>(A);
     n--;

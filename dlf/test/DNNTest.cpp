@@ -129,8 +129,8 @@ TYPED_TEST(BinaryTest, Add) {
     using T = TypeParam;
     constexpr size_t N = 20;
 
-    auto A = Tensor<int>::random({N}, -int(N), int(N)).template cast<T>();
-    auto B = Tensor<int>::random({N}, -int(N), int(N)).template cast<T>();
+    auto A = Tensor<int>({N}).random(-int(N), int(N)).template cast<T>();
+    auto B = Tensor<int>({N}).random(-int(N), int(N)).template cast<T>();
     auto C = Tensor<T>({N});
 
     auto dev_A = DevTensor<T>(A);
@@ -147,8 +147,8 @@ TYPED_TEST(BinaryTest, Sub) {
     using T = TypeParam;
     constexpr size_t N = 20;
 
-    auto A = Tensor<int>::random({N}, -int(N), int(N)).template cast<T>();
-    auto B = Tensor<int>::random({N}, -int(N), int(N)).template cast<T>();
+    auto A = Tensor<int>({N}).random(-int(N), int(N)).template cast<T>();
+    auto B = Tensor<int>({N}).random(-int(N), int(N)).template cast<T>();
     auto C = Tensor<T>({N});
 
     auto dev_A = DevTensor<T>(A);
@@ -165,8 +165,8 @@ TYPED_TEST(BinaryTest, Mul) {
     using T = TypeParam;
     constexpr size_t N = 20;
 
-    auto A = Tensor<int>::random({N}, -int(N), int(N)).template cast<T>();
-    auto B = Tensor<int>::random({N}, -int(N), int(N)).template cast<T>();
+    auto A = Tensor<int>({N}).random(-int(N), int(N)).template cast<T>();
+    auto B = Tensor<int>({N}).random(-int(N), int(N)).template cast<T>();
     auto C = Tensor<T>({N});
 
     auto dev_A = DevTensor<T>(A);
@@ -183,8 +183,8 @@ TYPED_TEST(BinaryTest, Div) {
     using T = TypeParam;
     constexpr size_t N = 20;
 
-    auto A = Tensor<int>::random({N}, -int(N), int(N)).template cast<T>();
-    auto B = Tensor<int>::random({N}, -int(N), int(N)).template cast<T>();
+    auto A = Tensor<int>({N}).random(-int(N), int(N)).template cast<T>();
+    auto B = Tensor<int>({N}).random(-int(N), int(N)).template cast<T>();
     auto C = Tensor<T>({N});
 
     auto dev_A = DevTensor<T>(A);
@@ -326,7 +326,7 @@ TEST(ActivationTest, Shrink) {
 TEST(ActivationTest, Relu) {
     constexpr size_t N = 20;
 
-    auto A = Tensor<int>::random({N}, -int(N), int(N)).template cast<float>();
+    auto A = Tensor<int>({N}).random(-int(N), int(N)).template cast<float>();
     auto dev_A = DevTensor<float>(A);
     auto B = transform(A, xfn::relu<float>());
     auto dev_B = transform(dev_A, xfn::relu<float>());
@@ -336,7 +336,7 @@ TEST(ActivationTest, Relu) {
 TEST(ActivationTest, PRelu) {
     constexpr size_t N = 20;
 
-    auto A = Tensor<int>::random({N}, -int(N), int(N)).template cast<float>();
+    auto A = Tensor<int>({N}).random(-int(N), int(N)).template cast<float>();
     auto dev_A = DevTensor<float>(A);
     auto B = transform(A, Tensor<float>::scalar(0.01f), xfn::prelu<float>());
     auto dev_B = transform(dev_A, DevTensor<float>::scalar(0.01f), xfn::prelu<float>());
@@ -370,11 +370,11 @@ TEST(DNNTest, BatchNormalizationCPU) {
     }
 
     {
-        auto x = Tensor<float>::random({2, 3, 4, 5}, -10, 10);
-        auto s = Tensor<float>::random({3}, 0.5, 1.5);
-        auto b = Tensor<float>::random({3}, 0, 1);
-        auto m = Tensor<float>::random({3}, 0, 3);
-        auto v = Tensor<float>::random({3}, 1, 1.5);
+        auto x = Tensor<float>({2, 3, 4, 5}).random(-10, 10);
+        auto s = Tensor<float>({3}).random(0.5, 1.5);
+        auto b = Tensor<float>({3}).random(0, 1);
+        auto m = Tensor<float>({3}).random(0, 3);
+        auto v = Tensor<float>({3}).random(1, 1.5);
         auto t = batch_norm_test(x, s, b, m, v);
 
         auto y = Tensor<float>({2, 3, 4, 5});
@@ -398,11 +398,11 @@ TEST(DNNTest, BatchNormalizationGPU) {
     }
 
     {
-        auto x = Tensor<float>::random({2, 3, 4, 5}, -10, 10);
-        auto s = Tensor<float>::random({3}, 0.5, 1.5);
-        auto b = Tensor<float>::random({3}, 0, 1);
-        auto m = Tensor<float>::random({3}, 0, 3);
-        auto v = Tensor<float>::random({3}, 1, 1.5);
+        auto x = Tensor<float>({2, 3, 4, 5}).random(-10, 10);
+        auto s = Tensor<float>({3}).random(0.5, 1.5);
+        auto b = Tensor<float>({3}).random(0, 1);
+        auto m = Tensor<float>({3}).random(0, 3);
+        auto v = Tensor<float>({3}).random(1, 1.5);
         auto t = batch_norm_test(x, s, b, m, v);
 
         auto y = DevTensor<float>({2, 3, 4, 5});
@@ -412,11 +412,11 @@ TEST(DNNTest, BatchNormalizationGPU) {
 }
 
 PERFORMANCE_TEST(DNNTest, BatchNormalizationPerformanceCPU) {
-    auto x = Tensor<float>::random({2, 3, 1024, 1024}, -10, 10);
-    auto s = Tensor<float>::random({3}, 0.5, 1.5);
-    auto b = Tensor<float>::random({3}, 0, 1);
-    auto m = Tensor<float>::random({3}, 0, 3);
-    auto v = Tensor<float>::random({3}, 1, 1.5);
+    auto x = Tensor<float>({2, 3, 1024, 1024}).random(-10, 10);
+    auto s = Tensor<float>({3}).random(0.5, 1.5);
+    auto b = Tensor<float>({3}).random(0, 1);
+    auto m = Tensor<float>({3}).random(0, 3);
+    auto v = Tensor<float>({3}).random(1, 1.5);
     auto y = Tensor<float>({2, 3, 1024, 1024});
 
     for (int i = 0; i < 3; i++) {
@@ -429,11 +429,11 @@ PERFORMANCE_TEST(DNNTest, BatchNormalizationPerformanceCPU) {
 }
 
 PERFORMANCE_TEST(DNNTest, BatchNormalizationPerformanceGPU) {
-    auto x = dev(Tensor<float>::random({2, 3, 1024, 1024}, -10, 10));
-    auto s = dev(Tensor<float>::random({3}, 0.5, 1.5));
-    auto b = dev(Tensor<float>::random({3}, 0, 1));
-    auto m = dev(Tensor<float>::random({3}, 0, 3));
-    auto v = dev(Tensor<float>::random({3}, 1, 1.5));
+    auto x = dev(Tensor<float>({2, 3, 1024, 1024}).random(-10, 10));
+    auto s = dev(Tensor<float>({3}).random(0.5, 1.5));
+    auto b = dev(Tensor<float>({3}).random(0, 1));
+    auto m = dev(Tensor<float>({3}).random(0, 3));
+    auto v = dev(Tensor<float>({3}).random(1, 1.5));
     auto y = dev(Tensor<float>({2, 3, 1024, 1024}));
 
     for (int i = 0; i < 3; i++)
@@ -491,7 +491,7 @@ TEST(DNNTest, LRN) {
 
 TEST(Conv2D, basic_conv_with_padding) {
     auto X = Tensor<float>::range({1, 1, 5, 5}, 0);
-    auto W = Tensor<float>::fill({1, 1, 3, 3}, 1);
+    auto W = Tensor<float>({1, 1, 3, 3}, 1);
     auto Y = Tensor<float>({1, 1, 5, 5});
     auto filter = dnn::Filter2D(X.shape(), W.shape()).pads(1, 1);
     auto R = Tensor<float>({1, 1, 5, 5}, {
@@ -512,7 +512,7 @@ TEST(Conv2D, basic_conv_with_padding) {
 
 TEST(Conv2D, basic_conv_without_padding) {
     auto X = Tensor<float>::range({1, 1, 5, 5}, 0);
-    auto W = Tensor<float>::fill({1, 1, 3, 3}, 1);
+    auto W = Tensor<float>({1, 1, 3, 3}, 1);
     auto Y = Tensor<float>({1, 1, 3, 3});
     auto filter = dnn::Filter2D(X.shape(), W.shape());
     auto R = Tensor<float>({1, 1, 3, 3}, {
@@ -531,7 +531,7 @@ TEST(Conv2D, basic_conv_without_padding) {
 
 TEST(Conv2D, conv_with_strides_padding) {
     auto X = Tensor<float>::range({1, 1, 7, 5}, 0);
-    auto W = Tensor<float>::fill({1, 1, 3, 3}, 1);
+    auto W = Tensor<float>({1, 1, 3, 3}, 1);
     auto Y = Tensor<float>({1, 1, 4, 3});
     auto filter = dnn::Filter2D(X.shape(), W.shape()).pads(1, 1).strides(2, 2);
     auto R = Tensor<float>({1, 1, 4, 3}, {
@@ -551,7 +551,7 @@ TEST(Conv2D, conv_with_strides_padding) {
 
 TEST(Conv2D, conv_with_strides_no_padding) {
     auto X = Tensor<float>::range({1, 1, 7, 5}, 0);
-    auto W = Tensor<float>::fill({1, 1, 3, 3}, 1);
+    auto W = Tensor<float>({1, 1, 3, 3}, 1);
     auto Y = Tensor<float>({1, 1, 3, 2});
     auto filter = dnn::Filter2D(X.shape(), W.shape()).strides(2, 2);
     auto R = Tensor<float>({1, 1, 3, 2}, {
@@ -570,7 +570,7 @@ TEST(Conv2D, conv_with_strides_no_padding) {
 
 TEST(Conv2D, conv_with_strides_and_asymmetric_padding) {
     auto X = Tensor<float>::range({1, 1, 7, 5}, 0);
-    auto W = Tensor<float>::fill({1, 1, 3, 3}, 1);
+    auto W = Tensor<float>({1, 1, 3, 3}, 1);
     auto Y = Tensor<float>({1, 1, 4, 2});
     auto filter = dnn::Filter2D(X.shape(), W.shape()).pads(1, 0).strides(2, 2);
     auto R = Tensor<float>({1, 1, 4, 2}, {
@@ -590,7 +590,7 @@ TEST(Conv2D, conv_with_strides_and_asymmetric_padding) {
 
 TEST(Conv2D, conv_with_multiple_channels) {
     auto X = Tensor<float>::range({2, 3, 5, 5}, 0);
-    auto W = Tensor<float>::fill({8, 3, 3, 3}, 1);
+    auto W = Tensor<float>({8, 3, 3, 3}, 1);
     auto Y = Tensor<float>({2, 8, 5, 5});
     auto filter = dnn::Filter2D(X.shape(), W.shape()).pads(1, 1);
     auto dev_Y = DevTensor<float>({2, 8, 5, 5});
@@ -602,7 +602,7 @@ TEST(Conv2D, conv_with_multiple_channels) {
 
 TEST(Conv2D, conv_with_strange_padding) {
     auto X = Tensor<float>::range({2, 3, 10, 10}, 0);
-    auto W = Tensor<float>::fill({8, 3, 3, 3}, 1);
+    auto W = Tensor<float>({8, 3, 3, 3}, 1);
     auto filter = dnn::Filter2D(X.shape(), W.shape()).pads(1, 2, 2, 1);
     auto Y = Tensor<float>(filter.output_shape());
     auto dev_Y = DevTensor<float>(Y.shape());
