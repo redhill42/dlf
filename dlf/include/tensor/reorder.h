@@ -9,11 +9,32 @@ namespace dlf {
 //==-------------------------------------------------------------------------
 
 namespace detail {
+#if HAS_MKL
+template <typename Src, typename Dst>
+std::enable_if_t<
+    is_cpu_tensor<Src>::value && is_cpu_tensor<Dst>::value,
+    bool>
+inline reorder_transpose(const Src& src, const Shape& src_shape, Dst& dst, const Shape& dst_shape) {
+    if (src_shape.rank() != 2)
+        return false;
+    return cblas::omatcopy2(
+        'R', 'T', src_shape.extent(1), src_shape.extent(0),
+        tensor_value_type<Src>{1},
+        src.data() + src_shape.offset(), src_shape.stride(1), src_shape.stride(0),
+        dst.data() + dst_shape.offset(), dst_shape.stride(0), dst_shape.stride(1)) ;
+}
+#endif
+
 template <typename Src, typename Dst>
 std::enable_if_t<is_cpu_tensor<Src>::value && is_cpu_tensor<Dst>::value>
-inline reorder(const Src& src, const Shape& src_shape, Dst& dst, const Shape& dst_shape) {
+reorder(const Src& src, const Shape& src_shape, Dst& dst, const Shape& dst_shape) {
     assert(src_shape == dst_shape);
     using T = tensor_value_type<Src>;
+
+#if HAS_MKL
+    if (reorder_transpose(src, src_shape, dst, dst_shape))
+        return;
+#endif
 
     if (dst_shape.is_contiguous()) {
         if (src.original_shape().size() == 1) {
@@ -57,12 +78,32 @@ inline reorder(const Src& src, const Shape& src_shape, Dst& dst, const Shape& ds
 }
 
 template <typename Src, typename Dst>
+std::enable_if_t<is_gpu_tensor<Src>::value && is_gpu_tensor<Dst>::value, bool>
+reorder_transpose(const Src& src, const Shape& src_shape, Dst& dst, const Shape& dst_shape) {
+    if (src_shape.rank() != 2)
+        return false;
+    if (src_shape.stride(0) != 1 || dst_shape.stride(1) != 1)
+        return false;
+    gpgpu::blas::omatcopy(gpgpu::blas::Layout::RowMajor,
+                          gpgpu::blas::Transpose::Trans,
+                          src_shape.extent(1),
+                          src_shape.extent(0),
+                          tensor_value_type<Src>{1},
+                          src.data(), src_shape.offset(), src_shape.stride(1),
+                          dst.data(), dst_shape.offset(), dst_shape.stride(0));
+    return true;
+}
+
+template <typename Src, typename Dst>
 std::enable_if_t<is_gpu_tensor<Src>::value && is_gpu_tensor<Dst>::value>
 reorder(const Src& src, const Shape& src_shape, Dst& dst, const Shape& dst_shape) {
     assert(src_shape == dst_shape);
 
     if (src_shape.is_contiguous() && dst_shape.is_contiguous() &&
         src.data() == dst.data() && src_shape.offset() == dst_shape.offset())
+        return;
+
+    if (reorder_transpose(src, src_shape, dst, dst_shape))
         return;
 
     if (src.original_shape().is_tail(src_shape) && dst_shape.is_contiguous()) {
@@ -139,12 +180,12 @@ inline auto flatten(TensorT&& X, int axis) {
 
 template <typename TensorT>
 inline auto squeeze(TensorT&& X, const std::vector<int>& axes = {}) {
-    return detail::reshape(std::forward<TensorT>(X), X.shape().squeeze(axes));
+    return tensor_view_type<TensorT>(X.shape().squeeze(axes), std::forward<TensorT>(X));
 }
 
 template <typename TensorT>
 inline auto unsqueeze(TensorT&& X, const std::vector<int>& axes) {
-    return detail::reshape(std::forward<TensorT>(X), X.shape().unsqueeze(axes));
+    return tensor_view_type<TensorT>(X.shape().unsqueeze(axes), std::forward<TensorT>(X));
 }
 
 //==-------------------------------------------------------------------------
@@ -165,25 +206,10 @@ inline broadcast(const TensorT& src, TensorT& dst) {
     reorder(src.broadcast(dst.shape()), dst);
 }
 
-template <typename T>
-inline void transpose(const Tensor<T>& src, Tensor<T>& dst, const std::vector<size_t>& perm) {
+template <typename TensorT>
+enable_if_non_view_tensor<TensorT, void>
+inline transpose(const TensorT& src, TensorT& dst, const std::vector<size_t>& perm) {
     reorder(src.transpose(perm), dst);
-}
-
-template <typename T>
-void transpose(const DevTensor<T>& src, DevTensor<T>& dst, const std::vector<size_t>& perm) {
-    Shape shape = src.shape().transpose(perm);
-    dst.resize(shape);
-
-    if (shape.rank() == 2 && !shape.is_contiguous()) {
-        gpgpu::blas::omatcopy(gpgpu::blas::Layout::RowMajor,
-                              gpgpu::blas::Transpose::Trans,
-                              src.extent(0), src.extent(1),
-                              T(1), src.data(), src.stride(0),
-                              dst.data(), dst.stride(0));
-    } else {
-        reorder(src, shape, dst);
-    }
 }
 
 template <typename TensorT>

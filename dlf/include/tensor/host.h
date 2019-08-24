@@ -5,6 +5,7 @@
 #include <random>
 #include <cmath>
 #include <iostream>
+#include <iomanip>
 
 #include "utility.h"
 #include "tensor/shape.h"
@@ -825,14 +826,14 @@ inline TensorView<T>& TensorView<T>::random(T low, T high) {
 
 class tensor_printer {
     template <typename Iterator>
-    static Iterator print_rec(std::ostream& out, const Shape& shape, size_t level, Iterator cur) {
+    static Iterator print_rec(std::ostream& out, int w, const Shape& shape, size_t level, Iterator cur) {
         auto d = shape.extent(level);
 
         if (level == shape.rank()-1) {
             // last level, printing data
             out << '[';
             for (int i = 0; ; i++) {
-                out << *cur++;
+                out << std::setw(w) << *cur++;
                 if (i == d-1)
                     break;
                 out << ',';
@@ -842,7 +843,7 @@ class tensor_printer {
             // Intermediate levels, recursive
             out << '[';
             for (int i = 0; ; i++) {
-                cur = print_rec(out, shape, level+1, cur);
+                cur = print_rec(out, w, shape, level+1, cur);
                 if (i == d-1)
                     break;
                 out << ',' << '\n';
@@ -859,9 +860,10 @@ class tensor_printer {
 
     template <typename TensorT>
     static std::ostream& print(std::ostream& out, const TensorT& t) {
+        auto w = out.width(0);
         out << t.shape() << '\n';
         if (!t.empty()) {
-            print_rec(out, t.shape(), 0, t.begin());
+            print_rec(out, w, t.shape(), 0, t.begin());
             out << '\n';
         }
         return out;
