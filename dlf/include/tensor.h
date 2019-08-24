@@ -8,6 +8,7 @@
 #include "tensor/transform.h"
 #include "tensor/reorder.h"
 #include "tensor/reduce.h"
+#include "tensor/sorting.h"
 #include "tensor/aggregate.h"
 #include "tensor/common.h"
 #include "tensor/dnn.h"
