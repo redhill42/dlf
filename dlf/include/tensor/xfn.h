@@ -363,133 +363,104 @@ struct softplus : std::unary_function<T,T>, parameterized_function<T> {
 //==-------------------------------------------------------------------------
 
 template <typename T>
-struct reduce_max {
+struct post_reduce_identity {
+    constexpr T operator()(const T& acc, const int) {
+        return acc;
+    }
+};
+
+template <typename T>
+struct post_reduce_mean {
+    constexpr T operator()(const T& acc, const int n) {
+        return acc / n;
+    }
+};
+
+template <typename T>
+struct post_reduce_log {
+    constexpr T operator()(const T& acc, const int) {
+        return std::log(acc);
+    }
+};
+
+template <typename T>
+struct post_reduce_sqrt {
+    constexpr T operator()(const T& acc, const int) {
+        return std::sqrt(acc);
+    }
+};
+
+template <typename T>
+struct reduce_max : max<T> {
     static constexpr auto name = "reduce_max";
     static constexpr T identity = std::numeric_limits<T>::lowest();
-    constexpr T operator()(const T& acc, const T& x) const {
-        return std::max(acc, x);
-    }
-    static constexpr T post(const T& acc, const int) {
-        return acc;
-    }
+    using Post = post_reduce_identity<T>;
 };
 
 template <typename T>
-struct reduce_min {
+struct reduce_min : min<T> {
     static constexpr auto name = "reduce_min";
     static constexpr T identity = std::numeric_limits<T>::max();
-    constexpr T operator()(const T& acc, const T& x) const {
-        return std::min(acc, x);
-    }
-    static constexpr T post(const T& acc, const int) {
-        return acc;
-    }
+    using Post = post_reduce_identity<T>;
 };
 
 template <typename T>
-struct reduce_sum {
+struct reduce_sum : plus<T> {
     static constexpr auto name = "reduce_sum";
     static constexpr T identity{};
-    constexpr T operator()(const T& acc, const T& x) const {
-        return acc + x;
-    }
-    static constexpr T post(const T& acc, const int) {
-        return acc;
-    }
+    using Post = post_reduce_identity<T>;
 };
 
 template <typename T>
 struct reduce_mean : reduce_sum<T> {
     static constexpr auto name = "reduce_mean";
-    static constexpr T post(const T& acc, const int n) {
-        return acc / n;
-    }
+    using Post = post_reduce_mean<T>;
 };
 
 template <typename T>
 struct reduce_sum_square {
     static constexpr auto name = "reduce_sum_square";
     static constexpr T identity{};
-    constexpr T operator()(const T& acc, const T& x) const {
-        return acc + x*x;
-    }
-    static constexpr T post(const T& acc, const int) {
-        return acc;
-    }
+    constexpr T operator()(const T& acc, const T& x) const
+        { return acc + x*x; }
+    using Post = post_reduce_identity<T>;
 };
 
 template <typename T>
 struct reduce_log_sum : reduce_sum<T> {
     static constexpr auto name = "reduce_log_sum";
-    static constexpr T post(const T& acc, const int) {
-        return std::log(acc);
-    }
+    using Post = post_reduce_log<T>;
 };
 
 template <typename T>
 struct reduce_log_sum_exp {
     static constexpr auto name = "reduce_log_sum_exp";
     static constexpr T identity{};
-    constexpr T operator()(const T& acc, const T& x) const {
-        return acc + std::exp(x);
-    }
-    static constexpr T post(const T& acc, const int) {
-        return std::log(acc);
-    }
+    constexpr T operator()(const T& acc, const T& x) const
+        { return acc + std::exp(x); }
+    using Post = post_reduce_log<T>;
 };
 
 template <typename T>
-struct reduce_prod {
+struct reduce_prod : multiplies<T> {
     static constexpr auto name = "reduce_prod";
     static constexpr T identity{1};
-    constexpr T operator()(const T& acc, const T& x) const {
-        return acc * x;
-    }
-    static constexpr T post(const T& acc, const int) {
-        return acc;
-    }
+    using Post = post_reduce_identity<T>;
 };
 
 template <typename T>
 struct reduce_l1 {
     static constexpr auto name = "reduce_l1";
     static constexpr T identity{};
-    constexpr T operator()(const T& acc, const T& x) const {
-        return acc + std::abs(x);
-    }
-    static constexpr T post(const T& acc, const int) {
-        return acc;
-    }
+    constexpr T operator()(const T& acc, const T& x) const
+        { return acc + std::abs(x); }
+    using Post = post_reduce_identity<T>;
 };
 
 template <typename T>
 struct reduce_l2 : reduce_sum_square<T> {
     static constexpr auto name = "reduce_l2";
-    static constexpr T post(const T& acc, const int) {
-        return std::sqrt(acc);
-    }
-};
-
-struct reduce_all {
-    static constexpr auto name = "reduce_all";
-    static constexpr bool identity = true;
-    constexpr bool operator()(const bool acc, const bool x) const {
-        return acc && x;
-    }
-    static constexpr bool post(const bool acc, const int) {
-        return acc;
-    }
-};
-
-struct reduce_any {
-    static constexpr auto name = "reduce_all";
-    static constexpr bool identity = false;
-    constexpr bool operator()(const bool acc, const bool x) const {
-        return acc || x;
-    }
-    static constexpr bool post(const bool acc, const int) {
-        return acc;
-    }
+    using Post = post_reduce_sqrt<T>;
 };
 
 }} // namespace dlf::xfn

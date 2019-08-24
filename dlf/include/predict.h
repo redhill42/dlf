@@ -615,7 +615,7 @@ private:
         result = std::make_unique<MeanOp>(this, n);
     }
 
-    template <typename Fn>
+    template <typename Reduction, typename Post = typename Reduction::Post>
     struct ReductionOp : Operator {
         TensorT<> X, Y;
         std::vector<int> axes;
@@ -630,7 +630,7 @@ private:
         }
 
         void evaluate() override {
-            dlf::reduce(X, Y, Fn{}, axes, keepdims);
+            dlf::reduce(X, Y, Reduction{}, Post{}, axes, keepdims);
         }
     };
 

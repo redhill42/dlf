@@ -629,6 +629,41 @@ template void PUBLIC_API reduce<double>(const std::string&, const size_t, const 
                                         const Queue&, Event*);
 
 template <typename T>
+void arg_reduce(const std::string& name, const size_t n, const size_t k,
+                const std::vector<size_t>& dims, const std::vector<size_t>& strides,
+                const Buffer<T>& x_buffer, const size_t x_offset, Buffer<int>& y_buffer,
+                const Queue& queue, Event* event)
+{
+    auto routine = Xargreduce<T>(queue, event);
+    routine.DoArgReduce(name, n, k, dims, strides, x_buffer, x_offset, y_buffer);
+}
+
+template void PUBLIC_API arg_reduce<int16_t>(const std::string&, const size_t, const size_t,
+                                             const std::vector<size_t>&, const std::vector<size_t>&,
+                                             const Buffer<int16_t>&, const size_t, Buffer<int>&,
+                                             const Queue&, Event*);
+template void PUBLIC_API arg_reduce<int32_t>(const std::string&, const size_t, const size_t,
+                                             const std::vector<size_t>&, const std::vector<size_t>&,
+                                             const Buffer<int32_t>&, const size_t, Buffer<int>&,
+                                             const Queue&, Event*);
+template void PUBLIC_API arg_reduce<int64_t>(const std::string&, const size_t, const size_t,
+                                             const std::vector<size_t>&, const std::vector<size_t>&,
+                                             const Buffer<int64_t>&, const size_t, Buffer<int>&,
+                                             const Queue&, Event*);
+template void PUBLIC_API arg_reduce<half>   (const std::string&, const size_t, const size_t,
+                                             const std::vector<size_t>&, const std::vector<size_t>&,
+                                             const Buffer<half>&, const size_t, Buffer<int>&,
+                                             const Queue&, Event*);
+template void PUBLIC_API arg_reduce<float>  (const std::string&, const size_t, const size_t,
+                                             const std::vector<size_t>&, const std::vector<size_t>&,
+                                             const Buffer<float>&, const size_t, Buffer<int>&,
+                                             const Queue&, Event*);
+template void PUBLIC_API arg_reduce<double> (const std::string&, const size_t, const size_t,
+                                             const std::vector<size_t>&, const std::vector<size_t>&,
+                                             const Buffer<double>&, const size_t, Buffer<int>&,
+                                             const Queue&, Event*);
+
+template <typename T>
 void batch_norm(const std::vector<size_t>& dims,
                 const Buffer<T>& x_buffer,
                       Buffer<T>& y_buffer,
@@ -1299,62 +1334,6 @@ template void PUBLIC_API hardmax<float> (const size_t, const size_t,
 template void PUBLIC_API hardmax<double>(const size_t, const size_t,
                                          const Buffer<double>&, Buffer<double>&,
                                          const Queue& queue, Event*);
-
-template <typename T>
-void argmax(const size_t m, const size_t k, const size_t n,
-            const Buffer<T>& x_buffer, Buffer<int>& y_buffer,
-            const Queue& queue, Event* event)
-{
-    auto routine = Xargmax<T>(queue, event);
-    routine.DoArgMax(m, k, n, x_buffer, y_buffer);
-}
-
-template void PUBLIC_API argmax<int16_t>(const size_t, const size_t, const size_t,
-                                         const Buffer<int16_t>&, Buffer<int>&,
-                                         const Queue&, Event*);
-template void PUBLIC_API argmax<int32_t>(const size_t, const size_t, const size_t,
-                                         const Buffer<int32_t>&, Buffer<int>&,
-                                         const Queue&, Event*);
-template void PUBLIC_API argmax<int64_t>(const size_t, const size_t, const size_t,
-                                         const Buffer<int64_t>&, Buffer<int>&,
-                                         const Queue&, Event*);
-template void PUBLIC_API argmax<half>   (const size_t, const size_t, const size_t,
-                                         const Buffer<half>&, Buffer<int>&,
-                                         const Queue&, Event*);
-template void PUBLIC_API argmax<float>  (const size_t, const size_t, const size_t,
-                                         const Buffer<float>&, Buffer<int>&,
-                                         const Queue&, Event*);
-template void PUBLIC_API argmax<double> (const size_t, const size_t, const size_t,
-                                         const Buffer<double>&, Buffer<int>&,
-                                         const Queue&, Event*);
-
-template <typename T>
-void argmin(const size_t m, const size_t k, const size_t n,
-            const Buffer<T>& x_buffer, Buffer<int>& y_buffer,
-            const Queue& queue, Event* event)
-{
-    auto routine = Xargmax<T>(queue, event);
-    routine.DoArgMin(m, k, n, x_buffer, y_buffer);
-}
-
-template void PUBLIC_API argmin<int16_t>(const size_t, const size_t, const size_t,
-                                         const Buffer<int16_t>&, Buffer<int>&,
-                                         const Queue&, Event*);
-template void PUBLIC_API argmin<int32_t>(const size_t, const size_t, const size_t,
-                                         const Buffer<int32_t>&, Buffer<int>&,
-                                         const Queue&, Event*);
-template void PUBLIC_API argmin<int64_t>(const size_t, const size_t, const size_t,
-                                         const Buffer<int64_t>&, Buffer<int>&,
-                                         const Queue&, Event*);
-template void PUBLIC_API argmin<half>   (const size_t, const size_t, const size_t,
-                                         const Buffer<half>&, Buffer<int>&,
-                                         const Queue&, Event*);
-template void PUBLIC_API argmin<float>  (const size_t, const size_t, const size_t,
-                                         const Buffer<float>&, Buffer<int>&,
-                                         const Queue&, Event*);
-template void PUBLIC_API argmin<double> (const size_t, const size_t, const size_t,
-                                         const Buffer<double>&, Buffer<int>&,
-                                         const Queue&, Event*);
 
 template <typename T>
 void where(const size_t n, const size_t rank,

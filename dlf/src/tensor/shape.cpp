@@ -124,6 +124,17 @@ size_t Shape::offset(const std::vector<size_t>& index) const noexcept {
     return offset;
 }
 
+size_t Shape::linear_offset(size_t index) const noexcept {
+    size_t offset = m_offset;
+    for (int i = rank()-1; i >= 0; --i) {
+        auto dim = extent(i);
+        auto accord = index % dim;
+        index /= dim;
+        offset += accord * stride(i);
+    }
+    return offset;
+}
+
 bool Shape::next(std::vector<size_t>& index) const noexcept {
     for (auto i = m_dims.size(); i--; ) {
         if (++index[i] < m_dims[i].extent)

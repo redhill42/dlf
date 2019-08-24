@@ -84,10 +84,10 @@
 #include "routines/dnn/xtransform_c.hpp"
 #include "routines/dnn/xtransform_p.hpp"
 #include "routines/dnn/xreduce.hpp"
+#include "routines/dnn/xargreduce.hpp"
 #include "routines/dnn/xnorm.hpp"
 #include "routines/dnn/xpool.hpp"
 #include "routines/dnn/xsoftmax.hpp"
-#include "routines/dnn/xargmax.hpp"
 #include "routines/dnn/xwhere.hpp"
 
 #endif // GPGPU_BLAS_ROUTINES_ROUTINES_H_

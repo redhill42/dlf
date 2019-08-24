@@ -1014,6 +1014,14 @@ TEST(DNNTest, ArgMin) {
     }));
 }
 
+TEST(DNNTest, ArgMinMaxView) {
+    auto X = Tensor<int>({4, 5, 6}).random(0, 100);
+    EXPECT_EQ(argmax(X.transpose(), 0), argmax(X, -1).transpose());
+    EXPECT_EQ(argmax(dev(X).transpose(), 0).read(), argmax(dev(X), -1).transpose().read());
+    EXPECT_EQ(argmin(X.transpose(), 0), argmin(X, -1).transpose());
+    EXPECT_EQ(argmin(dev(X).transpose(), 0).read(), argmin(dev(X), -1).transpose().read());
+}
+
 TEST(DNNTest, SpaceToDepth) {
     auto X = Tensor<float>({1, 1, 4, 6}, {
          0,  6,  1,  7,  2,  8,

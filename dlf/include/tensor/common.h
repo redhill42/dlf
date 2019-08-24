@@ -233,18 +233,6 @@ inline int matmul_broadcast(Shape& shapeA, Shape& shapeB, Shape& shapeC) {
 }
 
 template <int = 0>
-int batch_offset(const Shape& shape, int batch) {
-    int ret = shape.offset();
-    for (int i = shape.rank() - 3; i >= 0; --i) {
-        auto dim = shape.extent(i);
-        auto index = batch % dim;
-        batch /= dim;
-        ret += index * shape.stride(i);
-    }
-    return ret;
-}
-
-template <int = 0>
 bool is_contiguous_strides(const Shape& shape) {
     if (shape.rank() <= 2)
         return true;
@@ -355,8 +343,8 @@ void matmul(int m, int n, int k,
             for (int p = r.begin(); p < r.end(); p++) {
                 matmul_cpu(
                     m, n, k,
-                    A + batch_offset(shapeA, p), lda, incA,
-                    B + batch_offset(shapeB, p), ldb, incB,
+                    A + shapeA.linear_offset(p*m*k), lda, incA,
+                    B + shapeB.linear_offset(p*k*n), ldb, incB,
                     C + p*m*n, ldc);
             }
         });
@@ -436,8 +424,8 @@ void matmul(int m, int n, int k,
         for (int p = 0; p < batch_size; p++) {
             alphas[p]    = T{1};
             betas[p]     = T{0};
-            a_offsets[p] = batch_offset(shapeA, p);
-            b_offsets[p] = batch_offset(shapeB, p);
+            a_offsets[p] = shapeA.linear_offset(p*m*k);
+            b_offsets[p] = shapeB.linear_offset(p*k*n);
             c_offsets[p] = p*m*n;
         }
 

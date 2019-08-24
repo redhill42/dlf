@@ -81,6 +81,12 @@ void reduce(const std::string& name, const size_t m, const size_t n,
             const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 template <typename T>
+void arg_reduce(const std::string& name, const size_t n, const size_t k,
+                const std::vector<size_t>& dims, const std::vector<size_t>& strides,
+                const Buffer<T>& x_buffer, const size_t x_offset, Buffer<int>& y_buffer,
+                const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
+
+template <typename T>
 void batch_norm(const std::vector<size_t>& dims,
                 const Buffer<T>& x_buffer,
                       Buffer<T>& y_buffer,
@@ -172,16 +178,6 @@ void logsoftmax(const size_t m, const size_t n, const Buffer<T>& x_buffer, Buffe
 template <typename T>
 void hardmax(const size_t m, const size_t n, const Buffer<T>& x_buffer, Buffer<T>& y_buffer,
              const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
-
-template <typename T>
-void argmax(const size_t m, const size_t k, const size_t n,
-            const Buffer<T>& x_buffer, Buffer<int>& y_buffer,
-            const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
-
-template <typename T>
-void argmin(const size_t m, const size_t k, const size_t n,
-            const Buffer<T>& x_buffer, Buffer<int>& y_buffer,
-            const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 template <typename T>
 void where(const size_t n, const size_t rank,

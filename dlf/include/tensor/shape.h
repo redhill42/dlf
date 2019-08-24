@@ -256,6 +256,11 @@ public:
     size_t offset(const std::vector<size_t>& index) const noexcept;
 
     /**
+     * Returns the data offset for the given linear index.
+     */
+    size_t linear_offset(size_t index) const noexcept;
+
+    /**
      * Returns the next index within this shape.
      *
      * @return true if next index is available
