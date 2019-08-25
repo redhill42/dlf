@@ -220,16 +220,8 @@ public: // Shape operations
         return DevTensorView<T>(shape().slice(dims), *this);
     }
 
-    DevTensorView<T> operator[](const std::vector<SliceDim>& dims) const {
-        return slice(dims);
-    }
-
-    DevTensorView<T> slice(const char* spec) const {
-        return DevTensorView<T>(shape().slice(spec), *this);
-    }
-
     DevTensorView<T> operator[](const char* spec) const {
-        return slice(spec);
+        return DevTensorView<T>(shape().slice(spec), *this);
     }
 
     DevTensorView<T> diagonal(int offset = 0, int axis1 = -2, int axis2 = -1) const {
@@ -268,6 +260,10 @@ public:
 
     const gpgpu::Buffer<T>& data() const noexcept {
         return m_data;
+    }
+
+    DevTensorView view() const {
+        return *this;
     }
 
     DevTensor<T> copy() const {
@@ -326,16 +322,8 @@ public: // Shape operations
         return DevTensorView<T>(shape().slice(dims), *this);
     }
 
-    DevTensorView<T> operator[](const std::vector<SliceDim>& dims) const {
-        return slice(dims);
-    }
-
-    DevTensorView<T> slice(const char* spec) const {
-        return DevTensorView<T>(shape().slice(spec), *this);
-    }
-
     DevTensorView<T> operator[](const char* spec) const {
-        return slice(spec);
+        return DevTensorView<T>(shape().slice(spec), *this);
     }
 
     DevTensorView<T> diagonal(int offset = 0, int axis1 = -2, int axis2 = -1) const {

@@ -21,11 +21,6 @@ endif()
 # CMake project details
 project("gpgpu" C CXX)
 set(CMAKE_CXX_STANDARD 14)
-set(gpgpu_VERSION_MAJOR 1)
-set(gpgpu_VERSION_MINOR 5)
-set(gpgpu_VERSION_PATCH 0)
-set(gpgpu_VERSION "${gpgpu_VERSION_MAJOR}.${gpgpu_VERSION_MINOR}.${gpgpu_VERSION_PATCH}")
-set(gpgpu_SOVERSION ${gpgpu_VERSION_MAJOR})
 
 # Options and their default values
 option(BUILD_SHARED_LIBS "Build a shared (ON) or static library (OFF)" ON)
@@ -249,7 +244,6 @@ if(BUILD_SHARED_LIBS)
 else(BUILD_SHARED_LIBS)
   add_library(gpgpu STATIC ${SOURCES} ${HEADERS})
 endif()
-set_target_properties(gpgpu PROPERTIES VERSION ${gpgpu_VERSION} SOVERSION ${gpgpu_SOVERSION})
 
 target_link_libraries(gpgpu ${API_LIBRARIES})
 

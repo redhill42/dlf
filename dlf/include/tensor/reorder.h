@@ -31,6 +31,10 @@ reorder(const Src& src, const Shape& src_shape, Dst& dst, const Shape& dst_shape
     assert(src_shape == dst_shape);
     using T = tensor_value_type<Src>;
 
+    if (src_shape.is_contiguous() && dst_shape.is_contiguous() &&
+        src.data() == dst.data() && src_shape.offset() == dst_shape.offset())
+        return;
+
 #if HAS_MKL
     if (reorder_transpose(src, src_shape, dst, dst_shape))
         return;
@@ -45,11 +49,9 @@ reorder(const Src& src, const Shape& src_shape, Dst& dst, const Shape& dst_shape
         }
 
         if (src_shape.is_contiguous()) {
-            if (src.data() != dst.data() || src_shape.offset() != dst_shape.offset()) {
-                par::copy(src.data() + src_shape.offset(),
-                          src.data() + src_shape.offset() + src_shape.size(),
-                          dst.data() + dst_shape.offset());
-            }
+            par::copy(src.data() + src_shape.offset(),
+                      src.data() + src_shape.offset() + src_shape.size(),
+                      dst.data() + dst_shape.offset());
             return;
         }
 

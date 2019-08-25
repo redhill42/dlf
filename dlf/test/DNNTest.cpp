@@ -612,6 +612,30 @@ TEST(Conv2D, conv_with_strange_padding) {
     EXPECT_EQ(Y, dev_Y.read());
 }
 
+TEST(Conv2D, conv_with_1x1_kernel) {
+    auto X = Tensor<float>::range({2, 3, 5, 5}, 0);
+    auto W = Tensor<float>::range({3, 3, 1, 1}, 0);
+    auto Y = Tensor<float>();
+    auto dev_Y = DevTensor<float>();
+    auto filter = dnn::Filter2D(X.shape(), W.shape());
+
+    dnn::conv2d(X, W, Y, filter);
+    dnn::conv2d(dev(X), dev(W), dev_Y, filter);
+    ExpectElementsEQ(Y, dev_Y.read());
+}
+
+TEST(Conv2D, conv_with_group) {
+    auto X = Tensor<float>::range({2, 3, 5, 5}, 0);
+    auto W = Tensor<float>::range({6, 1, 3, 3}, 1);
+    auto Y = Tensor<float>();
+    auto dev_Y = DevTensor<float>();
+    auto filter = dnn::Filter2D(X.shape(), W.shape(), 3).pads(1, 1);
+
+    dnn::conv2d(X, W, Y, filter);
+    dnn::conv2d(dev(X), dev(W), dev_Y, filter);
+    ExpectElementsEQ(Y, dev_Y.read());
+}
+
 PERFORMANCE_TEST(Conv2D, performance_test) {
     auto X = Tensor<float>::range({1, 3, 1000, 1000}, 0);
     auto W = Tensor<float>::range({8, 3, 3, 3}, 0);
@@ -813,13 +837,13 @@ TEST(DNNTest, Softmax) {
     });
 
     auto Y = dnn::softmax(X);
-    EXPECT_EQ(Y.shape(), X.shape());
     ExpectElementsEQ(Y, R);
 
-    auto dev_X = dev(X);
-    auto dev_Y = DevTensor<float>({2, 4});
-    dnn::softmax(dev_X, dev_Y);
+    auto dev_Y = dnn::softmax(dev(X));
     ExpectElementsEQ(dev_Y.read(), R);
+
+    auto Y1 = dnn::softmax(std::move(X));
+    ExpectElementsEQ(Y1, R);
 }
 
 TEST(DNNTest, LogSoftmax) {
@@ -830,8 +854,10 @@ TEST(DNNTest, LogSoftmax) {
     });
 
     auto Y = dnn::logsoftmax(X);
-    EXPECT_EQ(Y.shape(), X.shape());
     ExpectElementsEQ(Y, R);
+
+    auto Y1 = dnn::logsoftmax(std::move(X));
+    ExpectElementsEQ(Y1, R);
 }
 
 TEST(DNNTest, Hardmax) {
@@ -847,6 +873,9 @@ TEST(DNNTest, Hardmax) {
 
     auto dev_Y = dnn::hardmax(dev(X));
     EXPECT_EQ(dev_Y.read(), R);
+
+    auto Y1 = dnn::hardmax(std::move(X));
+    EXPECT_EQ(Y1, R);
 }
 
 TEST(DNNTest, HardmaxOneHot) {

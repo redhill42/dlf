@@ -486,16 +486,14 @@ inline transform(const LHS& A, const RHS& B, F f) {
 }
 
 template <typename LHS, typename RHS, typename F>
-std::enable_if_t<is_same_tensor<LHS, RHS>::value, tensor_invoke_result<F, LHS, RHS>>
-inline transform(LHS&& A, RHS&& B, F f,
-    std::enable_if_t<
-        std::is_rvalue_reference<decltype(A)>::value &&
-        std::is_rvalue_reference<decltype(B)>::value &&
-        !is_tensor_view<LHS>::value && !is_tensor_view<RHS>::value &&
-        std::is_same<tensor_type<LHS>, tensor_invoke_result<F,LHS,RHS>>::value &&
-        std::is_same<tensor_type<RHS>, tensor_invoke_result<F,LHS,RHS>>::value,
-        int> = 0)
-{
+std::enable_if_t<
+    is_same_tensor<LHS, RHS>::value &&
+    !is_tensor_view<LHS>::value && !std::is_lvalue_reference<LHS>::value &&
+    std::is_same<tensor_type<LHS>, tensor_invoke_result<F,LHS,RHS>>::value &&
+    !is_tensor_view<RHS>::value && !std::is_lvalue_reference<RHS>::value &&
+    std::is_same<tensor_type<RHS>, tensor_invoke_result<F,LHS,RHS>>::value,
+    tensor_invoke_result<F, LHS, RHS>>
+inline transform(LHS&& A, RHS&& B, F f) {
     if (A.shape() == Shape::broadcast(A, B))
         return std::move(transformTo(A, B, A, f));
     if (B.shape() == Shape::broadcast(A, B))
@@ -504,35 +502,27 @@ inline transform(LHS&& A, RHS&& B, F f,
 }
 
 template <typename LHS, typename RHS, typename F>
-std::enable_if_t<is_same_tensor<LHS, RHS>::value, tensor_invoke_result<F, LHS, RHS>>
-inline transform(LHS&& A, RHS&& B, F f,
-    std::enable_if_t<
-        !std::is_rvalue_reference<decltype(B)>::value &&
-        std::is_rvalue_reference<decltype(A)>::value &&
-        !is_tensor_view<LHS>::value &&
-        std::is_same<tensor_type<LHS>, tensor_invoke_result<F,LHS,RHS>>::value,
-        int> = 0)
-{
+std::enable_if_t<
+    is_same_tensor<LHS, RHS>::value &&
+    !is_tensor_view<LHS>::value && !std::is_lvalue_reference<LHS>::value &&
+    std::is_same<tensor_type<LHS>, tensor_invoke_result<F,LHS,RHS>>::value,
+    tensor_invoke_result<F, LHS, RHS>>
+inline transform(LHS&& A, const RHS& B, F f) {
     if (A.shape() == Shape::broadcast(A, B))
         return std::move(transformTo(A, B, A, f));
-    else
-        return basic_transform(A, B, f);
+    return basic_transform(A, B, f);
 }
 
 template <typename LHS, typename RHS, typename F>
-std::enable_if_t<is_same_tensor<LHS, RHS>::value, tensor_invoke_result<F, LHS, RHS>>
-inline transform(LHS&& A, RHS&& B, F f,
-    std::enable_if_t<
-        !std::is_rvalue_reference<decltype(A)>::value &&
-        std::is_rvalue_reference<decltype(B)>::value &&
-        !is_tensor_view<RHS>::value &&
-        std::is_same<tensor_type<RHS>, tensor_invoke_result<F,LHS,RHS>>::value,
-        int> = 0)
-{
+std::enable_if_t<
+    is_same_tensor<LHS, RHS>::value &&
+    !is_tensor_view<RHS>::value && !std::is_lvalue_reference<RHS>::value &&
+    std::is_same<tensor_type<RHS>, tensor_invoke_result<F,LHS,RHS>>::value,
+    tensor_invoke_result<F, LHS, RHS>>
+inline transform(const LHS& A, RHS&& B, F f) {
     if (B.shape() == Shape::broadcast(A, B))
         return std::move(transformTo(A, B, B, f));
-    else
-        return basic_transform(A, B, f);
+    return basic_transform(A, B, f);
 }
 } // namespace detail
 

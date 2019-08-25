@@ -1850,6 +1850,9 @@ TEST(UniformTest, Rot90) {
     EXPECT_EQ(rot90(A, 3), Tensor<float>({2, 2}, {3, 1, 4, 2}));
     EXPECT_EQ(rot90(A, 4), Tensor<float>({2, 2}, {1, 2, 3, 4}));
 
+    EXPECT_EQ(rot90(rot90(A)), rot90(A, 2));
+    EXPECT_EQ(rot90(rot90(rot90(A))), rot90(A, 3));
+
     auto B = Tensor<float>::range({2, 3, 4}, 0);
     EXPECT_EQ(rot90(B, 1, 0, 1), Tensor<float>({3, 2, 4}, {
         8,  9, 10, 11, 20, 21, 22, 23,

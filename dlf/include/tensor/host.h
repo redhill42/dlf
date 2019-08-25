@@ -282,11 +282,6 @@ public: // Attributes
     }
 
     /**
-     * Returns a slice given by the index.
-     */
-    Tensor<T> operator[](int index);
-
-    /**
      * Returns a view of this tensor.
      */
     TensorView<T> view() const {
@@ -361,16 +356,8 @@ public: // Shape operations
         return TensorView<T>(shape().slice(dims), *this);
     }
 
-    TensorView<T> operator[](const std::vector<SliceDim>& dims) const {
-        return slice(dims);
-    }
-
-    TensorView<T> slice(const char* spec) const {
-        return TensorView<T>(shape().slice(spec), *this);
-    }
-
     TensorView<T> operator[](const char* spec) const {
-        return slice(spec);
+        return TensorView<T>(shape().slice(spec), *this);
     }
 
     TensorView<T> diagonal(int offset = 0, int axis1 = -2, int axis2 = -1) const {
@@ -435,6 +422,10 @@ public: // Attributes
     std::enable_if_t<cxx::conjunction<std::is_integral<Args>...>::value, T&>
     operator()(Args... args) noexcept {
         return data()[shape().offset({static_cast<size_t>(args)...})];
+    }
+
+    TensorView view() const {
+        return *this;
     }
 
     /**
@@ -516,16 +507,8 @@ public: // Shape operations
         return TensorView<T>(shape().slice(dims), *this);
     }
 
-    TensorView<T> operator[](const std::vector<SliceDim>& dims) const {
-        return slice(dims);
-    }
-
-    TensorView<T> slice(const char* spec) const {
-        return TensorView<T>(shape().slice(spec), *this);
-    }
-
     TensorView<T> operator[](const char* spec) const {
-        return slice(spec);
+        return TensorView<T>(shape().slice(spec), *this);
     }
 
     TensorView<T> diagonal(int offset = 0, int axis1 = -2, int axis2 = -1) const {
@@ -709,12 +692,6 @@ inline bool operator==(const Tensor<T>& lhs, const Tensor<T>& rhs) {
 template <typename T>
 inline bool operator!=(const Tensor<T>& lhs, const Tensor<T>& rhs) {
     return !(lhs == rhs);
-}
-
-template <typename T>
-inline Tensor<T> Tensor<T>::operator[](int index) {
-    auto slice_shape = shape().slice({{index, index+1}});
-    return wrap(slice_shape, data() + slice_shape.offset());
 }
 
 //==-------------------------------------------------------------------------
