@@ -635,6 +635,49 @@ TEST(UniformTest, Dot) {
     EXPECT_EQ(dot(dev(A), dev(B)).read(), C);
 }
 
+TEST(UniformTest, MultiDot) {
+    auto A = Tensor<int>::range({2, 3});
+    auto B = Tensor<int>::range({3, 4});
+    auto C = Tensor<int>::range({4, 5});
+    auto D = multi_dot(A, B, C);
+
+    EXPECT_EQ(D, Tensor<int>({2, 5}, {
+         810,  908, 1006, 1104, 1202,
+        2520, 2816, 3112, 3408, 3704
+    }));
+    EXPECT_EQ(multi_dot(dev(A), dev(B), dev(C)).read(), D);
+}
+
+TEST(UniformTest, MultiDotVectorFirst) {
+    auto A = Tensor<int>::range({3});
+    auto B = Tensor<int>::range({3, 4});
+    auto C = Tensor<int>::range({4, 5});
+    auto D = multi_dot(A, B, C);
+
+    EXPECT_EQ(D, Tensor<int>({5}, {810, 908, 1006, 1104, 1202}));
+    EXPECT_EQ(multi_dot(dev(A), dev(B), dev(C)).read(), D);
+}
+
+TEST(UniformTest, MultiDotVectorLast) {
+    auto A = Tensor<int>::range({2, 3});
+    auto B = Tensor<int>::range({3, 4});
+    auto C = Tensor<int>::range({4});
+    auto D = multi_dot(A, B, C);
+
+    EXPECT_EQ(D, Tensor<int>({2}, {162, 504}));
+    EXPECT_EQ(multi_dot(dev(A), dev(B), dev(C)).read(), D);
+}
+
+TEST(UniformTest, MultiDotVectorFirstAndLast) {
+    auto A = Tensor<int>::range({3});
+    auto B = Tensor<int>::range({3, 4});
+    auto C = Tensor<int>::range({4});
+    auto D = multi_dot(A, B, C);
+
+    EXPECT_EQ(D, Tensor<int>({1}, {162}));
+    EXPECT_EQ(multi_dot(dev(A), dev(B), dev(C)).read(), D);
+}
+
 TEST(UniformTest, TensorDotSimple) {
     auto A = Tensor<float>::range({3,4,5}, 0);
     auto B = Tensor<float>::range({4,3,2}, 0);

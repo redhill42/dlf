@@ -738,6 +738,123 @@ tensordot(const LHS& A, const RHS& B, int N = 2) {
 
 //==-------------------------------------------------------------------------
 
+namespace detail {
+template <typename TensorT>
+std::vector<int> get_matrix_chain_dimensions(const std::vector<TensorT>& args) {
+    std::vector<int> dims;
+
+    int m, n;
+    if (args[0].is_vector()) {
+        m = 1;
+        n = args[0].extent(0);
+    } else if (args[0].is_matrix()) {
+        m = args[0].extent(0);
+        n = args[0].extent(1);
+    } else {
+        throw shape_error("multi_dot: the first argument must be a vector or a matrix");
+    }
+    dims.push_back(m);
+    dims.push_back(n);
+
+    for (int i = 1; i < args.size(); ++i) {
+        if (args[i].is_matrix()) {
+            if (args[i].extent(0) != n)
+                throw shape_error("multi_dot: incompatible shape");
+            n = args[i].extent(1);
+        } else if (i == args.size()-1 && args[i].is_vector()) {
+            if (args[i].extent(0) != n)
+                throw shape_error("multi_dot: incompatible shape");
+            n = 1;
+        } else {
+            throw shape_error("multi_dot: the arguments in the middle must be matrices");
+        }
+        dims.push_back(n);
+    }
+
+    return dims;
+}
+
+template <int = 0>
+Tensor<int> matrix_chain_order(const std::vector<int>& dims) {
+    auto n = dims.size() - 1;
+    Tensor<int> m({n, n}, std::numeric_limits<int>::max());
+    Tensor<int> s({n, n}, 0);
+
+    for (int len = 1; len < n; len++) {
+        for (int i = 0; i < n - len; i++) {
+            int j = i + len;
+            for (int k = i; k < j; k++) {
+                int cost = m(i, k) + m(k+1, j) + dims[i]*dims[k+1]*dims[j+1];
+                if (cost < m(i, j)) {
+                    m(i, j) = cost;
+                    s(i, j) = k;
+                }
+            }
+        }
+    }
+    return s;
+}
+
+template <typename TensorT>
+tensor_type<TensorT> optimal_parenthesizations(
+    int n, const Tensor<int>& s, const std::vector<TensorT>& args,
+    int i, int j)
+{
+    if (i == j) {
+        return args[i];
+    } else {
+        return matmul(optimal_parenthesizations(n, s, args, i, s(i, j)),
+                      optimal_parenthesizations(n, s, args, s(i, j)+1, j));
+    }
+}
+
+template <typename TensorT>
+inline tensor_type<TensorT> optimal_parenthesizations(
+    const Tensor<int>& s, const std::vector<TensorT>& args)
+{
+    int n = args.size();
+    return optimal_parenthesizations(n, s, args, 0, n-1);
+}
+} // namespace detail
+
+/**
+ * Compute the dot product of two or more tensors in a single function call,
+ * while automatically selecting the fastest evaluation order.
+ *
+ * multi_dot chains dot and uses optimal parenthesization of the matrices,
+ * this can speed up the multiplication a lot.
+ *
+ * If the first argument is 1-D it is treated as a row vector, If the last
+ * argument is 1-D it is treated as a column vector. The other arguments
+ * must be 2-D.
+ *
+ * @see https://en.wikipedia.org/wiki/Matrix_chain_multiplication
+ */
+template <typename TensorT>
+std::enable_if_t<is_tensor_view<TensorT>::value, tensor_type<TensorT>>
+inline multi_dot(const std::vector<TensorT>& args) {
+    if (args.size() == 0)
+        throw std::logic_error("multi_dot: at least 1 argument is required");
+    if (args.size() == 1)
+        return args[0];
+
+    auto dims = detail::get_matrix_chain_dimensions(args);
+    auto s = detail::matrix_chain_order(dims);
+    return detail::optimal_parenthesizations(s, args);
+}
+
+template <typename First, typename... Rest>
+std::enable_if_t<
+    is_tensor<First>::value &&
+    cxx::conjunction<is_same_tensor<First, Rest>...>::value,
+    tensor_type<First>>
+multi_dot(const First& first, const Rest&... rest) {
+    static_assert(sizeof...(rest) > 1, "multi_dot: two few arguments");
+    return multi_dot(std::vector<tensor_view_type<First>>{first.view(), rest.view()...});
+}
+
+//==-------------------------------------------------------------------------
+
 /**
  * The cross product on tensors is typically referred to as the tensor product.
  * Given a tensor a of order q with dimensions (i1, ..., iq), and a tensor b
