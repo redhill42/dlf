@@ -224,6 +224,14 @@ public: // Shape operations
         return DevTensorView<T>(shape().slice(spec), *this);
     }
 
+    DevTensorView<T> operator[](const std::string& spec) const {
+        return operator[](spec.c_str());
+    }
+
+    DevTensorView<T> operator[](const int index) const {
+        return TensorView<T>(shape().slice({{index, index+1}}).squeeze(0), *this);
+    }
+
     DevTensorView<T> diagonal(int offset = 0, int axis1 = -2, int axis2 = -1) const {
         return DevTensorView<T>(shape().diagonal(offset, axis1, axis2), *this);
     }
@@ -324,6 +332,14 @@ public: // Shape operations
 
     DevTensorView<T> operator[](const char* spec) const {
         return DevTensorView<T>(shape().slice(spec), *this);
+    }
+
+    DevTensorView<T> operator[](const std::string& spec) const {
+        return operator[](spec.c_str());
+    }
+
+    DevTensorView<T> operator[](const int index) const {
+        return TensorView<T>(shape().slice({{index, index+1}}).squeeze(0), *this);
     }
 
     DevTensorView<T> diagonal(int offset = 0, int axis1 = -2, int axis2 = -1) const {

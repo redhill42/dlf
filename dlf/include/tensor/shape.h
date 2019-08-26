@@ -170,6 +170,7 @@ public:
      * than one, an error is raised.
      */
     Shape squeeze(const std::vector<int> axes = {}) const;
+    Shape squeeze(int axis) const;
 
     template <typename... Args>
     std::enable_if_t<cxx::conjunction<std::is_integral<Args>...>::value, Shape>
@@ -183,6 +184,7 @@ public:
      * @param axes List of integers, indicate the dimensions to be inserted.
      */
     Shape unsqueeze(const std::vector<int> axes) const;
+    Shape unsqueeze(int axis) const;
 
     template <typename... Args>
     std::enable_if_t<cxx::conjunction<std::is_integral<Args>...>::value, Shape>

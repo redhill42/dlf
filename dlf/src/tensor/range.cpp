@@ -14,8 +14,12 @@ class Parser {
     Token token;
     std::vector<SliceDim> range;
 
+    static void parse_error(const char* reason) {
+        throw std::runtime_error(reason);
+    }
+
     static void parse_error() {
-        throw std::runtime_error("invalid slice range specification");
+        parse_error("invalid slice range specification");
     }
 
     Token advance() {
@@ -77,7 +81,7 @@ class Parser {
             start = num;
             has_start = true;
             if (next() != COLON) {
-                end = start + 1;
+                end = (start == -1) ? std::numeric_limits<int>::max() : (start + 1);
             }
         }
         if (token == COLON && next() == NUM) {
@@ -103,18 +107,25 @@ public:
 
     std::vector<SliceDim> parse(size_t rank) {
         int fill_ind = -1;
-        for (int idim = 0; idim < rank; idim++) {
+
+        for (int idim = 0;;) {
             if (token == ELLIPSES) {
                 next();
                 if (fill_ind != -1)
                     parse_error();
                 fill_ind = idim;
-            } else {
+            } else if (idim < rank) {
                 range.push_back(parse_dim());
+                idim++;
+            } else {
+                parse_error("too many elements in slice range");
             }
-            if (token != COMMA)
+
+            if (token == COMMA) {
+                next();
+            } else {
                 break;
-            next();
+            }
         }
 
         if (token != EOI)

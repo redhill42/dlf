@@ -281,6 +281,9 @@ public: // Attributes
         return data()[shape().offset({static_cast<size_t>(args)...})];
     }
 
+    T& operator*() noexcept { return *m_data; }
+    const T& operator*() const noexcept { return *m_data; }
+
     /**
      * Returns a view of this tensor.
      */
@@ -360,6 +363,14 @@ public: // Shape operations
         return TensorView<T>(shape().slice(spec), *this);
     }
 
+    TensorView<T> operator[](const std::string& spec) const {
+        return operator[](spec.c_str());
+    }
+
+    TensorView<T> operator[](const int index) const {
+        return TensorView<T>(shape().slice({{index, index+1}}).squeeze(0), *this);
+    }
+
     TensorView<T> diagonal(int offset = 0, int axis1 = -2, int axis2 = -1) const {
         return TensorView<T>(shape().diagonal(offset, axis1, axis2), *this);
     }
@@ -423,6 +434,9 @@ public: // Attributes
     operator()(Args... args) noexcept {
         return data()[shape().offset({static_cast<size_t>(args)...})];
     }
+
+    T& operator*() noexcept { return m_data[shape().offset()]; }
+    const T& operator*() const noexcept { return m_data[shape().offset()]; }
 
     TensorView view() const {
         return *this;
@@ -509,6 +523,14 @@ public: // Shape operations
 
     TensorView<T> operator[](const char* spec) const {
         return TensorView<T>(shape().slice(spec), *this);
+    }
+
+    TensorView<T> operator[](const std::string& spec) const {
+        return operator[](spec.c_str());
+    }
+
+    TensorView<T> operator[](const int index) const {
+        return TensorView<T>(shape().slice({{index, index+1}}).squeeze(0), *this);
     }
 
     TensorView<T> diagonal(int offset = 0, int axis1 = -2, int axis2 = -1) const {

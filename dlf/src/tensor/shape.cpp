@@ -221,6 +221,9 @@ Shape Shape::flatten(int axis) const {
 }
 
 Shape Shape::squeeze(const std::vector<int> axes) const {
+    if (axes.size() == 1)
+        return squeeze(axes[0]);
+
     std::unordered_set<int> norm_axes;
     for (auto a : axes) {
         if (a < 0) a += rank();
@@ -242,10 +245,32 @@ Shape Shape::squeeze(const std::vector<int> axes) const {
         }
     }
 
+    if (new_dims.empty() && rank() > 0) {
+        // squeezed to a scalar, at least one dimension must exist
+        new_dims.push_back(m_dims[rank()-1]);
+    }
+
+    return Shape(std::move(new_dims), size(), offset());
+}
+
+Shape Shape::squeeze(int axis) const {
+    if (axis < 0) axis += rank();
+    if (axis < 0 || axis >= rank())
+        throw shape_error("squeeze: Invalid axis");
+    if (extent(axis) != 1)
+        throw shape_error("squeeze: cannot select an axis to squeeze out which has size not equal to one");
+    if (rank() == 1)
+        return *this; // don't squeeze a scalar
+
+    auto new_dims = m_dims;
+    new_dims.erase(new_dims.begin() + axis);
     return Shape(std::move(new_dims), size(), offset());
 }
 
 Shape Shape::unsqueeze(const std::vector<int> axes) const {
+    if (axes.size() == 1)
+        return unsqueeze(axes[0]);
+
     const auto new_rank = rank() + axes.size();
     std::unordered_set<int> norm_axes;
 
@@ -267,6 +292,17 @@ Shape Shape::unsqueeze(const std::vector<int> axes) const {
         }
     }
 
+    return Shape(std::move(new_dims), size(), offset());
+}
+
+Shape Shape::unsqueeze(int axis) const {
+    auto new_rank = rank() + 1;
+    if (axis < 0) axis += new_rank;
+    if (axis < 0 || axis >= new_rank)
+        throw shape_error("unsqueeze: Invalid axis");
+
+    auto new_dims = m_dims;
+    new_dims.insert(new_dims.begin() + axis, {1, 0});
     return Shape(std::move(new_dims), size(), offset());
 }
 

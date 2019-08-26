@@ -981,6 +981,11 @@ TEST(UniformTest, SqueezeCPU) {
     EXPECT_ANY_THROW(squeeze(A, {0}));
 }
 
+TEST(UniformTest, SqueezeToScalar) {
+    auto A = Tensor<int>({1, 1}, 123);
+    EXPECT_EQ(squeeze(A), Tensor<int>({1}, 123));
+}
+
 TEST(UniformTest, UnsqueezeCPU) {
     auto A = Tensor<int>::range({2, 3, 4}, 1);
     EXPECT_EQ(unsqueeze(A, {1, -2}), Tensor<int>::range({2, 1, 3, 1, 4}, 1));

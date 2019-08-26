@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <dirent.h>
 #include <sys/stat.h>
+#include <chrono>
 
 #include <opencv2/opencv.hpp>
 #include <opencv2/highgui/highgui.hpp>
@@ -13,7 +14,7 @@
 #include "synset.txt"
 
 using namespace dlf;
-using Context = predict::CPU;
+using Context = predict::GPU;
 using Real = float;
 using Predictor = predict::Predictor<Context, Real>;
 
@@ -57,8 +58,9 @@ struct ImageClass {
     }
 };
 
-Predictor create_predictor(const char* path) {
+Predictor create_predictor(const char* path, const std::vector<size_t>& input_shape) {
     auto g = model::import_model(path);
+    g->input(0)->set_dims(input_shape);
     return predict::Predictor<Context, Real>(std::move(g));
 }
 
@@ -82,7 +84,7 @@ cv::Mat prepare(const std::string& path, int size = 224) {
 #endif
 }
 
-Tensor<Real> preprocess(const cv::Mat& img) {
+auto preprocess(const cv::Mat& img) {
     size_t rows = img.rows, cols = img.cols;
 
     cv::Mat tmp_img;
@@ -94,8 +96,9 @@ Tensor<Real> preprocess(const cv::Mat& img) {
     return ((pixels - mean) / stdev).transpose({0, 3, 1, 2});
 }
 
-std::vector<Score> postprocess(Tensor<Real>&& scores) {
-    scores = dnn::softmax(squeeze(std::move(scores)), 0);
+template <typename TensorT>
+std::vector<Score> postprocess(TensorT&& scores_in) {
+    auto scores = dnn::softmax(squeeze(std::forward<TensorT>(scores_in)), 0);
 
     std::vector<Score> result(scores.size());
     for (int i = 0; i < 1000; i++) {
@@ -143,10 +146,17 @@ std::vector<ImageClass> load_images(std::string dir, RandomGenerator& g, size_t 
 }
 
 void predict_images(Predictor& predictor, std::vector<ImageClass>& images) {
-    for (auto& img : images) {
-        predictor.set(0, preprocess(img.image));
-        predictor.predict();
-        img.setResult(postprocess(predictor.get(0)));
+    Tensor<Real> batch({images.size(), 3, size_t(images[0].image.rows), size_t(images[0].image.cols)});
+    for (int i = 0; i < images.size(); i++) {
+        reorder(preprocess(images[i].image), unsqueeze(batch[i], {0}));
+    }
+
+    predictor.set(0, batch);
+    predictor.predict();
+    auto result = predictor.get(0);
+
+    for (int i = 0; i < images.size(); i++) {
+        images[i].setResult(postprocess(result[i]));
     }
 }
 
@@ -203,7 +213,7 @@ cv::Mat create_image_grid(
 static bool is_dir(const char* path) {
     struct stat s;
     if (stat(path, &s) != 0) {
-        perror("imagenet");
+        perror(path);
         exit(1);
     }
     return S_ISDIR(s.st_mode);
@@ -222,7 +232,7 @@ int main(int argc, char** argv) {
             title = title.substr(pos+1);
         title = "Image Classification - " + title;
 
-        auto predictor = create_predictor(argv[1]);
+        auto predictor = create_predictor(argv[1], {15, 3, 224, 224});
         std::mt19937 rng(std::random_device{}());
         cv::namedWindow(title);
 
@@ -233,17 +243,46 @@ int main(int argc, char** argv) {
             cv::imshow(title, canvas);
         } while (cv::waitKey(0) != 'q');
     } else {
-        auto predictor = create_predictor(argv[1]);
-        auto image = prepare(argv[2]);
-        predictor.set(0, preprocess(image));
-        predictor.predict();
-        auto result = postprocess(predictor.get(0));
+        constexpr int BATCH_SIZE = 1;
+        constexpr int ITERATION = 1000;
 
+        // prepare batch
+        auto predictor = create_predictor(argv[1], {BATCH_SIZE, 3, 224, 224});
+        auto image = prepare(argv[2]);
+        auto input = Tensor<Real>({BATCH_SIZE, 3, 224, 224});
+        for (int i = 0; i < BATCH_SIZE; i++) {
+            reorder(preprocess(image), unsqueeze(input[i], {0}));
+        }
+
+        // show prediction result
+        predictor.set(0, input);
+        predictor.predict();
+        auto result = postprocess(predictor.get(0)[0]);
         for (int i = 0; i < 5; i++) {
             auto x = result[i];
             std::cout << ImageLabel(x.index) << ": "
-                      << static_cast<int>(x.score*100) << "%\n";
+                      << x.score*100 << "%\n";
         }
+
+        // warm up
+        for (int i = 0; i < 10; i++) {
+            predictor.set(0, input);
+            predictor.predict();
+            predictor.get(0);
+        }
+
+        // cooking
+        auto start = std::chrono::high_resolution_clock().now();
+        for (int i = 0; i < ITERATION; i++) {
+            predictor.set(0, input);
+            predictor.predict();
+            predictor.get(0);
+        }
+        auto end = std::chrono::high_resolution_clock().now();
+
+        auto elapsed = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
+        std::cout << elapsed.count() << std::endl;
+        std::cout << int(ITERATION*BATCH_SIZE / elapsed.count()) << " images/second\n";
     }
 
     return 0;
