@@ -5,42 +5,30 @@
 namespace dlf {
 
 //==-------------------------------------------------------------------------
-// General matrix multiplication (Host)
+// General matrix multiplication
 //==-------------------------------------------------------------------------
 
+namespace detail {
 template <typename T>
 std::enable_if_t<!cblas::RequireBlasType<T>>
-gemm(const T& alpha, const Tensor<T>& A, const Tensor<T>& B,
-     const T& beta, Tensor<T>* C,
-     bool transA = false, bool transB = false,
+gemm(const int m, const int n, const int k,
+     const T& alpha,
+     const T* A, const int lda,
+     const T* B, const int ldb,
+     const T& beta,
+     T* C, const int ldc,
+     const bool transA = false,
+     const bool transB = false,
      Tensor<T>* = nullptr)
 {
-    assert(A.is_matrix() && B.is_matrix() && C->is_matrix());
-    auto m = A.extent(0), k = A.extent(1);
-    auto p = B.extent(0), n = B.extent(1);
-    const auto lda = A.stride(0), ldb = B.stride(0), ldc = C->stride(0);
-
-    if (transA)
-        std::swap(m, k);
-    if (transB)
-        std::swap(p, n);
-    if (k != p)
-        throw shape_error("gemm: incompatible shape");
-    C->resize({m, n});
-
-    if (alpha == T(0)) {
-        *C *= Tensor<T>::scalar(beta);
-        return;
-    }
-
-    tbb::parallel_for(tbb::blocked_range2d<size_t>(0, m, 32, 0, n, 32), [&](auto&& r) {
+    tbb::parallel_for(tbb::blocked_range2d<size_t>(0, m, 32, 0, n, 32), [&](auto r) {
         size_t incX = transA ? lda : 1;
         size_t incY = transB ? 1 : ldb;
-        for (size_t i = r.rows().begin(); i != r.rows().end(); i++) {
-            T* pz = &C->data()[i * ldc + r.cols().begin()];
+        for (size_t i = r.rows().begin(); i != r.rows().end(); ++i) {
+            T* pz = C + (i*ldc + r.cols().begin());
             for (size_t j = r.cols().begin(); j != r.cols().end(); j++) {
-                const T* px = A.data() + (transA ? i : i*lda);
-                const T* py = B.data() + (transB ? j*ldb : j);
+                const T* px = A + (transA ? i : i*lda);
+                const T* py = B + (transB ? j*ldb : j);
                 T v = beta == T(0) ? T(0) : *pz * beta;
                 for (size_t t = 0; t < k; t++) {
                     v += alpha * *px * *py;
@@ -55,10 +43,49 @@ gemm(const T& alpha, const Tensor<T>& A, const Tensor<T>& B,
 
 template <typename T>
 std::enable_if_t<cblas::RequireBlasType<T>>
-gemm(const T& alpha, const Tensor<T>& A, const Tensor<T>& B,
-     const T& beta, Tensor<T>* C,
-     bool transA = false, bool transB = false,
+gemm(const int m, const int n, const int k,
+     const T& alpha,
+     const T* A, const int lda,
+     const T* B, const int ldb,
+     const T& beta,
+     T* C, const int ldc,
+     const bool transA = false,
+     const bool transB = false,
      Tensor<T>* = nullptr)
+{
+    cblas::gemm(cblas::Layout::RowMajor,
+                transA ? cblas::Transpose::Trans : cblas::Transpose::NoTrans,
+                transB ? cblas::Transpose::Trans : cblas::Transpose::NoTrans,
+                m, n, k, alpha, A, lda, B, ldb, beta, C, ldc);
+}
+
+template <typename T>
+void gemm(const int m, const int n, const int k,
+          const T& alpha,
+          const gpgpu::Buffer<T>& A, const int lda,
+          const gpgpu::Buffer<T>& B, const int ldb,
+          const T& beta,
+          gpgpu::Buffer<T>& C, const int ldc,
+          const bool transA = false,
+          const bool transB = false,
+          DevTensor<T>* work = nullptr)
+{
+    gblas::gemm(gblas::Layout::RowMajor,
+                transA ? gblas::Transpose::Trans : gblas::Transpose::NoTrans,
+                transB ? gblas::Transpose::Trans : gblas::Transpose::NoTrans,
+                m, n, k, alpha, A, lda, B, ldb, beta, C, ldc,
+                work == nullptr ? nullptr : &work->data());
+}
+} // namespace detail
+
+template <typename TensorT>
+enable_if_non_view_tensor<TensorT, void>
+gemm(const tensor_value_type<TensorT>& alpha,
+     const TensorT& A, const TensorT& B,
+     const tensor_value_type<TensorT>& beta,
+     TensorT* C,
+     bool transA = false, bool transB = false,
+     TensorT* work = nullptr)
 {
     assert(A.is_matrix() && B.is_matrix() && C->is_matrix());
     auto m = A.extent(0), k = A.extent(1);
@@ -72,11 +99,14 @@ gemm(const T& alpha, const Tensor<T>& A, const Tensor<T>& B,
         throw shape_error("gemm: incompatible shape");
     C->resize({m, n});
 
-    cblas::gemm(cblas::Layout::RowMajor,
-                transA ? cblas::Transpose::Trans : cblas::Transpose::NoTrans,
-                transB ? cblas::Transpose::Trans : cblas::Transpose::NoTrans,
-                m, n, k, alpha, A.data(), A.stride(0), B.data(), B.stride(0),
-                beta, C->data(), C->stride(0));
+    detail::gemm(
+        m, n, k,
+        alpha,
+        A.data(), A.stride(0),
+        B.data(), B.stride(0),
+        beta,
+        C->data(), C->stride(0),
+        transA, transB, work);
 }
 
 template <typename T>
@@ -85,40 +115,6 @@ inline size_t gemmWorkspaceSize(
     bool = false, bool = false)
 {
     return 0; // API compatible to DevTensor
-}
-
-//==-------------------------------------------------------------------------
-// General matrix multiplication (Device)
-//==-------------------------------------------------------------------------
-
-template <typename T>
-void gemm(const T& alpha, const DevTensor<T>& A, const DevTensor<T>& B,
-          const T& beta, DevTensor<T>* C,
-          bool transA = false, bool transB = false,
-          DevTensor<T>* work = nullptr)
-{
-    assert(A.is_matrix() && B.is_matrix() && C->is_matrix());
-    auto m = A.extent(0), k = A.extent(1);
-    auto p = B.extent(0), n = B.extent(1);
-
-    if (transA)
-        std::swap(m, k);
-    if (transB)
-        std::swap(p, n);
-    if (k != p)
-        throw shape_error("gemm: incompatible shape");
-    C->resize({m, n});
-
-    gblas::gemm(gblas::Layout::RowMajor,
-                transA ? gblas::Transpose::Trans : gblas::Transpose::NoTrans,
-                transB ? gblas::Transpose::Trans : gblas::Transpose::NoTrans,
-                m, n, k,
-                alpha,
-                A.data(), A.stride(0),
-                B.data(), B.stride(0),
-                beta,
-                C->data(), C->stride(0),
-                work == nullptr ? nullptr : &work->data());
 }
 
 template <typename T>
@@ -142,10 +138,6 @@ inline size_t gemmWorkspaceSize(
         transB ? gblas::Transpose::Trans : gblas::Transpose::NoTrans,
         m, n, k, 0, A.stride(0), 0, B.stride(0), 0, C.stride(0));
 }
-
-//==-------------------------------------------------------------------------
-// General matrix multiplication (Uniform)
-//==-------------------------------------------------------------------------
 
 template <typename TensorT>
 inline enable_if_non_view_tensor<TensorT, void>

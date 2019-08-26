@@ -328,12 +328,11 @@ void conv2d(const Tensor<T>& X, const Tensor<T>& W, Tensor<T>& Y, const Filter2D
         for (size_t c = 0; c < group; c++) {
             im2col(x_buffer, work->data(), filter);
 
-            cblas::gemm(cblas::Layout::RowMajor,
-                        cblas::Transpose::NoTrans, cblas::Transpose::NoTrans,
-                        m, n, k,
-                        T{1}, w_buffer, W.stride(0),
-                        work->data(), work->stride(0),
-                        T{0}, y_buffer, Y.stride(1));
+            detail::gemm(
+                m, n, k,
+                T{1}, w_buffer, W.stride(0),
+                work->data(), work->stride(0),
+                T{0}, y_buffer, Y.stride(1));
 
             x_buffer += X.stride(0) / group;
             y_buffer += Y.stride(0) / group;
@@ -370,14 +369,6 @@ void conv2d(const DevTensor<T>& X, const DevTensor<T>& W, DevTensor<T>& Y,
                        work == nullptr ? nullptr : &work->data());
 }
 
-template <typename TensorT>
-enable_if_non_view_tensor<TensorT>
-conv2d(const TensorT& X, const TensorT& W, const Filter2D& filter, TensorT* work = nullptr) {
-    TensorT Y{};
-    conv2d(X, W, Y, filter, work);
-    return Y;
-}
-
 template <typename T>
 size_t conv2dWorkspaceSize(const DevTensor<T>&, const DevTensor<T>&, const Filter2D& filter) {
     return gpgpu::dnn::conv2dWorkspaceSize<T>(
@@ -390,6 +381,14 @@ size_t conv2dWorkspaceSize(const DevTensor<T>&, const DevTensor<T>&, const Filte
         filter.pad_bottom(), filter.pad_right(),
         filter.stride_h(), filter.stride_w(),
         filter.dilation_h(), filter.dilation_w());
+}
+
+template <typename TensorT>
+enable_if_non_view_tensor<TensorT>
+conv2d(const TensorT& X, const TensorT& W, const Filter2D& filter, TensorT* work = nullptr) {
+    TensorT Y{};
+    conv2d(X, W, Y, filter, work);
+    return Y;
 }
 
 //=--------------------------------------------------------------------------
