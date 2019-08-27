@@ -40,7 +40,7 @@ struct tensor_traits_impl<Tensor<T>> {
     using value_type = T;
 
     template <typename U>
-    using tensor_type = Tensor<std::decay_t<U>>;
+    using tensor_type = Tensor<std::remove_cv_t<std::decay_t<U>>>;
 
     template <typename U>
     using tensor_view_type = TensorView<std::decay_t<U>>;
@@ -54,7 +54,7 @@ struct tensor_traits_impl<TensorView<T>> {
     using value_type = T;
 
     template <typename U>
-    using tensor_type = Tensor<std::decay_t<U>>;
+    using tensor_type = Tensor<std::remove_cv_t<std::decay_t<U>>>;
 
     template <typename U>
     using tensor_view_type = TensorView<std::decay_t<U>>;
@@ -68,7 +68,7 @@ struct tensor_traits_impl<DevTensor<T>> {
     using value_type = T;
 
     template <typename U>
-    using tensor_type = DevTensor<std::decay_t<U>>;
+    using tensor_type = DevTensor<std::remove_cv_t<std::decay_t<U>>>;
 
     template <typename U>
     using tensor_view_type = DevTensorView<std::decay_t<U>>;
@@ -82,7 +82,7 @@ struct tensor_traits_impl<DevTensorView<T>> {
     using value_type = T;
 
     template <typename U>
-    using tensor_type = DevTensor<std::decay_t<U>>;
+    using tensor_type = DevTensor<std::remove_cv_t<std::decay_t<U>>>;
 
     template <typename U>
     using tensor_view_type = DevTensorView<std::decay_t<U>>;
@@ -120,7 +120,8 @@ using tensor_view_type = typename tensor_traits<TensorT>::template tensor_view_t
 
 template <typename X, typename Y>
 using is_exactly_same_tensor = cxx::conjunction<
-    is_same_tensor<X, Y>, std::is_same<tensor_value_type<X>, tensor_value_type<Y>>>;
+    is_same_tensor<X, Y>,
+    std::is_same<std::remove_cv_t<tensor_value_type<X>>, std::remove_cv_t<tensor_value_type<Y>>>>;
 
 template <typename TensorT, typename R = tensor_type<TensorT>>
 using enable_if_tensor = std::enable_if_t<is_tensor<TensorT>::value, R>;

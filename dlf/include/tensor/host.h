@@ -703,20 +703,6 @@ Tensor<T>& Tensor<T>::resize(const Shape& shape) {
 }
 
 //==-------------------------------------------------------------------------
-// Tensor attributes
-//==-------------------------------------------------------------------------
-
-template <typename T>
-inline bool operator==(const Tensor<T>& lhs, const Tensor<T>& rhs) {
-    return lhs.shape() == rhs.shape() && std::equal(lhs.begin(), lhs.end(), rhs.begin());
-}
-
-template <typename T>
-inline bool operator!=(const Tensor<T>& lhs, const Tensor<T>& rhs) {
-    return !(lhs == rhs);
-}
-
-//==-------------------------------------------------------------------------
 // TensorView implementation
 //==-------------------------------------------------------------------------
 
@@ -735,36 +721,6 @@ TensorView<T>::TensorView(Shape shape, const TensorView<T>& src)
       m_data(src.m_data),
       m_alloc_data(src.m_alloc_data)
 {}
-
-template <typename T>
-inline bool operator==(const TensorView<T>& lhs, const TensorView<T>& rhs) {
-    return lhs.shape() == rhs.shape() && std::equal(lhs.begin(), lhs.end(), rhs.begin());
-}
-
-template <typename T>
-inline bool operator==(const Tensor<T>& lhs, const TensorView<T>& rhs) {
-    return lhs.shape() == rhs.shape() && std::equal(lhs.begin(), lhs.end(), rhs.begin());
-}
-
-template <typename T>
-inline bool operator==(const TensorView<T>& lhs, const Tensor<T>& rhs) {
-    return lhs.shape() == rhs.shape() && std::equal(lhs.begin(), lhs.end(), rhs.begin());
-}
-
-template <typename T>
-inline bool operator!=(const TensorView<T>& lhs, const TensorView<T>& rhs) {
-    return !(lhs == rhs);
-}
-
-template <typename T>
-inline bool operator!=(const Tensor<T>& lhs, const TensorView<T>& rhs) {
-    return !(lhs == rhs);
-}
-
-template <typename T>
-inline bool operator!=(const TensorView<T>& lhs, const Tensor<T>& rhs) {
-    return !(lhs == rhs);
-}
 
 //==-------------------------------------------------------------------------
 // Tensor randomize

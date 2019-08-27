@@ -30,6 +30,7 @@ std::enable_if_t<is_cpu_tensor<Src>::value && is_cpu_tensor<Dst>::value>
 reorder(const Src& src, const Shape& src_shape, Dst& dst, const Shape& dst_shape) {
     assert(src_shape == dst_shape);
     using T = tensor_value_type<Src>;
+    using U = tensor_value_type<Dst>;
 
     if (src_shape.is_contiguous() && dst_shape.is_contiguous() &&
         src.data() == dst.data() && src_shape.offset() == dst_shape.offset())
@@ -60,8 +61,8 @@ reorder(const Src& src, const Shape& src_shape, Dst& dst, const Shape& dst_shape
                   dst.data() + dst_shape.offset());
     } else {
         if (src.original_shape().size() == 1) {
-            std::fill(shaped_iterator<T>(dst_shape, dst.data(), 0),
-                      shaped_iterator<T>(dst_shape, dst.data(), dst_shape.size()),
+            std::fill(shaped_iterator<U>(dst_shape, dst.data(), 0),
+                      shaped_iterator<U>(dst_shape, dst.data(), dst_shape.size()),
                       *src.data());
             return;
         }
@@ -69,13 +70,13 @@ reorder(const Src& src, const Shape& src_shape, Dst& dst, const Shape& dst_shape
         if (src_shape.is_contiguous()) {
             par::copy(src.data() + src_shape.offset(),
                       src.data() + src_shape.offset() + src_shape.size(),
-                      shaped_iterator<T>(dst_shape, dst.data(), 0));
+                      shaped_iterator<U>(dst_shape, dst.data(), 0));
             return;
         }
 
         par::copy(const_shaped_iterator<T>(src_shape, src.data(), 0),
                   const_shaped_iterator<T>(src_shape, src.data(), src_shape.size()),
-                  shaped_iterator<T>(dst_shape, dst.data(), 0));
+                  shaped_iterator<U>(dst_shape, dst.data(), 0));
     }
 }
 

@@ -591,6 +591,24 @@ DEFINE_BINARY_OPERATOR(^, bit_xor)
 #undef DEFINE_BINARY_OPERATOR
 
 template <typename LHS, typename RHS>
+std::enable_if_t<
+    is_cpu_tensor<LHS>::value && is_cpu_tensor<RHS>::value &&
+    is_exactly_same_tensor<LHS, RHS>::value,
+    bool>
+inline operator==(const LHS& lhs, const RHS& rhs) {
+    return lhs.shape() == rhs.shape() && std::equal(lhs.begin(), lhs.end(), rhs.begin());
+}
+
+template <typename LHS, typename RHS>
+std::enable_if_t<
+    is_cpu_tensor<LHS>::value && is_cpu_tensor<RHS>::value &&
+    is_exactly_same_tensor<LHS, RHS>::value,
+    bool>
+inline operator!=(const LHS& lhs, const RHS& rhs) {
+    return !(lhs == rhs);
+}
+
+template <typename LHS, typename RHS>
 enable_if_tensors<LHS, RHS, xfn::less<>>
 inline operator<(LHS&& lhs, RHS&& rhs) {
     return transform(std::forward<LHS>(lhs), std::forward<RHS>(rhs), xfn::less<>());

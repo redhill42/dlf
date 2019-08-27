@@ -48,6 +48,14 @@ TEST(UniformTest, BroadcastTransformOnView) {
     EXPECT_EQ(dev_Z.read(), Z);
 }
 
+TEST(UniformTest, TransformOnConstantElements) {
+    auto A = Tensor<float>({2, 2}, 0.f);
+    auto B = Tensor<const float>::wrap({2, 2}, A.data());
+    A + B; matmul(A, B);
+    B + A; matmul(B, A);
+    B + B; matmul(B, B);
+}
+
 template <typename T> struct MatMulTest : public testing::Test {};
 using MatMulTestTypes = testing::Types<float, int>;
 TYPED_TEST_CASE(MatMulTest, MatMulTestTypes);
