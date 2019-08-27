@@ -768,7 +768,7 @@ TEST(UniformTest, TensorDotExt) {
         "acccbbdddd", "aaaaacccccccbbbbbbdddddddd",
     }));
 
-    EXPECT_EQ(tensordot(a, A, 0), cross(a, A));
+    EXPECT_EQ(tensordot(a, A, 0), outer(a, A));
     EXPECT_EQ(tensordot(a, A, 1), dot(a, A));
 }
 
@@ -782,6 +782,36 @@ TEST(UniformTest, MatPowGPU) {
     auto A = dev(Tensor<int>({2, 2}, {1, 1, 1, 0}));
     EXPECT_EQ(matpow(A, 0).read()(0, 0), 1);
     EXPECT_EQ(matpow(A, 11).read()(0, 0), 144);
+}
+
+TEST(UniformTest, Kronecker) {
+    auto A = Tensor<int>::range({2, 2, 3}, 1);
+    auto B = Tensor<int>::range({2, 2, 2}, 1);
+    auto C = kronecker(A, B);
+
+    EXPECT_EQ(C, Tensor<int>({4, 4, 6}, {
+         1,  2,  2,  4,  3,  6,
+         3,  4,  6,  8,  9, 12,
+         4,  8,  5, 10,  6, 12,
+        12, 16, 15, 20, 18, 24,
+
+         5,  6, 10, 12, 15, 18,
+         7,  8, 14, 16, 21, 24,
+        20, 24, 25, 30, 30, 36,
+        28, 32, 35, 40, 42, 48,
+
+         7, 14,  8, 16,  9, 18,
+        21, 28, 24, 32, 27, 36,
+        10, 20, 11, 22, 12, 24,
+        30, 40, 33, 44, 36, 48,
+
+        35, 42, 40, 48, 45, 54,
+        49, 56, 56, 64, 63, 72,
+        50, 60, 55, 66, 60, 72,
+        70, 80, 77, 88, 84, 96
+    }));
+
+    EXPECT_EQ(kronecker(dev(A), dev(B)).read(), C);
 }
 
 TEST(UniformTest, PowCPU) {

@@ -473,8 +473,8 @@ TEST_F(TensorTest, VectorOuter) {
         2, 4, 6, 8,
         3, 6, 9, 12
     });
-    EXPECT_EQ(cross(A, B), C);
-    EXPECT_EQ(cross(dev(A), dev(B)).read(), C);
+    EXPECT_EQ(outer(A, B), C);
+    EXPECT_EQ(outer(dev(A), dev(B)).read(), C);
 }
 
 TEST_F(TensorTest, MatrixOuter) {
@@ -486,13 +486,13 @@ TEST_F(TensorTest, MatrixOuter) {
         15, 18, 21, 24, 27, 30,
         20, 24, 28, 32, 36, 40
     });
-    EXPECT_EQ(cross(A, B), C);
-    EXPECT_EQ(cross(dev(A), dev(B)).read(), C);
+    EXPECT_EQ(outer(A, B), C);
+    EXPECT_EQ(outer(dev(A), dev(B)).read(), C);
 }
 
 TEST_F(TensorTest, MatrixOuterView) {
     auto A = Tensor<int>::range({5, 2}, 1);
-    auto C = cross(A.slice({{0,2}}), A.slice({{2,5}}));
+    auto C = outer(A.slice({{0,2}}), A.slice({{2,5}}));
     EXPECT_EQ(C, Tensor<int>({2, 2, 3, 2}, {
          5,  6,  7,  8,  9, 10,
         10, 12, 14, 16, 18, 20,

@@ -598,16 +598,15 @@ std::enable_if_t<is_exactly_same_tensor<LHS, RHS>::value, tensor_type<LHS>>
 dot(const LHS& A, const RHS& B) {
     if (A.is_scalar() || B.is_scalar())
         return A * B;
-    if (A.rank() <= 2 && B.rank() <= 2)
+    if ((A.rank() <= 2 && B.rank() <= 2) || B.rank() == 1)
         return matmul(A, B);
 
-    std::vector<int> pads;
+    std::vector<int> unsq;
     for (int i = 0; i < B.rank()-1; i++) {
-        pads.push_back(i + A.rank() - 1);
+        unsq.push_back(i + A.rank() - 1);
     }
 
-    auto vA = tensor_view_type<LHS>(A.shape().unsqueeze(pads), A);
-    auto C = matmul(std::move(vA), B);
+    auto C = matmul(unsqueeze(A, unsq), B);
     C.squeeze(-2);
     return C;
 }
@@ -628,105 +627,6 @@ inline operator,(const LHS& lhs, const RHS& rhs) {
     return dot(lhs, rhs);
 }
 } // namespace dot_product
-
-/**
- * Compute tensor dot product along specified axes.
- *
- * Given two tensors, A and B, and two axes array, a_axes and b_axes, sum the
- * products of A's and B's elements (components) over the axes specified by
- * a_axes and b_axes.
- *
- * @param A, B Tensors to "dot".
- * @param axes_a, axes_b
- *        A list of axes to be summed over. Both elements must be of the same
- *        length.
- */
-template <typename LHS, typename RHS>
-std::enable_if_t<is_exactly_same_tensor<LHS, RHS>::value, tensor_type<LHS>>
-tensordot(const LHS& A, const RHS& B, std::vector<int> axes_a, std::vector<int> axes_b) {
-    bool equal = false;
-    if (axes_a.size() == axes_b.size()) {
-        equal = true;
-        for (int k = 0; k < axes_a.size(); k++) {
-            if (axes_a[k] < 0)
-                axes_a[k] += A.rank();
-            if (axes_a[k] < 0 || axes_a[k] >= A.rank())
-                throw shape_error("tensordot: axes_a has incorrect value");
-
-            if (axes_b[k] < 0)
-                axes_b[k] += B.rank();
-            if (axes_b[k] < 0 || axes_b[k] >= B.rank())
-                throw shape_error("tensordot: axes_b has incorrect value");
-
-            if (A.extent(axes_a[k]) != B.extent(axes_b[k])) {
-                equal = false;
-                break;
-            }
-        }
-    }
-    if (!equal) {
-        throw shape_error("tensordot: shape-mismatch");
-    }
-
-    std::vector<int> out_dims;
-
-    // Move the axes to sum over to the end of A
-    std::vector<size_t> newaxes_a;
-    int M = 1, K = 1;
-    for (int k = 0; k < A.rank(); k++) {
-        if (std::find(axes_a.begin(), axes_a.end(), k) == axes_a.end()) {
-            newaxes_a.push_back(k);
-            out_dims.push_back(A.extent(k));
-            M *= A.extent(k);
-        }
-    }
-    for (auto k : axes_a) {
-        newaxes_a.push_back(k);
-        K *= A.extent(k);
-    }
-
-    // Move the axes to sum over to the front of B
-    std::vector<size_t> newaxes_b;
-    int P = 1, N = 1;
-    for (auto k : axes_b) {
-        newaxes_b.push_back(k);
-        P *= B.extent(k);
-    }
-    for (int k = 0; k < B.rank(); k++) {
-        if (std::find(axes_b.begin(), axes_b.end(), k) == axes_b.end()) {
-            newaxes_b.push_back(k);
-            out_dims.push_back(B.extent(k));
-            N *= B.extent(k);
-        }
-    }
-
-    auto at = reshape(A.transpose(newaxes_a), {M, K});
-    auto bt = reshape(B.transpose(newaxes_b), {P, N});
-    auto res = matmul(at, bt);
-    res.reshape(out_dims);
-    return res;
-}
-
-/**
- * Compute tensor dot product along specified axis
- *
- * Given two tensors, A and B, and an axis N, the products of last N dimensions
- * of A and the first N dimensions of B are summed over.
- *
- * @param A, B Tensors to "dot".
- * @param N Sum over the last N axes of A and the first N axes of B in order.
- *        The size of the corresponding axes must match.
- */
-template <typename LHS, typename RHS>
-std::enable_if_t<is_exactly_same_tensor<LHS, RHS>::value, tensor_type<LHS>>
-tensordot(const LHS& A, const RHS& B, int N = 2) {
-    std::vector<int> axes_a, axes_b;
-    for (int i = 0; i < N; i++) {
-        axes_a.push_back(i-N);
-        axes_b.push_back(i);
-    }
-    return tensordot(A, B, axes_a, axes_b);
-}
 
 //==-------------------------------------------------------------------------
 
@@ -848,31 +748,223 @@ multi_dot(const First& first, const Rest&... rest) {
 //==-------------------------------------------------------------------------
 
 /**
- * The cross product on tensors is typically referred to as the tensor product.
+ * Compute tensor dot product along specified axes.
+ *
+ * Given two tensors, A and B, and two axes array, a_axes and b_axes, sum the
+ * products of A's and B's elements (components) over the axes specified by
+ * a_axes and b_axes.
+ *
+ * @param A, B Tensors to "dot".
+ * @param axes_a, axes_b
+ *        A list of axes to be summed over. Both elements must be of the same
+ *        length.
+ */
+template <typename LHS, typename RHS>
+std::enable_if_t<is_exactly_same_tensor<LHS, RHS>::value, tensor_type<LHS>>
+tensordot(const LHS& A, const RHS& B, std::vector<int> axes_a, std::vector<int> axes_b) {
+    bool equal = false;
+    if (axes_a.size() == axes_b.size()) {
+        equal = true;
+        for (int k = 0; k < axes_a.size(); k++) {
+            if (axes_a[k] < 0)
+                axes_a[k] += A.rank();
+            if (axes_a[k] < 0 || axes_a[k] >= A.rank())
+                throw shape_error("tensordot: axes_a has incorrect value");
+
+            if (axes_b[k] < 0)
+                axes_b[k] += B.rank();
+            if (axes_b[k] < 0 || axes_b[k] >= B.rank())
+                throw shape_error("tensordot: axes_b has incorrect value");
+
+            if (A.extent(axes_a[k]) != B.extent(axes_b[k])) {
+                equal = false;
+                break;
+            }
+        }
+    }
+    if (!equal) {
+        throw shape_error("tensordot: shape-mismatch");
+    }
+
+    std::vector<int> out_dims;
+
+    // Move the axes to sum over to the end of A
+    std::vector<size_t> newaxes_a;
+    int M = 1, K = 1;
+    for (int k = 0; k < A.rank(); k++) {
+        if (std::find(axes_a.begin(), axes_a.end(), k) == axes_a.end()) {
+            newaxes_a.push_back(k);
+            out_dims.push_back(A.extent(k));
+            M *= A.extent(k);
+        }
+    }
+    for (auto k : axes_a) {
+        newaxes_a.push_back(k);
+        K *= A.extent(k);
+    }
+
+    // Move the axes to sum over to the front of B
+    std::vector<size_t> newaxes_b;
+    int P = 1, N = 1;
+    for (auto k : axes_b) {
+        newaxes_b.push_back(k);
+        P *= B.extent(k);
+    }
+    for (int k = 0; k < B.rank(); k++) {
+        if (std::find(axes_b.begin(), axes_b.end(), k) == axes_b.end()) {
+            newaxes_b.push_back(k);
+            out_dims.push_back(B.extent(k));
+            N *= B.extent(k);
+        }
+    }
+
+    if (out_dims.empty()) {
+        out_dims.push_back(1);
+    }
+
+    auto at = reshape(A.transpose(newaxes_a), {M, K});
+    auto bt = reshape(B.transpose(newaxes_b), {P, N});
+    auto res = matmul(at, bt);
+    res.reshape(out_dims);
+    return res;
+}
+
+/**
+ * Compute tensor dot product along specified axis
+ *
+ * Given two tensors, A and B, and an axis N, the products of last N dimensions
+ * of A and the first N dimensions of B are summed over.
+ *
+ * Three common use cases are:
+ *
+ *     - N = 0: tensor product
+ *     - N = 1: tensor dot product
+ *     - N = 2: (default) tensor double contraction
+ *
+ * The sequence for evaluation will be: first the -Nth axis in A and 0th axis in
+ * B, and the -1th axis in A and Nth axis in B last.
+ *
+ * @param A, B Tensors to "dot".
+ * @param N Sum over the last N axes of A and the first N axes of B in order.
+ *        The size of the corresponding axes must match.
+ */
+template <typename LHS, typename RHS>
+std::enable_if_t<is_exactly_same_tensor<LHS, RHS>::value, tensor_type<LHS>>
+tensordot(const LHS& A, const RHS& B, int N = 2) {
+    std::vector<int> axes_a, axes_b;
+    for (int i = 0; i < N; i++) {
+        axes_a.push_back(i-N);
+        axes_b.push_back(i);
+    }
+    return tensordot(A, B, axes_a, axes_b);
+}
+
+//==-------------------------------------------------------------------------
+
+/**
+ * Inner product of two tensors.
+ *
+ * Ordinary inner product of vectors for 1-D tensor (without complex conjugation),
+ * in higher dimensions a sum product over the last axes.
+ *
+ * For vectors (1-D tensor) it computes the ordinary inner-product.
+ *
+ * More generally, if A.rank() > 0 and B.rank() > 0:
+ *
+ *     inner(A, B) = tensordot(A, B, {-1}, {-1})
+ */
+template <typename LHS, typename RHS>
+std::enable_if_t<is_exactly_same_tensor<LHS, RHS>::value, tensor_type<LHS>>
+inner(LHS&& A, RHS&& B) {
+    if (A.is_vector() && B.is_vector())
+        return dot(A, B);
+    return tensordot(A, B, {-1}, {-1});
+}
+
+//==-------------------------------------------------------------------------
+
+/**
+ * The outer product on tensors is typically referred to as the tensor product.
  * Given a tensor a of order q with dimensions (i1, ..., iq), and a tensor b
- * of order r with dimensions (j1, ..., jr), their cross product c is of order
+ * of order r with dimensions (j1, ..., jr), their outer product c is of order
  * q + r with dimensions (k1, ..., kq+r) which are the i dimensions followed
  * by the j dimensions.
  */
 template <typename LHS, typename RHS, typename Fn>
 enable_if_tensors<LHS, RHS, Fn>
-cross(const LHS& A, const RHS& B, Fn f) {
+outer(const LHS& A, const RHS& B, Fn f) {
     std::vector<int> axesA(B.rank()), axesB(A.rank());
     std::iota(axesA.begin(), axesA.end(), A.rank()); // unsqueeze right
     std::iota(axesB.begin(), axesB.end(), 0);        // unsqueeze left
-    return transform(tensor_view_type<LHS>(A.shape().unsqueeze(axesA), A),
-                     tensor_view_type<RHS>(B.shape().unsqueeze(axesB), B),
-                     f);
+    return transform(unsqueeze(A, axesA), unsqueeze(B, axesB), f);
 }
 
 template <typename LHS, typename RHS>
 enable_if_tensors<LHS, RHS, xfn::multiplies<>>
-inline cross(const LHS& lhs, const RHS& rhs) {
-    return cross(lhs, rhs, xfn::multiplies<>());
+inline outer(const LHS& lhs, const RHS& rhs) {
+    return outer(lhs, rhs, xfn::multiplies<>());
 }
 
 //==-------------------------------------------------------------------------
-// Linear algebra operations
+
+/**
+ * Computes the Kronecker product, a composite tensor made of blocks of the second
+ * tensor scaled by the first.
+ *
+ * The function assumes that the number of dimensions of a and b are the same,
+ * if necessary prepending the smallest with ones. If A.shape = (r0,r1,rN) and
+ * B.shape = (s0,s1,...,sN), the kronecker product has shape (r0*s0,r1*s1,...,rN*sN).
+ * The elements are products of elements from A and B, organized explicitly by:
+ *
+ *     kron(A,B)[k0,k1,...,kN] = A[i0,i1,...,iN] * B[j0,j1,...,jN]
+ *
+ * where:
+ *
+ *     kt = it * st + jt,  t = 0,...,N
+ */
+template <typename LHS, typename RHS>
+enable_if_tensors<LHS, RHS, xfn::multiplies<>>
+kronecker(LHS&& A, RHS&& B) {
+    auto rank = std::max(A.rank(), B.rank());
+    auto a_unsq = std::vector<int>(rank);
+    auto b_unsq = std::vector<int>(rank);
+    auto a_dims = A.shape().extents();
+    auto b_dims = B.shape().extents();
+    auto c_dims = std::vector<size_t>();
+    auto final_dims = std::vector<size_t>();
+
+    std::iota(a_unsq.begin(), a_unsq.end(), rank); // unsqueeze right
+    std::iota(b_unsq.begin(), b_unsq.end(), 0);    // unsqueeze left
+
+    while (a_dims.size() < rank) {
+        a_dims.insert(a_dims.begin(), 1);
+        a_unsq.push_back(rank - a_dims.size());
+    }
+    while (b_dims.size() < rank) {
+        b_dims.insert(b_dims.begin(), 1);
+        b_unsq.push_back(2*rank - b_dims.size());
+    }
+
+    for (int i = 0; i < rank; i++) {
+        c_dims.push_back(a_dims[i]);
+        c_dims.push_back(b_dims[i]);
+        final_dims.push_back(a_dims[i] * b_dims[i]);
+    }
+
+    auto c_order = std::vector<size_t>();
+    for (int i = 0; i < rank; i++)
+        c_order.push_back(i*2);
+    for (int i = 0; i < rank; i++)
+        c_order.push_back(i*2+1);
+
+    tensor_invoke_result<xfn::multiplies<>, LHS, RHS> C(Shape{c_dims});
+    transformTo(unsqueeze(std::forward<LHS>(A), a_unsq),
+                unsqueeze(std::forward<RHS>(B), b_unsq),
+                C.transpose(c_order), xfn::multiplies<>());
+    C.reshape(Shape{final_dims});
+    return C;
+}
+
 //==-------------------------------------------------------------------------
 
 /**
