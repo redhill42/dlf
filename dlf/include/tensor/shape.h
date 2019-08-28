@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <unordered_set>
 #include <iterator>
 #include <cassert>
 #include <cstdlib>
@@ -631,5 +632,44 @@ public:
         return &m_data[offset()];
     }
 };
+
+//---------------------------------------------------------------------------
+
+namespace detail {
+template <int = 0>
+void norm_axis(const int rank, int& axis) {
+    if (axis < 0) axis += rank;
+    if (axis < 0 || axis >= rank)
+        throw shape_error("axis has incorrect value");
+}
+
+template <int = 0>
+void norm_axes(const int rank, int& axis1, int& axis2, bool allow_duplicates = false) {
+    if (axis1 < 0) axis1 += rank;
+    if (axis1 < 0 || axis1 >= rank)
+        throw shape_error("axis1 has incorrect value");
+    if (axis2 < 0) axis2 += rank;
+    if (axis2 < 0 || axis2 >= rank)
+        throw shape_error("axis2 has incorrect value");
+    if (!allow_duplicates && axis1 == axis2)
+        throw shape_error("axis1 and axis2 must have different value");
+}
+
+template <int = 0>
+void norm_axes(const int rank, std::vector<int>& axes, bool allow_duplicates = false) {
+    for (auto& k : axes) {
+        norm_axis(rank, k);
+    }
+
+    if (!allow_duplicates) {
+        std::unordered_set<int> unique_axes;
+        for (auto k : axes) {
+            if (unique_axes.find(k) != unique_axes.end())
+                throw shape_error("axes has duplicates");
+            unique_axes.insert(k);
+        }
+    }
+}
+} // namespace detail
 
 } // namespace dlf

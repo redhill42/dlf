@@ -892,17 +892,17 @@ inner(LHS&& A, RHS&& B) {
  */
 template <typename LHS, typename RHS, typename Fn>
 enable_if_tensors<LHS, RHS, Fn>
-outer(const LHS& A, const RHS& B, Fn f) {
-    std::vector<int> axesA(B.rank()), axesB(A.rank());
-    std::iota(axesA.begin(), axesA.end(), A.rank()); // unsqueeze right
-    std::iota(axesB.begin(), axesB.end(), 0);        // unsqueeze left
-    return transform(unsqueeze(A, axesA), unsqueeze(B, axesB), f);
+inline outer(LHS&& A, RHS&& B, Fn f) {
+    auto rank = A.rank() + B.rank();
+    return transform(unsqueeze_right(std::forward<LHS>(A), rank),
+                     unsqueeze_left(std::forward<RHS>(B), rank),
+                     f);
 }
 
 template <typename LHS, typename RHS>
 enable_if_tensors<LHS, RHS, xfn::multiplies<>>
-inline outer(const LHS& lhs, const RHS& rhs) {
-    return outer(lhs, rhs, xfn::multiplies<>());
+inline outer(LHS&& A, RHS&& B) {
+    return outer(std::forward<LHS>(A), std::forward<RHS>(B), xfn::multiplies<>());
 }
 
 //==-------------------------------------------------------------------------
@@ -926,42 +926,24 @@ template <typename LHS, typename RHS>
 enable_if_tensors<LHS, RHS, xfn::multiplies<>>
 kronecker(LHS&& A, RHS&& B) {
     auto rank = std::max(A.rank(), B.rank());
-    auto a_unsq = std::vector<int>(rank);
-    auto b_unsq = std::vector<int>(rank);
     auto a_dims = A.shape().extents();
     auto b_dims = B.shape().extents();
-    auto c_dims = std::vector<size_t>();
-    auto final_dims = std::vector<size_t>();
+    auto c_dims = std::vector<size_t>(rank);
 
-    std::iota(a_unsq.begin(), a_unsq.end(), rank); // unsqueeze right
-    std::iota(b_unsq.begin(), b_unsq.end(), 0);    // unsqueeze left
-
-    while (a_dims.size() < rank) {
+    while (a_dims.size() < rank)
         a_dims.insert(a_dims.begin(), 1);
-        a_unsq.push_back(rank - a_dims.size());
-    }
-    while (b_dims.size() < rank) {
+    while (b_dims.size() < rank)
         b_dims.insert(b_dims.begin(), 1);
-        b_unsq.push_back(2*rank - b_dims.size());
-    }
-
-    for (int i = 0; i < rank; i++) {
-        c_dims.push_back(a_dims[i]);
-        c_dims.push_back(b_dims[i]);
-        final_dims.push_back(a_dims[i] * b_dims[i]);
-    }
-
-    auto c_order = std::vector<size_t>();
     for (int i = 0; i < rank; i++)
-        c_order.push_back(i*2);
-    for (int i = 0; i < rank; i++)
-        c_order.push_back(i*2+1);
+        c_dims[i] = a_dims[i] * b_dims[i];
+
+    std::vector<int> axes(rank);
+    std::iota(axes.begin(), axes.end(), 0);
 
     tensor_invoke_result<xfn::multiplies<>, LHS, RHS> C(Shape{c_dims});
-    transformTo(unsqueeze(std::forward<LHS>(A), a_unsq),
-                unsqueeze(std::forward<RHS>(B), b_unsq),
-                C.transpose(c_order), xfn::multiplies<>());
-    C.reshape(Shape{final_dims});
+    transformTo(unsqueeze_right(unsqueeze_left(std::forward<LHS>(A), rank), rank*2),
+                unsqueeze_left(std::forward<RHS>(B), rank*2),
+                partition(C, axes, b_dims), xfn::multiplies<>());
     return C;
 }
 

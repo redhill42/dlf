@@ -1,7 +1,5 @@
 #pragma once
 
-#include <unordered_set>
-
 namespace dlf {
 
 //==-------------------------------------------------------------------------
@@ -191,6 +189,26 @@ inline auto unsqueeze(TensorT&& X, const std::vector<int>& axes) {
     return tensor_view_type<TensorT>(X.shape().unsqueeze(axes), std::forward<TensorT>(X));
 }
 
+template <typename TensorT>
+auto unsqueeze_left(TensorT&& X, size_t rank) {
+    if (X.rank() < rank) {
+        std::vector<int> axes(rank - X.rank());
+        std::iota(axes.begin(), axes.end(), 0);
+        return unsqueeze(std::forward<TensorT>(X), axes);
+    }
+    return X.view();
+}
+
+template <typename TensorT>
+auto unsqueeze_right(TensorT&& X, size_t rank) {
+    if (X.rank() < rank) {
+        std::vector<int> axes(rank - X.rank());
+        std::iota(axes.begin(), axes.end(), X.rank());
+        return unsqueeze(std::forward<TensorT>(X), axes);
+    }
+    return X.view();
+}
+
 //==-------------------------------------------------------------------------
 // Reorder operations used by DNN
 //==-------------------------------------------------------------------------
@@ -264,46 +282,97 @@ inline as_strided(
     return tensor_view_type<TensorT>(Shape::as_strided(shape, strides), X);
 }
 
+template <typename TensorT>
+enable_if_tensor<TensorT, tensor_view_type<TensorT>>
+partition(const TensorT& X,
+          std::vector<int> axes,
+          std::vector<size_t> extents,
+          std::vector<size_t> strides = {},
+          std::vector<size_t> steps = {})
+{
+    if (axes.empty()) {
+        axes.resize(X.rank());
+        std::iota(axes.begin(), axes.end(), 0);
+    } else {
+        detail::norm_axes(X.rank(), axes);
+    }
+
+    assert(extents.size() == axes.size());
+    assert(strides.empty() || strides.size() == axes.size());
+    assert(steps.empty() || steps.size() == axes.size());
+
+    if (strides.empty()) {
+        strides.resize(axes.size());
+        std::copy(extents.begin(), extents.end(), strides.begin());
+    }
+    if (steps.empty()) {
+        steps.resize(axes.size());
+        std::fill(steps.begin(), steps.end(), 1);
+    }
+
+    // Create strided shape
+    auto rank = X.rank();
+    std::vector<size_t> shape_extents, shape_strides;
+
+    for (int k = 0; k < rank; k++) {
+        auto it = std::find(axes.begin(), axes.end(), k);
+        if (it == axes.end()) {
+            shape_extents.push_back(X.extent(k));
+            shape_strides.push_back(X.stride(k));
+        } else {
+            auto i = it - axes.begin();
+            assert(extents[i] > 0 && strides[i] > 0 && steps[i] > 0);
+            auto d = steps[i] * (extents[i] - 1) + 1;
+            assert(X.extent(k) >= d);
+            d = (X.extent(k) - d) / strides[i] + 1;
+            shape_extents.push_back(d);
+            shape_strides.push_back(d == 1 ? 0 : X.stride(k) * strides[i]);
+        }
+    }
+
+    for (int k = 0; k < rank; k++) {
+        auto it = std::find(axes.begin(), axes.end(), k);
+        if (it == axes.end()) {
+            shape_extents.push_back(1);
+            shape_strides.push_back(0);
+        } else {
+            auto i = it - axes.begin();
+            shape_extents.push_back(extents[i]);
+            shape_strides.push_back(X.stride(k) * steps[i]);
+        }
+    }
+
+    auto strided_shape = X.shape().as_strided(shape_extents, shape_strides);
+
+    // Squeeze axes that not partitioned
+    std::vector<int> sq;
+    for (int k = 0; k < rank; k++) {
+        if (std::find(axes.begin(), axes.end(), k) == axes.end())
+            sq.push_back(rank + k);
+    }
+    if (!sq.empty()) {
+        strided_shape = strided_shape.squeeze(sq);
+    }
+
+    // Return the partitioned view
+    return tensor_view_type<TensorT>(strided_shape, X);
+}
+
+template <typename TensorT>
+enable_if_tensor<TensorT, tensor_view_type<TensorT>>
+inline partition(const TensorT& X, int k, size_t n, size_t d, size_t s = 1) {
+    return partition(X, std::vector<int>{k}, {n}, {d}, {s});
+}
+
+template <typename TensorT>
+enable_if_tensor<TensorT, tensor_view_type<TensorT>>
+inline partition(const TensorT& X, int k, size_t n) {
+    return partition(X, k, n, n, 1);
+}
+
 //==-------------------------------------------------------------------------
 // Convenient routines
 //==-------------------------------------------------------------------------
-
-namespace detail {
-template <int = 0>
-void norm_axis(const int rank, int& axis) {
-    if (axis < 0) axis += rank;
-    if (axis < 0 || axis >= rank)
-        throw shape_error("axis has incorrect value");
-}
-
-template <int = 0>
-void norm_axes(const int rank, int& axis1, int& axis2, bool allow_duplicates = false) {
-    if (axis1 < 0) axis1 += rank;
-    if (axis1 < 0 || axis1 >= rank)
-        throw shape_error("axis1 has incorrect value");
-    if (axis2 < 0) axis2 += rank;
-    if (axis2 < 0 || axis2 >= rank)
-        throw shape_error("axis2 has incorrect value");
-    if (!allow_duplicates && axis1 == axis2)
-        throw shape_error("axis1 and axis2 must have different value");
-}
-
-template <int = 0>
-void norm_axes(const int rank, std::vector<int>& axes, bool allow_duplicates = false) {
-    for (auto& k : axes) {
-        norm_axis(rank, k);
-    }
-
-    if (!allow_duplicates) {
-        std::unordered_set<int> unique_axes;
-        for (auto k : axes) {
-            if (unique_axes.find(k) != unique_axes.end())
-                throw shape_error("axes has duplicates");
-            unique_axes.insert(k);
-        }
-    }
-}
-} // namespace detail
 
 /**
  * Move axes of a tensor to new positions. Other axes remain in their original
