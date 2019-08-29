@@ -17,12 +17,12 @@ TYPED_TEST(PredictTest, Simple) {
 
     auto x = g.append<Add>();
     x->addInput(g.addInput("A", DataType::FLOAT, {2, 3}));
-    x->addInput(g.addInput("B", DataType::FLOAT, {1}));
+    x->addInput(g.addInput("B", DataType::FLOAT, {}));
     x->addOutput("X");
 
     auto y = g.append<Mul>();
     y->addInput(x->output());
-    y->addInput(g.addInput("C", DataType::FLOAT, {1}));
+    y->addInput(g.addInput("C", DataType::FLOAT, {}));
     g.addOutput(y->addOutput("Y"));
 
     auto o1 = g.append<Clip>()->min(10)->max(15);

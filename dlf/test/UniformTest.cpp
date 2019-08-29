@@ -12,6 +12,62 @@ void ExpectElementsEQ(const Tensor<T>& a, const Tensor<T>& b) {
     }
 }
 
+TEST(UniformTest, ScalarRobust) {
+    auto V = Tensor<int>::range({5}, 1);
+    auto x = Tensor<int>::scalar(3);
+    auto y = Tensor<int>::scalar(7);
+    auto v = Tensor<int>({1}, 3); // a vector instead of scalar
+
+    auto W = Tensor<int>({5}, {3, 6, 9, 12, 15});
+    EXPECT_EQ(V * x, W);
+    EXPECT_EQ(x * V, W);
+    EXPECT_EQ(dot(V, x), W);
+    EXPECT_EQ(dot(x, V), W);
+    EXPECT_EQ(inner(V, x), W);
+    EXPECT_EQ(inner(x, V), W);
+    EXPECT_ANY_THROW(matmul(V, x));
+    EXPECT_ANY_THROW(matmul(x, V));
+    EXPECT_ANY_THROW(tensordot(V, x));
+    EXPECT_ANY_THROW(tensordot(x, V));
+
+    EXPECT_EQ(matmul(V, V), Tensor<int>::scalar(55));
+    EXPECT_EQ(dot(V, V), Tensor<int>::scalar(55));
+    EXPECT_EQ(inner(V, V), Tensor<int>::scalar(55));
+    EXPECT_ANY_THROW(tensordot(V, V));
+
+    EXPECT_EQ(V * v, W); // broadcast
+    EXPECT_EQ(v * V, W);
+    EXPECT_ANY_THROW(dot(v, V)); // incompatible shape
+    EXPECT_ANY_THROW(dot(V, v));
+    EXPECT_ANY_THROW(inner(v, V));
+    EXPECT_ANY_THROW(inner(V, v));
+
+    EXPECT_EQ(x * y, Tensor<int>::scalar(21));
+    EXPECT_EQ(dot(x, y), Tensor<int>::scalar(21));
+    EXPECT_EQ(inner(x, y), Tensor<int>::scalar(21));
+    EXPECT_ANY_THROW(matmul(x, y));
+    EXPECT_ANY_THROW(tensordot(x, y));
+
+    EXPECT_EQ(x, x);
+    EXPECT_NE(x, y);
+    EXPECT_EQ(x.transpose(), x);
+
+    EXPECT_EQ(squeeze(x), x);
+    EXPECT_ANY_THROW(squeeze(x, {0}));
+    EXPECT_EQ(squeeze(v), x);
+    EXPECT_EQ(unsqueeze(x, {0}), v);
+
+    EXPECT_TRUE(V[0].is_scalar());
+    EXPECT_TRUE(V["0"].is_vector());
+    EXPECT_ANY_THROW(x[0]);
+    EXPECT_ANY_THROW(x["0"]);
+    EXPECT_EQ(*x, 3);
+    EXPECT_EQ(x(), 3);
+    EXPECT_EQ(*V[3], 4);
+    EXPECT_EQ(V[3](), 4);
+    EXPECT_EQ(V["3"](0), 4);
+}
+
 TEST(UniformTest, BroadcastTransform) {
     auto X = Tensor<float>::range({2, 3, 2, 2}, 1);
     auto Y = Tensor<float>::range({3, 1, 1}, 1);
@@ -458,7 +514,7 @@ TYPED_TEST(MatMulTest, NonContiguousNonSquareSlice) {
 
 TYPED_TEST(MatMulTest, NonContiguousVector) {
     auto X = Tensor<TypeParam>::range({8}, 1);
-    auto Y = Tensor<TypeParam>({1}, {100});
+    auto Y = Tensor<TypeParam>::scalar(100);
     EXPECT_EQ(matmul(X["0:7:2"], X["1:8:2"]), Y);
 
     auto dev_X = dev(X);
@@ -682,7 +738,7 @@ TEST(UniformTest, MultiDotVectorFirstAndLast) {
     auto C = Tensor<int>::range({4});
     auto D = multi_dot(A, B, C);
 
-    EXPECT_EQ(D, Tensor<int>({1}, {162}));
+    EXPECT_EQ(D, Tensor<int>::scalar(162));
     EXPECT_EQ(multi_dot(dev(A), dev(B), dev(C)).read(), D);
 }
 
@@ -1021,7 +1077,7 @@ TEST(UniformTest, SqueezeCPU) {
 
 TEST(UniformTest, SqueezeToScalar) {
     auto A = Tensor<int>({1, 1}, 123);
-    EXPECT_EQ(squeeze(A), Tensor<int>({1}, 123));
+    EXPECT_EQ(squeeze(A), Tensor<int>::scalar(123));
 }
 
 TEST(UniformTest, UnsqueezeCPU) {

@@ -1,7 +1,6 @@
 #pragma once
 
 #include <vector>
-#include <unordered_set>
 #include <iterator>
 #include <cassert>
 #include <cstdlib>
@@ -47,7 +46,7 @@ class Shape final {
     friend class Shaped;
 
 public:
-    Shape() = default;
+    Shape() : m_size(1) {} // create a scalar shape
 
     explicit Shape(const std::vector<size_t>& dims) {
         init(dims);
@@ -334,19 +333,12 @@ private:
     Shape m_shape;
 
 public:
-    Shaped() = default;
+    Shaped() { m_shape.m_size = 0; } // initialize to empty shape
 
-    explicit Shaped(const Shape& shape, bool keep = false) :
-        m_shape(shape)
-    {
-        if (!keep) m_shape.init();
-    }
-
-    explicit Shaped(Shape&& shape, bool keep = false) :
-        m_shape(std::move(shape))
-    {
-        if (!keep) m_shape.init();
-    }
+    explicit Shaped(const Shape& shape, bool keep = false)
+        : m_shape(shape) { if (!keep) m_shape.init(); }
+    explicit Shaped(Shape&& shape, bool keep = false)
+        : m_shape(std::move(shape)) { if (!keep) m_shape.init(); }
 
     /**
      * Returns the shape of this shaped object.
@@ -394,7 +386,7 @@ public:
      * Returns true if this shaped object represent a scalar.
      */
     bool is_scalar() const noexcept {
-        return rank() == 1 && extent(0) == 1;
+        return rank() == 0;
     }
 
     /**
@@ -636,40 +628,9 @@ public:
 //---------------------------------------------------------------------------
 
 namespace detail {
-template <int = 0>
-void norm_axis(const int rank, int& axis) {
-    if (axis < 0) axis += rank;
-    if (axis < 0 || axis >= rank)
-        throw shape_error("axis has incorrect value");
-}
-
-template <int = 0>
-void norm_axes(const int rank, int& axis1, int& axis2, bool allow_duplicates = false) {
-    if (axis1 < 0) axis1 += rank;
-    if (axis1 < 0 || axis1 >= rank)
-        throw shape_error("axis1 has incorrect value");
-    if (axis2 < 0) axis2 += rank;
-    if (axis2 < 0 || axis2 >= rank)
-        throw shape_error("axis2 has incorrect value");
-    if (!allow_duplicates && axis1 == axis2)
-        throw shape_error("axis1 and axis2 must have different value");
-}
-
-template <int = 0>
-void norm_axes(const int rank, std::vector<int>& axes, bool allow_duplicates = false) {
-    for (auto& k : axes) {
-        norm_axis(rank, k);
-    }
-
-    if (!allow_duplicates) {
-        std::unordered_set<int> unique_axes;
-        for (auto k : axes) {
-            if (unique_axes.find(k) != unique_axes.end())
-                throw shape_error("axes has duplicates");
-            unique_axes.insert(k);
-        }
-    }
-}
+void norm_axis(const int rank, int& axis);
+void norm_axes(const int rank, int& axis1, int& axis2, bool allow_duplicates = false);
+void norm_axes(const int rank, std::vector<int>& axes, bool allow_duplicates = false);
 } // namespace detail
 
 } // namespace dlf

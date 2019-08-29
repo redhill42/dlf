@@ -164,7 +164,7 @@ public:
      * Create a scalar.
      */
     static DevTensor scalar(const T& value) {
-        DevTensor<T> res({1});
+        DevTensor<T> res{Shape()};
         res.data().write(gpgpu::current::queue(), &value, 1);
         return res;
     }

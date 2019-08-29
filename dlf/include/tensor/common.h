@@ -221,7 +221,7 @@ inline int matmul_broadcast(Shape& shapeA, Shape& shapeB, Shape& shapeC) {
     dimsC.push_back(n);
     shapeC = Shape(dimsC);
 
-    return prefixShape.rank() == 0 ? 1 : prefixShape.size();
+    return prefixShape.size();
 }
 
 template <int = 0>
@@ -516,8 +516,6 @@ matmul(const LHS& A, const RHS& B, tensor_type<LHS>& C) {
         shapeC = shapeC.squeeze(-2);
     if (B.rank() == 1)
         shapeC = shapeC.squeeze(-1);
-    if (shapeC.rank() == 0)
-        shapeC = Shape({1});
     C.resize(shapeC);
 
     // do batched matrix multiplication
@@ -741,7 +739,7 @@ std::enable_if_t<
     cxx::conjunction<is_same_tensor<First, Rest>...>::value,
     tensor_type<First>>
 multi_dot(const First& first, const Rest&... rest) {
-    static_assert(sizeof...(rest) > 1, "multi_dot: two few arguments");
+    static_assert(sizeof...(rest) > 0, "multi_dot: too few arguments");
     return multi_dot(std::vector<tensor_view_type<First>>{first.view(), rest.view()...});
 }
 
@@ -766,16 +764,8 @@ tensordot(const LHS& A, const RHS& B, std::vector<int> axes_a, std::vector<int> 
     if (axes_a.size() == axes_b.size()) {
         equal = true;
         for (int k = 0; k < axes_a.size(); k++) {
-            if (axes_a[k] < 0)
-                axes_a[k] += A.rank();
-            if (axes_a[k] < 0 || axes_a[k] >= A.rank())
-                throw shape_error("tensordot: axes_a has incorrect value");
-
-            if (axes_b[k] < 0)
-                axes_b[k] += B.rank();
-            if (axes_b[k] < 0 || axes_b[k] >= B.rank())
-                throw shape_error("tensordot: axes_b has incorrect value");
-
+            detail::norm_axis(A.rank(), axes_a[k]);
+            detail::norm_axis(B.rank(), axes_b[k]);
             if (A.extent(axes_a[k]) != B.extent(axes_b[k])) {
                 equal = false;
                 break;
@@ -816,10 +806,6 @@ tensordot(const LHS& A, const RHS& B, std::vector<int> axes_a, std::vector<int> 
             out_dims.push_back(B.extent(k));
             N *= B.extent(k);
         }
-    }
-
-    if (out_dims.empty()) {
-        out_dims.push_back(1);
     }
 
     auto at = reshape(A.transpose(newaxes_a), {M, K});
@@ -872,10 +858,16 @@ tensordot(const LHS& A, const RHS& B, int N = 2) {
  * More generally, if A.rank() > 0 and B.rank() > 0:
  *
  *     inner(A, B) = tensordot(A, B, {-1}, {-1})
+ *
+ * In addition a or b may be scalars, in which case:
+ *
+ *     inner(A, B) = A * B
  */
 template <typename LHS, typename RHS>
 std::enable_if_t<is_exactly_same_tensor<LHS, RHS>::value, tensor_type<LHS>>
 inner(LHS&& A, RHS&& B) {
+    if (A.is_scalar() || B.is_scalar())
+        return A * B;
     if (A.is_vector() && B.is_vector())
         return dot(A, B);
     return tensordot(A, B, {-1}, {-1});
@@ -962,6 +954,7 @@ kronecker(LHS&& A, RHS&& B) {
  */
 template <typename TensorT>
 enable_if_tensor<TensorT> diag(const TensorT& diagonal) {
+    assert(diagonal.rank() > 0);
     auto dims = diagonal.shape().extents();
     dims.push_back(dims[dims.size()-1]);
 

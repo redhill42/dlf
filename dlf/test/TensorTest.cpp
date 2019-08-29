@@ -133,12 +133,6 @@ TEST_F(TensorTest, Reshape) {
         EXPECT_NO_THROW(A.reshape(-1, 0));
         EXPECT_EQ(A.shape(), Shape(8, 3));
     }
-    // empty shape
-    {
-        Tensor<int> A;
-        EXPECT_NO_THROW(A.reshape({}));
-        EXPECT_EQ(A.shape(), Shape());
-    }
     // incompatible shape
     {
         Tensor<int> A({3, 7});
@@ -412,7 +406,7 @@ static void dot_test() {
     {
         Tensor<T> a({3}, {1, 2, 3});
         Tensor<T> b({3}, {4, 5, 6});
-        EXPECT_EQ(dot(a, b), Tensor<T>({1}, {32})); // computed by WolframAlpha
+        EXPECT_EQ(dot(a, b), Tensor<T>::scalar(32)); // computed by WolframAlpha
     }
 
     // Vector . Matrix

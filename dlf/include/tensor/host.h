@@ -32,8 +32,10 @@ class Tensor : public Shaped {
     std::shared_ptr<T> m_alloc_data;
 
     void init() {
-        m_alloc_data = std::shared_ptr<T>(new T[size()], std::default_delete<T[]>());
-        m_data = m_alloc_data.get();
+        if (size() != 0) {
+            m_alloc_data = std::shared_ptr<T>(new T[size()], std::default_delete<T[]>());
+            m_data = m_alloc_data.get();
+        }
     }
 
     friend class TensorView<T>;
@@ -602,7 +604,7 @@ inline Tensor<T> Tensor<T>::wrap(Shape shape, T* data) {
 
 template <typename T>
 inline Tensor<T> Tensor<T>::scalar(const T& value) {
-    Tensor<T> ret({1});
+    Tensor<T> ret{Shape()};
     *ret.data() = value;
     return ret;
 }
@@ -816,10 +818,14 @@ class tensor_printer {
     template <typename TensorT>
     static std::ostream& print(std::ostream& out, const TensorT& t) {
         auto w = out.width(0);
-        out << t.shape() << '\n';
         if (!t.empty()) {
-            print_rec(out, w, t.shape(), 0, t.begin());
-            out << '\n';
+            if (t.is_scalar()) {
+                out << *t;
+            } else {
+                out << t.shape() << '\n';
+                print_rec(out, w, t.shape(), 0, t.begin());
+                out << '\n';
+            }
         }
         return out;
     }

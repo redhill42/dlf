@@ -169,10 +169,10 @@ template <typename T>
 static void vector_dot_vector_test() {
     auto A = Tensor<T>({4}, {2, 7, 3, 4});
     auto B = Tensor<T>({4}, {4, 1, 9, 6});
-    auto R = Tensor<T>({1}, {66});
+    auto R = Tensor<T>::scalar(66);
     EXPECT_EQ(dot(dev(A), dev(B)).read(), R);
-
 }
+
 TEST_F(GPGPUTest, VectorDotVector) {
     doTest([]() {
         vector_dot_vector_test<float>();
@@ -536,7 +536,7 @@ TEST(GPGPU, MultipleThreadContextActivation) {
     auto task = [&]() {
         auto dev_A = DevTensor<float>(A);
         auto dev_B = DevTensor<float>(B);
-        return dot(dev_A, dev_B).read()(0);
+        return *dot(dev_A, dev_B).read();
     };
 
     auto r1 = std::async(std::launch::async, task);

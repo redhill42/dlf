@@ -1,5 +1,4 @@
 #include <unordered_set>
-#include <cstring>
 #include <numeric>
 #include "tensor/shape.h"
 #include "utility.h"
@@ -21,21 +20,16 @@ Shape& Shape::operator=(Shape&& rhs) {
 }
 
 void Shape::init(const std::vector<size_t>& extents, size_t offset) noexcept {
+    size_t size = 1;
     m_dims.resize(extents.size());
-    m_offset = offset;
-
-    if (extents.empty()) {
-        m_size = 0;
-    } else {
-        size_t size = 1;
-        for (size_t i = extents.size(); i-- != 0; ) {
-            assert(extents[i] != 0);
-            m_dims[i].extent = extents[i];
-            m_dims[i].stride = size;
-            size *= extents[i];
-        }
-        m_size = size;
+    for (size_t i = extents.size(); i-- != 0; ) {
+        assert(extents[i] != 0);
+        m_dims[i].extent = extents[i];
+        m_dims[i].stride = size;
+        size *= extents[i];
     }
+    m_size = size;
+    m_offset = offset;
 }
 
 void Shape::init() noexcept {
@@ -50,14 +44,13 @@ void Shape::init() noexcept {
 Shape Shape::as_strided(const std::vector<size_t>& extents, const std::vector<size_t>& strides) {
     assert(extents.size() == strides.size());
     std::vector<dim_t> dims(extents.size());
-
+    size_t size = 1;
     for (size_t i = 0; i < extents.size(); ++i) {
         assert(extents[i] != 0);
         dims[i].extent = extents[i];
         dims[i].stride = strides[i];
+        size *= extents[i];
     }
-
-    auto size = std::accumulate(extents.begin(), extents.end(), 1, std::multiplies<>());
     return Shape(std::move(dims), size, 0);
 }
 
@@ -176,24 +169,20 @@ Shape Shape::reshape(const std::vector<int>& new_shape) const {
     size_t new_size = 1;
     int pending = -1;
 
-    if (new_shape.size() == 0) {
-        new_size = 0;
-    } else {
-        for (int i = 0; i < new_shape.size(); i++) {
-            if (new_shape[i] < 0) {
-                if (new_shape[i] != -1 || pending != -1)
-                    throw shape_error("reshape: invalid shape");
-                pending = i;
+    for (int i = 0; i < new_shape.size(); i++) {
+        if (new_shape[i] < 0) {
+            if (new_shape[i] != -1 || pending != -1)
+                throw shape_error("reshape: invalid shape");
+            pending = i;
+        } else {
+            if (new_shape[i] == 0) {
+                if (i >= rank())
+                    throw shape_error("reshape: incompatible shape");
+                dims[i] = this->extent(i);
             } else {
-                if (new_shape[i] == 0) {
-                    if (i >= rank())
-                        throw shape_error("reshape: incompatible shape");
-                    dims[i] = this->extent(i);
-                } else {
-                    dims[i] = new_shape[i];
-                }
-                new_size *= dims[i];
+                dims[i] = new_shape[i];
             }
+            new_size *= dims[i];
         }
     }
 
@@ -226,9 +215,7 @@ Shape Shape::squeeze(const std::vector<int> axes) const {
 
     std::unordered_set<int> norm_axes;
     for (auto a : axes) {
-        if (a < 0) a += rank();
-        if (a < 0 || a >= rank())
-            throw shape_error("squeeze: Invalid axis");
+        detail::norm_axis(rank(), a);
         norm_axes.insert(a); // duplicate is ok
     }
 
@@ -245,22 +232,14 @@ Shape Shape::squeeze(const std::vector<int> axes) const {
         }
     }
 
-    if (new_dims.empty() && rank() > 0) {
-        // squeezed to a scalar, at least one dimension must exist
-        new_dims.push_back(m_dims[rank()-1]);
-    }
-
     return Shape(std::move(new_dims), size(), offset());
 }
 
 Shape Shape::squeeze(int axis) const {
-    if (axis < 0) axis += rank();
-    if (axis < 0 || axis >= rank())
-        throw shape_error("squeeze: Invalid axis");
-    if (extent(axis) != 1)
+    detail::norm_axis(rank(), axis);
+    if (extent(axis) != 1) {
         throw shape_error("squeeze: cannot select an axis to squeeze out which has size not equal to one");
-    if (rank() == 1)
-        return *this; // don't squeeze a scalar
+    }
 
     auto new_dims = m_dims;
     new_dims.erase(new_dims.begin() + axis);
@@ -275,9 +254,7 @@ Shape Shape::unsqueeze(const std::vector<int> axes) const {
     std::unordered_set<int> norm_axes;
 
     for (auto a : axes) {
-        if (a < 0) a += new_rank;
-        if (a < 0 || a >= new_rank)
-            throw shape_error("unsqueeze: Invalid axis");
+        detail::norm_axis(new_rank, a);
         if (norm_axes.find(a) != norm_axes.end())
             throw shape_error("unsqueeze: Duplicate axis value");
         norm_axes.insert(a);
@@ -297,9 +274,7 @@ Shape Shape::unsqueeze(const std::vector<int> axes) const {
 
 Shape Shape::unsqueeze(int axis) const {
     auto new_rank = rank() + 1;
-    if (axis < 0) axis += new_rank;
-    if (axis < 0 || axis >= new_rank)
-        throw shape_error("unsqueeze: Invalid axis");
+    detail::norm_axis(new_rank, axis);
 
     auto new_dims = m_dims;
     new_dims.insert(new_dims.begin() + axis, {1, 0});
@@ -378,9 +353,8 @@ Shape Shape::transpose(const std::vector<size_t>& perm) const {
         throw shape_error("transpose: invalid permutation");
     }
     std::vector<dim_t> dims(rank());
-    for (size_t i = 0; i < rank(); i++) {
+    for (size_t i = 0; i < rank(); i++)
         dims[i] = m_dims[perm[i]];
-    }
     return Shape(std::move(dims), size(), offset());
 }
 
@@ -433,9 +407,7 @@ Shape Shape::slice(
 
     for (int i = 0; i < axes.size(); ++i) {
         auto axis = axes[i];
-        if (axis < 0) axis += rank();
-        if (axis < 0 || axis >= rank())
-            throw shape_error("slice: axes has invalid value");
+        detail::norm_axis(rank(), axis);
         if (unique_axes.find(axis) != unique_axes.end())
             throw shape_error("slice: axes has duplicates");
         unique_axes.insert(axis);
@@ -486,7 +458,6 @@ Shape Shape::slice(const std::vector<SliceDim>& dims) const {
         ends[i] = dims[i].end;
         steps[i] = dims[i].step;
     }
-
     return slice(starts, ends, axes, steps);
 }
 
@@ -498,14 +469,7 @@ Shape Shape::slice(const char* spec) const {
 Shape Shape::diagonal(int offset, int axis1, int axis2) const {
     if (rank() < 2)
         throw shape_error("diagonal: requires at least rank-2");
-    if (axis1 < 0) axis1 += rank();
-    if (axis1 < 0 || axis1 >= rank())
-        throw shape_error("diagonal: invalid axis1 value");
-    if (axis2 < 0) axis2 += rank();
-    if (axis2 < 0 || axis2 >= rank())
-        throw shape_error("diagonal: invalid axis2 value");
-    if (axis1 == axis2)
-        throw shape_error("diagonal: the axis1 and axis2 should not have the same value");
+    detail::norm_axes(rank(), axis1, axis2);
 
     int k = std::min(extent(axis1), extent(axis2));
     if ((k -= std::abs(offset)) <= 0) {
@@ -572,7 +536,7 @@ void shape_indexer::reset(ptrdiff_t linear_idx) noexcept {
     m_last_idx = 0;
     m_offset = m_shape.offset();
 
-    if (linear_idx > 0) {
+    if (linear_idx > 0 && m_shape.rank() > 0) {
         auto i = static_cast<int>(m_shape.rank()) - 1;
         m_last_idx = update(i, linear_idx);
         while (--i >= 0) {
@@ -584,6 +548,11 @@ void shape_indexer::reset(ptrdiff_t linear_idx) noexcept {
 void shape_indexer::increment() noexcept {
     auto linear_idx = m_linear_idx++;
     if (linear_idx < 0) {
+        return;
+    }
+
+    if (m_shape.rank() == 0) {
+        m_offset = m_shape.offset() + m_linear_idx;
         return;
     }
 
@@ -618,6 +587,11 @@ void shape_indexer::decrement() noexcept {
         return;
     }
 
+    if (m_shape.rank() == 0) {
+        m_offset = m_shape.offset() + m_linear_idx;
+        return;
+    }
+
     // last dimension optimization
     auto i = static_cast<int>(m_shape.rank()) - 1;
     auto last_dim = m_shape.extent(i);
@@ -639,6 +613,44 @@ void shape_indexer::decrement() noexcept {
         } else {
             m_offset += m_shape.stride(i) * (dim - 1);
             linear_idx /= dim;
+        }
+    }
+}
+
+} // namespace detail
+
+//---------------------------------------------------------------------------
+
+namespace detail {
+
+void norm_axis(const int rank, int& axis) {
+    if (axis < 0) axis += rank;
+    if (axis < 0 || axis >= rank)
+        throw shape_error("axis has incorrect value");
+}
+
+void norm_axes(const int rank, int& axis1, int& axis2, bool allow_duplicates) {
+    if (axis1 < 0) axis1 += rank;
+    if (axis1 < 0 || axis1 >= rank)
+        throw shape_error("axis1 has incorrect value");
+    if (axis2 < 0) axis2 += rank;
+    if (axis2 < 0 || axis2 >= rank)
+        throw shape_error("axis2 has incorrect value");
+    if (!allow_duplicates && axis1 == axis2)
+        throw shape_error("axis1 and axis2 must have different value");
+}
+
+void norm_axes(const int rank, std::vector<int>& axes, bool allow_duplicates) {
+    for (auto& k : axes) {
+        norm_axis(rank, k);
+    }
+
+    if (!allow_duplicates) {
+        std::unordered_set<int> unique_axes;
+        for (auto k : axes) {
+            if (unique_axes.find(k) != unique_axes.end())
+                throw shape_error("axes has duplicates");
+            unique_axes.insert(k);
         }
     }
 }
