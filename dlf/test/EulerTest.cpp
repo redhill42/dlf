@@ -144,49 +144,26 @@ PERFORMANCE_TEST_F(EulerTest, Problem210) {
 // What is the position of the cursor after 1012 steps in D50 ?
 // Give your answer in the form x,y with no spaces.
 
-using Matrix = dlf::Tensor<long>;
-using Vector = dlf::Tensor<long>;
-
-static Matrix matrix(std::initializer_list<std::initializer_list<long>> data) {
-    size_t rows = data.size();
-    size_t cols = 0;
-    for (auto col : data) {
-        cols = std::max(cols, col.size());
-    }
-
-    Matrix mat({rows, cols});
-    long* p = mat.data();
-    for (auto col : data) {
-        std::copy(col.begin(), col.end(), p);
-        if (col.size() < cols)
-            std::fill(p+col.size(), p+cols, 0);
-        p += cols;
-    }
-    return mat;
-}
-
-static Vector vector(std::initializer_list<long> data) {
-    return Vector({data.size()}, data);
-}
+using namespace dlf;
 
 static std::string Problem220(long steps) {
     using namespace dlf::dot_product;
 
     struct Rule {
-        long x; Matrix r, l;
-        Rule(long x, Matrix r, Matrix l)
+        long x; Tensor<long> r, l;
+        Rule(long x, Tensor<long> r, Tensor<long> l)
             : x(x), r(std::move(r)), l(std::move(l)) {}
     };
 
     // matrices transform the vector (x, y, dx,dy)
-    const Matrix F = matrix({{1, 0, 1, 0}, {0, 1, 0, 1}, {0, 0, 1, 0}, {0, 0, 0, 1}});
-    const Matrix R = matrix({{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 0, 1}, {0, 0, -1, 0}});
-    const Matrix L = matrix({{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 0, -1}, {0, 0, 1, 0}});
-    const Matrix R1 = (F , R , F);
-    const Matrix L1 = (F , L , F);
+    auto F = Matrix<long>({{1, 0, 1, 0}, {0, 1, 0, 1}, {0, 0, 1, 0}, {0, 0, 0, 1}});
+    auto R = Matrix<long>({{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 0, 1}, {0, 0, -1, 0}});
+    auto L = Matrix<long>({{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 0, -1}, {0, 0, 1, 0}});
+    auto R1 = (F , R , F);
+    auto L1 = (F , L , F);
 
     long x = 0;
-    Matrix r = R, l = L;
+    auto r = R, l = L;
     std::vector<Rule> rules;
 
     while (x < steps) {
@@ -198,7 +175,7 @@ static std::string Problem220(long steps) {
         rules.emplace_back(x, r, l);
     }
 
-    Vector v = vector({0, 0, 0, 1});
+    auto v = Vector<long>({0, 0, 0, 1});
     v = (F , v);
     steps--;
 
@@ -231,7 +208,7 @@ PERFORMANCE_TEST(Euler, Problem220) {
 // Problem 577: Counting hexagons
 
 namespace Problem577 {
-inline bool inside(int n, Vector p) {
+inline bool inside(int n, const Tensor<long>& p) {
     auto x = p(0), y = p(1);
     return x >= 0 && y >= 0 && x + y <= n;
 }
@@ -242,13 +219,13 @@ bool inside(int n, int x1, int y1, int x2, int y2) {
     if (x1 == x2 && y1 == y2)
         return false;
 
-    Matrix m = matrix({{0, -1}, {1, 1}});
-    Vector p1 = vector({x1, y1});
-    Vector p2 = vector({x2, y2});
-    Vector p3 = p2 + (m , (p2 - p1));
-    Vector p4 = p3 + (m , (p3 - p2));
-    Vector p5 = p4 + (m , (p4 - p3));
-    Vector p6 = p5 + (m , (p5 - p4));
+    auto m  = Matrix<long>({{0, -1}, {1, 1}});
+    auto p1 = Vector<long>({x1, y1});
+    auto p2 = Vector<long>({x2, y2});
+    auto p3 = p2 + (m , (p2 - p1));
+    auto p4 = p3 + (m , (p3 - p2));
+    auto p5 = p4 + (m , (p4 - p3));
+    auto p6 = p5 + (m , (p5 - p4));
     return inside(n, p3) && inside(n, p4) && inside(n, p5) && inside(n, p6);
 }
 

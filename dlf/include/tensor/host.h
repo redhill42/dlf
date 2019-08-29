@@ -705,6 +705,98 @@ Tensor<T>& Tensor<T>::resize(const Shape& shape) {
 }
 
 //==-------------------------------------------------------------------------
+// Nested initializer list
+//==-------------------------------------------------------------------------
+
+template <typename T, size_t N>
+struct nested_initializer_list {
+    using type = std::initializer_list<typename nested_initializer_list<T, N-1>::type>;
+};
+
+template <typename T>
+struct nested_initializer_list<T, 0> {
+    using type = T;
+};
+
+template <typename T, size_t N>
+using nested_initializer_list_t = typename nested_initializer_list<T, N>::type;
+
+template <typename T, size_t N>
+struct NestedInitializerListProcessor {
+    static void get_shape(std::vector<size_t>& shape, nested_initializer_list_t<T, N> list) {
+        int i = shape.size() - N;
+        shape[i] = std::max(shape[i], list.size());
+        for (auto nested : list) {
+            NestedInitializerListProcessor<T, N-1>::get_shape(shape, nested);
+        }
+    }
+
+    static void copy_data(T* data, const std::vector<size_t>& shape, nested_initializer_list_t<T, N> list) {
+        int i = shape.size() - N;
+        size_t stride = 1;
+        for (int j = i+1; j < shape.size(); j++)
+            stride *= shape[j];
+        for (auto nested : list) {
+            NestedInitializerListProcessor<T, N-1>::copy_data(data, shape, nested);
+            if (nested.size() < shape[i+1])
+                std::fill(data + stride/shape[i+1]*nested.size(),
+                          data + stride,
+                          T{});
+            data += stride;
+        }
+    }
+};
+
+template <typename T>
+struct NestedInitializerListProcessor<T, 1> {
+    static void get_shape(std::vector<size_t>& shape, std::initializer_list<T> list) {
+        int i = shape.size() - 1;
+        shape[i] = std::max(shape[i], list.size());
+    }
+
+    static void copy_data(T* data, const std::vector<size_t>& shape, std::initializer_list<T> list) {
+        int i = shape.size() - 1;
+        std::copy(list.begin(), list.end(), data);
+        if (list.size() < shape[i])
+            std::fill(data + list.size(), data + shape[i], T{});
+    }
+};
+
+template <typename T>
+struct NestedInitializerListProcessor<T, 0> {
+    static void get_shape(std::vector<size_t>&, T) {}
+    static void copy_data(T* data, const std::vector<size_t>&, T value) {
+        *data = value;
+    }
+};
+
+/**
+ * Construct a tensor with a nested initializer list. The tensor shape is inferred
+ * from nested initializer list.
+ *
+ * @param init the nested initializer list
+ */
+template <typename T, size_t N>
+Tensor<T> make_tensor(nested_initializer_list_t<T, N> list) {
+    std::vector<size_t> dims(N);
+    NestedInitializerListProcessor<T, N>::get_shape(dims, list);
+
+    Tensor<T> res{Shape{dims}};
+    NestedInitializerListProcessor<T, N>::copy_data(res.data(), dims, list);
+    return res;
+}
+
+template <typename T>
+inline Tensor<T> Vector(std::initializer_list<T> list) {
+    return Tensor<T>(Shape(list.size()), list);
+}
+
+template <typename T>
+inline Tensor<T> Matrix(std::initializer_list<std::initializer_list<T>> list) {
+    return make_tensor<T, 2>(list);
+}
+
+//==-------------------------------------------------------------------------
 // TensorView implementation
 //==-------------------------------------------------------------------------
 
