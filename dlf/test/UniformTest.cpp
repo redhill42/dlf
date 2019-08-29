@@ -760,68 +760,68 @@ TEST(UniformTest, TensorDotSimple) {
 /**
  * An extended example taking advantage of the overloading of + and *.
  */
-struct Value {
-    int n; char c;
+struct Expr {
     std::string s;
-
-    Value() = default;
-    Value(int n) : n(n) {}
-    Value(char c) : c(c) {}
-    Value(std::string s) : s(std::move(s)) {}
-    Value(const char* s) : s(s) {}
+    Expr() = default;
+    Expr(char c) : s(1, c) {}
+    Expr(const char* s) : s(s) {}
+    Expr(std::string s) : s(std::move(s)) {}
 };
 
-inline Value operator*(const Value& n, const Value& c) {
-    return std::string(n.n, c.c);
+inline Expr operator+(const Expr& x, const Expr& y) {
+    return Expr(x.s + "+" + y.s);
 }
 
-inline Value operator+(const Value& a, const Value& b) {
-    return a.s + b.s;
+inline Expr& operator+=(Expr& x, const Expr& y) {
+    if (!x.s.empty())
+        x.s += "+";
+    x.s += y.s;
+    return x;
 }
 
-inline Value& operator+=(Value& a, const Value& b) {
-    a.s += b.s;
-    return a;
+inline Expr operator*(const Expr& x, const Expr& y) {
+    return Expr(x.s + y.s);
 }
 
-inline bool operator==(const Value& a, const Value& b) {
+inline bool operator==(const Expr& a, const Expr& b) {
     return a.s == b.s;
 }
 
-inline std::ostream& operator<<(std::ostream& out, const Value& s) {
-    return out << s.s;
+inline std::ostream& operator<<(std::ostream& out, const Expr& x) {
+    return out << x.s;
 }
 
 TEST(UniformTest, TensorDotExt) {
-    auto a = Tensor<Value>({2, 2, 2}, {1, 2, 3, 4, 5, 6, 7, 8});
-    auto A = Tensor<Value>({2, 2}, {'a', 'b', 'c', 'd'});
+    auto a = Tensor<Expr>({2, 2, 2}, {'1', '2', '3', '4', '5', '6', '7', '8'});
+    auto A = Tensor<Expr>({2, 2}, {'a', 'b', 'c', 'd'});
 
-    EXPECT_EQ(tensordot(a, A), Tensor<Value>({2}, {
-        "abbcccdddd", "aaaaabbbbbbcccccccdddddddd"
+    EXPECT_EQ(tensordot(a, A), Tensor<Expr>({2}, {
+        "1a+2b+3c+4d", "5a+6b+7c+8d"
     }));
-    EXPECT_EQ(tensordot(a, A, 1), Tensor<Value>({2, 2, 2}, {
-        "acc", "bdd",
-        "aaacccc", "bbbdddd",
-        "aaaaacccccc", "bbbbbdddddd",
-        "aaaaaaacccccccc", "bbbbbbbdddddddd"
+
+    EXPECT_EQ(tensordot(a, A, 1), Tensor<Expr>({2, 2, 2}, {
+        "1a+2c", "1b+2d",
+        "3a+4c", "3b+4d",
+        "5a+6c", "5b+6d",
+        "7a+8c", "7b+8d"
     }));
-    EXPECT_EQ(tensordot(a, A, {0}, {1}), Tensor<Value>({2, 2, 2}, {
-        "abbbbb", "cddddd",
-        "aabbbbbb", "ccdddddd",
-        "aaabbbbbbb", "cccddddddd",
-        "aaaabbbbbbbb", "ccccdddddddd"
+    EXPECT_EQ(tensordot(a, A, {0}, {1}), Tensor<Expr>({2, 2, 2}, {
+        "1a+5b", "1c+5d",
+        "2a+6b", "2c+6d",
+        "3a+7b", "3c+7d",
+        "4a+8b", "4c+8d"
     }));
-    EXPECT_EQ(tensordot(a, A, {2}, {1}), Tensor<Value>({2, 2, 2}, {
-        "abb", "cdd",
-        "aaabbbb", "cccdddd",
-        "aaaaabbbbbb", "cccccdddddd",
-        "aaaaaaabbbbbbbb", "cccccccdddddddd"
+    EXPECT_EQ(tensordot(a, A, {2}, {1}), Tensor<Expr>({2, 2, 2}, {
+        "1a+2b", "1c+2d",
+        "3a+4b", "3c+4d",
+        "5a+6b", "5c+6d",
+        "7a+8b", "7c+8d"
     }));
-    EXPECT_EQ(tensordot(a, A, {0,1}, {0,1}), Tensor<Value>({2}, {
-        "abbbcccccddddddd", "aabbbbccccccdddddddd",
+    EXPECT_EQ(tensordot(a, A, {0,1}, {0,1}), Tensor<Expr>({2}, {
+        "1a+3b+5c+7d", "2a+4b+6c+8d"
     }));
-    EXPECT_EQ(tensordot(a, A, {2,1}, {1,0}), Tensor<Value>({2}, {
-        "acccbbdddd", "aaaaacccccccbbbbbbdddddddd",
+    EXPECT_EQ(tensordot(a, A, {2,1}, {1,0}), Tensor<Expr>({2}, {
+        "1a+3c+2b+4d", "5a+7c+6b+8d"
     }));
 
     EXPECT_EQ(tensordot(a, A, 0), outer(a, A));

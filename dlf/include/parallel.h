@@ -18,6 +18,14 @@ copy(InputIterator first, InputIterator last, OutputIterator result) {
         });
 }
 
+template <size_t grainsize = GRAINSIZE, class ForwardIterator, typename T>
+inline void fill(ForwardIterator first, ForwardIterator last, const T& value) {
+    tbb::parallel_for(tbb::blocked_range<ForwardIterator>(first, last, grainsize),
+        [&](auto r) {
+            std::fill(first, last, value);
+        });
+}
+
 template <size_t grainsize = GRAINSIZE, class InputIterator, class OutputIterator, class UnaryOperation>
 inline void
 transform(InputIterator first, InputIterator last, OutputIterator result, UnaryOperation op) {

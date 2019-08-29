@@ -11,31 +11,44 @@ namespace dlf {
 namespace detail {
 template <typename T>
 std::enable_if_t<!cblas::RequireBlasType<T>>
-gemm(const int m, const int n, const int k,
+gemm(const int m, const int n, const int p,
      const T& alpha,
-     const T* A, const int lda,
-     const T* B, const int ldb,
+     const T* A, int lda,
+     const T* B, int ldb,
      const T& beta,
      T* C, const int ldc,
      const bool transA = false,
      const bool transB = false,
      Tensor<T>* = nullptr)
 {
-    tbb::parallel_for(tbb::blocked_range2d<size_t>(0, m, 32, 0, n, 32), [&](auto r) {
-        size_t incX = transA ? lda : 1;
-        size_t incY = transB ? 1 : ldb;
-        for (size_t i = r.rows().begin(); i != r.rows().end(); ++i) {
-            T* pz = C + (i*ldc + r.cols().begin());
-            for (size_t j = r.cols().begin(); j != r.cols().end(); j++) {
-                const T* px = A + (transA ? i : i*lda);
-                const T* py = B + (transB ? j*ldb : j);
-                T v = beta == T(0) ? T(0) : *pz * beta;
-                for (size_t t = 0; t < k; t++) {
-                    v += alpha * *px * *py;
-                    px += incX;
-                    py += incY;
-                }
-                *pz++ = std::move(v);
+    int incA = 1, incB = 1;
+    if (transA)
+        std::swap(lda, incA);
+    if (transB)
+        std::swap(ldb, incB);
+
+    if (beta == T{}) {
+        par::fill(C, C + m*n, beta);
+    } else {
+        par::transform(C, C + m*n, C, [&beta](const auto& x){ return x*beta; });
+    }
+
+    tbb::parallel_for(tbb::blocked_range2d<int>(0, m, 32, 0, n, 32), [=](auto r) {
+        const int i0   = r.rows().begin();
+        const int j0   = r.cols().begin();
+        const int rows = r.rows().size();
+        const int cols = r.cols().size();
+
+        auto pa0 = A + i0*lda;
+        auto pb0 = B + j0*incB;
+        auto pc  = C + i0*ldc + j0;
+
+        for (int i = 0; i < rows; i++, pa0 += lda, pc += ldc) {
+            auto pa = pa0, pb = pb0;
+            for (int k = 0; k < p; k++, pa += incA, pb += ldb) {
+                for (int j = 0; j < cols; j++, pb += incB)
+                    pc[j] += alpha * *pa * *pb;
+                pb -= cols*incB;
             }
         }
     });
@@ -290,31 +303,42 @@ matmul_cpu(int m, int n, int k,
 
 template <typename T>
 std::enable_if_t<!cblas::RequireBlasType<T>>
-matmul_cpu(int m, int n, int k,
+matmul_cpu(int m, int n, int p,
            const T* A, int lda, int incA,
            const T* B, int ldb, int incB,
            T* C, int ldc)
 {
     if (m == 1 && n == 1) {
         *C = tbb::parallel_reduce(
-            tbb::blocked_range<size_t>(0, k, GRAINSIZE),
+            tbb::blocked_range<int>(0, p, GRAINSIZE),
             T{},
             [=](auto r, T sum) {
                 auto px = A + r.begin()*incA;
                 auto py = B + r.begin()*ldb;
-                for (size_t k = r.size(); k-- != 0; px += incA, py += ldb)
+                for (int k = r.size(); --k >= 0; px += incA, py += ldb)
                     sum += *px * *py;
                 return sum;
             },
             std::plus<T>());
     } else {
-        tbb::parallel_for(tbb::blocked_range2d<size_t>(0, m, 32, 0, n, 32), [=](auto r) {
-            for (size_t i = r.rows().begin(); i != r.rows().end(); i++) {
-                for (size_t j = r.cols().begin(); j != r.cols().end(); j++) {
-                    T v{};
-                    for (size_t t = 0; t < k; t++)
-                        v += A[i*lda + t*incA] * B[t*ldb + j*incB];
-                    C[i*ldc + j] = std::move(v);
+        par::fill(C, C + m*n, T{});
+
+        tbb::parallel_for(tbb::blocked_range2d<int>(0, m, 32, 0, n, 32), [=](auto r) {
+            const int i0   = r.rows().begin();
+            const int j0   = r.cols().begin();
+            const int rows = r.rows().size();
+            const int cols = r.cols().size();
+
+            auto pa0 = A + i0*lda;
+            auto pb0 = B + j0*incB;
+            auto pc  = C + i0*ldc + j0;
+
+            for (int i = 0; i < rows; i++, pa0 += lda, pc += ldc) {
+                auto pa = pa0, pb = pb0;
+                for (int k = 0; k < p; k++, pa += incA, pb += ldb) {
+                    for (int j = 0; j < cols; j++, pb += incB)
+                        pc[j] += *pa * *pb;
+                    pb -= cols*incB;
                 }
             }
         });
