@@ -93,7 +93,7 @@ auto preprocess(const cv::Mat& img) {
     auto pixels = Tensor<uint8_t>::wrap({1, rows, cols, 3}, tmp_img.data) / Real{255};
     auto mean = Tensor<Real>({3}, {0.485, 0.456, 0.406});
     auto stdev = Tensor<Real>({3}, {0.229, 0.224, 0.225});
-    return ((pixels - mean) / stdev).transpose({0, 3, 1, 2});
+    return ((pixels - mean) / stdev).transpose(0, 3, 1, 2);
 }
 
 template <typename TensorT>
@@ -148,7 +148,7 @@ std::vector<ImageClass> load_images(std::string dir, RandomGenerator& g, size_t 
 void predict_images(Predictor& predictor, std::vector<ImageClass>& images) {
     Tensor<Real> batch({images.size(), 3, size_t(images[0].image.rows), size_t(images[0].image.cols)});
     for (int i = 0; i < images.size(); i++) {
-        reorder(preprocess(images[i].image), unsqueeze(batch[i], {0}));
+        reorder(preprocess(images[i].image), unsqueeze(batch[i], 0));
     }
 
     predictor.set(0, batch);
@@ -251,7 +251,7 @@ int main(int argc, char** argv) {
         auto image = prepare(argv[2]);
         auto input = Tensor<Real>({BATCH_SIZE, 3, 224, 224});
         for (int i = 0; i < BATCH_SIZE; i++) {
-            reorder(preprocess(image), unsqueeze(input[i], {0}));
+            reorder(preprocess(image), unsqueeze(input[i], 0));
         }
 
         // show prediction result

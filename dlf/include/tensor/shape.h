@@ -22,7 +22,7 @@ struct SliceDim {
 };
 
 /**
- * The Shape defines the dimensions of a Tensor.
+ * The Shape defines the dimensions of a Spatial.
  */
 class Shape final {
     struct dim_t {
@@ -43,7 +43,7 @@ class Shape final {
     void init(const std::vector<size_t>& extents, size_t offset = 0) noexcept;
     void init() noexcept;
 
-    friend class Shaped;
+    template <typename Derived> friend class Spatial;
 
 public:
     Shape() : m_size(1) {} // create a scalar shape
@@ -150,11 +150,12 @@ public:
      * this shape.
      */
     Shape reshape(const std::vector<int>& new_shape) const;
+    Shape reshape(Shape new_shape) const;
 
     template <typename... Args>
     std::enable_if_t<cxx::conjunction<std::is_integral<Args>...>::value, Shape>
     reshape(Args... args) const {
-        return reshape({static_cast<int>(args)...});
+        return reshape(std::vector<int>{static_cast<int>(args)...});
     }
 
     /**
@@ -169,13 +170,13 @@ public:
      * in the shape. If an axis is selected with shape entry greater
      * than one, an error is raised.
      */
-    Shape squeeze(const std::vector<int> axes = {}) const;
+    Shape squeeze(const std::vector<int>& axes) const;
     Shape squeeze(int axis) const;
 
     template <typename... Args>
     std::enable_if_t<cxx::conjunction<std::is_integral<Args>...>::value, Shape>
     squeeze(Args... args) const {
-        return squeeze({static_cast<int>(args)...});
+        return squeeze(std::vector<int>{static_cast<int>(args)...});
     }
 
     /**
@@ -183,13 +184,13 @@ public:
      *
      * @param axes List of integers, indicate the dimensions to be inserted.
      */
-    Shape unsqueeze(const std::vector<int> axes) const;
+    Shape unsqueeze(const std::vector<int>& axes) const;
     Shape unsqueeze(int axis) const;
 
     template <typename... Args>
     std::enable_if_t<cxx::conjunction<std::is_integral<Args>...>::value, Shape>
     unsqueeze(Args... args) const {
-        return unsqueeze({static_cast<int>(args)...});
+        return unsqueeze(std::vector<int>{static_cast<int>(args)...});
     }
 
     /**
@@ -326,18 +327,19 @@ private:
 };
 
 /**
- * Base class for shaped objects.
+ * Base class for spatial objects.
  */
-class Shaped {
+template <typename Derived>
+class Spatial {
 private:
     Shape m_shape;
 
 public:
-    Shaped() { m_shape.m_size = 0; } // initialize to empty shape
+    Spatial() { m_shape.m_size = 0; } // initialize to empty shape
 
-    explicit Shaped(const Shape& shape, bool keep = false)
+    explicit Spatial(const Shape& shape, bool keep = false)
         : m_shape(shape) { if (!keep) m_shape.init(); }
-    explicit Shaped(Shape&& shape, bool keep = false)
+    explicit Spatial(Shape&& shape, bool keep = false)
         : m_shape(std::move(shape)) { if (!keep) m_shape.init(); }
 
     /**
@@ -424,7 +426,7 @@ protected:
      *
      * @param new_shape specifies the new shape.
      */
-    void resize(Shape new_shape) {
+    void set_shape(Shape new_shape) {
         m_shape = std::move(new_shape);
         m_shape.init();
     }
@@ -438,56 +440,87 @@ protected:
      *
      * @param new_shape specifies the new shape.
      */
-    void reshape(const std::vector<int>& new_shape) {
-        resize(m_shape.reshape(new_shape));
-    }
-
-    void reshape(std::initializer_list<int> il) {
-        reshape(std::vector<int>(il));
-    }
-
     template <typename... Args>
-    std::enable_if_t<cxx::conjunction<std::is_integral<Args>...>::value>
-    reshape(Args... args) {
-        reshape(std::vector<int>{static_cast<int>(args)...});
-    }
-
-    void reshape(const Shape& new_shape) {
-        auto dims = new_shape.extents();
-        reshape(std::vector<int>{dims.begin(), dims.end()});
+    void reshape(Args&&... args) {
+        set_shape(m_shape.reshape(std::forward<Args>(args)...));
     }
 
     /**
      * Flattens the tensor into a 2D matrix.
      */
     void flatten(int axis) {
-        resize(m_shape.flatten(axis));
+        set_shape(m_shape.flatten(axis));
+    }
+
+    /**
+     * Flattens the tensor into a 1D vector.
+     */
+    void flatten() {
+        reshape(-1);
     }
 
     /**
      * Remove single-dimensional entries from the shape.
      */
-    void squeeze(const std::vector<int> axes = {}) {
-        resize(m_shape.squeeze(axes));
-    }
-
     template <typename... Args>
-    std::enable_if_t<cxx::conjunction<std::is_integral<Args>...>::value>
-    squeeze(Args... args) {
-        squeeze({static_cast<int>(args)...});
+    void squeeze(Args&&... args) {
+        set_shape(m_shape.squeeze(std::forward<Args>(args)...));
     }
 
     /**
      * Insert single-dimensional entries to the shape.
      */
-    void unsqueeze(const std::vector<int>& axes) {
-        resize(m_shape.unsqueeze(axes));
+    template <typename... Args>
+    void unsqueeze(Args&&... args) {
+        set_shape(m_shape.unsqueeze(std::forward<Args>(args)...));
+    }
+
+public:
+    auto broadcast(const Shape& to) const {
+        return self().view(m_shape.broadcast(to));
     }
 
     template <typename... Args>
-    std::enable_if_t<cxx::conjunction<std::is_integral<Args>...>::value>
-    unsqueeze(Args... args) {
-        unsqueeze({static_cast<int>(args)...});
+    auto transpose(Args&&... args) const {
+        return self().view(m_shape.transpose(std::forward<Args>(args)...));
+    }
+
+    auto slice(const std::vector<int>& starts, const std::vector<int>& ends,
+               const std::vector<int>& axes, const std::vector<int>& steps) const {
+        return self().view(m_shape.slice(starts, ends, axes, steps));
+    }
+
+    auto slice(const std::vector<SliceDim>& dims) const {
+        return self().view(m_shape.slice(dims));
+    }
+
+    auto operator[](const char* spec) const {
+        return self().view(m_shape.slice(spec));
+    }
+
+    auto operator[](const std::string& spec) const {
+        return operator[](spec.c_str());
+    }
+
+    auto operator[](const int index) const {
+        return row(index);
+    }
+
+    auto row(int index) const {
+        return self().view(m_shape.slice({{index, index+1}}).squeeze(0));
+    }
+
+    auto column(int index) const {
+        return self().view(m_shape.slice({{}, {index, index+1}}).squeeze(1));
+    }
+
+    auto diagonal(int offset = 0, int axis1 = -2, int axis2 = -1) const {
+        return self().view(m_shape.diagonal(offset, axis1, axis2));
+    }
+
+private:
+    inline const Derived& self() const {
+        return *static_cast<const Derived*>(this);
     }
 };
 
@@ -519,29 +552,23 @@ public:
     ptrdiff_t index() const noexcept { return m_linear_idx; }
     size_t offset() const noexcept { return m_offset; }
 
-    bool operator==(const shape_indexer& rhs) const noexcept {
-        return m_linear_idx == rhs.m_linear_idx;
-    }
-    bool operator!=(const shape_indexer& rhs) const noexcept {
-        return m_linear_idx != rhs.m_linear_idx;
-    }
-    bool operator<(const shape_indexer& rhs) const noexcept {
-        return m_linear_idx < rhs.m_linear_idx;
-    }
-    bool operator>(const shape_indexer& rhs) const noexcept {
-        return m_linear_idx > rhs.m_linear_idx;
-    }
-    bool operator<=(const shape_indexer& rhs) const noexcept {
-        return m_linear_idx <= rhs.m_linear_idx;
-    }
-    bool operator>=(const shape_indexer& rhs) const noexcept {
-        return m_linear_idx >= rhs.m_linear_idx;
-    }
+    bool operator==(const shape_indexer& rhs) const noexcept
+        { return m_linear_idx == rhs.m_linear_idx; }
+    bool operator!=(const shape_indexer& rhs) const noexcept
+        { return m_linear_idx != rhs.m_linear_idx; }
+    bool operator<(const shape_indexer& rhs) const noexcept
+        { return m_linear_idx < rhs.m_linear_idx; }
+    bool operator>(const shape_indexer& rhs) const noexcept
+        { return m_linear_idx > rhs.m_linear_idx; }
+    bool operator<=(const shape_indexer& rhs) const noexcept
+        { return m_linear_idx <= rhs.m_linear_idx; }
+    bool operator>=(const shape_indexer& rhs) const noexcept
+        { return m_linear_idx >= rhs.m_linear_idx; }
 
 private:
     ptrdiff_t update(int i, ptrdiff_t& linear_idx) noexcept;
 };
-}
+} // namespace detail
 
 template <typename T>
 class shaped_iterator : public detail::shape_indexer {

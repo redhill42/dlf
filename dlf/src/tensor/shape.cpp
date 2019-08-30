@@ -199,6 +199,11 @@ Shape Shape::reshape(const std::vector<int>& new_shape) const {
     return res;
 }
 
+Shape Shape::reshape(Shape new_shape) const {
+    auto dims = new_shape.extents();
+    return reshape(std::vector<int>{dims.begin(), dims.end()});
+}
+
 Shape Shape::flatten(int axis) const {
     if (axis < 0) axis += rank();
     if (axis < 0 || axis > rank())
@@ -206,10 +211,10 @@ Shape Shape::flatten(int axis) const {
 
     int rows = partial_size(0, axis);
     int cols = partial_size(axis, rank());
-    return reshape({rows, cols});
+    return reshape(rows, cols);
 }
 
-Shape Shape::squeeze(const std::vector<int> axes) const {
+Shape Shape::squeeze(const std::vector<int>& axes) const {
     if (axes.size() == 1)
         return squeeze(axes[0]);
 
@@ -246,7 +251,7 @@ Shape Shape::squeeze(int axis) const {
     return Shape(std::move(new_dims), size(), offset());
 }
 
-Shape Shape::unsqueeze(const std::vector<int> axes) const {
+Shape Shape::unsqueeze(const std::vector<int>& axes) const {
     if (axes.size() == 1)
         return unsqueeze(axes[0]);
 

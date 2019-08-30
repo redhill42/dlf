@@ -14,40 +14,47 @@ template <typename T> class DevTensorView;
  * A tensor which data allocated from compute devices such as GPU.
  */
 template <typename T>
-class DevTensor : public Shaped {
+class DevTensor : public Spatial<DevTensor<T>> {
     gpgpu::Buffer<T> m_data;
+
+    void init() {
+        assert(size() != 0);
+        m_data = gpgpu::current::context().createBuffer<T>(size());
+    }
 
     friend class DevTensorView<T>;
 
 public:
     DevTensor() = default;
 
-    explicit DevTensor(Shape shape) : Shaped(std::move(shape)) {
-        m_data = gpgpu::current::context().createBuffer<T>(size());
+    explicit DevTensor(Shape shape) : Spatial<DevTensor>(std::move(shape)) {
+        init();
     }
 
-    explicit DevTensor(Shape shape, const T& initial) : Shaped(std::move(shape)) {
-        m_data = gpgpu::current::context().createBuffer<T>(size());
+    explicit DevTensor(Shape shape, const T& initial) : Spatial<DevTensor>(std::move(shape)) {
+        init();
         fill(initial);
     }
 
-    explicit DevTensor(const Tensor<T>& host) : Shaped(host.shape()) {
-        m_data = gpgpu::current::context().createBuffer<T>(size());
+    explicit DevTensor(const Tensor<T>& host) : Spatial<DevTensor>(host.shape()) {
+        init();
         m_data.write(gpgpu::current::queue(), host.data(), host.size());
     }
 
     explicit DevTensor(Shape shape, gpgpu::Buffer<T> data)
-        : Shaped(std::move(shape)), m_data(std::move(data))
+        : Spatial<DevTensor>(std::move(shape)), m_data(std::move(data))
     {}
 
-    DevTensor(const DevTensor& src) : DevTensor(src.shape()) {
+    DevTensor(const DevTensor& src) : Spatial<DevTensor>(src) {
+        init();
         src.copyTo(*this);
     }
 
     DevTensor& operator=(const DevTensor& src) {
-        if (size() != src.size() || m_data.handle() == nullptr)
-            m_data = gpgpu::current::context().createBuffer<T>(src.size());
-        Shaped::resize(src.shape());
+        auto old_size = size();
+        Spatial<DevTensor>::set_shape(src.shape());
+        if (size() != old_size || m_data.handle() == nullptr)
+            init();
         src.copyTo(*this);
         return *this;
     }
@@ -59,9 +66,9 @@ public:
     DevTensor& operator=(const DevTensorView<T>& src);
 
     DevTensor& resize(const Shape& shape) {
-        if (empty()) {
-            Shaped::resize(shape);
-            m_data = gpgpu::current::context().createBuffer<T>(size());
+        if (this->empty()) {
+            Spatial<DevTensor>::set_shape(shape);
+            init();
         } else if (this->shape() != shape) {
             throw shape_error("incompatible shape");
         }
@@ -135,6 +142,9 @@ public:
     }
 
 public:
+    using Spatial<DevTensor>::shape;
+    using Spatial<DevTensor>::size;
+
     const Shape& original_shape() const {
         return shape();
     }
@@ -161,6 +171,13 @@ public:
     }
 
     /**
+     * Returns a view of this tensor with given shape.
+     */
+    DevTensorView<T> view(Shape shape) const {
+        return DevTensorView<T>(std::move(shape), *this);
+    }
+
+    /**
      * Create a scalar.
      */
     static DevTensor scalar(const T& value) {
@@ -182,59 +199,10 @@ public:
     static DevTensor identity(Shape shape, const T& value = T{1});
 
 public: // Shape operations
-    using Shaped::reshape;
-    using Shaped::flatten;
-    using Shaped::squeeze;
-    using Shaped::unsqueeze;
-
-    DevTensorView<T> broadcast(const Shape& to) const {
-        return DevTensorView<T>(shape().broadcast(to), *this);
-    }
-
-    DevTensorView<T> transpose(const std::vector<size_t>& perm) const {
-        return DevTensorView<T>(shape().transpose(perm), *this);
-    }
-
-    template <typename... Args>
-    std::enable_if_t<cxx::conjunction<std::is_integral<Args>...>::value, DevTensorView<T>>
-    transpose(Args... args) const {
-        return transpose({static_cast<size_t>(args)...});
-    }
-
-    DevTensorView<T> transpose() const {
-        return DevTensorView<T>(shape().transpose(), *this);
-    }
-
-    DevTensorView<T> operator~() const {
-        return transpose();
-    }
-
-    DevTensorView<T> slice(
-        const std::vector<int>& starts, const std::vector<int>& ends,
-        const std::vector<int>& axes, const std::vector<int>& steps) const
-    {
-        return DevTensorView<T>(shape().slice(starts, ends, axes, steps), *this);
-    }
-
-    DevTensorView<T> slice(const std::vector<SliceDim>& dims) const {
-        return DevTensorView<T>(shape().slice(dims), *this);
-    }
-
-    DevTensorView<T> operator[](const char* spec) const {
-        return DevTensorView<T>(shape().slice(spec), *this);
-    }
-
-    DevTensorView<T> operator[](const std::string& spec) const {
-        return operator[](spec.c_str());
-    }
-
-    DevTensorView<T> operator[](const int index) const {
-        return TensorView<T>(shape().slice({{index, index+1}}).squeeze(0), *this);
-    }
-
-    DevTensorView<T> diagonal(int offset = 0, int axis1 = -2, int axis2 = -1) const {
-        return DevTensorView<T>(shape().diagonal(offset, axis1, axis2), *this);
-    }
+    using Spatial<DevTensor>::reshape;
+    using Spatial<DevTensor>::flatten;
+    using Spatial<DevTensor>::squeeze;
+    using Spatial<DevTensor>::unsqueeze;
 };
 
 template <typename T>
@@ -248,7 +216,7 @@ inline DevTensor<T> dev(const TensorView<T>& host) {
 }
 
 template <typename T>
-class DevTensorView : public Shaped {
+class DevTensorView : public Spatial<DevTensorView<T>> {
     Shape m_original_shape;
     gpgpu::Buffer<T> m_data;
 
@@ -258,6 +226,9 @@ public:
     DevTensorView(Shape shape, const DevTensorView<T>& src);
 
 public:
+    using Spatial<DevTensorView>::shape;
+    using Spatial<DevTensorView>::size;
+
     const Shape& original_shape() const noexcept {
         return m_original_shape;
     }
@@ -272,6 +243,10 @@ public:
 
     DevTensorView view() const {
         return *this;
+    }
+
+    DevTensorView view(Shape shape) const {
+        return DevTensorView(std::move(shape), *this);
     }
 
     DevTensor<T> copy() const {
@@ -295,68 +270,18 @@ public:
     }
 
     DevTensorView& fill(const T& value);
-
-public: // Shape operations
-    DevTensorView<T> broadcast(const Shape& to) const {
-        return DevTensorView<T>(shape().broadcast(to), *this);
-    }
-
-    DevTensorView<T> transpose(const std::vector<size_t>& perm) const {
-        return DevTensorView<T>(shape().transpose(perm), *this);
-    }
-
-    template <typename... Args>
-    std::enable_if_t<cxx::conjunction<std::is_integral<Args>...>::value, DevTensorView<T>>
-    transpose(Args... args) const {
-        return transpose({static_cast<size_t>(args)...});
-    }
-
-    DevTensorView<T> transpose() const {
-        return DevTensorView<T>(shape().transpose(), *this);
-    }
-
-    DevTensorView<T> operator~() const {
-        return transpose();
-    }
-
-    DevTensorView<T> slice(
-        const std::vector<int>& starts, const std::vector<int>& ends,
-        const std::vector<int>& axes, const std::vector<int>& steps) const
-    {
-        return DevTensorView<T>(shape().slice(starts, ends, axes, steps), *this);
-    }
-
-    DevTensorView<T> slice(const std::vector<SliceDim>& dims) const {
-        return DevTensorView<T>(shape().slice(dims), *this);
-    }
-
-    DevTensorView<T> operator[](const char* spec) const {
-        return DevTensorView<T>(shape().slice(spec), *this);
-    }
-
-    DevTensorView<T> operator[](const std::string& spec) const {
-        return operator[](spec.c_str());
-    }
-
-    DevTensorView<T> operator[](const int index) const {
-        return TensorView<T>(shape().slice({{index, index+1}}).squeeze(0), *this);
-    }
-
-    DevTensorView<T> diagonal(int offset = 0, int axis1 = -2, int axis2 = -1) const {
-        return DevTensorView<T>(shape().diagonal(offset, axis1, axis2), *this);
-    }
 };
 
 template <typename T>
 DevTensorView<T>::DevTensorView(Shape shape, const DevTensor<T>& src)
-    : Shaped(std::move(shape), true),
+    : Spatial<DevTensorView>(std::move(shape), true),
       m_original_shape(src.original_shape()),
       m_data(src.m_data)
 {}
 
 template <typename T>
 DevTensorView<T>::DevTensorView(Shape shape, const DevTensorView<T>& src)
-    : Shaped(std::move(shape), true),
+    : Spatial<DevTensorView>(std::move(shape), true),
       m_original_shape(src.original_shape()),
       m_data(src.m_data)
 {}
@@ -368,9 +293,10 @@ DevTensor<T>::DevTensor(const DevTensorView<T>& src) {
 
 template <typename T>
 DevTensor<T>& DevTensor<T>::operator=(const DevTensorView<T>& src) {
-    if (size() != src.size())
-        m_data = gpgpu::current::context().createBuffer<T>(src.size());
-    Shaped::resize(src.shape());
+    auto old_size = size();
+    Spatial<DevTensor>::set_shape(src.shape());
+    if (size() != old_size || m_data.handle() == nullptr)
+        init();
     reorder(src, *this);
     return *this;
 }

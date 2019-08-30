@@ -27,15 +27,17 @@ template <typename T> class TensorView;
  * @tparam T the data type of the tensor.
  */
 template <typename T>
-class Tensor : public Shaped {
+class Tensor : public Spatial<Tensor<T>> {
     T* m_data = nullptr;
     std::shared_ptr<T> m_alloc_data;
 
     void init() {
-        if (size() != 0) {
+        assert(size() != 0);
+        if (std::is_trivially_destructible<T>::value)
+            m_alloc_data = std::shared_ptr<T>(new T[size()]);
+        else
             m_alloc_data = std::shared_ptr<T>(new T[size()], std::default_delete<T[]>());
-            m_data = m_alloc_data.get();
-        }
+        m_data = m_alloc_data.get();
     }
 
     friend class TensorView<T>;
@@ -67,15 +69,6 @@ public: // Container View
     const_iterator cend() const noexcept { return end(); }
     const_reverse_iterator crbegin() const noexcept { return rbegin(); }
     const_reverse_iterator crend() const noexcept { return rend(); }
-
-    shaped_iterator<T> begin(Shape shape)
-        { return shaped_iterator<T>(std::move(shape), data(), 0); }
-    shaped_iterator<T> end(Shape shape)
-        { return shaped_iterator<T>(std::move(shape), data(), shape.size()); }
-    const_shaped_iterator<T> begin(Shape shape) const
-        { return const_shaped_iterator<T>(std::move(shape), data(), 0); }
-    const_shaped_iterator<T> end(Shape shape) const
-        { return const_shaped_iterator<T>(std::move(shape), data(), shape.size()); }
 
 private: // Concepts
     template <typename InputIterator>
@@ -244,6 +237,9 @@ public: // Constructors
     }
 
 public: // Attributes
+    using Spatial<Tensor>::shape;
+    using Spatial<Tensor>::size;
+
     /**
      * The original shape is same as this tensor's shape.
      */
@@ -293,6 +289,13 @@ public: // Attributes
         return TensorView<T>(shape(), *this);
     }
 
+    /**
+     * Returns a view of this tensor with given shape.
+     */
+    TensorView<T> view(Shape shape) const {
+        return TensorView<T>(std::move(shape), *this);
+    }
+
 public: // Transformations
     /**
      * Transform tensor's elements by applying a unary function on tensor's elements.
@@ -323,63 +326,14 @@ public: // Transformations
     Tensor<U> cast() const;
 
 public: // Shape operations
-    using Shaped::reshape;
-    using Shaped::flatten;
-    using Shaped::squeeze;
-    using Shaped::unsqueeze;
-
-    TensorView<T> broadcast(const Shape& to) const {
-        return TensorView<T>(shape().broadcast(to), *this);
-    }
-
-    TensorView<T> transpose(const std::vector<size_t>& perm) const {
-        return TensorView<T>(shape().transpose(perm), *this);
-    }
-
-    template <typename... Args>
-    std::enable_if_t<cxx::conjunction<std::is_integral<Args>...>::value, TensorView<T>>
-    transpose(Args... args) const {
-        return transpose({static_cast<size_t>(args)...});
-    }
-
-    TensorView<T> transpose() const {
-        return TensorView<T>(shape().transpose(), *this);
-    }
-
-    TensorView<T> operator~() const {
-        return transpose();
-    }
-
-    TensorView<T> slice(
-        const std::vector<int>& starts, const std::vector<int>& ends,
-        const std::vector<int>& axes, const std::vector<int>& steps) const
-    {
-        return TensorView<T>(shape().slice(starts, ends, axes, steps), *this);
-    }
-
-    TensorView<T> slice(const std::vector<SliceDim>& dims) const {
-        return TensorView<T>(shape().slice(dims), *this);
-    }
-
-    TensorView<T> operator[](const char* spec) const {
-        return TensorView<T>(shape().slice(spec), *this);
-    }
-
-    TensorView<T> operator[](const std::string& spec) const {
-        return operator[](spec.c_str());
-    }
-
-    TensorView<T> operator[](const int index) const {
-        return TensorView<T>(shape().slice({{index, index+1}}).squeeze(0), *this);
-    }
-
-    TensorView<T> diagonal(int offset = 0, int axis1 = -2, int axis2 = -1) const {
-        return TensorView<T>(shape().diagonal(offset, axis1, axis2), *this);
-    }
+    using Spatial<Tensor>::reshape;
+    using Spatial<Tensor>::flatten;
+    using Spatial<Tensor>::squeeze;
+    using Spatial<Tensor>::unsqueeze;
 };
 
 template <typename T>
-class TensorView : public Shaped {
+class TensorView : public Spatial<TensorView<T>> {
     Shape m_original_shape;
     T* m_data;
     std::shared_ptr<T> m_alloc_data;
@@ -418,6 +372,9 @@ public: // Container View
     const_reverse_iterator crend() const { return rend(); }
 
 public: // Attributes
+    using Spatial<TensorView>::shape;
+    using Spatial<TensorView>::size;
+
     const Shape& original_shape() const {
         return m_original_shape;
     }
@@ -442,6 +399,10 @@ public: // Attributes
 
     TensorView view() const {
         return *this;
+    }
+
+    TensorView view(Shape shape) const {
+        return TensorView(std::move(shape), *this);
     }
 
     /**
@@ -488,56 +449,6 @@ public: // Operations
     }
 
     TensorView& random(T low, T high);
-
-public: // Shape operations
-    TensorView<T> broadcast(const Shape& to) const {
-        return TensorView<T>(shape().broadcast(to), *this);
-    }
-
-    TensorView<T> transpose(const std::vector<size_t>& perm) const {
-        return TensorView<T>(shape().transpose(perm), *this);
-    }
-
-    template <typename... Args>
-    std::enable_if_t<cxx::conjunction<std::is_integral<Args>...>::value, TensorView<T>>
-    transpose(Args... args) const {
-        return transpose({static_cast<size_t>(args)...});
-    }
-
-    TensorView<T> transpose() const {
-        return TensorView<T>(shape().transpose(), *this);
-    }
-
-    TensorView<T> operator~() const {
-        return transpose();
-    }
-
-    TensorView<T> slice(
-        const std::vector<int>& starts, const std::vector<int>& ends,
-        const std::vector<int>& axes, const std::vector<int>& steps) const
-    {
-        return TensorView<T>(shape().slice(starts, ends, axes, steps), *this);
-    }
-
-    TensorView<T> slice(const std::vector<SliceDim>& dims) const {
-        return TensorView<T>(shape().slice(dims), *this);
-    }
-
-    TensorView<T> operator[](const char* spec) const {
-        return TensorView<T>(shape().slice(spec), *this);
-    }
-
-    TensorView<T> operator[](const std::string& spec) const {
-        return operator[](spec.c_str());
-    }
-
-    TensorView<T> operator[](const int index) const {
-        return TensorView<T>(shape().slice({{index, index+1}}).squeeze(0), *this);
-    }
-
-    TensorView<T> diagonal(int offset = 0, int axis1 = -2, int axis2 = -1) const {
-        return TensorView<T>(shape().diagonal(offset, axis1, axis2), *this);
-    }
 };
 
 //==-------------------------------------------------------------------------
@@ -545,31 +456,25 @@ public: // Shape operations
 //==-------------------------------------------------------------------------
 
 template <typename T>
-Tensor<T>::Tensor(Shape shape)
-    : Shaped(std::move(shape))
-{
+Tensor<T>::Tensor(Shape shape) : Spatial<Tensor>(std::move(shape)) {
     init();
 }
 
 template <typename T>
-Tensor<T>::Tensor(Shape shape, const T& initial)
-    : Shaped(std::move(shape))
-{
+Tensor<T>::Tensor(Shape shape, const T& initial) : Spatial<Tensor>(std::move(shape)) {
     init();
     fill(initial);
 }
 
 template <typename T>
-Tensor<T>::Tensor(Shape shape, T* data)
-    : Shaped(std::move(shape))
-{
+Tensor<T>::Tensor(Shape shape, T* data) : Spatial<Tensor>(std::move(shape)) {
     m_data = data;
 }
 
 template <typename T>
 template <typename It>
 Tensor<T>::Tensor(Shape shape, It begin, RequireInputIterator<It> end)
-    : Shaped(std::move(shape))
+    : Spatial<Tensor>(std::move(shape))
 {
     init();
     assert(std::distance(begin, end) == size());
@@ -578,7 +483,7 @@ Tensor<T>::Tensor(Shape shape, It begin, RequireInputIterator<It> end)
 
 template <typename T>
 Tensor<T>::Tensor(Shape shape, std::initializer_list<T> il)
-    : Shaped(std::move(shape))
+    : Spatial<Tensor>(std::move(shape))
 {
     init();
     assert(size() == il.size());
@@ -587,7 +492,7 @@ Tensor<T>::Tensor(Shape shape, std::initializer_list<T> il)
 
 template <typename T>
 Tensor<T>::Tensor(Shape shape, std::shared_ptr<T> data)
-    : Shaped(std::move(shape)), m_alloc_data(std::move(data))
+    : Spatial<Tensor>(std::move(shape)), m_alloc_data(std::move(data))
 {
     m_data = m_alloc_data.get();
 }
@@ -652,7 +557,7 @@ inline Tensor<T> Tensor<T>::fill(const T& value) && {
 }
 
 template <typename T>
-Tensor<T>::Tensor(const Tensor& t) : Shaped(t) {
+Tensor<T>::Tensor(const Tensor& t) : Spatial<Tensor>(t) {
     init();
     std::copy(t.begin(), t.end(), m_data);
 }
@@ -660,7 +565,7 @@ Tensor<T>::Tensor(const Tensor& t) : Shaped(t) {
 template <typename T>
 Tensor<T>& Tensor<T>::operator=(const Tensor& t) {
     auto old_size = size();
-    Shaped::resize(t.shape());
+    Spatial<Tensor>::set_shape(t.shape());
     if (size() != old_size || m_alloc_data == nullptr)
         init();
     std::copy(t.begin(), t.end(), m_data);
@@ -670,16 +575,16 @@ Tensor<T>& Tensor<T>::operator=(const Tensor& t) {
 template <typename T>
 Tensor<T>& Tensor<T>::operator=(const TensorView<T>& v) {
     auto old_size = size();
-    Shaped::resize(v.shape());
+    Spatial<Tensor>::set_shape(v.shape());
     if (size() != old_size || m_alloc_data == nullptr)
         init();
-    std::copy(v.begin(), v.end(), m_data);
+    reorder(v, *this);
     return *this;
 }
 
 template <typename T>
 Tensor<T>::Tensor(Tensor&& t) noexcept
-    : Shaped(std::move(t)),
+    : Spatial<Tensor>(std::move(t)),
       m_data(std::exchange(t.m_data, nullptr)),
       m_alloc_data(std::move(t.m_alloc_data))
 {
@@ -687,7 +592,7 @@ Tensor<T>::Tensor(Tensor&& t) noexcept
 
 template <typename T>
 Tensor<T>& Tensor<T>::operator=(Tensor&& t) noexcept {
-    Shaped::resize(t.shape());
+    Spatial<Tensor>::set_shape(t.shape());
     m_data = std::exchange(t.m_data, nullptr);
     m_alloc_data = std::move(t.m_alloc_data);
     return *this;
@@ -695,8 +600,8 @@ Tensor<T>& Tensor<T>::operator=(Tensor&& t) noexcept {
 
 template <typename T>
 Tensor<T>& Tensor<T>::resize(const Shape& shape) {
-    if (empty()) {
-        Shaped::resize(shape);
+    if (this->empty()) {
+        Spatial<Tensor>::set_shape(shape);
         init();
     } else if (this->shape() != shape) {
         throw shape_error("incompatible shape");
@@ -802,7 +707,7 @@ inline Tensor<T> Matrix(std::initializer_list<std::initializer_list<T>> list) {
 
 template <typename T>
 TensorView<T>::TensorView(Shape shape, const Tensor<T>& src)
-    : Shaped(std::move(shape), true),
+    : Spatial<TensorView>(std::move(shape), true),
       m_original_shape(src.original_shape()),
       m_data(src.m_data),
       m_alloc_data(src.m_alloc_data)
@@ -810,7 +715,7 @@ TensorView<T>::TensorView(Shape shape, const Tensor<T>& src)
 
 template <typename T>
 TensorView<T>::TensorView(Shape shape, const TensorView<T>& src)
-    : Shaped(std::move(shape), true),
+    : Spatial<TensorView>(std::move(shape), true),
       m_original_shape(src.original_shape()),
       m_data(src.m_data),
       m_alloc_data(src.m_alloc_data)

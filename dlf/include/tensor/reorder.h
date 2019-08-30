@@ -157,40 +157,51 @@ inline reorder(const TensorT& src, tensor_view_type<TensorT>&& dst) {
 namespace detail {
 template <typename TensorT>
 enable_if_tensor<TensorT, tensor_view_type<TensorT>>
-reshape(const TensorT& X, const Shape& new_shape) {
+reshape(const TensorT& X, Shape&& new_shape) {
     if (X.shape().is_contiguous()) {
-        return tensor_view_type<TensorT>(new_shape, X);
+        return X.view(std::move(new_shape));
+    } else {
+        tensor_type<TensorT> Y{};
+        reorder(X, Y);
+        Y.reshape(std::move(new_shape));
+        return Y.view();
     }
-
-    tensor_type<TensorT> Y{};
-    reorder(X, Y);
-    Y.reshape(new_shape);
-    return Y.view();
 }
 } // namespace detail
 
-template <typename TensorT>
-inline auto reshape(TensorT&& X, const std::vector<int>& dims) {
+template <typename TensorT, typename... Args>
+enable_if_tensor<TensorT, tensor_view_type<TensorT>>
+inline reshape(TensorT&& X, const std::vector<int>& dims) {
     return detail::reshape(std::forward<TensorT>(X), X.shape().reshape(dims));
 }
 
 template <typename TensorT>
-inline auto flatten(TensorT&& X, int axis) {
+enable_if_tensor<TensorT, tensor_view_type<TensorT>>
+inline flatten(TensorT&& X, int axis) {
     return detail::reshape(std::forward<TensorT>(X), X.shape().flatten(axis));
 }
 
 template <typename TensorT>
-inline auto squeeze(TensorT&& X, const std::vector<int>& axes = {}) {
-    return tensor_view_type<TensorT>(X.shape().squeeze(axes), std::forward<TensorT>(X));
+enable_if_tensor<TensorT, tensor_view_type<TensorT>>
+inline flatten(TensorT&& X) {
+    return detail::reshape(std::forward<TensorT>(X), X.shape().reshape(-1));
+}
+
+template <typename TensorT, typename... Args>
+enable_if_tensor<TensorT, tensor_view_type<TensorT>>
+inline squeeze(TensorT&& X, Args&&... args) {
+    return X.view(X.shape().squeeze(std::forward<Args>(args)...));
+}
+
+template <typename TensorT, typename... Args>
+enable_if_tensor<TensorT, tensor_view_type<TensorT>>
+inline unsqueeze(TensorT&& X, Args&&... args) {
+    return X.view(X.shape().unsqueeze(std::forward<Args>(args)...));
 }
 
 template <typename TensorT>
-inline auto unsqueeze(TensorT&& X, const std::vector<int>& axes) {
-    return tensor_view_type<TensorT>(X.shape().unsqueeze(axes), std::forward<TensorT>(X));
-}
-
-template <typename TensorT>
-auto unsqueeze_left(TensorT&& X, size_t rank) {
+enable_if_tensor<TensorT, tensor_view_type<TensorT>>
+unsqueeze_left(TensorT&& X, size_t rank) {
     if (X.rank() < rank) {
         std::vector<int> axes(rank - X.rank());
         std::iota(axes.begin(), axes.end(), 0);
@@ -200,7 +211,8 @@ auto unsqueeze_left(TensorT&& X, size_t rank) {
 }
 
 template <typename TensorT>
-auto unsqueeze_right(TensorT&& X, size_t rank) {
+enable_if_tensor<TensorT, tensor_view_type<TensorT>>
+unsqueeze_right(TensorT&& X, size_t rank) {
     if (X.rank() < rank) {
         std::vector<int> axes(rank - X.rank());
         std::iota(axes.begin(), axes.end(), X.rank());
@@ -279,7 +291,7 @@ inline as_strided(
     const std::vector<size_t>& shape,
     const std::vector<size_t>& strides)
 {
-    return tensor_view_type<TensorT>(Shape::as_strided(shape, strides), X);
+    return X.view(Shape::as_strided(shape, strides));
 }
 
 template <typename TensorT>
@@ -355,7 +367,7 @@ partition(const TensorT& X,
     }
 
     // Return the partitioned view
-    return tensor_view_type<TensorT>(strided_shape, X);
+    return X.view(strided_shape);
 }
 
 template <typename TensorT>

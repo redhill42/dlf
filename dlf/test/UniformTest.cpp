@@ -53,9 +53,9 @@ TEST(UniformTest, ScalarRobust) {
     EXPECT_EQ(x.transpose(), x);
 
     EXPECT_EQ(squeeze(x), x);
-    EXPECT_ANY_THROW(squeeze(x, {0}));
+    EXPECT_ANY_THROW(squeeze(x, 0));
     EXPECT_EQ(squeeze(v), x);
-    EXPECT_EQ(unsqueeze(x, {0}), v);
+    EXPECT_EQ(unsqueeze(x, 0), v);
 
     EXPECT_TRUE(V[0].is_scalar());
     EXPECT_TRUE(V["0"].is_vector());
@@ -181,7 +181,7 @@ TYPED_TEST(MatMulTest, Broadcast3D) {
     EXPECT_EQ(matmul(A, B), C);
     EXPECT_EQ(matmul(dev(A), dev(B)).read(), C);
 
-    auto B1 = unsqueeze(B, {0});
+    auto B1 = unsqueeze(B, 0);
     EXPECT_EQ(matmul(A, B1), C);
     EXPECT_EQ(matmul(dev(A), dev(B1)).read(), C);
 }
@@ -211,7 +211,7 @@ TYPED_TEST(MatMulTest, Broadcast4DLeft) {
         EXPECT_EQ(matmul(A, B), C);
         EXPECT_EQ(matmul(dev(A), dev(B)).read(), C);
 
-        auto A1 = unsqueeze(A, {0, 1});
+        auto A1 = unsqueeze(A, 0, 1);
         EXPECT_EQ(matmul(A1, B), C);
         EXPECT_EQ(matmul(dev(A1), dev(B)).read(), C);
     }
@@ -292,7 +292,7 @@ TYPED_TEST(MatMulTest, Broadcast4DRight) {
         EXPECT_EQ(matmul(A, B), C);
         EXPECT_EQ(matmul(dev(A), dev(B)).read(), C);
 
-        auto B1 = unsqueeze(B, {0, 1});
+        auto B1 = unsqueeze(B, 0, 1);
         EXPECT_EQ(matmul(A, B1), C);
         EXPECT_EQ(matmul(dev(A), dev(B1)).read(), C);
     }
@@ -547,8 +547,8 @@ TYPED_TEST(MatMulTest, TransposeLast) {
         2298, 2376, 2454, 2532, 2610
     });
 
-    EXPECT_EQ(matmul(A.transpose({0, 2, 1}), B), C);
-    EXPECT_EQ(matmul(dev(A).transpose({0, 2, 1}), dev(B)).read(), C);
+    EXPECT_EQ(matmul(A.transpose(0, 2, 1), B), C);
+    EXPECT_EQ(matmul(dev(A).transpose(0, 2, 1), dev(B)).read(), C);
 }
 
 TYPED_TEST(MatMulTest, TransposePrefix) {
@@ -1070,9 +1070,9 @@ TEST(UniformTest, FlattenGPU) {
 TEST(UniformTest, SqueezeCPU) {
     auto A = Tensor<int>::range({2, 1, 3, 1, 4}, 1);
     EXPECT_EQ(squeeze(A), Tensor<int>::range({2, 3, 4}, 1));
-    EXPECT_EQ(squeeze(A, {1}), Tensor<int>::range({2, 3, 1, 4}, 1));
-    EXPECT_EQ(squeeze(A, {-2}), Tensor<int>::range({2, 1, 3, 4}, 1));
-    EXPECT_ANY_THROW(squeeze(A, {0}));
+    EXPECT_EQ(squeeze(A, 1), Tensor<int>::range({2, 3, 1, 4}, 1));
+    EXPECT_EQ(squeeze(A, -2), Tensor<int>::range({2, 1, 3, 4}, 1));
+    EXPECT_ANY_THROW(squeeze(A, 0));
 }
 
 TEST(UniformTest, SqueezeToScalar) {
@@ -1082,8 +1082,8 @@ TEST(UniformTest, SqueezeToScalar) {
 
 TEST(UniformTest, UnsqueezeCPU) {
     auto A = Tensor<int>::range({2, 3, 4}, 1);
-    EXPECT_EQ(unsqueeze(A, {1, -2}), Tensor<int>::range({2, 1, 3, 1, 4}, 1));
-    EXPECT_ANY_THROW(unsqueeze(A, {1, 5}));
+    EXPECT_EQ(unsqueeze(A, 1, -2), Tensor<int>::range({2, 1, 3, 1, 4}, 1));
+    EXPECT_ANY_THROW(unsqueeze(A, 1, 5));
 }
 
 TEST(UniformTest, ConcatCPU) {
@@ -1839,42 +1839,36 @@ TYPED_TEST(TransposeTest, Transpose1D_CPU) {
     auto A = Tensor<TypeParam>({4}, {1, 2, 3, 4});
     auto B = Tensor<TypeParam>({4, 1}, {1, 2, 3, 4});
     EXPECT_EQ(A.transpose(), B);
-    EXPECT_EQ(~A, B);
 }
 
 TYPED_TEST(TransposeTest, Transpose1D_GPU) {
     auto A = dev(Tensor<TypeParam>({4}, {1, 2, 3, 4}));
     auto B = Tensor<TypeParam>({4, 1}, {1, 2, 3, 4});
     EXPECT_EQ(A.transpose().read(), B);
-    EXPECT_EQ((~A).read(), B);
 }
 
 TYPED_TEST(TransposeTest, TransposeSquare_CPU) {
     auto A = Tensor<TypeParam>::range({3, 3}, 1);
     auto B = Tensor<TypeParam>({3, 3}, {1, 4, 7, 2, 5, 8, 3, 6, 9});
     EXPECT_EQ(A.transpose(), B);
-    EXPECT_EQ(~A, B);
 }
 
 TYPED_TEST(TransposeTest, TransposeSquare_GPU) {
     auto A = dev(Tensor<TypeParam>::range({3, 3}, 1));
     auto B = Tensor<TypeParam>({3, 3}, {1, 4, 7, 2, 5, 8, 3, 6, 9});
     EXPECT_EQ(A.transpose().read(), B);
-    EXPECT_EQ((~A).read(), B);
 }
 
 TYPED_TEST(TransposeTest, Transpose2D_CPU) {
     auto A = Tensor<TypeParam>::range({3, 4}, 1);
     auto B = Tensor<TypeParam>({4, 3}, {1, 5, 9, 2, 6, 10, 3, 7, 11, 4, 8, 12});
     EXPECT_EQ(A.transpose(), B);
-    EXPECT_EQ(~A, B);
 }
 
 TYPED_TEST(TransposeTest, Transpose2D_GPU) {
     auto A = dev(Tensor<TypeParam>::range({3, 4}, 1));
     auto B = Tensor<TypeParam>({4, 3}, {1, 5, 9, 2, 6, 10, 3, 7, 11, 4, 8, 12});
     EXPECT_EQ(A.transpose().read(), B);
-    EXPECT_EQ((~A).read(), B);
 }
 
 TYPED_TEST(TransposeTest, Transpose3D_CPU) {
@@ -1886,7 +1880,6 @@ TYPED_TEST(TransposeTest, Transpose3D_CPU) {
         4, 16, 8, 20, 12, 24
     });
     EXPECT_EQ(A.transpose(), B);
-    EXPECT_EQ(~A, B);
 }
 
 TYPED_TEST(TransposeTest, Transpose3D_GPU) {
@@ -1898,7 +1891,6 @@ TYPED_TEST(TransposeTest, Transpose3D_GPU) {
         4, 16, 8, 20, 12, 24
     });
     EXPECT_EQ(A.transpose().read(), B);
-    EXPECT_EQ((~A).read(), B);
 }
 
 TYPED_TEST(TransposeTest, TransposePerm_CPU) {
