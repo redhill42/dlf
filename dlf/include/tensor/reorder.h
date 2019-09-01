@@ -289,91 +289,76 @@ enable_if_tensor<TensorT, tensor_view_type<TensorT>>
 inline as_strided(
     const TensorT& X,
     const std::vector<size_t>& shape,
-    const std::vector<size_t>& strides)
+    const std::vector<size_t>& strides,
+    const size_t offset = 0)
 {
-    return X.view(Shape::as_strided(shape, strides));
+    return X.view(Shape::as_strided(shape, strides, offset));
 }
 
 template <typename TensorT>
 enable_if_tensor<TensorT, tensor_view_type<TensorT>>
 partition(const TensorT& X,
-          std::vector<int> axes,
-          std::vector<size_t> extents,
-          std::vector<size_t> strides = {},
-          std::vector<size_t> steps = {})
+          const std::vector<size_t> extents,
+          const std::vector<size_t> strides = {},
+          const std::vector<size_t> steps = {})
 {
-    if (axes.empty()) {
-        axes.resize(X.rank());
-        std::iota(axes.begin(), axes.end(), 0);
-    } else {
-        detail::norm_axes(X.rank(), axes);
-    }
-
-    assert(extents.size() == axes.size());
-    assert(strides.empty() || strides.size() == axes.size());
-    assert(steps.empty() || steps.size() == axes.size());
-
-    if (strides.empty()) {
-        strides.resize(axes.size());
-        std::copy(extents.begin(), extents.end(), strides.begin());
-    }
-    if (steps.empty()) {
-        steps.resize(axes.size());
-        std::fill(steps.begin(), steps.end(), 1);
-    }
+    assert(extents.size() <= X.rank());
+    assert(strides.empty() || strides.size() == extents.size());
+    assert(steps.empty() || steps.size() == extents.size());
 
     // Create strided shape
     auto rank = X.rank();
+    auto skip = rank - extents.size();
     std::vector<size_t> shape_extents, shape_strides;
 
-    for (int k = 0; k < rank; k++) {
-        auto it = std::find(axes.begin(), axes.end(), k);
-        if (it == axes.end()) {
-            shape_extents.push_back(X.extent(k));
-            shape_strides.push_back(X.stride(k));
-        } else {
-            auto i = it - axes.begin();
-            assert(extents[i] > 0 && strides[i] > 0 && steps[i] > 0);
-            auto d = steps[i] * (extents[i] - 1) + 1;
-            assert(X.extent(k) >= d);
-            d = (X.extent(k) - d) / strides[i] + 1;
-            shape_extents.push_back(d);
-            shape_strides.push_back(d == 1 ? 0 : X.stride(k) * strides[i]);
-        }
+    for (int k = 0; k < skip; k++) {
+        shape_extents.push_back(X.extent(k));
+        shape_strides.push_back(X.stride(k));
     }
 
-    for (int k = 0; k < rank; k++) {
-        auto it = std::find(axes.begin(), axes.end(), k);
-        if (it == axes.end()) {
-            shape_extents.push_back(1);
-            shape_strides.push_back(0);
-        } else {
-            auto i = it - axes.begin();
-            shape_extents.push_back(extents[i]);
-            shape_strides.push_back(X.stride(k) * steps[i]);
-        }
+    for (int k = skip; k < rank; k++) {
+        auto i = k - skip;
+        auto extent = extents[i];
+        auto stride = strides.empty() ? extent : strides[i];
+        auto step   = steps.empty() ? 1 : steps[i];
+        assert(extent > 0 && stride > 0 && step > 0);
+
+        auto d = step * (extent - 1) + 1;
+        assert(X.extent(k) >= d);
+        d = (X.extent(k) - d) / stride + 1;
+
+        shape_extents.push_back(d);
+        shape_strides.push_back(d == 1 ? 0 : X.stride(k) * stride);
     }
 
-    auto strided_shape = X.shape().as_strided(shape_extents, shape_strides);
-
-    // Squeeze axes that not partitioned
-    std::vector<int> sq;
-    for (int k = 0; k < rank; k++) {
-        if (std::find(axes.begin(), axes.end(), k) == axes.end())
-            sq.push_back(rank + k);
-    }
-    if (!sq.empty()) {
-        strided_shape = strided_shape.squeeze(sq);
+    for (int k = skip; k < rank; k++) {
+        auto i = k - skip;
+        auto step = steps.empty() ? 1 : steps[i];
+        shape_extents.push_back(extents[i]);
+        shape_strides.push_back(X.stride(k) * step);
     }
 
-    // Return the partitioned view
-    return X.view(strided_shape);
+    return as_strided(X, shape_extents, shape_strides, X.shape().offset());
 }
 
 template <typename TensorT>
 enable_if_tensor<TensorT, tensor_view_type<TensorT>>
-inline partition(const TensorT& X, int k, size_t n, size_t d, size_t s = 1) {
-    return partition(X, std::vector<int>{k}, {n}, {d}, {s});
+partition(const TensorT& X, int axis, size_t extent, size_t stride, size_t step = 1) {
+    assert(extent > 0 && stride > 0 && step > 0);
+    detail::norm_axis(X.rank(), axis);
+    auto shape_extents = X.shape().extents();
+    auto shape_strides = X.shape().strides();
+
+    auto d = step * (extent - 1) + 1;
+    assert(X.extent(axis) >= d);
+    d = (X.extent(axis) - d) / stride + 1;
+
+    shape_extents[axis] = d;
+    shape_strides[axis] = d == 1 ? 0 : X.stride(axis) * stride;
+    shape_extents.insert(shape_extents.begin()+axis+1, extent);
+    shape_strides.insert(shape_strides.begin()+axis+1, X.stride(axis) * step);
+
+    return as_strided(X, shape_extents, shape_strides, X.shape().offset());
 }
 
 template <typename TensorT>

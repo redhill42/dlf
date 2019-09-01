@@ -244,11 +244,11 @@ TEST(ViewTest, Partition2D) {
         31, 32, 33, 34
     });
 
-    EXPECT_EQ(partition(A, 0, 2, 1), Tensor<int>({2, 4, 2}, {
-        11, 21, 12, 22,
-        13, 23, 14, 24,
-        21, 31, 22, 32,
-        23, 33, 24, 34
+    EXPECT_EQ(partition(A, 0, 2, 1), Tensor<int>({2, 2, 4}, {
+        11, 12, 13, 14,
+        21, 22, 23, 24,
+        21, 22, 23, 24,
+        31, 32, 33, 34
     }));
 
     EXPECT_EQ(partition(A, 1, 2, 1), Tensor<int>({3, 3, 2}, {
@@ -257,7 +257,7 @@ TEST(ViewTest, Partition2D) {
         31, 32, 32, 33, 33, 34
     }));
 
-    EXPECT_EQ(partition(A, {0, 1}, {2, 2}, {1, 1}), Tensor<int>({2, 3, 2, 2}, {
+    EXPECT_EQ(partition(A, {2, 2}, {1, 1}), Tensor<int>({2, 3, 2, 2}, {
         11, 12, 21, 22,
         12, 13, 22, 23,
         13, 14, 23, 24,
@@ -266,20 +266,20 @@ TEST(ViewTest, Partition2D) {
         23, 24, 33, 34
     }));
 
-    EXPECT_EQ(partition(A, {0, 1}, {2, 2}, {1, 2}), Tensor<int>({2, 2, 2, 2}, {
+    EXPECT_EQ(partition(A, {2, 2}, {1, 2}), Tensor<int>({2, 2, 2, 2}, {
         11, 12, 21, 22,
         13, 14, 23, 24,
         21, 22, 31, 32,
         23, 24, 33, 34
     }));
 
-    EXPECT_EQ(partition(A, {0, 1}, {2, 2}, {2, 1}), Tensor<int>({1, 3, 2, 2}, {
+    EXPECT_EQ(partition(A, {2, 2}, {2, 1}), Tensor<int>({1, 3, 2, 2}, {
         11, 12, 21, 22,
         12, 13, 22, 23,
         13, 14, 23, 24
     }));
 
-    EXPECT_EQ(partition(A, {0, 1}, {2, 2}, {2, 2}), Tensor<int>({1, 2, 2, 2}, {
+    EXPECT_EQ(partition(A, {2, 2}, {2, 2}), Tensor<int>({1, 2, 2, 2}, {
         11, 12, 21, 22,
         13, 14, 23, 24
     }));
@@ -291,10 +291,13 @@ TEST(ViewTest, Partition2D) {
         41, 42, 43
     });
 
-    EXPECT_EQ(partition(B, 0, 2, 1), Tensor<int>({3, 3, 2}, {
-        11, 21, 12, 22, 13, 23,
-        21, 31, 22, 32, 23, 33,
-        31, 41, 32, 42, 33, 43
+    EXPECT_EQ(partition(B, 0, 2, 1), Tensor<int>({3, 2, 3}, {
+        11, 12, 13,
+        21, 22, 23,
+        21, 22, 23,
+        31, 32, 33,
+        31, 32, 33,
+        41, 42, 43
     }));
 
     EXPECT_EQ(partition(B, 1, 2, 1), Tensor<int>({4, 2, 2}, {
@@ -304,7 +307,7 @@ TEST(ViewTest, Partition2D) {
         41, 42, 42, 43
     }));
 
-    EXPECT_EQ(partition(B, {0, 1}, {2, 2}, {1, 1}), Tensor<int>({3, 2, 2, 2}, {
+    EXPECT_EQ(partition(B, {2, 2}, {1, 1}), Tensor<int>({3, 2, 2, 2}, {
         11, 12, 21, 22,
         12, 13, 22, 23,
         21, 22, 31, 32,
@@ -313,20 +316,20 @@ TEST(ViewTest, Partition2D) {
         32, 33, 42, 43
     }));
 
-    EXPECT_EQ(partition(B, {0, 1}, {2, 2}, {1, 2}), Tensor<int>({3, 1, 2, 2}, {
+    EXPECT_EQ(partition(B, {2, 2}, {1, 2}), Tensor<int>({3, 1, 2, 2}, {
         11, 12, 21, 22,
         21, 22, 31, 32,
         31, 32, 41, 42
     }));
 
-    EXPECT_EQ(partition(B, {0, 1}, {2, 2}, {2, 1}), Tensor<int>({2, 2, 2, 2}, {
+    EXPECT_EQ(partition(B, {2, 2}, {2, 1}), Tensor<int>({2, 2, 2, 2}, {
         11, 12, 21, 22,
         12, 13, 22, 23,
         31, 32, 41, 42,
         32, 33, 42, 43
     }));
 
-    EXPECT_EQ(partition(B, {0, 1}, {2, 2}, {2, 2}), Tensor<int>({2, 1, 2, 2}, {
+    EXPECT_EQ(partition(B, {2, 2}, {2, 2}), Tensor<int>({2, 1, 2, 2}, {
         11, 12, 21, 22,
         31, 32, 41, 42
     }));
@@ -343,7 +346,7 @@ TEST(ViewTest, Parition3D) {
         231, 232, 233, 234
     });
 
-    EXPECT_EQ(partition(A, {1, 2}, {2, 2}, {1, 1}), Tensor<int>({2, 2, 3, 2, 2}, {
+    EXPECT_EQ(partition(A, {2, 2}, {1, 1}), Tensor<int>({2, 2, 3, 2, 2}, {
         111, 112, 121, 122,
         112, 113, 122, 123,
         113, 114, 123, 124,
@@ -358,30 +361,7 @@ TEST(ViewTest, Parition3D) {
         223, 224, 233, 234
     }));
 
-    EXPECT_EQ(partition(A, {0, 2}, {2, 2}, {1, 1}), Tensor<int>({1, 3, 3, 2, 2}, {
-        111, 112, 211, 212,
-        112, 113, 212, 213,
-        113, 114, 213, 214,
-        121, 122, 221, 222,
-        122, 123, 222, 223,
-        123, 124, 223, 224,
-        131, 132, 231, 232,
-        132, 133, 232, 233,
-        133, 134, 233, 234
-    }));
-
-    EXPECT_EQ(partition(A, {0, 1}, {2, 2}, {1, 1}), Tensor<int>({1, 2, 4, 2, 2}, {
-        111, 121, 211, 221,
-        112, 122, 212, 222,
-        113, 123, 213, 223,
-        114, 124, 214, 224,
-        121, 131, 221, 231,
-        122, 132, 222, 232,
-        123, 133, 223, 233,
-        124, 134, 224, 234
-    }));
-
-    EXPECT_EQ(partition(A, {0, 1, 2}, {2, 2, 2}, {1, 1, 1}), Tensor<int>({1, 2, 3, 2, 2, 2}, {
+    EXPECT_EQ(partition(A, {2, 2, 2}, {1, 1, 1}), Tensor<int>({1, 2, 3, 2, 2, 2}, {
         111, 112, 121, 122,
         211, 212, 221, 222,
         112, 113, 122, 123,
@@ -395,6 +375,11 @@ TEST(ViewTest, Parition3D) {
         123, 124, 133, 134,
         223, 224, 233, 234
     }));
+
+    auto B = Tensor<int>::range({4, 4, 4}, 1);
+    EXPECT_EQ(partition(B, 0, 2), reshape(B, {2, 2, 4, 4}));
+    EXPECT_EQ(partition(B, 1, 2), reshape(B, {4, 2, 2, 4}));
+    EXPECT_EQ(partition(B, 2, 2), reshape(B, {4, 4, 2, 2}));
 }
 
 TEST(ViewTest, PartitionOnView) {
@@ -405,11 +390,11 @@ TEST(ViewTest, PartitionOnView) {
         41, 42, 43
     });
 
-    EXPECT_EQ(partition(A.transpose(), 0, 2, 1), Tensor<int>({2, 4, 2}, {
-        11, 12, 21, 22,
-        31, 32, 41, 42,
-        12, 13, 22, 23,
-        32, 33, 42, 43
+    EXPECT_EQ(partition(A.transpose(), 0, 2, 1), Tensor<int>({2, 2, 4}, {
+        11, 21, 31, 41,
+        12, 22, 32, 42,
+        12, 22, 32, 42,
+        13, 23, 33, 43
     }));
 
     EXPECT_EQ(partition(A.transpose(), 1, 2, 1), Tensor<int>({3, 3, 2}, {
@@ -418,7 +403,7 @@ TEST(ViewTest, PartitionOnView) {
         13, 23, 23, 33, 33, 43
     }));
 
-    EXPECT_EQ(partition(A.transpose(), {0, 1}, {2, 2}, {1, 1}), Tensor<int>({2, 3, 2, 2}, {
+    EXPECT_EQ(partition(A.transpose(), {2, 2}, {1, 1}), Tensor<int>({2, 3, 2, 2}, {
         11, 21, 12, 22,
         21, 31, 22, 32,
         31, 41, 32, 42,
@@ -427,20 +412,20 @@ TEST(ViewTest, PartitionOnView) {
         32, 42, 33, 43
     }));
 
-    EXPECT_EQ(partition(A.transpose(), {0, 1}, {2, 2}, {1, 2}), Tensor<int>({2, 2, 2, 2}, {
+    EXPECT_EQ(partition(A.transpose(), {2, 2}, {1, 2}), Tensor<int>({2, 2, 2, 2}, {
         11, 21, 12, 22,
         31, 41, 32, 42,
         12, 22, 13, 23,
         32, 42, 33, 43
     }));
 
-    EXPECT_EQ(partition(A.transpose(), {0, 1}, {2, 2}, {2, 1}), Tensor<int>({1, 3, 2, 2}, {
+    EXPECT_EQ(partition(A.transpose(), {2, 2}, {2, 1}), Tensor<int>({1, 3, 2, 2}, {
         11, 21, 12, 22,
         21, 31, 22, 32,
         31, 41, 32, 42
     }));
 
-    EXPECT_EQ(partition(A.transpose(), {0, 1}, {2, 2}, {2, 2}), Tensor<int>({1, 2, 2, 2}, {
+    EXPECT_EQ(partition(A.transpose(), {2, 2}, {2, 2}), Tensor<int>({1, 2, 2, 2}, {
         11, 21, 12, 22,
         31, 41, 32, 42
     }));
@@ -448,7 +433,7 @@ TEST(ViewTest, PartitionOnView) {
 
 TEST(ViewTest, PartitionAndReduceMeanEquivalentToAveragePool) {
     auto A = Tensor<float>({3, 3, 8, 10}).random(0, 1);
-    auto B = reduce_mean(partition(A, {-2, -1}, {3, 3}, {1, 1}), {-2, -1});
+    auto B = reduce_mean(partition(A, {3, 3}, {1, 1}), {-2, -1});
     auto C = dnn::average_pooling(A, dnn::Filter2D(A.shape(), 3, 3), false);
     EXPECT_EQ(B, C);
 }

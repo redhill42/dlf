@@ -61,7 +61,7 @@ public:
         init(std::vector<size_t>{static_cast<size_t>(args)...});
     }
 
-    static Shape as_strided(const std::vector<size_t>& extents, const std::vector<size_t>& strides);
+    static Shape as_strided(const std::vector<size_t>& extents, const std::vector<size_t>& strides, size_t offset);
 
     Shape(const Shape&) = default;
     Shape& operator=(const Shape&) = default;

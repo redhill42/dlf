@@ -953,13 +953,10 @@ kronecker(LHS&& A, RHS&& B) {
     for (int i = 0; i < rank; i++)
         c_dims[i] = a_dims[i] * b_dims[i];
 
-    std::vector<int> axes(rank);
-    std::iota(axes.begin(), axes.end(), 0);
-
     tensor_invoke_result<xfn::multiplies<>, LHS, RHS> C(Shape{c_dims});
     transformTo(unsqueeze_right(unsqueeze_left(std::forward<LHS>(A), rank), rank*2),
                 unsqueeze_left(std::forward<RHS>(B), rank*2),
-                partition(C, axes, b_dims), xfn::multiplies<>());
+                partition(C, b_dims), xfn::multiplies<>());
     return C;
 }
 

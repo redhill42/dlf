@@ -41,7 +41,7 @@ void Shape::init() noexcept {
     m_offset = 0;
 }
 
-Shape Shape::as_strided(const std::vector<size_t>& extents, const std::vector<size_t>& strides) {
+Shape Shape::as_strided(const std::vector<size_t>& extents, const std::vector<size_t>& strides, size_t offset) {
     assert(extents.size() == strides.size());
     std::vector<dim_t> dims(extents.size());
     size_t size = 1;
@@ -51,7 +51,7 @@ Shape Shape::as_strided(const std::vector<size_t>& extents, const std::vector<si
         dims[i].stride = strides[i];
         size *= extents[i];
     }
-    return Shape(std::move(dims), size, 0);
+    return Shape(std::move(dims), size, offset);
 }
 
 size_t Shape::partial_size(size_t start, size_t end) const noexcept {
