@@ -231,9 +231,22 @@ public:
     virtual std::shared_ptr<rawEvent> createEvent() const = 0;
     virtual std::shared_ptr<rawBuffer> createBuffer(size_t size, BufferAccess access) const = 0;
 
+    std::shared_ptr<rawBuffer> getTemporaryBuffer(
+        size_t& size, size_t& offset, size_t item_size) const;
+    void releaseTemporaryBuffer(size_t size, size_t offset, size_t item_size) const;
+
+    std::shared_ptr<rawBuffer> getSharedBuffer(
+        std::string&& content, const rawQueue& queue) const;
+
     virtual std::shared_ptr<rawProgram> compileProgram(
         const char* source, const std::vector<std::string>& options) const = 0;
     virtual std::shared_ptr<rawProgram> loadProgram(const std::string& binary) const = 0;
+
+private:
+    mutable std::shared_ptr<rawBuffer> m_temporary_buffer;
+    mutable size_t m_temp_buffer_size = 0;
+    mutable size_t m_temp_buffer_offset = 0;
+    mutable std::unordered_map<std::string, std::shared_ptr<rawBuffer>> m_shared_buffers;
 };
 
 class rawQueue {
@@ -325,9 +338,10 @@ class Device;
 class Context;
 class Queue;
 class Event;
-template <typename T> class Buffer;
 class Program;
 class Kernel;
+template <typename T> class Buffer;
+template <typename T> class TemporaryBuffer;
 
 class Platform {
     std::shared_ptr<rawPlatform> m_raw;
@@ -551,6 +565,12 @@ public:
     Buffer<T> createBuffer(size_t size, BufferAccess access = BufferAccess::ReadWrite) const;
 
     /**
+     * Create a temporary buffer.
+     */
+    template <typename T>
+    TemporaryBuffer<T> getTemporaryBuffer(size_t size) const;
+
+    /**
      * Get or create a device buffer with constant data. The buffer can be reused
      * by multiple operations to eliminate reallocation of device buffers
      */
@@ -564,9 +584,6 @@ public:
     bool operator!=(const Context& other) const noexcept {
         return !(*this == other);
     }
-
-private:
-    mutable std::unordered_map<std::string, std::shared_ptr<rawBuffer>> m_shared_buffers;
 };
 
 class Queue {
@@ -618,14 +635,23 @@ public:
 template <typename T>
 class Buffer {
     std::shared_ptr<rawBuffer> m_raw;
-    size_t m_size;
+    size_t m_size = 0;
 
-    friend class Context;
+    Buffer(const TemporaryBuffer<T>&) = delete;
+    Buffer(TemporaryBuffer<T>&& src) = delete;
+    Buffer& operator=(const TemporaryBuffer<T>&) = delete;
+    Buffer& operator=(TemporaryBuffer<T>&& src) = delete;
 
 public:
     Buffer() = default;
+
     explicit Buffer(std::shared_ptr<rawBuffer> buffer, size_t size)
         : m_raw(std::move(buffer)), m_size(size) {}
+
+    Buffer(const Buffer&) = default;
+    Buffer(Buffer&&) = default;
+    Buffer& operator=(const Buffer&) = default;
+    Buffer& operator=(Buffer&&) = default;
 
     rawBuffer& raw() const noexcept { return *m_raw; }
     std::shared_ptr<rawBuffer> handle() const noexcept { return m_raw; }
@@ -674,6 +700,44 @@ bool operator!=(const Buffer<T>& lhs, const Buffer<T>& rhs) {
     return lhs.handle() != rhs.handle();
 }
 
+template <typename T>
+class TemporaryBuffer : public Buffer<T> {
+    std::shared_ptr<rawContext> m_context;
+    size_t m_offset = 0;
+
+    explicit TemporaryBuffer(std::shared_ptr<rawContext> context,
+        std::shared_ptr<rawBuffer> buffer, size_t size, size_t offset)
+        : Buffer<T>(buffer, size), m_context(context), m_offset(offset) {}
+
+    friend class Context;
+
+public:
+    TemporaryBuffer() = default;
+
+    TemporaryBuffer(TemporaryBuffer&& src)
+        : Buffer<T>(std::move(static_cast<Buffer<T>&>(src))),
+          m_context(std::move(src.m_context)),
+          m_offset(src.m_offset)
+    {
+        src.m_offset = 0;
+    }
+
+    TemporaryBuffer& operator=(TemporaryBuffer&& src) {
+        Buffer<T>::operator=(std::move(static_cast<Buffer<T>&>(src)));
+        m_context = std::move(src.m_context);
+        std::swap(m_offset, src.m_offset);
+        return *this;
+    }
+
+    ~TemporaryBuffer() {
+        if (m_context) {
+            m_context->releaseTemporaryBuffer(this->size(), m_offset, sizeof(T));
+        }
+    }
+
+    size_t offset() const noexcept { return m_offset; }
+};
+
 class Program {
     std::shared_ptr<rawProgram> m_raw;
 
@@ -715,6 +779,11 @@ public:
 
     template <typename T>
     void setArgument(size_t index, const Buffer<T>& buffer) const {
+        m_raw->setArgument(index, buffer.raw());
+    }
+
+    template <typename T>
+    void setArgument(size_t index, const TemporaryBuffer<T>& buffer) const {
         m_raw->setArgument(index, buffer.raw());
     }
 
@@ -807,17 +876,24 @@ inline Buffer<T> Context::createBuffer(size_t size, BufferAccess access) const {
 }
 
 template <typename T>
-Buffer<T> Context::getSharedBuffer(const T* content, size_t size, const Queue& queue) const {
-    std::string key(reinterpret_cast<const char*>(content), size * sizeof(T));
-    auto it = m_shared_buffers.find(key);
-    if (it != m_shared_buffers.end()) {
-        return Buffer<T>(it->second, size);
-    }
+TemporaryBuffer<T> Context::getTemporaryBuffer(size_t size) const {
+    size_t offset = 0;
+    auto buffer = m_raw->getTemporaryBuffer(size, offset, sizeof(T));
+    return TemporaryBuffer<T>(m_raw, buffer, size, offset);
+}
 
-    Buffer<T> buffer = createBuffer<T>(size);
-    buffer.write(queue, content, size);
-    m_shared_buffers.emplace(std::move(key), buffer.handle());
-    return buffer;
+template <typename T>
+Buffer<T> Context::getSharedBuffer(const T* content, size_t size, const Queue& queue) const {
+    constexpr size_t SHARED_BUFFER_THRESHOLD = 1024;
+    if (size*sizeof(T) > SHARED_BUFFER_THRESHOLD) {
+        auto buffer = createBuffer<T>(size);
+        buffer.write(queue, content, size);
+        return buffer;
+    } else {
+        std::string key(reinterpret_cast<const char*>(content), size * sizeof(T));
+        auto buffer = m_raw->getSharedBuffer(std::move(key), queue.raw());
+        return Buffer<T>(buffer, size);
+    }
 }
 
 inline void Queue::finish(Event& event) const {

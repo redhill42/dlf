@@ -1893,7 +1893,6 @@ void gemm(const Layout layout, const Transpose a_transpose, const Transpose b_tr
           const Buffer<T>& b_buffer, const size_t b_offset, const size_t b_ld,
           const T beta,
           Buffer<T>& c_buffer, const size_t c_offset, const size_t c_ld,
-          Buffer<T>* temp_buffer,
           const Queue& queue, Event* event) {
     dispatch<T>(queue,
         OPENCL(
@@ -1904,8 +1903,7 @@ void gemm(const Layout layout, const Transpose a_transpose, const Transpose b_tr
                            a_buffer, a_offset, a_ld,
                            b_buffer, b_offset, b_ld,
                            beta,
-                           c_buffer, c_offset, c_ld,
-                           temp_buffer);
+                           c_buffer, c_offset, c_ld);
         ),
         CUDA(
             auto a = cuBuffer::unwrap(a_buffer) + a_offset;
@@ -1941,7 +1939,6 @@ template void PUBLIC_API gemm(const Layout, const Transpose, const Transpose,
                               const Buffer<float>&, const size_t, const size_t,
                               const float,
                               Buffer<float>&, const size_t, const size_t,
-                              Buffer<float>*,
                               const Queue&, Event*);
 template void PUBLIC_API gemm(const Layout, const Transpose, const Transpose,
                               const size_t, const size_t, const size_t,
@@ -1950,7 +1947,6 @@ template void PUBLIC_API gemm(const Layout, const Transpose, const Transpose,
                               const Buffer<double>&, const size_t, const size_t,
                               const double,
                               Buffer<double>&, const size_t, const size_t,
-                              Buffer<double>*,
                               const Queue&, Event*);
 template void PUBLIC_API gemm(const Layout, const Transpose, const Transpose,
                               const size_t, const size_t, const size_t,
@@ -1959,7 +1955,6 @@ template void PUBLIC_API gemm(const Layout, const Transpose, const Transpose,
                               const Buffer<float2>&, const size_t, const size_t,
                               const float2,
                               Buffer<float2>&, const size_t, const size_t,
-                              Buffer<float2>*,
                               const Queue&, Event*);
 template void PUBLIC_API gemm(const Layout, const Transpose, const Transpose,
                               const size_t, const size_t, const size_t,
@@ -1968,7 +1963,6 @@ template void PUBLIC_API gemm(const Layout, const Transpose, const Transpose,
                               const Buffer<double2>&, const size_t, const size_t,
                               const double2,
                               Buffer<double2>&, const size_t, const size_t,
-                              Buffer<double2>*,
                               const Queue&, Event*);
 template void PUBLIC_API gemm(const Layout, const Transpose, const Transpose,
                               const size_t, const size_t, const size_t,
@@ -1977,7 +1971,6 @@ template void PUBLIC_API gemm(const Layout, const Transpose, const Transpose,
                               const Buffer<half>&, const size_t, const size_t,
                               const half,
                               Buffer<half>&, const size_t, const size_t,
-                              Buffer<half>*,
                               const Queue&, Event*);
 template void PUBLIC_API gemm(const Layout, const Transpose, const Transpose,
                               const size_t, const size_t, const size_t,
@@ -1986,7 +1979,6 @@ template void PUBLIC_API gemm(const Layout, const Transpose, const Transpose,
                               const Buffer<int32_t>&, const size_t, const size_t,
                               const int32_t,
                               Buffer<int32_t>&, const size_t, const size_t,
-                              Buffer<int32_t>*,
                               const Queue&, Event*);
 template void PUBLIC_API gemm(const Layout, const Transpose, const Transpose,
                               const size_t, const size_t, const size_t,
@@ -1995,7 +1987,6 @@ template void PUBLIC_API gemm(const Layout, const Transpose, const Transpose,
                               const Buffer<int64_t>&, const size_t, const size_t,
                               const int64_t,
                               Buffer<int64_t>&, const size_t, const size_t,
-                              Buffer<int64_t>*,
                               const Queue&, Event*);
 
 //---------------------------------------------------------------------------
@@ -2662,7 +2653,6 @@ void convgemm(const KernelMode kernel_mode,
               const Buffer<T>& im_buffer, const size_t im_offset,
               const Buffer<T>& kernel_buffer, const size_t kernel_offset,
               Buffer<T>& result_buffer, const size_t result_offset,
-              Buffer<T>* temp_buffer,
               const Queue& queue, Event* event) {
     auto routine = Xconvgemm<T>(queue, event);
     routine.DoConvgemm(kernel_mode, batch_count, channels,
@@ -2672,8 +2662,7 @@ void convgemm(const KernelMode kernel_mode,
                        dilation_h, dilation_w,
                        im_buffer, im_offset,
                        kernel_buffer, kernel_offset,
-                       result_buffer, result_offset,
-                       temp_buffer);
+                       result_buffer, result_offset);
 }
 
 template void PUBLIC_API convgemm<float> (const KernelMode,
@@ -2687,7 +2676,6 @@ template void PUBLIC_API convgemm<float> (const KernelMode,
                                           const Buffer<float>&, const size_t,
                                           const Buffer<float>&, const size_t,
                                           Buffer<float>&, const size_t,
-                                          Buffer<float>*,
                                           const Queue&, Event*);
 template void PUBLIC_API convgemm<double>(const KernelMode,
                                           const size_t, const size_t,
@@ -2700,7 +2688,6 @@ template void PUBLIC_API convgemm<double>(const KernelMode,
                                           const Buffer<double>&, const size_t,
                                           const Buffer<double>&, const size_t,
                                           Buffer<double>&, const size_t,
-                                          Buffer<double>*,
                                           const Queue&, Event*);
 template void PUBLIC_API convgemm<half>  (const KernelMode,
                                           const size_t, const size_t,
@@ -2713,7 +2700,6 @@ template void PUBLIC_API convgemm<half>  (const KernelMode,
                                           const Buffer<half>&, const size_t,
                                           const Buffer<half>&, const size_t,
                                           Buffer<half>&, const size_t,
-                                          Buffer<half>*,
                                           const Queue&, Event*);
 
 //---------------------------------------------------------------------------
@@ -2925,19 +2911,19 @@ void gemmBatched(const Layout layout, const Transpose a_transpose, const Transpo
             auto Barray = std::vector<const T*>();
             auto Carray = std::vector<T*>();
 
-            for (auto batch = size_t{0}; batch < batch_count; ++batch) {
+            for (size_t batch = 0; batch < batch_count; ++batch) {
                 Aarray.push_back(A + a_offsets[batch]);
                 Barray.push_back(B + b_offsets[batch]);
                 Carray.push_back(C + c_offsets[batch]);
             }
 
-            auto AarrayBuffer = queue.context().createBuffer<const T*>(batch_count);
-            auto BarrayBuffer = queue.context().createBuffer<const T*>(batch_count);
-            auto CarrayBuffer = queue.context().createBuffer<T*>(batch_count);
+            auto AarrayBuffer = queue.context().getTemporaryBuffer<const T*>(batch_count);
+            auto BarrayBuffer = queue.context().getTemporaryBuffer<const T*>(batch_count);
+            auto CarrayBuffer = queue.context().getTemporaryBuffer<T*>(batch_count);
 
-            AarrayBuffer.write(queue, Aarray.data(), batch_count);
-            BarrayBuffer.write(queue, Barray.data(), batch_count);
-            CarrayBuffer.write(queue, Carray.data(), batch_count);
+            AarrayBuffer.write(queue, Aarray.data(), batch_count, AarrayBuffer.offset());
+            BarrayBuffer.write(queue, Barray.data(), batch_count, BarrayBuffer.offset());
+            CarrayBuffer.write(queue, Carray.data(), batch_count, CarrayBuffer.offset());
 
             if (layout == Layout::RowMajor) {
                 cublasGemmBatched(
@@ -2947,8 +2933,8 @@ void gemmBatched(const Layout layout, const Transpose a_transpose, const Transpo
                     cuBuffer::unwrap(BarrayBuffer), t, b_ld,
                     cuBuffer::unwrap(AarrayBuffer), t, a_ld,
                     betas,
-                    cuBuffer::unwrap(CarrayBuffer), t, c_ld, batch_count,
-                    t, cublasGemmAlgo_t::CUBLAS_GEMM_DFALT);
+                    cuBuffer::unwrap(CarrayBuffer), t, c_ld,
+                    batch_count, t, cublasGemmAlgo_t::CUBLAS_GEMM_DFALT);
             } else {
                 cublasGemmBatched(
                     h, CudaOp(a_transpose), CudaOp(b_transpose),
@@ -2957,8 +2943,8 @@ void gemmBatched(const Layout layout, const Transpose a_transpose, const Transpo
                     cuBuffer::unwrap(AarrayBuffer), t, a_ld,
                     cuBuffer::unwrap(BarrayBuffer), t, b_ld,
                     betas,
-                    cuBuffer::unwrap(CarrayBuffer), t, c_ld, batch_count,
-                    t, cublasGemmAlgo_t::CUBLAS_GEMM_DFALT);
+                    cuBuffer::unwrap(CarrayBuffer), t, c_ld,
+                    batch_count, t, cublasGemmAlgo_t::CUBLAS_GEMM_DFALT);
             }
         ));
 }
@@ -3251,80 +3237,6 @@ template void PUBLIC_API gemmStridedBatched<half>   (const Layout, const Transpo
                                                      Buffer<half>&, const size_t, const size_t, const size_t,
                                                      const size_t,
                                                      const Queue&, Event*);
-
-// =================================================================================================
-
-// Retrieves the required size of the temporary buffer for the GEMM kernel (optional)
-template <typename T>
-size_t gemmTempBufferSize(const Layout layout, const Transpose a_transpose, const Transpose b_transpose,
-                          const size_t m, const size_t n, const size_t k,
-                          const size_t a_offset, const size_t a_ld,
-                          const size_t b_offset, const size_t b_ld,
-                          const size_t c_offset, const size_t c_ld,
-                          const Queue& queue) {
-    // Retrieves the tuning database
-    const auto device = queue.context().device(); // FIXME
-    const auto kernel_names = std::vector<std::string>{"Xgemm", "GemmRoutine"};
-    Databases db(kernel_names);
-    Routine::InitDatabase(device, kernel_names, PrecisionValue<T>(), {}, db);
-
-    // Computes the buffer size
-    size_t temp_buffer_size;
-    if (Xgemm<T>::UseDirectKernel(m, n, k, db["XGEMM_MIN_INDIRECT_SIZE"])) {
-      temp_buffer_size = 0;
-    } else {
-      temp_buffer_size = Xgemm<T>::GetTempSize(
-          layout, a_transpose, b_transpose, m, n, k,
-          a_offset, a_ld, b_offset, b_ld, c_offset, c_ld,
-          db["MWG"], db["NWG"], db["KWG"] * db["KREG"],
-          db["GEMMK"]);
-    }
-    return temp_buffer_size;
-}
-
-template size_t PUBLIC_API gemmTempBufferSize<float>  (const Layout, const Transpose, const Transpose,
-                                                       const size_t, const size_t, const size_t,
-                                                       const size_t, const size_t, const size_t, const size_t,
-                                                       const size_t, const size_t, const Queue&);
-template size_t PUBLIC_API gemmTempBufferSize<double> (const Layout, const Transpose, const Transpose,
-                                                       const size_t, const size_t, const size_t,
-                                                       const size_t, const size_t, const size_t, const size_t,
-                                                       const size_t, const size_t, const Queue&);
-template size_t PUBLIC_API gemmTempBufferSize<float2> (const Layout, const Transpose, const Transpose,
-                                                       const size_t, const size_t, const size_t,
-                                                       const size_t, const size_t, const size_t, const size_t,
-                                                       const size_t, const size_t, const Queue&);
-template size_t PUBLIC_API gemmTempBufferSize<double2>(const Layout, const Transpose, const Transpose,
-                                                       const size_t, const size_t, const size_t,
-                                                       const size_t, const size_t, const size_t, const size_t,
-                                                       const size_t, const size_t, const Queue&);
-template size_t PUBLIC_API gemmTempBufferSize<half>   (const Layout, const Transpose, const Transpose,
-                                                       const size_t, const size_t, const size_t,
-                                                       const size_t, const size_t, const size_t, const size_t,
-                                                       const size_t, const size_t, const Queue&);
-
-template <typename T>
-size_t convgemmTempBufferSize(const size_t batch_count, const size_t channels,
-                              const size_t output_h, const size_t output_w,
-                              const size_t kernel_h, const size_t kernel_w,
-                              const Queue& queue)
-{
-    auto routine = Xconvgemm<T>(queue, nullptr);
-    return routine.GetTempBufferSize(batch_count, channels, output_h, output_w, kernel_h, kernel_w);
-}
-
-template size_t PUBLIC_API convgemmTempBufferSize<half>  (const size_t, const size_t,
-                                                          const size_t, const size_t,
-                                                          const size_t, const size_t,
-                                                          const Queue&);
-template size_t PUBLIC_API convgemmTempBufferSize<float> (const size_t, const size_t,
-                                                          const size_t, const size_t,
-                                                          const size_t, const size_t,
-                                                          const Queue&);
-template size_t PUBLIC_API convgemmTempBufferSize<double>(const size_t, const size_t,
-                                                          const size_t, const size_t,
-                                                          const size_t, const size_t,
-                                                          const Queue&);
 
 // =================================================================================================
 }} // namespace gpgpu::blas

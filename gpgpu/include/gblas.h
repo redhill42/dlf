@@ -717,7 +717,6 @@ void gemm(const Layout layout, const Transpose a_transpose, const Transpose b_tr
           const Buffer<T>& b_buffer, const size_t b_offset, const size_t b_ld,
           const T beta,
           Buffer<T>& c_buffer, const size_t c_offset, const size_t c_ld,
-          Buffer<T>* temp_buffer = nullptr,
           const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 template <typename T>
@@ -728,12 +727,11 @@ inline void gemm(const Layout layout, const Transpose a_transpose, const Transpo
                  const Buffer<T>& b_buffer, const size_t b_ld,
                  const T beta,
                  Buffer<T>& c_buffer, const size_t c_ld,
-                 Buffer<T>* temp_buffer = nullptr,
                  const Queue& queue = gpgpu::current::queue(), Event* event = nullptr)
 {
     gemm(layout, a_transpose, b_transpose, m, n, k, alpha,
          a_buffer, 0, a_ld, b_buffer, 0, b_ld, beta,
-         c_buffer, 0, c_ld, temp_buffer, queue, event);
+         c_buffer, 0, c_ld, queue, event);
 }
 
 // Symmetric matrix-matrix multiplication: SSYMM/DSYMM/CSYMM/ZSYMM/HSYMM
@@ -903,7 +901,6 @@ void convgemm(const KernelMode kernel_mode,
               const Buffer<T>& im_buffer, const size_t im_offset,
               const Buffer<T>& kernel_buffer, const size_t kernel_offset,
               Buffer<T>& result_buffer, const size_t result_offset,
-              Buffer<T>* temp_buffer = nullptr,
               const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 // Batched version of AXPY: SAXPYBATCHED/DAXPYBATCHED/CAXPYBATCHED/ZAXPYBATCHED/HAXPYBATCHED
@@ -938,23 +935,6 @@ void gemmStridedBatched(const Layout layout, const Transpose a_transpose, const 
                         Buffer<T>& c_buffer, const size_t c_offset, const size_t c_ld, const size_t c_stride,
                         const size_t batch_count,
                         const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
-
-// =================================================================================================
-
-// Retrieves the required size of the temporary buffer for the GEMM kernel (optional)
-template <typename T>
-size_t gemmTempBufferSize(const Layout layout, const Transpose a_transpose, const Transpose b_transpose,
-                          const size_t m, const size_t n, const size_t k,
-                          const size_t a_offset, const size_t a_ld,
-                          const size_t b_offset, const size_t b_ld,
-                          const size_t c_offset, const size_t c_ld,
-                          const Queue& queue = gpgpu::current::queue());
-
-template <typename T>
-size_t convgemmTempBufferSize(const size_t batch_count, const size_t channels,
-                              const size_t output_h, const size_t output_w,
-                              const size_t kernel_h, const size_t kernel_w,
-                              const Queue& queue = gpgpu::current::queue());
 
 // =================================================================================================
 

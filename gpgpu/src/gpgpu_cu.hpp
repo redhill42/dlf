@@ -227,6 +227,16 @@ public:
     static const T* unwrap(const gpgpu::Buffer<T>& buffer) {
         return reinterpret_cast<T*>(unwrap(buffer.raw()));
     }
+
+    template <typename T>
+    static T* unwrap(gpgpu::TemporaryBuffer<T>& buffer) {
+        return reinterpret_cast<T*>(unwrap(buffer.raw())) + buffer.offset();
+    }
+
+    template <typename T>
+    static const T* unwrap(const gpgpu::TemporaryBuffer<T>& buffer) {
+        return reinterpret_cast<T*>(unwrap(buffer.raw())) + buffer.offset();
+    }
 };
 
 class cuProgram final : public rawProgram {

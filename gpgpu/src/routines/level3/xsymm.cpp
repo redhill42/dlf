@@ -54,7 +54,7 @@ void Xsymm<T>::DoSymm(const Layout layout, const Side side, const Triangle trian
   auto kernel_name = (is_upper) ? "SymmUpperToSquared" : "SymmLowerToSquared";
 
   // Temporary buffer for a copy of the symmetric matrix
-  auto temp_symm = context_.template createBuffer<T>(k*k);
+  auto temp_symm = context_.template getTemporaryBuffer<T>(k*k);
 
   // Creates a general matrix from the symmetric matrix to be able to run the regular Xgemm
   // routine afterwards
@@ -67,7 +67,7 @@ void Xsymm<T>::DoSymm(const Layout layout, const Side side, const Triangle trian
   kernel.setArgument(3, a_buffer);
   kernel.setArgument(4, static_cast<int>(k));
   kernel.setArgument(5, static_cast<int>(k));
-  kernel.setArgument(6, static_cast<int>(0));
+  kernel.setArgument(6, static_cast<int>(temp_symm.offset()));
   kernel.setArgument(7, temp_symm);
 
   // Uses the common padding kernel's thread configuration. This is allowed, since the
@@ -82,7 +82,7 @@ void Xsymm<T>::DoSymm(const Layout layout, const Side side, const Triangle trian
     DoGemm(layout, Transpose::NoTrans, Transpose::NoTrans,
            m, n, k,
            alpha,
-           temp_symm, 0, k,
+           temp_symm, temp_symm.offset(), k,
            b_buffer, b_offset, b_ld,
            beta,
            c_buffer, c_offset, c_ld);
@@ -95,7 +95,7 @@ void Xsymm<T>::DoSymm(const Layout layout, const Side side, const Triangle trian
              m, n, k,
              alpha,
              b_buffer, b_offset, b_ld,
-             temp_symm, 0, k,
+             temp_symm, temp_symm.offset(), k,
              beta,
              c_buffer, c_offset, c_ld);
     } catch (BLASError &e) {

@@ -48,14 +48,15 @@ void Xnrm2<T>::DoNrm2(const size_t n,
 
   // Creates the buffer for intermediate values
   auto temp_size = 2*db_["WGS2"];
-  auto temp_buffer = context_.createBuffer<T>(temp_size);
+  auto temp_buffer = context_.getTemporaryBuffer<T>(temp_size);
 
   // Sets the kernel arguments
-  kernel1.setArgument(0, static_cast<int>(n));
-  kernel1.setArgument(1, x_buffer);
-  kernel1.setArgument(2, static_cast<int>(x_offset));
-  kernel1.setArgument(3, static_cast<int>(x_inc));
-  kernel1.setArgument(4, temp_buffer);
+  kernel1.setArguments(static_cast<int>(n),
+                       x_buffer,
+                       static_cast<int>(x_offset),
+                       static_cast<int>(x_inc),
+                       temp_buffer,
+                       static_cast<int>(temp_buffer.offset()));
 
   // Launches the main kernel
   auto global1 = std::vector<size_t>{db_["WGS1"]*temp_size};
@@ -63,9 +64,10 @@ void Xnrm2<T>::DoNrm2(const size_t n,
   RunKernel(kernel1, queue_, device_, global1, local1, nullptr);
 
   // Sets the arguments for the epilogue kernel
-  kernel2.setArgument(0, temp_buffer);
-  kernel2.setArgument(1, nrm2_buffer);
-  kernel2.setArgument(2, static_cast<int>(nrm2_offset));
+  kernel2.setArguments(temp_buffer,
+                       static_cast<int>(temp_buffer.offset()),
+                       nrm2_buffer,
+                       static_cast<int>(nrm2_offset));
 
   // Launches the epilogue kernel
   auto global2 = std::vector<size_t>{db_["WGS2"]};

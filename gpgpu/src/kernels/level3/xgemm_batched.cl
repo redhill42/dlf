@@ -23,20 +23,20 @@ __kernel __attribute__((reqd_work_group_size(MDIMC, NDIMC, 1)))
 void XgemmBatched(const int kSizeM, const int kSizeN, const int kSizeK,
                   const __constant real_arg* arg_alphas,
                   const __constant real_arg* arg_betas,
-                  const __global realM* restrict agm, const int a_one, const int a_two,
-                  const __global realN* restrict bgm, const int b_one, const int b_two,
-                  __global realM* cgm, const int c_one, const int c_two) {
+                  const __global realM* restrict agm, const int a_offset, const int a_one, const int a_two,
+                  const __global realN* restrict bgm, const int b_offset, const int b_one, const int b_two,
+                  __global realM* cgm, const int c_offset, const int c_one, const int c_two) {
   const int batch = get_group_id(2);
   const real alpha = GetRealArg(arg_alphas[batch]);
   const real beta = GetRealArg(arg_betas[batch]);
 
   // Sets the offsets
-  const int a_offset = batch * a_one * a_two;
-  const int b_offset = batch * b_one * b_two;
-  const int c_offset = batch * c_one * c_two;
-  const __global realM* restrict agm_ = &agm[a_offset / VWM];
-  const __global realN* restrict bgm_ = &bgm[b_offset / VWN];
-  __global realM* restrict cgm_ = &cgm[c_offset / VWM];
+  const int a_batch_offset = a_offset + batch * a_one * a_two;
+  const int b_batch_offset = b_offset + batch * b_one * b_two;
+  const int c_batch_offset = c_offset + batch * c_one * c_two;
+  agm = (const __global realM*)((const __global real*)agm + a_batch_offset);
+  bgm = (const __global realN*)((const __global real*)bgm + b_batch_offset);
+  cgm = (__global realM*)((__global real*)cgm + c_batch_offset);
 
   // Allocates workgroup-private memory (local memory)
   #if SA == 1
@@ -48,13 +48,13 @@ void XgemmBatched(const int kSizeM, const int kSizeN, const int kSizeK,
 
   // Computes the matrix-multiplication and stores the result in global memory
   #if SA == 1 && SB == 1
-    XgemmBody(kSizeM, kSizeN, kSizeK, agm_, bgm_, cgm_, alpha, beta, alm, blm);
+    XgemmBody(kSizeM, kSizeN, kSizeK, agm, bgm, cgm, alpha, beta, alm, blm);
   #elif SA == 1
-    XgemmBody(kSizeM, kSizeN, kSizeK, agm_, bgm_, cgm_, alpha, beta, alm);
+    XgemmBody(kSizeM, kSizeN, kSizeK, agm, bgm, cgm, alpha, beta, alm);
   #elif SB == 1
-    XgemmBody(kSizeM, kSizeN, kSizeK, agm_, bgm_, cgm_, alpha, beta, blm);
+    XgemmBody(kSizeM, kSizeN, kSizeK, agm, bgm, cgm, alpha, beta, blm);
   #else
-    XgemmBody(kSizeM, kSizeN, kSizeK, agm_, bgm_, cgm_, alpha, beta);
+    XgemmBody(kSizeM, kSizeN, kSizeK, agm, bgm, cgm, alpha, beta);
   #endif
 }
 
@@ -65,20 +65,20 @@ void XgemmBatched(const int kSizeM, const int kSizeN, const int kSizeK,
 __kernel __attribute__((reqd_work_group_size(MDIMC, NDIMC, 1)))
 void XgemmStridedBatched(const int kSizeM, const int kSizeN, const int kSizeK,
                          const real_arg arg_alpha, const real_arg arg_beta,
-                         const __global realM* restrict agm, const int a_one, const int a_two,
-                         const __global realN* restrict bgm, const int b_one, const int b_two,
-                         __global realM* cgm, const int c_one, const int c_two) {
+                         const __global realM* restrict agm, const int a_offset, const int a_one, const int a_two,
+                         const __global realN* restrict bgm, const int b_offset, const int b_one, const int b_two,
+                         __global realM* cgm, const int c_offset, const int c_one, const int c_two) {
   const int batch = get_group_id(2);
   const real alpha = GetRealArg(arg_alpha);
   const real beta = GetRealArg(arg_beta);
 
   // Sets the offsets
-  const int a_offset = batch * a_one * a_two;
-  const int b_offset = batch * b_one * b_two;
-  const int c_offset = batch * c_one * c_two;
-  const __global realM* restrict agm_ = &agm[a_offset / VWM];
-  const __global realN* restrict bgm_ = &bgm[b_offset / VWN];
-  __global realM* restrict cgm_ = &cgm[c_offset / VWM];
+  const int a_batch_offset = a_offset + batch * a_one * a_two;
+  const int b_batch_offset = b_offset + batch * b_one * b_two;
+  const int c_batch_offset = c_offset + batch * c_one * c_two;
+  agm = (const __global realM*)((const __global real*)agm + a_batch_offset);
+  bgm = (const __global realN*)((const __global real*)bgm + b_batch_offset);
+  cgm = (__global realM*)((const __global real*)cgm + c_batch_offset);
 
   // Allocates workgroup-private memory (local memory)
   #if SA == 1
@@ -90,13 +90,13 @@ void XgemmStridedBatched(const int kSizeM, const int kSizeN, const int kSizeK,
 
   // Computes the matrix-multiplication and stores the result in global memory
   #if SA == 1 && SB == 1
-    XgemmBody(kSizeM, kSizeN, kSizeK, agm_, bgm_, cgm_, alpha, beta, alm, blm);
+    XgemmBody(kSizeM, kSizeN, kSizeK, agm, bgm, cgm, alpha, beta, alm, blm);
   #elif SA == 1
-    XgemmBody(kSizeM, kSizeN, kSizeK, agm_, bgm_, cgm_, alpha, beta, alm);
+    XgemmBody(kSizeM, kSizeN, kSizeK, agm, bgm, cgm, alpha, beta, alm);
   #elif SB == 1
-    XgemmBody(kSizeM, kSizeN, kSizeK, agm_, bgm_, cgm_, alpha, beta, blm);
+    XgemmBody(kSizeM, kSizeN, kSizeK, agm, bgm, cgm, alpha, beta, blm);
   #else
-    XgemmBody(kSizeM, kSizeN, kSizeK, agm_, bgm_, cgm_, alpha, beta);
+    XgemmBody(kSizeM, kSizeN, kSizeK, agm, bgm, cgm, alpha, beta);
   #endif
 }
 

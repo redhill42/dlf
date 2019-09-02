@@ -24,8 +24,11 @@ void XgemmUpper(const int kSizeN, const int kSizeK,
                 const real_arg arg_alpha,
                 const real_arg arg_beta,
                 const __global realM* restrict agm,
+                const int a_offset,
                 const __global realN* restrict bgm,
-                __global realM* cgm) {
+                const int b_offset,
+                __global realM* cgm,
+                const int c_offset) {
   const real alpha = GetRealArg(arg_alpha);
   const real beta = GetRealArg(arg_beta);
 
@@ -33,6 +36,10 @@ void XgemmUpper(const int kSizeN, const int kSizeK,
   if ((GetGroupID1() + 1)*NWG < GetGroupID0()*MWG) {
     return;
   }
+
+  agm = (const __global realM*)((const __global real*)agm + a_offset);
+  bgm = (const __global realN*)((const __global real*)bgm + b_offset);
+  cgm = (__global realM*)((__global real*)cgm + c_offset);
 
   // Allocates workgroup-private memory (local memory)
   #if SA == 1
@@ -60,8 +67,11 @@ void XgemmLower(const int kSizeN, const int kSizeK,
                 const real_arg arg_alpha,
                 const real_arg arg_beta,
                 const __global realM* restrict agm,
+                const int a_offset,
                 const __global realN* restrict bgm,
-                __global realM* cgm) {
+                const int b_offset,
+                __global realM* cgm,
+                const int c_offset) {
   const real alpha = GetRealArg(arg_alpha);
   const real beta = GetRealArg(arg_beta);
 
@@ -69,6 +79,10 @@ void XgemmLower(const int kSizeN, const int kSizeK,
   if (GetGroupID1()*NWG > (GetGroupID0() + 1)*MWG) {
     return;
   }
+
+  agm = (const __global realM*)((const __global real*)agm + a_offset);
+  bgm = (const __global realN*)((const __global real*)bgm + b_offset);
+  cgm = (__global realM*)((__global real*)cgm + c_offset);
 
   // Allocates workgroup-private memory (local memory)
   #if SA == 1
@@ -100,15 +114,18 @@ void Xgemm(const int kSizeM, const int kSizeN, const int kSizeK,
            const real_arg arg_alpha,
            const real_arg arg_beta,
            const __global realM* restrict agm,
+           const int a_offset,
            const __global realN* restrict bgm,
+           const int b_offset,
            __global realM* cgm,
-           const int b_offset, const int c_offset) {
+           const int c_offset) {
   const real alpha = GetRealArg(arg_alpha);
   const real beta = GetRealArg(arg_beta);
 
   // Adds the offsets (in case of use of a single temporary buffer for A, B, and C)
-  bgm = &bgm[b_offset];
-  cgm = &cgm[c_offset];
+  agm = (const __global realM*)((const __global real*)agm + a_offset);
+  bgm = (const __global realN*)((const __global real*)bgm + b_offset);
+  cgm = (__global realM*)((__global real*)cgm + c_offset);
 
   // Allocates workgroup-private memory (local memory)
   #if SA == 1

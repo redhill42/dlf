@@ -111,34 +111,35 @@ void Xherk<T,U>::HerkAB(const Layout layout, const Triangle triangle, const Tran
   const auto b_no_temp = Xgemm<T>::NoTempBuffer(b_one, b_one_i, b_two, b_two_i, b_ld, b_offset, b_do_transpose, b_conjugate);
 
   // Creates the temporary matrices
-  auto a_temp = (a_no_temp) ? a_buffer : context_.createBuffer<T>(a_one_i * a_two_i);
-  auto b_temp = (b_no_temp) ? b_buffer : context_.createBuffer<T>(b_one_i * b_two_i);
-  auto c_temp = context_.createBuffer<T>(n_ceiled*n_ceiled);
+  TemporaryBuffer<T> a_temp, b_temp, c_temp;
 
   // Runs the pre-processing kernel for matrix A. This transposes the matrix, but also pads zeros
   // to fill it up until it reaches a certain multiple of size (kernel parameter dependent). In
   // case nothing has to be done, these kernels can be skipped. Two copies are created.
   if (!a_no_temp) {
+    a_temp = context_.getTemporaryBuffer<T>(a_one_i * a_two_i);
     PadCopyTransposeMatrix(queue_, device_, db_, nullptr,
                            a_one, a_two, a_ld, a_offset, a_buffer,
-                           a_one_i, a_two_i, a_one_i, 0, a_temp,
+                           a_one_i, a_two_i, a_one_i, a_temp.offset(), a_temp,
                            ConstantOne<T>(), program_,
                            true, a_do_transpose, a_conjugate);
   }
   
   if (!b_no_temp) {
+    b_temp = context_.getTemporaryBuffer<T>(b_one_i * b_two_i);
     PadCopyTransposeMatrix(queue_, device_, db_, nullptr,
                            b_one, b_two, b_ld, b_offset, b_buffer,
-                           b_one_i, b_two_i, b_one_i, 0, b_temp,
+                           b_one_i, b_two_i, b_one_i, b_temp.offset(), b_temp,
                            ConstantOne<T>(), program_,
                            true, b_do_transpose, b_conjugate);
   }
 
   // Furthermore, also creates a (possibly padded) copy of matrix C, since it is not allowed to
   // modify the other triangle.
+  c_temp = context_.getTemporaryBuffer<T>(n_ceiled * n_ceiled);
   PadCopyTransposeMatrix(queue_, device_, db_, nullptr,
                          n, n, c_ld, c_offset, c_buffer,
-                         n_ceiled, n_ceiled, n_ceiled, 0, c_temp,
+                         n_ceiled, n_ceiled, n_ceiled, c_temp.offset(), c_temp,
                          ConstantOne<T>(), program_,
                          true, c_do_transpose, false);
 
@@ -146,13 +147,16 @@ void Xherk<T,U>::HerkAB(const Layout layout, const Triangle triangle, const Tran
   auto kernel = program_.getKernel(kernel_name);
 
   // Sets the kernel arguments
-  kernel.setArgument(0, static_cast<int>(n_ceiled));
-  kernel.setArgument(1, static_cast<int>(k_ceiled));
-  kernel.setArgument(2, GetRealArg(complex_alpha));
-  kernel.setArgument(3, GetRealArg(complex_beta));
-  kernel.setArgument(4, a_temp);
-  kernel.setArgument(5, b_temp);
-  kernel.setArgument(6, c_temp);
+  kernel.setArguments(static_cast<int>(n_ceiled),
+                      static_cast<int>(k_ceiled),
+                      GetRealArg(complex_alpha),
+                      GetRealArg(complex_beta),
+                      a_no_temp ? a_buffer : a_temp,
+                      static_cast<int>(a_no_temp ? a_offset : a_temp.offset()),
+                      b_no_temp ? b_buffer : b_temp,
+                      static_cast<int>(b_no_temp ? b_offset : b_temp.offset()),
+                      c_temp,
+                      static_cast<int>(c_temp.offset()));
 
   // Computes the global and local thread sizes
   auto global = std::vector<size_t>{
@@ -169,7 +173,7 @@ void Xherk<T,U>::HerkAB(const Layout layout, const Triangle triangle, const Tran
                      (triangle == Triangle::Upper);
   const auto lower = !upper;
   PadCopyTransposeMatrix(queue_, device_, db_, final_event,
-                         n_ceiled, n_ceiled, n_ceiled, 0, c_temp,
+                         n_ceiled, n_ceiled, n_ceiled, c_temp.offset(), c_temp,
                          n, n, c_ld, c_offset, c_buffer,
                          ConstantOne<T>(), program_,
                          false, c_do_transpose, false, upper, lower, diagonal_to_zero);

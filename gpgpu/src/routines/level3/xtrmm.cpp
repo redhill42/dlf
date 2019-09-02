@@ -66,7 +66,7 @@ void Xtrmm<T>::DoTrmm(const Layout layout, const Side side, const Triangle trian
   auto unit_diagonal = (diagonal == Diagonal::Unit) ? true : false;
 
   // Temporary buffer for a copy of the triangular matrix
-  auto temp_triangular = context_.template createBuffer<T>(k*k);
+  auto temp_triangular = context_.template getTemporaryBuffer<T>(k*k);
 
   // Creates a general matrix from the triangular matrix to be able to run the regular Xgemm
   // routine afterwards
@@ -79,7 +79,7 @@ void Xtrmm<T>::DoTrmm(const Layout layout, const Side side, const Triangle trian
   kernel.setArgument(3, a_buffer);
   kernel.setArgument(4, static_cast<int>(k));
   kernel.setArgument(5, static_cast<int>(k));
-  kernel.setArgument(6, static_cast<int>(0));
+  kernel.setArgument(6, static_cast<int>(temp_triangular.offset()));
   kernel.setArgument(7, temp_triangular);
   kernel.setArgument(8, static_cast<int>(unit_diagonal));
 
@@ -95,7 +95,7 @@ void Xtrmm<T>::DoTrmm(const Layout layout, const Side side, const Triangle trian
     DoGemm(layout, a_transpose, Transpose::NoTrans,
            m, n, k,
            alpha,
-           temp_triangular, 0, k,
+           temp_triangular, temp_triangular.offset(), k,
            b_buffer_copy, b_offset, b_ld,
            ConstantZero<T>(),
            b_buffer, b_offset, b_ld);
@@ -108,7 +108,7 @@ void Xtrmm<T>::DoTrmm(const Layout layout, const Side side, const Triangle trian
              m, n, k,
              alpha,
              b_buffer_copy, b_offset, b_ld,
-             temp_triangular, 0, k,
+             temp_triangular, temp_triangular.offset(), k,
              ConstantZero<T>(),
              b_buffer, b_offset, b_ld);
     } catch (BLASError &e) {

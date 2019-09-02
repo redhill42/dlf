@@ -18,8 +18,7 @@ gemm(const int m, const int n, const int p,
      const T& beta,
      T* C, const int ldc,
      const bool transA = false,
-     const bool transB = false,
-     Tensor<T>* = nullptr)
+     const bool transB = false)
 {
     int incA = 1, incB = 1;
     if (transA)
@@ -63,8 +62,7 @@ gemm(const int m, const int n, const int k,
      const T& beta,
      T* C, const int ldc,
      const bool transA = false,
-     const bool transB = false,
-     Tensor<T>* = nullptr)
+     const bool transB = false)
 {
     cblas::gemm(cblas::Layout::RowMajor,
                 transA ? cblas::Transpose::Trans : cblas::Transpose::NoTrans,
@@ -80,14 +78,12 @@ void gemm(const int m, const int n, const int k,
           const T& beta,
           gpgpu::Buffer<T>& C, const int ldc,
           const bool transA = false,
-          const bool transB = false,
-          DevTensor<T>* work = nullptr)
+          const bool transB = false)
 {
     gblas::gemm(gblas::Layout::RowMajor,
                 transA ? gblas::Transpose::Trans : gblas::Transpose::NoTrans,
                 transB ? gblas::Transpose::Trans : gblas::Transpose::NoTrans,
-                m, n, k, alpha, A, lda, B, ldb, beta, C, ldc,
-                work == nullptr ? nullptr : &work->data());
+                m, n, k, alpha, A, lda, B, ldb, beta, C, ldc);
 }
 } // namespace detail
 
@@ -97,8 +93,7 @@ gemm(const tensor_value_type<TensorT>& alpha,
      const TensorT& A, const TensorT& B,
      const tensor_value_type<TensorT>& beta,
      TensorT* C,
-     bool transA = false, bool transB = false,
-     TensorT* work = nullptr)
+     bool transA = false, bool transB = false)
 {
     assert(A.is_matrix() && B.is_matrix() && C->is_matrix());
     auto m = A.extent(0), k = A.extent(1);
@@ -119,54 +114,24 @@ gemm(const tensor_value_type<TensorT>& alpha,
         B.data(), B.stride(0),
         beta,
         C->data(), C->stride(0),
-        transA, transB, work);
-}
-
-template <typename T>
-inline size_t gemmWorkspaceSize(
-    const Tensor<T>&, const Tensor<T>&, const Tensor<T>&,
-    bool = false, bool = false)
-{
-    return 0; // API compatible to DevTensor
-}
-
-template <typename T>
-inline size_t gemmWorkspaceSize(
-    const DevTensor<T>& A, const DevTensor<T>& B, const DevTensor<T>& C,
-    bool transA = false, bool transB = false)
-{
-    auto m = A.extent(0), k = A.extent(1);
-    auto p = B.extent(0), n = B.extent(1);
-
-    if (transA)
-        std::swap(m, k);
-    if (transB)
-        std::swap(p, n);
-    if (k != p || m != C.extent(0) || n != C.extent(1))
-        throw shape_error("gemm: incompatible shape");
-
-    return gblas::gemmTempBufferSize<T>(
-        gblas::Layout::RowMajor,
-        transA ? gblas::Transpose::Trans : gblas::Transpose::NoTrans,
-        transB ? gblas::Transpose::Trans : gblas::Transpose::NoTrans,
-        m, n, k, 0, A.stride(0), 0, B.stride(0), 0, C.stride(0));
+        transA, transB);
 }
 
 template <typename TensorT>
 inline enable_if_non_view_tensor<TensorT, void>
 gemm(const tensor_value_type<TensorT>& alpha, const TensorT& A, const TensorT& B,
      const tensor_value_type<TensorT>& beta, const TensorT& C, TensorT& Y,
-     bool transA = false, bool transB = false, TensorT* work = nullptr)
+     bool transA = false, bool transB = false)
 {
     broadcast(C, Y);
-    gemm(alpha, A, B, beta, &Y, transA, transB, work);
+    gemm(alpha, A, B, beta, &Y, transA, transB);
 }
 
 template <typename TensorT>
 enable_if_non_view_tensor<TensorT>
 gemm(const tensor_value_type<TensorT>& alpha, const TensorT& A, const TensorT& B,
      const tensor_value_type<TensorT>& beta, const TensorT& C,
-     bool transA = false, bool transB = false, TensorT* work = nullptr)
+     bool transA = false, bool transB = false)
 {
     assert(A.is_matrix() && B.is_matrix());
     auto m = A.extent(0), k = A.extent(1);
@@ -179,7 +144,7 @@ gemm(const tensor_value_type<TensorT>& alpha, const TensorT& A, const TensorT& B
     assert(k == p);
 
     auto Y = C.broadcast({m, n}).copy();
-    gemm(alpha, A, B, beta, &Y, transA, transB, work);
+    gemm(alpha, A, B, beta, &Y, transA, transB);
     return Y;
 }
 

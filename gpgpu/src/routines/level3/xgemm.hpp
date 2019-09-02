@@ -22,49 +22,23 @@ namespace gpgpu { namespace blas {
 // See comment at top of file for a description of the class
 template <typename T>
 class Xgemm: public Routine {
- public:
+public:
+  // Constructor
+  Xgemm(const Queue &queue, Event* event, const std::string &name = "GEMM");
+
+  // Templated-precision implementation of the routine
+  void DoGemm(const Layout layout, const Transpose a_transpose, const Transpose b_transpose,
+              const size_t m, const size_t n, const size_t k,
+              const T alpha,
+              const Buffer<T> &a_buffer, const size_t a_offset, const size_t a_ld,
+              const Buffer<T> &b_buffer, const size_t b_offset, const size_t b_ld,
+              const T beta,
+              Buffer<T> &c_buffer, const size_t c_offset, const size_t c_ld);
 
   // Defines the assumptions of the GEMM kernels
   static bool a_want_rotated_(const size_t gemm_kernel_id) { return gemm_kernel_id == 1; }
   static bool b_want_rotated_(const size_t) { return true; }
   static bool c_want_rotated_(const size_t gemm_kernel_id) { return gemm_kernel_id == 1; }
-
-  // Computes the size of the temporary GEMM buffer based on user-arguments
-  static size_t GetTempSize(const Layout layout, const Transpose a_transpose, const Transpose b_transpose,
-                            const size_t m, const size_t n, const size_t k,
-                            const size_t a_offset, const size_t a_ld,
-                            const size_t b_offset, const size_t b_ld,
-                            const size_t c_offset, const size_t c_ld,
-                            const size_t mwg, const size_t nwg, const size_t kwg,
-                            const size_t gemm_kernel_id) {
-
-    // Computes the transpose/conjugate options and sets the a/b/c sizes based on that
-    bool a_do_transpose, b_do_transpose, c_do_transpose, a_conjugate, b_conjugate;
-    size_t a_one, a_two, b_one, b_two, c_one, c_two;
-    ProcessArguments(layout, a_transpose, b_transpose, m, n, k,
-                     a_one, a_two, b_one, b_two, c_one, c_two,
-                     a_do_transpose, b_do_transpose, c_do_transpose, a_conjugate, b_conjugate,
-                     gemm_kernel_id);
-
-    // Computes the first and second "internal" (ceiled) dimensions of the 3 matrices taking into account
-    // whether the matrices need to be rotated or not for the kernel.
-    size_t a_one_i, a_two_i, b_one_i, b_two_i, c_one_i, c_two_i;
-    CalculateInternalDimensions(m, n, k, mwg, nwg, kwg,
-                                a_one_i, a_two_i, b_one_i, b_two_i, c_one_i, c_two_i,
-                                gemm_kernel_id);
-
-    // Determines whether or not temporary matrices are needed
-    auto a_no_temp = NoTempBuffer(a_one, a_one_i, a_two, a_two_i, a_ld, a_offset, a_do_transpose, a_conjugate);
-    auto b_no_temp = NoTempBuffer(b_one, b_one_i, b_two, b_two_i, b_ld, b_offset, b_do_transpose, b_conjugate);
-    auto c_no_temp = NoTempBuffer(c_one, c_one_i, c_two, c_two_i, c_ld, c_offset, c_do_transpose, false);
-
-    // Computes the sizes and offsets for (optional) temporary buffers for the 3 matrices
-    auto b_temp_offset = size_t{0};
-    auto c_temp_offset = size_t{0};
-    return ComputeTempSize(a_no_temp, b_no_temp, c_no_temp,
-                           a_one_i*a_two_i, b_one_i*b_two_i, c_one_i*c_two_i,
-                           b_temp_offset, c_temp_offset);
-  }
 
   // Selects which version of GEMM to run
   static bool UseDirectKernel(const size_t m, const size_t n, const size_t k,
@@ -153,19 +127,6 @@ class Xgemm: public Routine {
     c_two_i = (c_want_rotated_(gemm_kernel_id)) ? m_ceiled : n_ceiled;
   }
 
-  // Constructor
-  Xgemm(const Queue &queue, Event* event, const std::string &name = "GEMM");
-
-  // Templated-precision implementation of the routine
-  void DoGemm(const Layout layout, const Transpose a_transpose, const Transpose b_transpose,
-              const size_t m, const size_t n, const size_t k,
-              const T alpha,
-              const Buffer<T> &a_buffer, const size_t a_offset, const size_t a_ld,
-              const Buffer<T> &b_buffer, const size_t b_offset, const size_t b_ld,
-              const T beta,
-              Buffer<T> &c_buffer, const size_t c_offset, const size_t c_ld,
-              Buffer<T> *temp_buffer = nullptr);
-
   // Indirect version of GEMM (with pre and post-processing kernels)
   void GemmIndirect(const size_t m, const size_t n, const size_t k,
                     const T alpha,
@@ -177,8 +138,7 @@ class Xgemm: public Routine {
                     const bool a_conjugate, const bool b_conjugate,
                     const size_t a_one, const size_t a_two,
                     const size_t b_one, const size_t b_two,
-                    const size_t c_one, const size_t c_two,
-                    Buffer<T> *temp_buffer);
+                    const size_t c_one, const size_t c_two);
 
   // Direct version of GEMM (no pre and post-processing kernels)
   void GemmDirect(const size_t m, const size_t n, const size_t k,

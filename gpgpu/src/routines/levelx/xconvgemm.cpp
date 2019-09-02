@@ -13,7 +13,6 @@
 
 #include <string>
 #include <vector>
-#include <assert.h>
 
 #include "routines/levelx/xconvgemm.hpp"
 #include "routines/levelx/xim2col.hpp"
@@ -23,8 +22,7 @@ namespace gpgpu { namespace blas {
 
 // Constructor: forwards to base class constructor
 template <typename T>
-Xconvgemm<T>::Xconvgemm(const Queue &queue, Event* event, const std::string &name,
-                        const ConvGemmMethod method):
+Xconvgemm<T>::Xconvgemm(const Queue& queue, Event* event, const std::string& name, const ConvGemmMethod method) :
     Routine(queue, event, name, {"XgemmDirect"},
         PrecisionValue<T>(), {}, {
             (method == ConvGemmMethod::kWithIm2Col) ? "#define CONVGEMM_WITH_IM2COL\n" : "",
@@ -51,10 +49,9 @@ void Xconvgemm<T>::DoConvgemm(const KernelMode kernel_mode,
                               const size_t pad_h, const size_t pad_w,
                               const size_t stride_h, const size_t stride_w,
                               const size_t dilation_h, const size_t dilation_w,
-                              const Buffer<T> &im_buffer, const size_t im_offset,
-                              const Buffer<T> &kernel_buffer, const size_t kernel_offset,
-                              Buffer<T> &result_buffer, const size_t result_offset,
-                              Buffer<T>* temp_buffer) {
+                              const Buffer<T>& im_buffer, const size_t im_offset,
+                              const Buffer<T>& kernel_buffer, const size_t kernel_offset,
+                              Buffer<T>& result_buffer, const size_t result_offset) {
 
   // Tests for a valid batch count
   if (batch_count == 0) {
@@ -72,40 +69,24 @@ void Xconvgemm<T>::DoConvgemm(const KernelMode kernel_mode,
 
   // Possible approach: im2col + GEMM
   //      result = GEMM(im2col(image), kernel)
-  Buffer<T> col_buffer; // nullptr, will be optionally created later
-  if (method_ == ConvGemmMethod::kWithIm2Col) {
+  TemporaryBuffer<T> col_buffer; // nullptr, will be optionally created later
 
+  if (method_ == ConvGemmMethod::kWithIm2Col) {
     // Temporary col matrix
     const auto col_size = (method_ == ConvGemmMethod::kWithIm2Col) ? patch_size * num_patches * batch_count : 1;
-    col_buffer = temp_buffer ? *temp_buffer : context_.createBuffer<T>(col_size);
-    if (temp_buffer) {
-        if (temp_buffer->size() < col_size)
-            throw BLASError(StatusCode::kInsufficientMemoryTemp);
-    }
+    col_buffer = context_.getTemporaryBuffer<T>(col_size);
 
     auto im2col = Xim2col<T>(queue_, nullptr);
     im2col.DoIm2col(kernel_mode, batch_count, channels,
                     height, width, output_h, output_w,
                     kernel_h, kernel_w, pad_h, pad_w,
                     stride_h, stride_w, dilation_h, dilation_w,
-                    im_buffer, im_offset, col_buffer, 0);
+                    im_buffer, im_offset, col_buffer, col_buffer.offset());
   }
 
   // Strided batched GEMM: C (result) = alpha (1) * A (col) * B (kernel) + beta (0) * C (result)
   const auto col_stride = patch_size * num_patches;
   const auto result_stride = num_kernels * output_h * output_w;
-
-  // Tests the matrices for validity
-  TestMatrixB(patch_size, num_kernels, kernel_buffer, kernel_offset, patch_size);
-  for (auto batch = size_t{0}; batch < batch_count; ++batch) {
-    if (method_ == ConvGemmMethod::kWithIm2Col) {
-      TestMatrixA(num_patches, patch_size, col_buffer, col_stride * batch, num_patches);
-    }
-    else {
-      // TODO: check for valid image tensor
-    }
-    TestMatrixC(num_patches, num_kernels, result_buffer, result_offset + result_stride * batch, num_patches);
-  }
 
   // Retrieves the proper XgemmDirect kernel from the compiled binary
   const std::string kernel_name = (method_ == ConvGemmMethod::kWithIm2Col)
@@ -126,7 +107,7 @@ void Xconvgemm<T>::DoConvgemm(const KernelMode kernel_mode,
   kernel.setArgument(7, static_cast<int>(result_stride));
   if (method_ == ConvGemmMethod::kWithIm2Col) {
     kernel.setArgument(8, col_buffer);
-    kernel.setArgument(9, static_cast<int>(0));
+    kernel.setArgument(9, static_cast<int>(col_buffer.offset()));
     kernel.setArgument(10, static_cast<int>(col_stride));
   }
   if (method_ == ConvGemmMethod::kSingleKernel) {
@@ -159,19 +140,6 @@ void Xconvgemm<T>::DoConvgemm(const KernelMode kernel_mode,
 
   // Launches the kernel
   RunKernel(kernel, queue_, device_, global, local, event_);
-}
-
-template <typename T>
-size_t Xconvgemm<T>::GetTempBufferSize(const size_t batch_count, const size_t channels,
-                                       const size_t output_h, const size_t output_w,
-                                       const size_t kernel_h, const size_t kernel_w)
-{
-    if (method_ != ConvGemmMethod::kWithIm2Col)
-        return 0;
-
-    const auto patch_size = kernel_h * kernel_w * channels;
-    const auto num_patches = output_h * output_w;
-    return patch_size * num_patches * batch_count;
 }
 
 // =================================================================================================

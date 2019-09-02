@@ -54,7 +54,7 @@ void Xhemm<T>::DoHemm(const Layout layout, const Side side, const Triangle trian
   auto kernel_name = (is_upper) ? "HermUpperToSquared" : "HermLowerToSquared";
 
   // Temporary buffer for a copy of the hermitian matrix
-  auto temp_herm = context_.template createBuffer<T>(k*k);
+  auto temp_herm = context_.template getTemporaryBuffer<T>(k*k);
 
   // Creates a general matrix from the hermitian matrix to be able to run the regular Xgemm
   // routine afterwards
@@ -67,7 +67,7 @@ void Xhemm<T>::DoHemm(const Layout layout, const Side side, const Triangle trian
   kernel.setArgument(3, a_buffer);
   kernel.setArgument(4, static_cast<int>(k));
   kernel.setArgument(5, static_cast<int>(k));
-  kernel.setArgument(6, static_cast<int>(0));
+  kernel.setArgument(6, static_cast<int>(temp_herm.offset()));
   kernel.setArgument(7, temp_herm);
 
   // Uses the common padding kernel's thread configuration. This is allowed, since the
@@ -82,7 +82,7 @@ void Xhemm<T>::DoHemm(const Layout layout, const Side side, const Triangle trian
     DoGemm(layout, Transpose::NoTrans, Transpose::NoTrans,
            m, n, k,
            alpha,
-           temp_herm, 0, k,
+           temp_herm, temp_herm.offset(), k,
            b_buffer, b_offset, b_ld,
            beta,
            c_buffer, c_offset, c_ld);
@@ -95,7 +95,7 @@ void Xhemm<T>::DoHemm(const Layout layout, const Side side, const Triangle trian
              m, n, k,
              alpha,
              b_buffer, b_offset, b_ld,
-             temp_herm, 0, k,
+             temp_herm, temp_herm.offset(), k,
              beta,
              c_buffer, c_offset, c_ld);
     } catch (BLASError &e) {

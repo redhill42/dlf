@@ -2,6 +2,7 @@
 #include <numeric>
 #include <atomic>
 #include <iostream>
+#include <cassert>
 
 #include "gpgpu.h"
 #include "gpgpu_cl.hpp"
@@ -135,33 +136,19 @@ std::vector<Device> Platform::devices(DeviceType type) const {
     return devices;
 }
 
-static std::vector<Context> initialize_global_contexts() {
-    auto devices = probe().devices(DeviceType::GPU);
-    auto contexts = std::vector<Context>();
+static Device select_current_device() {
+    static std::vector<Device> global_devices = probe().devices(DeviceType::GPU);
+    static std::atomic<size_t> device_index(0); // round-robin select device
 
-    for (size_t id = 0; id < devices.size(); id++) {
-        try {
-            contexts.push_back(devices[id].createContext());
-        } catch (APIError&) {
-            std::cerr << "Warning: failed to create context on device #" + std::to_string(id) << std::endl;
-        }
-    }
-    return contexts;
-}
-
-static Context select_current_context() {
-    static std::vector<Context> global_contexts = initialize_global_contexts();
-    static std::atomic<size_t> context_index(0); // round-robin select context
-
-    if (global_contexts.empty())
+    if (global_devices.empty())
         throw NoDeviceFound();
 
     do {
-        size_t id = ++context_index;
-        if (id < global_contexts.size())
-            return global_contexts[id];
-        if (context_index.compare_exchange_strong(id, 0))
-            return global_contexts[0];
+        size_t id = ++device_index;
+        if (id < global_devices.size())
+            return global_devices[id];
+        if (device_index.compare_exchange_strong(id, 0))
+            return global_devices[0];
     } while (true);
 }
 
@@ -169,7 +156,7 @@ static thread_local Queue current_queue;
 
 const Queue& current::queue() {
     if (current_queue.id() == 0) {
-        Context context = select_current_context();
+        Context context = select_current_device().createContext();
         context.activate();
         current_queue = context.createQueue();
     }
@@ -195,6 +182,49 @@ current::~current() {
     if (previous_queue.id() != 0)
         previous_queue.context().activate();
     current_queue = previous_queue;
+}
+
+//---------------------------------------------------------------------------
+
+std::shared_ptr<rawBuffer> rawContext::getTemporaryBuffer(
+    size_t& size, size_t& offset, size_t item_size) const
+{
+    auto data_offset = m_temp_buffer_offset;
+    if (data_offset > 0)
+        data_offset = ((data_offset - 1)/item_size + 1) * item_size;
+
+    auto data_size = data_offset + size*item_size;
+    if (data_size > m_temp_buffer_size) {
+        m_temporary_buffer = createBuffer(data_size, BufferAccess::ReadWrite);
+        m_temp_buffer_size = data_size;
+    }
+
+    size = data_size / item_size;
+    offset = data_offset / item_size;
+    m_temp_buffer_offset = data_size;
+    return m_temporary_buffer;
+}
+
+void rawContext::releaseTemporaryBuffer(
+    size_t size, size_t offset, size_t item_size) const
+{
+    if (size * item_size != m_temp_buffer_offset)
+        throw std::runtime_error("temporary buffer allocation violation");
+    m_temp_buffer_offset = offset * item_size;
+}
+
+std::shared_ptr<rawBuffer> rawContext::getSharedBuffer(
+    std::string&& content, const rawQueue& queue) const
+{
+    auto it = m_shared_buffers.find(content);
+    if (it != m_shared_buffers.end()) {
+        return it->second;
+    }
+
+    auto buffer = createBuffer(content.size(), BufferAccess::ReadWrite);
+    buffer->write(queue, content.data(), content.size(), 0, nullptr);
+    m_shared_buffers.emplace(std::move(content), buffer);
+    return buffer;
 }
 
 } // namespace gpgpu

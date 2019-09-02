@@ -33,7 +33,8 @@ R"(
 __kernel __attribute__((reqd_work_group_size(WGS1, 1, 1)))
 void Xamax(const int n,
            const __global real* restrict xgm, const int x_offset, const int x_inc,
-           __global singlereal* maxgm, __global unsigned int* imaxgm) {
+           __global singlereal* maxgm, const int maxgm_offset,
+           __global unsigned int* imaxgm, const int imaxgm_offset) {
   __local singlereal maxlm[WGS1];
   __local unsigned int imaxlm[WGS1];
   const int lid = get_local_id(0);
@@ -87,8 +88,8 @@ void Xamax(const int n,
 
   // Stores the per-workgroup result
   if (lid == 0) {
-    maxgm[wgid] = maxlm[0];
-    imaxgm[wgid] = imaxlm[0];
+    maxgm[maxgm_offset + wgid] = maxlm[0];
+    imaxgm[imaxgm_offset + wgid] = imaxlm[0];
   }
 }
 
@@ -97,21 +98,20 @@ void Xamax(const int n,
 // The epilogue reduction kernel, performing the final bit of the operation. This kernel has to
 // be launched with a single workgroup only.
 __kernel __attribute__((reqd_work_group_size(WGS2, 1, 1)))
-void XamaxEpilogue(const __global singlereal* restrict maxgm,
-                   const __global unsigned int* restrict imaxgm,
+void XamaxEpilogue(const __global singlereal* restrict maxgm, const int maxgm_offset,
+                   const __global unsigned int* restrict imaxgm, const int imaxgm_offset
                    __global unsigned int* imax, const int imax_offset) {
   __local singlereal maxlm[WGS2];
   __local unsigned int imaxlm[WGS2];
   const int lid = get_local_id(0);
 
   // Performs the first step of the reduction while loading the data
-  if (maxgm[lid + WGS2] >= maxgm[lid]) {
-    maxlm[lid] = maxgm[lid + WGS2];
-    imaxlm[lid] = imaxgm[lid + WGS2];
-  }
-  else {
-    maxlm[lid] = maxgm[lid];
-    imaxlm[lid] = imaxgm[lid];
+  if (maxgm[maxgm_offset + lid + WGS2] >= maxgm[maxgm_offset + lid]) {
+    maxlm[lid] = maxgm[maxgm_offset + lid + WGS2];
+    imaxlm[lid] = imaxgm[imaxgm_offset + lid + WGS2];
+  } else {
+    maxlm[lid] = maxgm[maxgm_offset + lid];
+    imaxlm[lid] = imaxgm[imaxgm_offset + lid];
   }
   barrier(CLK_LOCAL_MEM_FENCE);
 

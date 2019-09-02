@@ -300,9 +300,7 @@ void im2col(const T* x_buffer, T* y_buffer, const Filter2D& filter) {
 }
 
 template <typename T>
-void conv2d(const Tensor<T>& X, const Tensor<T>& W, Tensor<T>& Y, const Filter2D& filter,
-            Tensor<T>* work = nullptr)
-{
+void conv2d(const Tensor<T>& X, const Tensor<T>& W, Tensor<T>& Y, const Filter2D& filter) {
     assert(X.shape() == filter.input_shape());
     assert(W.shape() == filter.kernel_shape());
     Y.resize(filter.output_shape());
@@ -312,26 +310,19 @@ void conv2d(const Tensor<T>& X, const Tensor<T>& W, Tensor<T>& Y, const Filter2D
     const auto k = filter.channels() * filter.kernel_h() * filter.kernel_w() / group;
     const auto n = filter.output_h() * filter.output_w();
 
-    Tensor<T> temp_buffer;
-    if (work == nullptr) {
-        temp_buffer = Tensor<T>({k, n});
-        work = &temp_buffer;
-    } else {
-        work->reshape(k, n);
-    }
-
+    Tensor<T> work = Tensor<T>({k, n});
     auto x_buffer = X.data();
     auto y_buffer = Y.data();
 
     for (size_t b = 0; b < filter.batches(); b++) {
         auto w_buffer = W.data();
         for (size_t c = 0; c < group; c++) {
-            im2col(x_buffer, work->data(), filter);
+            im2col(x_buffer, work.data(), filter);
 
             detail::gemm(
                 m, n, k,
                 T{1}, w_buffer, W.stride(0),
-                work->data(), work->stride(0),
+                work.data(), work.stride(0),
                 T{0}, y_buffer, Y.stride(1));
 
             x_buffer += X.stride(0) / group;
@@ -342,17 +333,7 @@ void conv2d(const Tensor<T>& X, const Tensor<T>& W, Tensor<T>& Y, const Filter2D
 }
 
 template <typename T>
-size_t conv2dWorkspaceSize(const Tensor<T>&, const Tensor<T>&, const Filter2D& filter) {
-    const auto group = filter.group();
-    const auto k = filter.channels() * filter.kernel_h() * filter.kernel_w() / group;
-    const auto n = filter.output_h() * filter.output_w();
-    return k * n;
-}
-
-template <typename T>
-void conv2d(const DevTensor<T>& X, const DevTensor<T>& W, DevTensor<T>& Y,
-            const Filter2D& filter, DevTensor<T>* work = nullptr)
-{
+void conv2d(const DevTensor<T>& X, const DevTensor<T>& W, DevTensor<T>& Y, const Filter2D& filter) {
     assert(X.shape() == filter.input_shape());
     assert(W.shape() == filter.kernel_shape());
     Y.resize(filter.output_shape());
@@ -365,22 +346,7 @@ void conv2d(const DevTensor<T>& X, const DevTensor<T>& W, DevTensor<T>& Y,
                        filter.pad_bottom(), filter.pad_right(),
                        filter.stride_h(), filter.stride_w(),
                        filter.dilation_h(), filter.dilation_w(),
-                       X.data(), W.data(), Y.data(),
-                       work == nullptr ? nullptr : &work->data());
-}
-
-template <typename T>
-size_t conv2dWorkspaceSize(const DevTensor<T>&, const DevTensor<T>&, const Filter2D& filter) {
-    return gpgpu::dnn::conv2dWorkspaceSize<T>(
-        filter.batches(), filter.channels(),
-        filter.height(), filter.width(),
-        filter.output_h(), filter.output_w(),
-        filter.num_kernels(), filter.group(),
-        filter.kernel_h(), filter.kernel_w(),
-        filter.pad_top(), filter.pad_left(),
-        filter.pad_bottom(), filter.pad_right(),
-        filter.stride_h(), filter.stride_w(),
-        filter.dilation_h(), filter.dilation_w());
+                       X.data(), W.data(), Y.data());
 }
 
 template <typename TensorT>

@@ -32,13 +32,13 @@ Xdot<T>::Xdot(const Queue &queue, Event* event, const std::string &name):
 // The main routine
 template <typename T>
 void Xdot<T>::DoDot(const size_t n,
-                    const Buffer<T> &x_buffer, const size_t x_offset, const size_t x_inc,
-                    const Buffer<T> &y_buffer, const size_t y_offset, const size_t y_inc,
-                    Buffer<T> &dot_buffer, const size_t dot_offset,
+                    const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
+                    const Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
+                    Buffer<T>& dot_buffer, const size_t dot_offset,
                     const bool do_conjugate) {
 
   // Makes sure all dimensions are larger than zero
-  if (n == 0) { throw BLASError(StatusCode::kInvalidDimension); }
+  if (n == 0) throw BLASError(StatusCode::kInvalidDimension);
 
   // Tests the vectors for validity
   TestVectorX(n, x_buffer, x_offset, x_inc);
@@ -51,18 +51,19 @@ void Xdot<T>::DoDot(const size_t n,
 
   // Creates the buffer for intermediate values
   auto temp_size = 2*db_["WGS2"];
-  auto temp_buffer = context_.createBuffer<T>(temp_size);
+  auto temp_buffer = context_.getTemporaryBuffer<T>(temp_size);
 
   // Sets the kernel arguments
-  kernel1.setArgument(0, static_cast<int>(n));
-  kernel1.setArgument(1, x_buffer);
-  kernel1.setArgument(2, static_cast<int>(x_offset));
-  kernel1.setArgument(3, static_cast<int>(x_inc));
-  kernel1.setArgument(4, y_buffer);
-  kernel1.setArgument(5, static_cast<int>(y_offset));
-  kernel1.setArgument(6, static_cast<int>(y_inc));
-  kernel1.setArgument(7, temp_buffer);
-  kernel1.setArgument(8, static_cast<int>(do_conjugate));
+  kernel1.setArguments(static_cast<int>(n),
+                       x_buffer,
+                       static_cast<int>(x_offset),
+                       static_cast<int>(x_inc),
+                       y_buffer,
+                       static_cast<int>(y_offset),
+                       static_cast<int>(y_inc),
+                       temp_buffer,
+                       static_cast<int>(temp_buffer.offset()),
+                       static_cast<int>(do_conjugate));
 
   // Launches the main kernel
   auto global1 = std::vector<size_t>{db_["WGS1"]*temp_size};
@@ -70,9 +71,10 @@ void Xdot<T>::DoDot(const size_t n,
   RunKernel(kernel1, queue_, device_, global1, local1, nullptr);
 
   // Sets the arguments for the epilogue kernel
-  kernel2.setArgument(0, temp_buffer);
-  kernel2.setArgument(1, dot_buffer);
-  kernel2.setArgument(2, static_cast<int>(dot_offset));
+  kernel2.setArguments(temp_buffer,
+                       static_cast<int>(temp_buffer.offset()),
+                       dot_buffer,
+                       static_cast<int>(dot_offset));
 
   // Launches the epilogue kernel
   auto global2 = std::vector<size_t>{db_["WGS2"]};

@@ -33,7 +33,7 @@ R"(
 __kernel __attribute__((reqd_work_group_size(WGS1, 1, 1)))
 void Xnrm2(const int n,
            const __global real* restrict xgm, const int x_offset, const int x_inc,
-           __global real* output) {
+           __global real* output, const int output_offset) {
   __local real lm[WGS1];
   const int lid = get_local_id(0);
   const int wgid = get_group_id(0);
@@ -63,7 +63,7 @@ void Xnrm2(const int n,
 
   // Stores the per-workgroup result
   if (lid == 0) {
-    output[wgid] = lm[0];
+    output[output_offset + wgid] = lm[0];
   }
 }
 
@@ -72,13 +72,13 @@ void Xnrm2(const int n,
 // The epilogue reduction kernel, performing the final bit of the operation. This kernel has to
 // be launched with a single workgroup only.
 __kernel __attribute__((reqd_work_group_size(WGS2, 1, 1)))
-void Xnrm2Epilogue(const __global real* restrict input,
+void Xnrm2Epilogue(const __global real* restrict input, const int input_offset,
                    __global real* nrm2, const int nrm2_offset) {
   __local real lm[WGS2];
   const int lid = get_local_id(0);
 
   // Performs the first step of the reduction while loading the data
-  Add(lm[lid], input[lid], input[lid + WGS2]);
+  Add(lm[lid], input[input_offset + lid], input[input_offset + lid + WGS2]);
   barrier(CLK_LOCAL_MEM_FENCE);
 
   // Performs reduction in local memory
