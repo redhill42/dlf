@@ -56,7 +56,7 @@ inline transform(Tensor<T>&& A, F f) {
 
 namespace detail {
 template <typename TensorX, typename TensorY>
-void transform(const std::string& name, const TensorX& X, TensorY& Y) {
+void gpu_transform(const std::string& name, const TensorX& X, TensorY& Y) {
     assert(X.shape() == Y.shape());
     if (X.shape().is_contiguous() && Y.shape().is_contiguous()) {
         gpgpu::dnn::transform(name, X.size(),
@@ -70,8 +70,8 @@ void transform(const std::string& name, const TensorX& X, TensorY& Y) {
 }
 
 template <typename T, typename TensorX, typename TensorY>
-void transform(const std::string name, const T alpha, const T beta,
-               const TensorX& X, TensorY& Y)
+void gpu_transform(const std::string name, const T alpha, const T beta,
+                   const TensorX& X, TensorY& Y)
 {
     assert(X.shape() == Y.shape());
     if (X.shape().is_contiguous() && Y.shape().is_contiguous()) {
@@ -93,7 +93,7 @@ std::enable_if_t<
     DevTensor<T>&>
 inline transformTo(const DevTensorT& X, DevTensor<T>& Y, Fn) {
     Y.resize(X.shape());
-    detail::transform(Fn::name, X, Y);
+    detail::gpu_transform(Fn::name, X, Y);
     return Y;
 }
 
@@ -104,7 +104,7 @@ std::enable_if_t<
     DevTensorView<T>&>
 inline transformTo(const DevTensorT& X, DevTensorView<T>& Y, Fn) {
     assert(Y.shape() == X.shape());
-    detail::transform(Fn::name, X, Y);
+    detail::gpu_transform(Fn::name, X, Y);
     return Y;
 }
 
@@ -124,7 +124,7 @@ std::enable_if_t<
     DevTensor<T>&>
 inline transformTo(const DevTensorT& X, DevTensor<T>& Y, Fn fn) {
     Y.resize(X.shape());
-    detail::transform(Fn::name, fn.alpha, fn.beta, X, Y);
+    detail::gpu_transform(Fn::name, fn.alpha, fn.beta, X, Y);
     return Y;
 }
 
@@ -135,7 +135,7 @@ std::enable_if_t<
     DevTensorView<T>&>
 inline transformTo(const DevTensorT& X, DevTensorView<T>& Y, Fn fn) {
     assert(Y.shape() == X.shape());
-    detail::transform(Fn::name, fn.alpha, fn.beta, X, Y);
+    detail::gpu_transform(Fn::name, fn.alpha, fn.beta, X, Y);
     return Y;
 }
 
@@ -445,7 +445,7 @@ inline transformChannel(const LHS& A, const RHS& B, RET& C, size_t axis, F f) {
     detail::transformChannel(A, B, C, axis, f);
 }
 
-#if __cplusplus >= 201703L
+#if CPP_VER >= 17
 template <typename LHS, typename RHS, typename F>
 std::enable_if_t<is_same_tensor<LHS, RHS>::value, tensor_invoke_result<F, LHS, RHS>>
 transform(LHS&& A, RHS&& B, F f) {

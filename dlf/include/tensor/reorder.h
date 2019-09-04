@@ -494,11 +494,9 @@ rot90(const TensorT& X, int k = 1, int axis1 = -2, int axis2 = -1) {
 // Concat and split
 //==-------------------------------------------------------------------------
 
-namespace concat_detail {
-inline void check_input_shapes(int, std::vector<size_t>&) {}
-
-template <typename TensorT, typename... Tensors>
-void check_input_shapes(int axis, std::vector<size_t>& dims, const TensorT& input, const Tensors&... rest) {
+namespace detail {
+template <typename TensorT>
+void check_concat_shapes(int axis, std::vector<size_t>& dims, const TensorT& input) {
     if (input.rank() != dims.size())
         throw shape_error("concat: all tensors to concat must have same rank");
     for (int i = 0; i < dims.size(); i++) {
@@ -508,17 +506,25 @@ void check_input_shapes(int axis, std::vector<size_t>& dims, const TensorT& inpu
             throw shape_error("concat: incompatible input tensor shape");
         }
     }
-    check_input_shapes(axis, dims, rest...);
 }
 
-template <typename TensorT>
-inline void do_concat(int, int, TensorT&) {}
+template <typename TensorT, typename... Tensors>
+inline void check_concat_shapes(int axis, std::vector<size_t>& dims, const TensorT& first, const Tensors&... rest) {
+    check_concat_shapes(axis, dims, first);
+    check_concat_shapes(axis, dims, rest...);
+}
 
-template <typename TensorR, typename TensorT, typename... Tensors>
-void do_concat(int axis, int offset, TensorR& output, const TensorT& input, const Tensors&... rest) {
+template <typename TensorR, typename TensorT>
+void do_concat(int axis, int& offset, TensorR& output, const TensorT& input) {
     int next = offset + input.extent(axis);
     reorder(input, output.slice({offset}, {next}, {axis}, {1}));
-    do_concat(axis, next, output, rest...);
+    offset = next;
+}
+
+template <typename TensorR, typename TensorT, typename... Tensors>
+inline void do_concat(int axis, int& offset, TensorR& output, const TensorT& first, const Tensors&... rest) {
+    do_concat(axis, offset, output, first);
+    do_concat(axis, offset, output, rest...);
 }
 } // namespace concat_detail
 
@@ -533,14 +539,12 @@ concat(int axis, const std::vector<const TensorT*>& inputs, tensor_type<TensorT>
 
     dims[axis] = 0;
     for (auto t : inputs)
-        concat_detail::check_input_shapes(axis, dims, *t);
+        detail::check_concat_shapes(axis, dims, *t);
     output.resize(Shape(dims));
 
     int offset = 0;
     for (auto t : inputs) {
-        int next = offset + t->extent(axis);
-        reorder(*t, output.slice({offset}, {next}, {axis}, {1}));
-        offset = next;
+        detail::do_concat(axis, offset, output, *t);
     }
 }
 
@@ -554,10 +558,12 @@ concat(int axis, const TensorT& first, const Tensors&... rest) {
     detail::norm_axis(first.rank(), axis);
 
     auto dims = first.shape().extents();
-    concat_detail::check_input_shapes(axis, dims, rest...);
+    dims[axis] = 0;
+    detail::check_concat_shapes(axis, dims, first, rest...);
 
-    tensor_type<TensorT> output{Shape(dims)};
-    concat_detail::do_concat(axis, 0, output, first, rest...);
+    auto output = tensor_type<TensorT>{Shape(dims)};
+    auto offset = 0;
+    detail::do_concat(axis, offset, output, first, rest...);
     return output;
 }
 

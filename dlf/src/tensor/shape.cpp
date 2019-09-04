@@ -1,21 +1,20 @@
 #include <unordered_set>
 #include <numeric>
-#include "tensor/shape.h"
-#include "utility.h"
+#include "tensor.h"
 
 namespace dlf {
 
 Shape::Shape(Shape&& rhs)
     : m_dims(std::move(rhs.m_dims)),
-      m_size(cxx::exchange(rhs.m_size, 0)),
-      m_offset(cxx::exchange(rhs.m_offset, 0))
+      m_size(std::exchange(rhs.m_size, 0)),
+      m_offset(std::exchange(rhs.m_offset, 0))
 {
 }
 
 Shape& Shape::operator=(Shape&& rhs) {
     m_dims = std::move(rhs.m_dims);
-    m_size = cxx::exchange(rhs.m_size, 0);
-    m_offset = cxx::exchange(rhs.m_offset, 0);
+    m_size = std::exchange(rhs.m_size, 0);
+    m_offset = std::exchange(rhs.m_offset, 0);
     return *this;
 }
 

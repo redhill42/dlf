@@ -11,17 +11,10 @@
 #include <complex>
 #include <cassert>
 
-#if __cplusplus >= 201703L
+#if CPP_VER >= 17
 #define HAS_VARIANT
 #include <variant>
 #endif
-
-#include "model/intern.h"
-#include "model/node_list.h"
-#include "tensor.h"
-
-#pragma clang diagnostic push
-#pragma ide diagnostic ignored "OCUnusedGlobalDeclarationInspection"
 
 namespace dlf { namespace model {
 
@@ -2082,5 +2075,3 @@ inline void Node::destroy() noexcept {
 }
 
 }} // namespace dlf::model
-
-#pragma clang diagnostic pop

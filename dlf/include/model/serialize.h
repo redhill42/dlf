@@ -2,7 +2,6 @@
 
 #include <stdexcept>
 #include <fstream>
-#include "model.h"
 
 namespace dlf { namespace model {
 

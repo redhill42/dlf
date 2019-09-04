@@ -3,7 +3,7 @@
 #include <mutex>
 #include <cassert>
 
-#include "model/intern.h"
+#include "model.h"
 
 namespace dlf { namespace model {
 

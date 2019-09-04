@@ -1,11 +1,7 @@
-#include <fstream>
 #include <memory>
 
-#include "model/serialize.h"
-#include "model/operators.h"
-
+#include "model.h"
 #include "gtest/gtest.h"
-#include "gmock/gmock.h"
 
 using namespace dlf::model;
 

@@ -5,7 +5,6 @@
 #include <cassert>
 #include <cstdlib>
 #include <cstddef>
-#include "utility.h"
 
 namespace dlf {
 

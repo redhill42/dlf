@@ -1,7 +1,5 @@
 #pragma once
 
-#include "tensor/shape.h"
-#include "tensor/host.h"
 #include "gpgpu.h"
 #include "gblas.h"
 #include "gdnn.h"

@@ -10,7 +10,7 @@ namespace dlf {
 
 namespace detail {
 template <typename T>
-std::enable_if_t<!cblas::RequireBlasType<T>>
+std::enable_if_t<!cblas::is_blasable<T>::value>
 gemv(cblas::Transpose trans, int m, int n,
      const T& alpha, const T* A, int lda, const T* x, int incX,
      const T& beta, T* y, int incY)
@@ -41,7 +41,7 @@ gemv(cblas::Transpose trans, int m, int n,
 }
 
 template <typename T>
-std::enable_if_t<cblas::RequireBlasType<T>>
+std::enable_if_t<cblas::is_blasable<T>::value>
 inline gemv(cblas::Transpose trans, int m, int n,
             const T& alpha, const T* A, int lda, const T* x, int incX,
             const T& beta, T* y, int incY)
@@ -91,7 +91,7 @@ gemv(const TensorT& A, const TensorT& x) {
 
 namespace detail {
 template <typename T>
-std::enable_if_t<!cblas::RequireBlasType<T>>
+std::enable_if_t<!cblas::is_blasable<T>::value>
 gemm(cblas::Transpose transA, cblas::Transpose transB,
      const int m, const int n, const int p,
      const T& alpha,
@@ -134,7 +134,7 @@ gemm(cblas::Transpose transA, cblas::Transpose transB,
 }
 
 template <typename T>
-std::enable_if_t<cblas::RequireBlasType<T>>
+std::enable_if_t<cblas::is_blasable<T>::value>
 inline gemm(cblas::Transpose transA, cblas::Transpose transB,
             const int m, const int n, const int k,
             const T& alpha,
@@ -287,7 +287,7 @@ inline void symv(cblas::Triangle uplo, const int n,
 }
 
 template <typename T>
-std::enable_if_t<!cblas::RequireBlasType<T>>
+std::enable_if_t<!cblas::is_blasable<T>::value>
 symm(cblas::Side side, cblas::Triangle uplo, const int m, const int n,
      const T& alpha, const T* A, int lda, const T* B, int ldb,
      const T& beta, T* C, const int ldc)
@@ -309,7 +309,7 @@ symm(cblas::Side side, cblas::Triangle uplo, const int m, const int n,
 }
 
 template <typename T>
-std::enable_if_t<cblas::RequireBlasType<T>>
+std::enable_if_t<cblas::is_blasable<T>::value>
 inline symm(cblas::Side side, cblas::Triangle uplo, const int m, int n,
             const T& alpha, const T* A, int lda, const T* B, int ldb,
             const T& beta, T* C, const int ldc)
@@ -431,7 +431,7 @@ void triangular_upper_to_squared(const T* A, int lda, T* X, int k, bool unit_dia
 }
 
 template <typename T>
-std::enable_if_t<!cblas::RequireBlasType<T>>
+std::enable_if_t<!cblas::is_blasable<T>::value>
 trmv(cblas::Triangle uplo, cblas::Transpose trans, cblas::Diagonal diag,
      const int n, const T* A, int lda, T* x, int incX)
 {
@@ -444,7 +444,7 @@ trmv(cblas::Triangle uplo, cblas::Transpose trans, cblas::Diagonal diag,
 }
 
 template <typename T>
-std::enable_if_t<cblas::RequireBlasType<T>>
+std::enable_if_t<cblas::is_blasable<T>::value>
 inline trmv(cblas::Triangle uplo, cblas::Transpose trans, cblas::Diagonal diag,
             const int n, const T* A, int lda, T* x, int incX)
 {
@@ -464,7 +464,7 @@ inline void trmv(cblas::Triangle uplo, cblas::Transpose trans, cblas::Diagonal d
 }
 
 template <typename T>
-std::enable_if_t<!cblas::RequireBlasType<T>>
+std::enable_if_t<!cblas::is_blasable<T>::value>
 trmm(cblas::Side side, cblas::Triangle uplo, cblas::Transpose transA, cblas::Diagonal diag,
      const int m, const int n, const T& alpha,
      const T* A, int lda, T* B, int ldb)
@@ -487,7 +487,7 @@ trmm(cblas::Side side, cblas::Triangle uplo, cblas::Transpose transA, cblas::Dia
 }
 
 template <typename T>
-std::enable_if_t<cblas::RequireBlasType<T>>
+std::enable_if_t<cblas::is_blasable<T>::value>
 inline trmm(cblas::Side side, cblas::Triangle uplo, cblas::Transpose transA, cblas::Diagonal diag,
             const int m, const int n, const T& alpha,
             const T* A, int lda, T* B, int ldb)
@@ -641,7 +641,7 @@ bool is_contiguous_strides(const Shape& shape) {
 }
 
 template <typename T>
-std::enable_if_t<cblas::RequireBlasType<T>>
+std::enable_if_t<cblas::is_blasable<T>::value>
 matmul_cpu(int m, int n, int k,
            const T* A, int lda, int incA,
            const T* B, int ldb, int incB,
@@ -684,7 +684,7 @@ matmul_cpu(int m, int n, int k,
 }
 
 template <typename T>
-std::enable_if_t<!cblas::RequireBlasType<T>>
+std::enable_if_t<!cblas::is_blasable<T>::value>
 matmul_cpu(int m, int n, int p,
            const T* A, int lda, int incA,
            const T* B, int ldb, int incB,

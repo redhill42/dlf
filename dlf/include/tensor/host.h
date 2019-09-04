@@ -7,8 +7,6 @@
 #include <iostream>
 #include <iomanip>
 
-#include "utility.h"
-#include "tensor/shape.h"
 #include "parallel.h"
 #include "os_blas.h"
 

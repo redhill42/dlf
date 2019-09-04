@@ -7,11 +7,6 @@
 
 #elif defined(__APPLE__)
 #include <Accelerate/Accelerate.h>
-#define cblas_saxpby catlas_saxpby
-#define cblas_daxpby catlas_daxpby
-#define cblas_caxpby catlas_caxpby
-#define cblas_zaxpby catlas_zaxpby
-
 #else
 #include <cblas.h>
 #endif
@@ -19,11 +14,11 @@
 namespace cblas {
 
 template <typename T>
-constexpr bool RequireBlasType =
-    std::is_same<T, float>::value ||
-    std::is_same<T, double>::value ||
-    std::is_same<T, std::complex<float>>::value ||
-    std::is_same<T, std::complex<double>>::value;
+using is_blasable = cxx::disjunction<
+    std::is_same<T, float>,
+    std::is_same<T, double>,
+    std::is_same<T, std::complex<float>>,
+    std::is_same<T, std::complex<double>>>;
 
 enum class Layout {
     RowMajor = CblasRowMajor,
@@ -77,22 +72,6 @@ inline void axpy(size_t N, const std::complex<float>& alpha, const std::complex<
 
 inline void axpy(size_t N, const std::complex<double>& alpha, const std::complex<double>* X, size_t incX, std::complex<double>* Y, size_t incY) {
     cblas_zaxpy(N, &alpha, X, incX, Y, incY);
-}
-
-inline void axpby(size_t N, float alpha, const float* X, size_t incX, float beta, float* Y, size_t incY) {
-    cblas_saxpby(N, alpha, X, incX, beta, Y, incY);
-}
-
-inline void axpby(size_t N, double alpha, const double* X, size_t incX, double beta, double* Y, size_t incY) {
-    cblas_daxpby(N, alpha, X, incX, beta, Y, incY);
-}
-
-inline void axpby(size_t N, const std::complex<float>& alpha, const std::complex<float>* X, size_t incX, const std::complex<float>& beta, std::complex<float>* Y, size_t incY) {
-    cblas_caxpby(N, &alpha, X, incX, &beta, Y, incY);
-}
-
-inline void axpby(size_t N, const std::complex<double>& alpha, const std::complex<double>* X, size_t incX, const std::complex<double>& beta, std::complex<double>* Y, size_t incY) {
-    cblas_zaxpby(N, &alpha, X, incX, &beta, Y, incY);
 }
 
 inline void copy(size_t N, const float* X, size_t incX, float* Y, size_t incY) {

@@ -1,5 +1,4 @@
 #include "model.h"
-#include "model/operators.h"
 #include "gtest/gtest.h"
 
 using namespace dlf::model;

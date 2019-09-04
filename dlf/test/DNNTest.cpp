@@ -2,7 +2,6 @@
 #include "tensor.h"
 #include "gdnn.h"
 #include "gtest/gtest.h"
-#include "gmock/gmock.h"
 #include "test_utility.h"
 
 using namespace dlf;

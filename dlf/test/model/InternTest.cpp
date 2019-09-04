@@ -1,4 +1,4 @@
-#include <model/intern.h>
+#include "model.h"
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 

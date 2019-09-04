@@ -3,7 +3,6 @@
 #include "gmock/gmock.h"
 
 #include "model.h"
-#include "model/serialize.h"
 
 using namespace dlf::model;
 

@@ -9,10 +9,26 @@
 #include <cassert>
 #include <sstream>
 
+#ifndef CPP_VER
+#  if __cplusplus <= 201103L
+#    define CPP_VER 11
+#  elif __cplusplus <= 201402L
+#    define CPP_VER 14
+#  elif __cplusplus <= 201703L
+#    define CPP_VER 17
+#  else
+#    define CPP_VER 20
+#  endif
+#endif // !CPP_VER
+
+#if CPP_VER < 14
+#  error C++14 is the minimal requirement
+#endif
+
 // C++17 back ports
 namespace cxx {
 
-#if __cplusplus >= 201703L
+#if CPP_VER >= 17
 template <typename... B>
 using conjunction = std::conjunction<B...>;
 template <typename... B>
@@ -42,7 +58,7 @@ template <class T>
 struct negation : std::conditional<T::value, std::false_type, std::true_type>::type {};
 #endif
 
-#if __cplusplus >= 201703L
+#if CPP_VER >= 17
 template <typename Fn, typename... Args>
 using invoke_result = std::invoke_result<Fn, Args...>;
 template <typename Fn, typename... Args>
@@ -54,17 +70,9 @@ template <typename Fn, typename... Args>
 using invoke_result_t = std::result_of_t<Fn(Args...)>;
 #endif
 
-#if __cplusplus >= 201703L
-using std::exchange;
+#if CPP_VER >= 17
 using std::clamp;
 #else
-template <typename T, typename U = T>
-T exchange(T& obj, U&& new_value) {
-    T old_value = std::move(obj);
-    obj = std::forward<U>(new_value);
-    return old_value;
-}
-
 template <class T, class Compare>
 inline constexpr const T& clamp(const T& v, const T& lo, const T& hi, Compare comp) {
     return comp(v, lo) ? lo : comp(hi, v) ? hi : v;
@@ -76,7 +84,7 @@ inline constexpr const T& clamp(const T& v, const T& lo, const T& hi) {
 }
 #endif
 
-#if __cplusplus >= 201703L
+#if CPP_VER >= 17
 using std::size;
 #else
 template <typename Cont>
@@ -249,7 +257,7 @@ public:
 #pragma clang diagnostic pop
 
 namespace detail {
-#if __cplusplus >= 201703L
+#if CPP_VER >= 17
 template <typename... Args>
 inline void string_concat(std::stringstream& ss, Args&&... args) {
     (void)(ss << ... << std::forward<Args>(args));

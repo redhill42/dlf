@@ -1,7 +1,5 @@
 #pragma once
 
-#include "model.h"
-
 namespace dlf { namespace model {
 
 #define BEGIN_OPERATOR(name) \
