@@ -320,6 +320,8 @@ void conv2d(const Tensor<T>& X, const Tensor<T>& W, Tensor<T>& Y, const Filter2D
             im2col(x_buffer, work.data(), filter);
 
             detail::gemm(
+                cblas::Transpose::NoTrans,
+                cblas::Transpose::NoTrans,
                 m, n, k,
                 T{1}, w_buffer, W.stride(0),
                 work.data(), work.stride(0),

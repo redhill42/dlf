@@ -286,10 +286,13 @@ static void gemm_test() {
 
     T alpha = T(2), beta = T(3);
 
-    EXPECT_EQ(R, gemm(alpha, dev_A, dev_B, beta, dev_C, false, false).read());
-    EXPECT_EQ(R, gemm(alpha, dev_A_t, dev_B, beta, dev_C, true, false).read());
-    EXPECT_EQ(R, gemm(alpha, dev_A, dev_B_t, beta, dev_C, false, true).read());
-    EXPECT_EQ(R, gemm(alpha, dev_A_t, dev_B_t, beta, dev_C, true, true).read());
+    constexpr auto Trans = cblas::Transpose::Trans;
+    constexpr auto NoTrans = cblas::Transpose::NoTrans;
+
+    EXPECT_EQ(R, gemm(NoTrans, NoTrans, alpha, dev_A, dev_B, beta, dev_C).read());
+    EXPECT_EQ(R, gemm(Trans, NoTrans, alpha, dev_A_t, dev_B, beta, dev_C).read());
+    EXPECT_EQ(R, gemm(NoTrans, Trans, alpha, dev_A, dev_B_t, beta, dev_C).read());
+    EXPECT_EQ(R, gemm(Trans, Trans, alpha, dev_A_t, dev_B_t, beta, dev_C).read());
 }
 
 TEST_F(GPGPUTest, GEMM) {
@@ -297,6 +300,188 @@ TEST_F(GPGPUTest, GEMM) {
         gemm_test<float>();
         gemm_test<int32_t>();
         gemm_test<int64_t>();
+    });
+}
+
+
+template <typename T>
+void symm_test() {
+    using namespace cblas;
+
+    auto A = Tensor<T>::range({6, 5}, 1);
+    auto B = Tensor<T>::range({4, 3}, 1);
+    auto dev_A = dev(A);
+    auto dev_B = dev(B);
+
+    EXPECT_EQ(symm(Side::Left, Triangle::Lower, A, B), Tensor<T>({4, 3}, {
+        262, 296, 330,
+        288, 330, 372,
+        330, 384, 438,
+        400, 470, 540
+    }));
+    EXPECT_EQ(symm(Side::Left, Triangle::Lower, dev_A, dev_B).read(),
+              symm(Side::Left, Triangle::Lower, A, B));
+
+    EXPECT_EQ(symm(Side::Left, Triangle::Upper, A, B), Tensor<T>({4, 3}, {
+         70,  80,  90,
+        176, 202, 228,
+        266, 304, 342,
+        328, 374, 420
+    }));
+    EXPECT_EQ(symm(Side::Left, Triangle::Upper, dev_A, dev_B).read(),
+              symm(Side::Left, Triangle::Upper, A, B));
+
+    EXPECT_EQ(symm(Side::Right, Triangle::Lower, A, B), Tensor<T>({4, 3}, {
+         46,  56,  74,
+        100, 131, 182,
+        154, 206, 290,
+        208, 281, 398
+    }));
+    EXPECT_EQ(symm(Side::Right, Triangle::Lower, dev_A, dev_B).read(),
+              symm(Side::Right, Triangle::Lower, A, B));
+
+    EXPECT_EQ(symm(Side::Right, Triangle::Upper, A, B), Tensor<T>({4, 3}, {
+         14,  40,  58,
+         32,  91, 130,
+         50, 142, 202,
+         68, 193, 274
+    }));
+    EXPECT_EQ(symm(Side::Right, Triangle::Upper, dev_A, dev_B).read(),
+              symm(Side::Right, Triangle::Upper, A, B));
+}
+
+TEST_F(GPGPUTest, SYMM) {
+    doTest([]() {
+        symm_test<float>();
+        symm_test<int32_t>();
+        symm_test<int64_t>();
+    });
+}
+
+template <typename T>
+void trmm_test() {
+    using namespace cblas;
+    auto A = Tensor<T>::range({6, 5}, 1);
+    auto B = Tensor<T>::identity({4, 4});
+    auto dev_A = dev(A);
+    auto dev_B = dev(B);
+
+    EXPECT_EQ(trmm(Side::Left, Triangle::Lower, Transpose::NoTrans, Diagonal::NonUnit, A, B), Tensor<T>({4, 4}, {
+         1,  0,  0,  0,
+         6,  7,  0,  0,
+        11, 12, 13,  0,
+        16, 17, 18, 19
+    }));
+    EXPECT_EQ(trmm(Side::Left, Triangle::Lower, Transpose::NoTrans, Diagonal::NonUnit, dev_A, dev_B).read(),
+              trmm(Side::Left, Triangle::Lower, Transpose::NoTrans, Diagonal::NonUnit, A, B));
+
+    EXPECT_EQ(trmm(Side::Left, Triangle::Upper, Transpose::NoTrans, Diagonal::NonUnit, A, B), Tensor<T>({4, 4}, {
+         1,  2,  3,  4,
+         0,  7,  8,  9,
+         0,  0, 13, 14,
+         0,  0,  0, 19
+    }));
+    EXPECT_EQ(trmm(Side::Left, Triangle::Upper, Transpose::NoTrans, Diagonal::NonUnit, dev_A, dev_B).read(),
+              trmm(Side::Left, Triangle::Upper, Transpose::NoTrans, Diagonal::NonUnit, A, B));
+
+    EXPECT_EQ(trmm(Side::Left, Triangle::Lower, Transpose::NoTrans, Diagonal::Unit, A, B), Tensor<T>({4, 4}, {
+         1,  0,  0,  0,
+         6,  1,  0,  0,
+        11, 12,  1,  0,
+        16, 17, 18,  1
+    }));
+    EXPECT_EQ(trmm(Side::Left, Triangle::Lower, Transpose::NoTrans, Diagonal::Unit, dev_A, dev_B).read(),
+              trmm(Side::Left, Triangle::Lower, Transpose::NoTrans, Diagonal::Unit, A, B));
+
+    EXPECT_EQ(trmm(Side::Left, Triangle::Upper, Transpose::NoTrans, Diagonal::Unit, A, B), Tensor<T>({4, 4}, {
+         1,  2,  3,  4,
+         0,  1,  8,  9,
+         0,  0,  1, 14,
+         0,  0,  0,  1
+    }));
+    EXPECT_EQ(trmm(Side::Left, Triangle::Upper, Transpose::NoTrans, Diagonal::Unit, dev_A, dev_B).read(),
+              trmm(Side::Left, Triangle::Upper, Transpose::NoTrans, Diagonal::Unit, A, B));
+
+    EXPECT_EQ(trmm(Side::Left, Triangle::Lower, Transpose::Trans, Diagonal::NonUnit, A, B), Tensor<T>({4, 4}, {
+         1,  6, 11, 16,
+         0,  7, 12, 17,
+         0,  0, 13, 18,
+         0,  0,  0, 19
+    }));
+    EXPECT_EQ(trmm(Side::Left, Triangle::Lower, Transpose::Trans, Diagonal::NonUnit, dev_A, dev_B).read(),
+              trmm(Side::Left, Triangle::Lower, Transpose::Trans, Diagonal::NonUnit, A, B));
+
+    EXPECT_EQ(trmm(Side::Left, Triangle::Upper, Transpose::Trans, Diagonal::NonUnit, A, B), Tensor<T>({4, 4}, {
+         1,  0,  0,  0,
+         2,  7,  0,  0,
+         3,  8, 13,  0,
+         4,  9, 14, 19
+    }));
+    EXPECT_EQ(trmm(Side::Left, Triangle::Upper, Transpose::Trans, Diagonal::NonUnit, dev_A, dev_B).read(),
+              trmm(Side::Left, Triangle::Upper, Transpose::Trans, Diagonal::NonUnit, A, B));
+
+    //---
+
+    EXPECT_EQ(trmm(Side::Right, Triangle::Lower, Transpose::NoTrans, Diagonal::NonUnit, A, B), Tensor<T>({4, 4}, {
+         1,  0,  0,  0,
+         6,  7,  0,  0,
+        11, 12, 13,  0,
+        16, 17, 18, 19
+    }));
+    EXPECT_EQ(trmm(Side::Right, Triangle::Lower, Transpose::NoTrans, Diagonal::NonUnit, dev_A, dev_B).read(),
+              trmm(Side::Right, Triangle::Lower, Transpose::NoTrans, Diagonal::NonUnit, A, B));
+
+    EXPECT_EQ(trmm(Side::Right, Triangle::Upper, Transpose::NoTrans, Diagonal::NonUnit, A, B), Tensor<T>({4, 4}, {
+         1,  2,  3,  4,
+         0,  7,  8,  9,
+         0,  0, 13, 14,
+         0,  0,  0, 19
+    }));
+    EXPECT_EQ(trmm(Side::Right, Triangle::Upper, Transpose::NoTrans, Diagonal::NonUnit, dev_A, dev_B).read(),
+              trmm(Side::Right, Triangle::Upper, Transpose::NoTrans, Diagonal::NonUnit, A, B));
+
+    EXPECT_EQ(trmm(Side::Right, Triangle::Lower, Transpose::NoTrans, Diagonal::Unit, A, B), Tensor<T>({4, 4}, {
+         1,  0,  0,  0,
+         6,  1,  0,  0,
+        11, 12,  1,  0,
+        16, 17, 18,  1
+    }));
+    EXPECT_EQ(trmm(Side::Right, Triangle::Lower, Transpose::NoTrans, Diagonal::Unit, dev_A, dev_B).read(),
+              trmm(Side::Right, Triangle::Lower, Transpose::NoTrans, Diagonal::Unit, A, B));
+
+    EXPECT_EQ(trmm(Side::Right, Triangle::Upper, Transpose::NoTrans, Diagonal::Unit, A, B), Tensor<T>({4, 4}, {
+         1,  2,  3,  4,
+         0,  1,  8,  9,
+         0,  0,  1, 14,
+         0,  0,  0,  1
+    }));
+    EXPECT_EQ(trmm(Side::Right, Triangle::Upper, Transpose::NoTrans, Diagonal::Unit, dev_A, dev_B).read(),
+              trmm(Side::Right, Triangle::Upper, Transpose::NoTrans, Diagonal::Unit, A, B));
+
+    EXPECT_EQ(trmm(Side::Right, Triangle::Lower, Transpose::Trans, Diagonal::NonUnit, A, B), Tensor<T>({4, 4}, {
+         1,  6, 11, 16,
+         0,  7, 12, 17,
+         0,  0, 13, 18,
+         0,  0,  0, 19
+    }));
+    EXPECT_EQ(trmm(Side::Right, Triangle::Lower, Transpose::Trans, Diagonal::NonUnit, dev_A, dev_B).read(),
+              trmm(Side::Right, Triangle::Lower, Transpose::Trans, Diagonal::NonUnit, A, B));
+
+    EXPECT_EQ(trmm(Side::Right, Triangle::Upper, Transpose::Trans, Diagonal::NonUnit, A, B), Tensor<T>({4, 4}, {
+         1,  0,  0,  0,
+         2,  7,  0,  0,
+         3,  8, 13,  0,
+         4,  9, 14, 19
+    }));
+    EXPECT_EQ(trmm(Side::Right, Triangle::Upper, Transpose::Trans, Diagonal::NonUnit, dev_A, dev_B).read(),
+              trmm(Side::Right, Triangle::Upper, Transpose::Trans, Diagonal::NonUnit, A, B));
+}
+
+TEST_F(GPGPUTest, TRMM) {
+    doTest([]() {
+        trmm_test<float>();
+        trmm_test<int32_t>();
+        trmm_test<int64_t>();
     });
 }
 

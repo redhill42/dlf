@@ -540,12 +540,15 @@ static void gemm_test() {
          933,  980, 715,  923
     });
 
-    EXPECT_EQ(gemm(T(2), a, b, T(3), c, false, false), r);
-    EXPECT_EQ(gemm(T(2), t_a, b, T(3), c, true, false), r);
-    EXPECT_EQ(gemm(T(2), a, t_b, T(3), c, false, true), r);
-    EXPECT_EQ(gemm(T(2), t_a, t_b, T(3), c, true, true), r);
+    constexpr auto Trans = cblas::Transpose::Trans;
+    constexpr auto NoTrans = cblas::Transpose::NoTrans;
 
-    gemm(T(2), a, b, T(3), &c);
+    EXPECT_EQ(gemm(NoTrans, NoTrans, T(2), a, b, T(3), c), r);
+    EXPECT_EQ(gemm(Trans, NoTrans, T(2), t_a, b, T(3), c), r);
+    EXPECT_EQ(gemm(NoTrans, Trans, T(2), a, t_b, T(3), c), r);
+    EXPECT_EQ(gemm(Trans, Trans, T(2), t_a, t_b, T(3), c), r);
+
+    gemm(NoTrans, NoTrans, T(2), a, b, T(3), &c);
     EXPECT_EQ(c, r);
 }
 

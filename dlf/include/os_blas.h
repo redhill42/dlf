@@ -36,6 +36,21 @@ enum class Transpose {
     ConjTrans = CblasConjTrans
 };
 
+enum class Triangle {
+    Upper = CblasUpper,
+    Lower = CblasLower,
+};
+
+enum class Diagonal {
+    NonUnit = CblasNonUnit,
+    Unit = CblasUnit
+};
+
+enum class Side {
+    Left = CblasLeft,
+    Right = CblasRight
+};
+
 //==-------------------------------------------------------------------------
 // BLAS level-1 (vector-vector) routines
 //==-------------------------------------------------------------------------
@@ -274,6 +289,114 @@ inline void gemm(Layout layout,
                 static_cast<decltype(CblasNoTrans)>(transA),
                 static_cast<decltype(CblasNoTrans)>(transB),
                 m, n, k, &alpha, A, lda, B, ldb, &beta, C, ldc);
+}
+
+inline void symm(Layout layout, Side side, Triangle uplo,
+                 const size_t m, const size_t n,
+                 const float alpha,
+                 const float* A, const size_t lda,
+                 const float* B, const size_t ldb,
+                 const float beta,
+                 float* C, const size_t ldc) {
+    cblas_ssymm(static_cast<decltype(CblasRowMajor)>(layout),
+                static_cast<decltype(CblasLeft)>(side),
+                static_cast<decltype(CblasLower)>(uplo),
+                m, n, alpha, A, lda, B, ldb, beta, C, ldc);
+}
+
+inline void symm(Layout layout, Side side, Triangle uplo,
+                 const size_t m, const size_t n,
+                 const double alpha,
+                 const double* A, const size_t lda,
+                 const double* B, const size_t ldb,
+                 const double beta,
+                 double* C, const size_t ldc) {
+    cblas_dsymm(static_cast<decltype(CblasRowMajor)>(layout),
+                static_cast<decltype(CblasLeft)>(side),
+                static_cast<decltype(CblasLower)>(uplo),
+                m, n, alpha, A, lda, B, ldb, beta, C, ldc);
+}
+
+inline void symm(Layout layout, Side side, Triangle uplo,
+                 const size_t m, const size_t n,
+                 const std::complex<float> alpha,
+                 const std::complex<float>* A, const size_t lda,
+                 const std::complex<float>* B, const size_t ldb,
+                 const std::complex<float> beta,
+                 std::complex<float>* C, const size_t ldc) {
+    cblas_csymm(static_cast<decltype(CblasRowMajor)>(layout),
+                static_cast<decltype(CblasLeft)>(side),
+                static_cast<decltype(CblasLower)>(uplo),
+                m, n, &alpha, A, lda, B, ldb, &beta, C, ldc);
+}
+
+inline void symm(Layout layout, Side side, Triangle uplo,
+                 const size_t m, const size_t n,
+                 const std::complex<double> alpha,
+                 const std::complex<double>* A, const size_t lda,
+                 const std::complex<double>* B, const size_t ldb,
+                 const std::complex<double> beta,
+                 std::complex<double>* C, const size_t ldc) {
+    cblas_zsymm(static_cast<decltype(CblasRowMajor)>(layout),
+                static_cast<decltype(CblasLeft)>(side),
+                static_cast<decltype(CblasLower)>(uplo),
+                m, n, &alpha, A, lda, B, ldb, &beta, C, ldc);
+}
+
+inline void trmm(Layout layout, Side side, Triangle uplo, Transpose trans, Diagonal diag,
+                 const size_t m, const size_t n, const float alpha,
+                 const float* A, const size_t lda,
+                 float* B, const size_t ldb)
+{
+    cblas_strmm(static_cast<decltype(CblasRowMajor)>(layout),
+                static_cast<decltype(CblasLeft)>(side),
+                static_cast<decltype(CblasLower)>(uplo),
+                static_cast<decltype(CblasNoTrans)>(trans),
+                static_cast<decltype(CblasNonUnit)>(diag),
+                m, n, alpha, A, lda, B, ldb);
+
+}
+
+inline void trmm(Layout layout, Side side, Triangle uplo, Transpose trans, Diagonal diag,
+                 const size_t m, const size_t n, const double alpha,
+                 const double* A, const size_t lda,
+                 double* B, const size_t ldb)
+{
+    cblas_dtrmm(static_cast<decltype(CblasRowMajor)>(layout),
+                static_cast<decltype(CblasLeft)>(side),
+                static_cast<decltype(CblasLower)>(uplo),
+                static_cast<decltype(CblasNoTrans)>(trans),
+                static_cast<decltype(CblasNonUnit)>(diag),
+                m, n, alpha, A, lda, B, ldb);
+
+}
+
+inline void trmm(Layout layout, Side side, Triangle uplo, Transpose trans, Diagonal diag,
+                 const size_t m, const size_t n, const std::complex<float>& alpha,
+                 const std::complex<float>* A, const size_t lda,
+                 std::complex<float>* B, const size_t ldb)
+{
+    cblas_ctrmm(static_cast<decltype(CblasRowMajor)>(layout),
+                static_cast<decltype(CblasLeft)>(side),
+                static_cast<decltype(CblasLower)>(uplo),
+                static_cast<decltype(CblasNoTrans)>(trans),
+                static_cast<decltype(CblasNonUnit)>(diag),
+                m, n, &alpha, A, lda, B, ldb);
+
+}
+
+inline void trmm(Layout layout, Side side, Triangle uplo, Transpose trans, Diagonal diag,
+                 const size_t m, const size_t n, const std::complex<double>& alpha,
+                 const std::complex<double>* A, const size_t lda,
+                 std::complex<double>* B, const size_t ldb)
+{
+    cblas_ztrmm(static_cast<decltype(CblasRowMajor)>(layout),
+                static_cast<decltype(CblasLeft)>(side),
+                static_cast<decltype(CblasLower)>(uplo),
+                static_cast<decltype(CblasNoTrans)>(trans),
+                static_cast<decltype(CblasNonUnit)>(diag),
+                m, n, &alpha, A, lda, B, ldb);
+
 }
 
 template <typename T>

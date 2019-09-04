@@ -121,6 +121,8 @@ template class Xsymm<float>;
 template class Xsymm<double>;
 template class Xsymm<float2>;
 template class Xsymm<double2>;
+template class Xsymm<int32_t>;
+template class Xsymm<int64_t>;
 
 // =================================================================================================
 }} // namespace gpgpu::blas

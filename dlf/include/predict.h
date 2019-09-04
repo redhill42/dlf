@@ -685,19 +685,20 @@ private:
 
     struct GemmOp : Operator {
         T alpha, beta;
-        bool transA, transB;
+        cblas::Transpose transA, transB;
         TensorT<> A, B, C, Y;
 
         GemmOp(OperatorFactory* of, model::Gemm* n)
             : alpha(n->alpha()), beta(n->beta()),
-              transA(n->transA()), transB(n->transB()),
+              transA(n->transA() ? cblas::Transpose::Trans : cblas::Transpose::NoTrans),
+              transB(n->transB() ? cblas::Transpose::Trans : cblas::Transpose::NoTrans),
               A(of->alloc(n->A())),
               B(of->alloc(n->B())),
               C(of->alloc(n->C())),
               Y(of->alloc(n->Y())) {}
 
         void evaluate() override {
-            gemm(alpha, A, B, beta, C, Y, transA, transB);
+            gemm(transA, transB, alpha, A, B, beta, C, Y);
         }
     };
 

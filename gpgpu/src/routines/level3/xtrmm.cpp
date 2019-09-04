@@ -134,6 +134,8 @@ template class Xtrmm<float>;
 template class Xtrmm<double>;
 template class Xtrmm<float2>;
 template class Xtrmm<double2>;
+template class Xtrmm<int32_t>;
+template class Xtrmm<int64_t>;
 
 // =================================================================================================
 }} // namespace gpgpu::blas
