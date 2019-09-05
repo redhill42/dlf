@@ -83,9 +83,10 @@ R"(
 
 // Inverts a diagonal block of INTERNAL_BLOCK_SIZE by INTERNAL_BLOCK_SIZE elements in a larger matrix
 __kernel __attribute__((reqd_work_group_size(INTERNAL_BLOCK_SIZE, 1, 1)))
-void InvertDiagonalBlock(const int n, __global const real* restrict src, const int src_offset, const int src_ld,
-                         __global real* restrict dest, const int outer_block_size,
-                         const int unit_diagonal, const int is_upper)
+void InvertDiagonalBlock(
+    const int n, __global const real* restrict src, const int src_offset, const int src_ld,
+    __global real* restrict dest, const int dest_offset, const int outer_block_size,
+    const int unit_diagonal, const int is_upper)
 {
   const int thread_index = get_local_id(0);
   const int block_index = get_group_id(0);
@@ -184,18 +185,19 @@ void InvertDiagonalBlock(const int n, __global const real* restrict src, const i
   // Writes the result to global memory
   #pragma unroll
   for (int j = 0; j < INTERNAL_BLOCK_SIZE; j += 1) {
-    dest[j*outer_block_size + thread_index + dest_block_offset] = lm[thread_index][j];
+    dest[j*outer_block_size + thread_index + dest_block_offset + dest_offset] = lm[thread_index][j];
   }
 }
 
 // =================================================================================================
 
 // Triple matrix-multiplication kernel: C = A * B
-INLINE_FUNC void TripleMatMul(const int size, const bool upper, const int part, LOCAL_PTR real* blm, int n,
-                              __global const real* agm, __global const real* bgm, __global real* cgm,
-                              const int lda, const int ldb, const int ldc,
-                              int current_size, int num_pages, const int block_size) {
-
+INLINE_FUNC void TripleMatMul(
+    const int size, const bool upper, const int part, LOCAL_PTR real* blm, int n,
+    __global const real* agm, __global const real* bgm, __global real* cgm,
+    const int lda, const int ldb, const int ldc,
+    int current_size, int num_pages, const int block_size)
+{
   // Emulates a 3D grid: NX * (NY * num_pages)
   const int by   = get_group_id(1) / num_pages;
   const int page = get_group_id(1) % num_pages;
@@ -275,10 +277,12 @@ INLINE_FUNC void TripleMatMul(const int size, const bool upper, const int part, 
 // =================================================================================================
 
 // Triple matrix-multiplication kernel part 1: B12 = A12 * B22 (upper) or B21 = A21 * B11 (lower)
-INLINE_FUNC void TripleMatMulPart1(const int size, const bool upper, LOCAL_PTR real* blm, int n,
-                                   __global const real* src, const int a_offset, const int lda,
-                                   __global real* dest, int current_size, int num_pages, const int block_size) {
-
+INLINE_FUNC void TripleMatMulPart1(
+    const int size, const bool upper, LOCAL_PTR real* blm, int n,
+    __global const real* src, const int src_offset, const int lda,
+    __global real* dest, const int dest_offset, int current_size,
+     int num_pages, const int block_size)
+{
   // Emulates a 3D grid: NX * (NY * num_pages)
   const int page = get_group_id(1) % num_pages;
 
@@ -287,19 +291,19 @@ INLINE_FUNC void TripleMatMulPart1(const int size, const bool upper, LOCAL_PTR r
   // - then the (page % pages_per_block) inner (current_size*2) * (current_size*2) page inside that
   const int pages_per_block = block_size / (current_size*2);
   dest += (page / pages_per_block) * block_size * block_size +
-          (page % pages_per_block) * (current_size*2*block_size + current_size*2);
+          (page % pages_per_block) * (current_size*2*block_size + current_size*2) +
+          dest_offset;
 
   // Using the GEMM notation: C = A*B
   __global const real* agm;
   __global const real* bgm;
   __global real* cgm;
   if (upper) { // upper triangular: B12 = A12 * B22
-    agm = src + a_offset + page*current_size*2*lda + page*current_size*2 + current_size*lda;  // A12
+    agm = src + src_offset + page*current_size*2*lda + page*current_size*2 + current_size*lda;  // A12
     bgm = dest + current_size*block_size + current_size;                                      // B22
     cgm = dest + current_size*block_size;                                                     // B12
-  }
-  else { // lower triangular: B21 = A21 * B11
-    agm = src + a_offset + page*current_size*2*lda + page*current_size*2 + current_size;  // A21
+  } else { // lower triangular: B21 = A21 * B11
+    agm = src + src_offset + page*current_size*2*lda + page*current_size*2 + current_size;  // A21
     bgm = dest;                                                                           // B11
     cgm = dest + current_size;                                                            // B21
   }
@@ -311,9 +315,11 @@ INLINE_FUNC void TripleMatMulPart1(const int size, const bool upper, LOCAL_PTR r
 }
 
 // Triple matrix-multiplication kernel part 1: B12 = -B11 * B12 (upper) or B21 = -B22 * B21 (lower)
-INLINE_FUNC void TripleMatMulPart2(const int size, const bool upper, LOCAL_PTR real* blm, const int n,
-                                   __global real* dest, int current_size, int num_pages, const int block_size) {
-
+INLINE_FUNC void TripleMatMulPart2(
+    const int size, const bool upper, LOCAL_PTR real* blm, const int n,
+    __global real* dest, const int dest_offset, int current_size,
+    int num_pages, const int block_size)
+{
   // Emulates a 3D grid: NX * (NY * num_pages)
   const int page = get_group_id(1) % num_pages;
 
@@ -322,7 +328,8 @@ INLINE_FUNC void TripleMatMulPart2(const int size, const bool upper, LOCAL_PTR r
   // - then the (page % pages_per_block) inner (current_size*2) * (current_size*2) page inside that
   const int pages_per_block = block_size / (current_size*2);
   dest += (page / pages_per_block) * block_size * block_size +
-          (page % pages_per_block) * (current_size*2*block_size + current_size*2);
+          (page % pages_per_block) * (current_size*2*block_size + current_size*2) +
+          dest_offset;
 
   // Using the GEMM notation: C = A*B
   __global const real* agm;

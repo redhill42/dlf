@@ -17,24 +17,22 @@
 #include "routine.hpp"
 
 namespace gpgpu { namespace blas {
-// =================================================================================================
 
 template <typename T>
 class Xinvert: public Routine {
- public:
+public:
 
-  // Constructor
-  Xinvert(const Queue &queue, Event* event, const std::string &name = "INVERT");
+    // Constructor
+    Xinvert(const Queue &queue, Event* event, const std::string &name = "INVERT");
 
-  // Inverts diagonal square blocks of a matrix
-  void InvertMatrixDiagonalBlocks(const Layout layout, const Triangle triangle, const Diagonal diag,
-                                  const size_t n, const size_t block_size,
-                                  const Buffer<T> &src, const size_t offset, const size_t ld_src,
-                                  Buffer<T> &dest);
+    // Inverts diagonal square blocks of a matrix
+    void InvertMatrixDiagonalBlocks(
+        const Layout layout, const Triangle triangle, const Diagonal diag,
+        const size_t n, const size_t block_size,
+        const Buffer<T>& src, const size_t src_offset, const size_t ld_src,
+        Buffer<T>& dest, const size_t dest_offset);
 };
 
-// =================================================================================================
 }} // namespace gpgpu::blas
 
-// GPGPU_BLAS_ROUTINES_XINVERT_H_
-#endif
+#endif // GPGPU_BLAS_ROUTINES_XINVERT_H_

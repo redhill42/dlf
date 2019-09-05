@@ -60,6 +60,8 @@ void Xsymv<T>::DoSymv(const Layout layout, const Triangle triangle,
 template class Xsymv<half>;
 template class Xsymv<float>;
 template class Xsymv<double>;
+template class Xsymv<int32_t>;
+template class Xsymv<int64_t>;
 
 // =================================================================================================
 }} // namespace gpgpu::blas

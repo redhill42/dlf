@@ -258,11 +258,13 @@ void clBuffer::write(const rawQueue& queue, const void* host, size_t size, size_
         offset, size, host, 0, nullptr, clEvent::unwrap(event)));
 }
 
-void clBuffer::copyTo(const rawQueue& queue, gpgpu::rawBuffer& dest, size_t size, rawEvent* event) const {
+void clBuffer::copyTo(const rawQueue& queue, gpgpu::rawBuffer& dest, size_t size,
+                      size_t src_offset, size_t dst_offset, rawEvent* event) const {
     CheckError(clEnqueueCopyBuffer(
         *clQueue::unwrap(queue),
         m_buffer, *clBuffer::unwrap(dest),
-        0, 0, size, 0, nullptr, clEvent::unwrap(event)));
+        src_offset, dst_offset, size,
+        0, nullptr, clEvent::unwrap(event)));
 }
 
 clBuffer::~clBuffer() {

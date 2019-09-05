@@ -221,9 +221,12 @@ public:
 
     ~clBuffer() override;
 
-    void read(const rawQueue& queue, void* host, size_t size, size_t offset, rawEvent* event) const override;
-    void write(const rawQueue& queue, const void* host, size_t size, size_t offset, rawEvent* event) override;
-    void copyTo(const rawQueue& queue, rawBuffer& dest, size_t size, rawEvent* event) const override;
+    void read(const rawQueue& queue, void* host, size_t size,
+        size_t offset, rawEvent* event) const override;
+    void write(const rawQueue& queue, const void* host, size_t size,
+        size_t offset, rawEvent* event) override;
+    void copyTo(const rawQueue& queue, rawBuffer& dest, size_t size,
+        size_t src_offset, size_t dst_offset, rawEvent* event) const override;
 
     static cl_mem* unwrap(rawBuffer& raw) {
         return &reinterpret_cast<clBuffer&>(raw).m_buffer;

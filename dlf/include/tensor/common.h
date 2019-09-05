@@ -5,8 +5,89 @@
 namespace dlf {
 
 //==-------------------------------------------------------------------------
-// General matrix multiplication
+// Low level BLAS routines
 //==-------------------------------------------------------------------------
+
+namespace detail {
+template <typename T>
+std::enable_if_t<!cblas::RequireBlasType<T>>
+gemv(cblas::Transpose trans, int m, int n,
+     const T& alpha, const T* A, int lda, const T* x, int incX,
+     const T& beta, T* y, int incY)
+{
+    if (x == y) {
+        auto z = std::make_unique<T[]>(n);
+        for (int i = 0; i < n; ++i)
+            z[i] = x[i*incX];
+        gemv(trans, m, n, alpha, A, lda, z.get(), 1, beta, y, incY);
+        return;
+    }
+
+    int incA = 1;
+    if (trans != cblas::Transpose::NoTrans) {
+        std::swap(lda, incA);
+    }
+
+    tbb::parallel_for(tbb::blocked_range<int>(0, m, 32), [=](auto r) {
+        for (int i = r.begin(); i < r.end(); i++) {
+            auto acc = y[i*incY] * beta;
+            auto pa = A + i*lda;
+            auto px = x;
+            for (int j = 0; j < n; j++, pa += incA, px += incX)
+                acc += alpha * *pa * *px;
+            y[i*incY] = acc;
+        }
+    });
+}
+
+template <typename T>
+std::enable_if_t<cblas::RequireBlasType<T>>
+inline gemv(cblas::Transpose trans, int m, int n,
+            const T& alpha, const T* A, int lda, const T* x, int incX,
+            const T& beta, T* y, int incY)
+{
+    cblas::gemv(cblas::Layout::RowMajor, trans, m, n, alpha, A, lda, x, incX, beta, y, incY);
+}
+
+template <typename T>
+inline void gemv(cblas::Transpose trans, int m, int n,
+                 const T& alpha,
+                 const gpgpu::Buffer<T>& A, int lda,
+                 const gpgpu::Buffer<T>& x, int incX,
+                 const T& beta, gpgpu::Buffer<T>& y, int incY)
+{
+    gblas::gemv(gblas::Layout::RowMajor,
+                static_cast<gblas::Transpose>(trans),
+                m, n, alpha, A, lda, x, incX, beta, y, incY);
+}
+} // namespace detail
+
+template <typename TensorT>
+enable_if_non_view_tensor<TensorT, void>
+gemv(cblas::Transpose trans,
+     const tensor_value_type<TensorT>& alpha,
+     const TensorT& A, const TensorT& x,
+     const tensor_value_type<TensorT>& beta,
+     TensorT& y)
+{
+    assert(A.is_matrix() && x.is_vector());
+    auto m = A.extent(0), n = A.extent(1);
+    if (trans != cblas::Transpose::NoTrans)
+        std::swap(m, n);
+    if (n != x.extent(0))
+        throw shape_error("gemv: incompatible shape");
+    y.resize(m);
+    detail::gemv(trans, m, n, alpha, A.data(), A.stride(0), x.data(), 1, beta, y.data(), 1);
+}
+
+template <typename TensorT>
+enable_if_non_view_tensor<TensorT, tensor_type<TensorT>>
+gemv(const TensorT& A, const TensorT& x) {
+    using T = tensor_value_type<TensorT>;
+    tensor_type<TensorT> y{};
+    gemv(cblas::Transpose::NoTrans, T{1}, A, x, T{0}, y);
+    return y;
+}
 
 namespace detail {
 template <typename T>
@@ -54,26 +135,26 @@ gemm(cblas::Transpose transA, cblas::Transpose transB,
 
 template <typename T>
 std::enable_if_t<cblas::RequireBlasType<T>>
-gemm(cblas::Transpose transA, cblas::Transpose transB,
-     const int m, const int n, const int k,
-     const T& alpha,
-     const T* A, const int lda,
-     const T* B, const int ldb,
-     const T& beta,
-     T* C, const int ldc)
+inline gemm(cblas::Transpose transA, cblas::Transpose transB,
+            const int m, const int n, const int k,
+            const T& alpha,
+            const T* A, const int lda,
+            const T* B, const int ldb,
+            const T& beta,
+            T* C, const int ldc)
 {
     cblas::gemm(cblas::Layout::RowMajor, transA, transB,
                 m, n, k, alpha, A, lda, B, ldb, beta, C, ldc);
 }
 
 template <typename T>
-void gemm(cblas::Transpose transA, cblas::Transpose transB,
-          const int m, const int n, const int k,
-          const T& alpha,
-          const gpgpu::Buffer<T>& A, const int lda,
-          const gpgpu::Buffer<T>& B, const int ldb,
-          const T& beta,
-          gpgpu::Buffer<T>& C, const int ldc)
+inline void gemm(cblas::Transpose transA, cblas::Transpose transB,
+                 const int m, const int n, const int k,
+                 const T& alpha,
+                 const gpgpu::Buffer<T>& A, const int lda,
+                 const gpgpu::Buffer<T>& B, const int ldb,
+                 const T& beta,
+                 gpgpu::Buffer<T>& C, const int ldc)
 {
     gblas::gemm(gblas::Layout::RowMajor,
                 static_cast<gblas::Transpose>(transA),
@@ -149,7 +230,7 @@ gemm(cblas::Transpose transA, cblas::Transpose transB,
 
 namespace detail {
 template <typename T>
-void symm_lower_to_squared(const T* A, int lda, T* X, int k) {
+void symmetric_lower_to_squared(const T* A, int lda, T* X, int k) {
     tbb::parallel_for(tbb::blocked_range2d<int>(0, k, 32, 0, k, 32), [=](auto r) {
         for (int i = r.rows().begin(); i < r.rows().end(); ++i) {
             T* px = X + i*k + r.cols().begin();
@@ -161,7 +242,7 @@ void symm_lower_to_squared(const T* A, int lda, T* X, int k) {
 }
 
 template <typename T>
-void symm_upper_to_squared(const T* A, int lda, T* X, int k) {
+void symmetric_upper_to_squared(const T* A, int lda, T* X, int k) {
     tbb::parallel_for(tbb::blocked_range2d<int>(0, k, 32, 0, k, 32), [=](auto r) {
         for (int i = r.rows().begin(); i < r.rows().end(); ++i) {
             T* px = X + i*k + r.cols().begin();
@@ -173,6 +254,39 @@ void symm_upper_to_squared(const T* A, int lda, T* X, int k) {
 }
 
 template <typename T>
+std::enable_if_t<!(std::is_same<T, float>::value || std::is_same<T, double>::value)>
+symv(cblas::Triangle uplo, const int n,
+     const T& alpha, const T* A, int lda, const T* x, int incX,
+     const T& beta, T* y, int incY)
+{
+    auto t = std::make_unique<T[]>(n * n);
+    if (uplo == cblas::Triangle::Lower)
+        symmetric_lower_to_squared(A, lda, t.get(), n);
+    else
+        symmetric_upper_to_squared(A, lda, t.get(), n);
+    gemv(cblas::Transpose::NoTrans, n, n, alpha, t.get(), n, x, incX, beta, y, incY);
+}
+
+template <typename T>
+std::enable_if_t<std::is_same<T, float>::value || std::is_same<T, double>::value>
+inline symv(cblas::Triangle uplo, const int n,
+            const T& alpha, const T* A, int lda, const T* x, int incX,
+            const T& beta, T* y, int incY)
+{
+    cblas::symv(cblas::Layout::RowMajor, uplo, n, alpha, A, lda, x, incX, beta, y, incY);
+}
+
+template <typename T>
+inline void symv(cblas::Triangle uplo, const int n,
+                 const T& alpha, const gpgpu::Buffer<T>& A, int lda,
+                 const gpgpu::Buffer<T>& x, int incX,
+                 const T& beta, gpgpu::Buffer<T>& y, int incY)
+{
+    gblas::symv(gblas::Layout::RowMajor, static_cast<gblas::Triangle>(uplo),
+                n, alpha, A, 0, lda, x, 0, incX, beta, y, 0, incY);
+}
+
+template <typename T>
 std::enable_if_t<!cblas::RequireBlasType<T>>
 symm(cblas::Side side, cblas::Triangle uplo, const int m, const int n,
      const T& alpha, const T* A, int lda, const T* B, int ldb,
@@ -181,9 +295,9 @@ symm(cblas::Side side, cblas::Triangle uplo, const int m, const int n,
     auto k = (side == cblas::Side::Left) ? m : n;
     auto X = std::make_unique<T[]>(k * k);
     if (uplo == cblas::Triangle::Lower)
-        symm_lower_to_squared(A, lda, X.get(), k);
+        symmetric_lower_to_squared(A, lda, X.get(), k);
     else
-        symm_upper_to_squared(A, lda, X.get(), k);
+        symmetric_upper_to_squared(A, lda, X.get(), k);
 
     if (side == cblas::Side::Left) {
         gemm(cblas::Transpose::NoTrans, cblas::Transpose::NoTrans,
@@ -218,6 +332,31 @@ inline void symm(cblas::Side side, cblas::Triangle uplo, const int m, const int 
                 m, n, alpha, A, 0, lda, B, 0, ldb, beta, C, 0, ldc);
 }
 } // namespace detail
+
+template <typename TensorT>
+enable_if_non_view_tensor<TensorT, void>
+symv(cblas::Triangle uplo,
+     const tensor_value_type<TensorT>& alpha,
+     const TensorT& A, const TensorT& x,
+     const tensor_value_type<TensorT>& beta,
+     TensorT& y)
+{
+    assert(A.is_matrix() && x.is_vector());
+    auto n = x.extent(0);
+    if (A.extent(0) < n || A.extent(1) < n)
+        throw shape_error("symv: matrix A has too few dimensions");
+    y.resize(n);
+    detail::symv(uplo, n, alpha, A.data(), A.stride(0), x.data(), 1, beta, y.data(), 1);
+}
+
+template <typename TensorT>
+enable_if_non_view_tensor<TensorT, tensor_type<TensorT>>
+symv(cblas::Triangle uplo, const TensorT& A, const TensorT& x) {
+    using T = tensor_value_type<TensorT>;
+    tensor_type<TensorT> y{};
+    symv(uplo, T{1}, A, x, T{0}, y);
+    return y;
+}
 
 template <typename TensorT>
 enable_if_non_view_tensor<TensorT, void>
@@ -258,7 +397,7 @@ symm(cblas::Side side, cblas::Triangle uplo, const TensorT& A, const TensorT& B)
 
 namespace detail {
 template <typename T>
-void trmm_lower_to_squared(const T* A, int lda, T* X, int k, bool unit_diagonal) {
+void triangular_lower_to_squared(const T* A, int lda, T* X, int k, bool unit_diagonal) {
     tbb::parallel_for(tbb::blocked_range2d<int>(0, k, 32, 0, k, 32), [=](auto r) {
         for (int i = r.rows().begin(); i < r.rows().end(); ++i) {
             T* px = X + i*k + r.cols().begin();
@@ -275,7 +414,7 @@ void trmm_lower_to_squared(const T* A, int lda, T* X, int k, bool unit_diagonal)
 }
 
 template <typename T>
-void trmm_upper_to_squared(const T* A, int lda, T* X, int k, bool unit_diagonal) {
+void triangular_upper_to_squared(const T* A, int lda, T* X, int k, bool unit_diagonal) {
     tbb::parallel_for(tbb::blocked_range2d<int>(0, k, 32, 0, k, 32), [=](auto r) {
         for (int i = r.rows().begin(); i < r.rows().end(); ++i) {
             T* px = X + i*k + r.cols().begin();
@@ -293,6 +432,39 @@ void trmm_upper_to_squared(const T* A, int lda, T* X, int k, bool unit_diagonal)
 
 template <typename T>
 std::enable_if_t<!cblas::RequireBlasType<T>>
+trmv(cblas::Triangle uplo, cblas::Transpose trans, cblas::Diagonal diag,
+     const int n, const T* A, int lda, T* x, int incX)
+{
+    auto t = std::make_unique<T[]>(n * n);
+    if (uplo == cblas::Triangle::Lower)
+        triangular_lower_to_squared(A, lda, t.get(), n, diag == cblas::Diagonal::Unit);
+    else
+        triangular_upper_to_squared(A, lda, t.get(), n, diag == cblas::Diagonal::Unit);
+    gemv(trans, n, n, T{1}, t.get(), n, x, incX, T{0}, x, incX);
+}
+
+template <typename T>
+std::enable_if_t<cblas::RequireBlasType<T>>
+inline trmv(cblas::Triangle uplo, cblas::Transpose trans, cblas::Diagonal diag,
+            const int n, const T* A, int lda, T* x, int incX)
+{
+    cblas::trmv(cblas::Layout::RowMajor, uplo, trans, diag, n, A, lda, x, incX);
+}
+
+template <typename T>
+inline void trmv(cblas::Triangle uplo, cblas::Transpose trans, cblas::Diagonal diag,
+                 const int n, const gpgpu::Buffer<T>& A, int lda,
+                 gpgpu::Buffer<T>& x, int incX)
+{
+    gblas::trmv(gblas::Layout::RowMajor,
+                static_cast<gblas::Triangle>(uplo),
+                static_cast<gblas::Transpose>(trans),
+                static_cast<gblas::Diagonal>(diag),
+                n, A, 0, lda, x, 0, incX);
+}
+
+template <typename T>
+std::enable_if_t<!cblas::RequireBlasType<T>>
 trmm(cblas::Side side, cblas::Triangle uplo, cblas::Transpose transA, cblas::Diagonal diag,
      const int m, const int n, const T& alpha,
      const T* A, int lda, T* B, int ldb)
@@ -300,9 +472,9 @@ trmm(cblas::Side side, cblas::Triangle uplo, cblas::Transpose transA, cblas::Dia
     auto k = (side == cblas::Side::Left) ? m : n;
     auto X = std::make_unique<T[]>(k * k);
     if (uplo == cblas::Triangle::Lower)
-        trmm_lower_to_squared(A, lda, X.get(), k, diag == cblas::Diagonal::Unit);
+        triangular_lower_to_squared(A, lda, X.get(), k, diag == cblas::Diagonal::Unit);
     else
-        trmm_upper_to_squared(A, lda, X.get(), k, diag == cblas::Diagonal::Unit);
+        triangular_upper_to_squared(A, lda, X.get(), k, diag == cblas::Diagonal::Unit);
 
     auto Y = std::make_unique<T[]>(m * n);
     std::copy(B, B+m*n, Y.get());
@@ -337,6 +509,29 @@ inline void trmm(cblas::Side side, cblas::Triangle uplo, cblas::Transpose transA
                 m, n, alpha, A, 0, lda, B, 0, ldb);
 }
 } // namespace detail
+
+template <typename TensorT>
+enable_if_non_view_tensor<TensorT, void>
+trmv(cblas::Triangle uplo, cblas::Transpose trans, cblas::Diagonal diag,
+     const TensorT& A, const TensorT& x, TensorT& y)
+{
+    assert(A.is_matrix() && x.is_vector());
+    auto n = x.extent(0);
+    if (A.extent(0) < n || A.extent(1) < n)
+        throw shape_error("trmv: matrix A has too few dimensions");
+    reorder(x, y);
+    detail::trmv(uplo, trans, diag, n, A.data(), A.stride(0), y.data(), 1);
+}
+
+template <typename TensorT>
+enable_if_non_view_tensor<TensorT, tensor_type<TensorT>>
+trmv(cblas::Triangle uplo, cblas::Transpose trans, cblas::Diagonal diag,
+     const TensorT& A, const TensorT& x)
+{
+    tensor_type<TensorT> y{};
+    trmv(uplo, trans, diag, A, x, y);
+    return y;
+}
 
 template <typename TensorT>
 enable_if_non_view_tensor<TensorT, void>

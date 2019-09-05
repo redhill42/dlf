@@ -36,8 +36,8 @@ void Xtrmv<T>::DoTrmv(const Layout layout, const Triangle triangle,
                       Buffer<T> &x_buffer, const size_t x_offset, const size_t x_inc) {
 
   // Creates a copy of X: a temporary scratch buffer
-  auto scratch_buffer = context_.template createBuffer<T>(n*x_inc + x_offset);
-  x_buffer.copyTo(queue_, scratch_buffer, n*x_inc + x_offset);
+  auto scratch_buffer = context_.template getTemporaryBuffer<T>(n*x_inc);
+  x_buffer.copyTo(queue_, scratch_buffer, n*x_inc, x_offset, scratch_buffer.offset());
 
   // The data is either in the upper or lower triangle
   size_t is_upper = ((triangle == Triangle::Upper && layout != Layout::RowMajor) ||
@@ -54,7 +54,7 @@ void Xtrmv<T>::DoTrmv(const Layout layout, const Triangle triangle,
     MatVec(layout, a_transpose,
            n, n, ConstantOne<T>(),
            a_buffer, a_offset, a_ld,
-           scratch_buffer, x_offset, x_inc, ConstantZero<T>(),
+           scratch_buffer, scratch_buffer.offset(), x_inc, ConstantZero<T>(),
            x_buffer, x_offset, x_inc,
            fast_kernels, fast_kernels,
            parameter, false, 0, 0);
@@ -77,6 +77,8 @@ template class Xtrmv<float>;
 template class Xtrmv<double>;
 template class Xtrmv<float2>;
 template class Xtrmv<double2>;
+template class Xtrmv<int32_t>;
+template class Xtrmv<int64_t>;
 
 // =================================================================================================
 }} // namespace gpgpu::blas

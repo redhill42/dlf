@@ -52,9 +52,9 @@ void Xtrmm<T>::DoTrmm(const Layout layout, const Side side, const Triangle trian
   TestMatrixB(b_one, b_two, b_buffer, b_offset, b_ld);
 
   // Creates a copy of B to avoid overwriting input in GEMM while computing output
-  const auto b_size = (b_ld * (b_two - 1) + b_one + b_offset);
-  auto b_buffer_copy = context_.template createBuffer<T>(b_size);
-  b_buffer.copyTo(queue_, b_buffer_copy, b_size);
+  const auto b_size = b_ld * (b_two - 1) + b_one;
+  auto b_buffer_copy = context_.template getTemporaryBuffer<T>(b_size);
+  b_buffer.copyTo(queue_, b_buffer_copy, b_size, b_offset, b_buffer_copy.offset());
 
   // Determines which kernel to run based on the layout (the Xgemm kernel assumes column-major as
   // default) and on whether we are dealing with an upper or lower triangle of the triangular matrix
@@ -96,7 +96,7 @@ void Xtrmm<T>::DoTrmm(const Layout layout, const Side side, const Triangle trian
            m, n, k,
            alpha,
            temp_triangular, temp_triangular.offset(), k,
-           b_buffer_copy, b_offset, b_ld,
+           b_buffer_copy, b_buffer_copy.offset(), b_ld,
            ConstantZero<T>(),
            b_buffer, b_offset, b_ld);
   }
@@ -107,7 +107,7 @@ void Xtrmm<T>::DoTrmm(const Layout layout, const Side side, const Triangle trian
       DoGemm(layout, Transpose::NoTrans, a_transpose,
              m, n, k,
              alpha,
-             b_buffer_copy, b_offset, b_ld,
+             b_buffer_copy, b_buffer_copy.offset(), b_ld,
              temp_triangular, temp_triangular.offset(), k,
              ConstantZero<T>(),
              b_buffer, b_offset, b_ld);

@@ -1218,6 +1218,26 @@ template void PUBLIC_API hpmv<double2>(const Layout, const Triangle, const size_
 //---------------------------------------------------------------------------
 // Symmetric matrix-vector multiplication: SSYMV/DSYMV/HSYMV
 
+#if HAS_CUDA
+inline void cublasSymv(cublasHandle_t handle,
+                       cublasFillMode_t uplo,
+                       const int n, const float alpha,
+                       const float* A, const int lda,
+                       const float* x, const int incX,
+                       const float beta,
+                       float* y, const int incY)
+{ cublasSsymv(handle, uplo, n, &alpha, A, lda, x, incX, &beta, y, incY); }
+
+inline void cublasSymv(cublasHandle_t handle,
+                       cublasFillMode_t uplo,
+                       const int n, const double alpha,
+                       const double* A, const int lda,
+                       const double* x, const int incX,
+                       const double beta,
+                       double* y, const int incY)
+{ cublasDsymv(handle, uplo, n, &alpha, A, lda, x, incX, &beta, y, incY); }
+#endif
+
 template <typename T>
 void symv(const Layout layout, const Triangle triangle, const size_t n,
           const T alpha,
@@ -1226,13 +1246,37 @@ void symv(const Layout layout, const Triangle triangle, const size_t n,
           const T beta,
           Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
           const Queue& queue, Event* event) {
-    auto routine = Xsymv<T>(queue, event);
-    routine.DoSymv(layout, triangle, n,
-                   alpha,
-                   a_buffer, a_offset, a_ld,
-                   x_buffer, x_offset, x_inc,
-                   beta,
-                   y_buffer, y_offset, y_inc);
+    dispatch<T>(queue,
+        OPENCL(
+            auto routine = Xsymv<T>(queue, event);
+            routine.DoSymv(layout, triangle, n,
+                           alpha,
+                           a_buffer, a_offset, a_ld,
+                           x_buffer, x_offset, x_inc,
+                           beta,
+                           y_buffer, y_offset, y_inc);
+        ),
+        CUDA(
+            if (layout == Layout::RowMajor) {
+                auto uplo = triangle == Triangle::Lower
+                    ? cublasFillMode_t::CUBLAS_FILL_MODE_UPPER
+                    : cublasFillMode_t::CUBLAS_FILL_MODE_LOWER;
+                cublasSymv(h, uplo, n, alpha,
+                           cuBuffer::unwrap(a_buffer) + a_offset, a_ld,
+                           cuBuffer::unwrap(x_buffer) + x_offset, x_inc,
+                           beta,
+                           cuBuffer::unwrap(y_buffer) + y_offset, y_inc);
+            } else {
+                auto uplo = triangle == Triangle::Lower
+                    ? cublasFillMode_t::CUBLAS_FILL_MODE_LOWER
+                    : cublasFillMode_t::CUBLAS_FILL_MODE_UPPER;
+                cublasSymv(h, uplo, n, alpha,
+                           cuBuffer::unwrap(a_buffer) + a_offset, a_ld,
+                           cuBuffer::unwrap(x_buffer) + x_offset, x_inc,
+                           beta,
+                           cuBuffer::unwrap(y_buffer) + y_offset, y_inc);
+            }
+        ));
 }
 
 template void PUBLIC_API symv<float> (const Layout, const Triangle, const size_t,
@@ -1255,6 +1299,20 @@ template void PUBLIC_API symv<half>  (const Layout, const Triangle, const size_t
                                       const Buffer<half>&, const size_t, const size_t,
                                       const half,
                                       Buffer<half>&, const size_t, const size_t,
+                                      const Queue&, Event*);
+template void PUBLIC_API symv<int32_t>(const Layout, const Triangle, const size_t,
+                                      const int32_t,
+                                      const Buffer<int32_t>&, const size_t, const size_t,
+                                      const Buffer<int32_t>&, const size_t, const size_t,
+                                      const int32_t,
+                                      Buffer<int32_t>&, const size_t, const size_t,
+                                      const Queue&, Event*);
+template void PUBLIC_API symv<int64_t>(const Layout, const Triangle, const size_t,
+                                      const int64_t,
+                                      const Buffer<int64_t>&, const size_t, const size_t,
+                                      const Buffer<int64_t>&, const size_t, const size_t,
+                                      const int64_t,
+                                      Buffer<int64_t>&, const size_t, const size_t,
                                       const Queue&, Event*);
 
 //---------------------------------------------------------------------------
@@ -1348,17 +1406,92 @@ template void PUBLIC_API spmv<half>  (const Layout, const Triangle, const size_t
 //---------------------------------------------------------------------------
 // Triangular matrix-vector multiplication: STRMV/DTRMV/CTRMV/ZTRMV/HTRMV
 
+#if HAS_CUDA
+inline void cublasTrmv(cublasHandle_t handle,
+                       cublasFillMode_t uplo,
+                       cublasOperation_t trans,
+                       cublasDiagType_t diag,
+                       int n,
+                       const float* A, int lda,
+                       float* x, int incx)
+{ cublasStrmv(handle, uplo, trans, diag, n, A, lda, x, incx); }
+
+inline void cublasTrmv(cublasHandle_t handle,
+                       cublasFillMode_t uplo,
+                       cublasOperation_t trans,
+                       cublasDiagType_t diag,
+                       int n,
+                       const double* A, int lda,
+                       double* x, int incx)
+{ cublasDtrmv(handle, uplo, trans, diag, n, A, lda, x, incx); }
+
+inline void cublasTrmv(cublasHandle_t handle,
+                       cublasFillMode_t uplo,
+                       cublasOperation_t trans,
+                       cublasDiagType_t diag,
+                       int n,
+                       const float2* A, int lda,
+                       float2* x, int incx)
+{
+    cublasCtrmv(handle, uplo, trans, diag, n,
+                reinterpret_cast<const cuComplex*>(A), lda,
+                reinterpret_cast<cuComplex*>(x), incx);
+}
+
+inline void cublasTrmv(cublasHandle_t handle,
+                       cublasFillMode_t uplo,
+                       cublasOperation_t trans,
+                       cublasDiagType_t diag,
+                       int n,
+                       const double2* A, int lda,
+                       double2* x, int incx)
+{
+    cublasZtrmv(handle, uplo, trans, diag, n,
+                reinterpret_cast<const cuDoubleComplex*>(A), lda,
+                reinterpret_cast<cuDoubleComplex*>(x), incx);
+}
+#endif
+
 template <typename T>
 void trmv(const Layout layout, const Triangle triangle, const Transpose a_transpose, const Diagonal diagonal,
                 const size_t n,
                 const Buffer<T>& a_buffer, const size_t a_offset, const size_t a_ld,
                 Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
                 const Queue& queue, Event* event) {
-    auto routine = Xtrmv<T>(queue, event);
-    routine.DoTrmv(layout, triangle, a_transpose, diagonal,
-                   n,
-                   a_buffer, a_offset, a_ld,
-                   x_buffer, x_offset, x_inc);
+    dispatch<T>(queue,
+        OPENCL(
+            auto routine = Xtrmv<T>(queue, event);
+            routine.DoTrmv(layout, triangle, a_transpose, diagonal,
+                           n,
+                           a_buffer, a_offset, a_ld,
+                           x_buffer, x_offset, x_inc);
+        ),
+        CUDA(
+            if (layout == Layout::RowMajor) {
+                auto uplo = triangle == Triangle::Lower
+                    ? cublasFillMode_t::CUBLAS_FILL_MODE_UPPER
+                    : cublasFillMode_t::CUBLAS_FILL_MODE_LOWER;
+                auto trans = a_transpose == Transpose::NoTrans
+                    ? cublasOperation_t::CUBLAS_OP_T
+                    : cublasOperation_t::CUBLAS_OP_N;
+                auto diag = diagonal == Diagonal::NonUnit
+                    ? cublasDiagType_t::CUBLAS_DIAG_NON_UNIT
+                    : cublasDiagType_t::CUBLAS_DIAG_UNIT;
+                cublasTrmv(h, uplo, trans, diag, n,
+                           cuBuffer::unwrap(a_buffer) + a_offset, a_ld,
+                           cuBuffer::unwrap(x_buffer) + x_offset, x_inc);
+            } else {
+                auto uplo = triangle == Triangle::Lower
+                    ? cublasFillMode_t::CUBLAS_FILL_MODE_LOWER
+                    : cublasFillMode_t::CUBLAS_FILL_MODE_UPPER;
+                auto diag = diagonal == Diagonal::NonUnit
+                    ? cublasDiagType_t::CUBLAS_DIAG_NON_UNIT
+                    : cublasDiagType_t::CUBLAS_DIAG_UNIT;
+                cublasTrmv(h, uplo, CudaOp(a_transpose), diag, n,
+                           cuBuffer::unwrap(a_buffer) + a_offset, a_ld,
+                           cuBuffer::unwrap(x_buffer) + x_offset, x_inc);
+            }
+        ));
 }
 
 template void PUBLIC_API trmv<float>  (const Layout, const Triangle, const Transpose, const Diagonal,
@@ -1385,6 +1518,16 @@ template void PUBLIC_API trmv<half>   (const Layout, const Triangle, const Trans
                                        const size_t,
                                        const Buffer<half>&, const size_t, const size_t,
                                        Buffer<half>&, const size_t, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API trmv<int32_t>(const Layout, const Triangle, const Transpose, const Diagonal,
+                                       const size_t,
+                                       const Buffer<int32_t>&, const size_t, const size_t,
+                                       Buffer<int32_t>&, const size_t, const size_t,
+                                       const Queue&, Event*);
+template void PUBLIC_API trmv<int64_t>(const Layout, const Triangle, const Transpose, const Diagonal,
+                                       const size_t,
+                                       const Buffer<int64_t>&, const size_t, const size_t,
+                                       Buffer<int64_t>&, const size_t, const size_t,
                                        const Queue&, Event*);
 
 //---------------------------------------------------------------------------

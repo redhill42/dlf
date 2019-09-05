@@ -266,8 +266,10 @@ void cuBuffer::write(const rawQueue& queue, const void* host, size_t size, size_
     CheckError(cuMemcpyHtoDAsync(m_buffer+offset, host, size, *cuQueue::unwrap(queue)));
 }
 
-void cuBuffer::copyTo(const rawQueue& queue, rawBuffer& dest, size_t size, rawEvent*) const {
-    CheckError(cuMemcpyDtoDAsync(cuBuffer::unwrap(dest), m_buffer, size, *cuQueue::unwrap(queue)));
+void cuBuffer::copyTo(const rawQueue& queue, rawBuffer& dest, size_t size,
+    size_t src_offset, size_t dst_offset, rawEvent*) const {
+    CheckError(cuMemcpyDtoDAsync(
+        cuBuffer::unwrap(dest)+dst_offset, m_buffer+src_offset, size, *cuQueue::unwrap(queue)));
 }
 
 cuBuffer::~cuBuffer() {

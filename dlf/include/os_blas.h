@@ -227,6 +227,70 @@ inline void gemv(Layout layout,
                 m, n, &alpha, A, lda, X, incX, &beta, Y, incY);
 }
 
+inline void symv(Layout layout, Triangle uplo, const size_t n,
+                 float alpha, const float* A, const size_t lda,
+                 const float* x, const size_t incX,
+                 const float beta, float* y, const size_t incY)
+{
+    cblas_ssymv(static_cast<decltype(CblasRowMajor)>(layout),
+                static_cast<decltype(CblasLower)>(uplo),
+                n, alpha, A, lda, x, incX, beta, y, incY);
+}
+
+inline void symv(Layout layout, Triangle uplo, const size_t n,
+                 double alpha, const double* A, const size_t lda,
+                 const double* x, const size_t incX,
+                 const double beta, double* y, const size_t incY)
+{
+    cblas_dsymv(static_cast<decltype(CblasRowMajor)>(layout),
+                static_cast<decltype(CblasLower)>(uplo),
+                n, alpha, A, lda, x, incX, beta, y, incY);
+}
+
+inline void trmv(Layout layout, Triangle uplo, Transpose trans, Diagonal diag,
+                 const size_t n, const float* A, const size_t lda,
+                 float* x, const size_t incX)
+{
+    cblas_strmv(static_cast<decltype(CblasRowMajor)>(layout),
+                static_cast<decltype(CblasLower)>(uplo),
+                static_cast<decltype(CblasNoTrans)>(trans),
+                static_cast<decltype(CblasNonUnit)>(diag),
+                n, A, lda, x, incX);
+}
+
+inline void trmv(Layout layout, Triangle uplo, Transpose trans, Diagonal diag,
+                 const size_t n, const double* A, const size_t lda,
+                 double* x, const size_t incX)
+{
+    cblas_dtrmv(static_cast<decltype(CblasRowMajor)>(layout),
+                static_cast<decltype(CblasLower)>(uplo),
+                static_cast<decltype(CblasNoTrans)>(trans),
+                static_cast<decltype(CblasNonUnit)>(diag),
+                n, A, lda, x, incX);
+}
+
+inline void trmv(Layout layout, Triangle uplo, Transpose trans, Diagonal diag,
+                 const size_t n, const std::complex<float>* A, const size_t lda,
+                 std::complex<float>* x, const size_t incX)
+{
+    cblas_ctrmv(static_cast<decltype(CblasRowMajor)>(layout),
+                static_cast<decltype(CblasLower)>(uplo),
+                static_cast<decltype(CblasNoTrans)>(trans),
+                static_cast<decltype(CblasNonUnit)>(diag),
+                n, A, lda, x, incX);
+}
+
+inline void trmv(Layout layout, Triangle uplo, Transpose trans, Diagonal diag,
+                 const size_t n, const std::complex<double>* A, const size_t lda,
+                 std::complex<double>* x, const size_t incX)
+{
+    cblas_ztrmv(static_cast<decltype(CblasRowMajor)>(layout),
+                static_cast<decltype(CblasLower)>(uplo),
+                static_cast<decltype(CblasNoTrans)>(trans),
+                static_cast<decltype(CblasNonUnit)>(diag),
+                n, A, lda, x, incX);
+}
+
 //==-------------------------------------------------------------------------
 // BLAS level-3 (matrix-matrix) routines
 //==-------------------------------------------------------------------------

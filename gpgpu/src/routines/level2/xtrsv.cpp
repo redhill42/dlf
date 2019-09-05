@@ -96,11 +96,11 @@ void Xtrsv<T>::DoTrsv(const Layout layout, const Triangle triangle,
 
   // Creates a copy of B to avoid overwriting input while computing output
   // TODO: Make x with 0 offset and unit increment by creating custom copy-to and copy-from kernels
-  const auto x_offset = b_offset;
   const auto x_inc = b_inc;
-  const auto x_size = n*x_inc + x_offset;
-  auto x_buffer = context_.template createBuffer<T>(x_size);
-  b_buffer.copyTo(queue_, x_buffer, x_size);
+  const auto x_size = n*x_inc;
+  auto x_buffer = context_.template getTemporaryBuffer<T>(x_size);
+  const auto x_offset = x_buffer.offset();
+  b_buffer.copyTo(queue_, x_buffer, x_size, b_offset, x_offset);
 
   // Fills the output buffer with zeros
   FillVector(queue_, device_, program_, nullptr,
@@ -146,7 +146,7 @@ void Xtrsv<T>::DoTrsv(const Layout layout, const Triangle triangle,
   }
 
   // Retrieves the results
-  x_buffer.copyToAsync(queue_, b_buffer, x_size, event_);
+  x_buffer.copyToAsync(queue_, b_buffer, x_size, x_offset, b_offset, event_);
 }
 
 // =================================================================================================

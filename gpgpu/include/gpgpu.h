@@ -288,9 +288,12 @@ public:
     rawBuffer& operator=(const rawBuffer&) = delete;
     rawBuffer& operator=(rawBuffer&&) = delete;
 
-    virtual void read(const rawQueue& queue, void* host, size_t size, size_t offset, rawEvent* event) const = 0;
-    virtual void write(const rawQueue& queue, const void* host, size_t size, size_t offset, rawEvent* event) = 0;
-    virtual void copyTo(const rawQueue& queue, rawBuffer& dest, size_t size, rawEvent* event) const = 0;
+    virtual void read(const rawQueue& queue, void* host, size_t size,
+        size_t offset, rawEvent* event) const = 0;
+    virtual void write(const rawQueue& queue, const void* host, size_t size,
+        size_t offset, rawEvent* event) = 0;
+    virtual void copyTo(const rawQueue& queue, rawBuffer& dest, size_t size,
+        size_t src_offset, size_t dst_offset, rawEvent* event) const = 0;
 };
 
 class rawProgram {
@@ -679,13 +682,16 @@ public:
         queue.finish();
     }
 
-    void copyToAsync(const Queue &queue, Buffer &dest, size_t size, Event* event = nullptr) const {
+    void copyToAsync(const Queue &queue, Buffer &dest, size_t size,
+                     size_t src_offset = 0, size_t dst_offset = 0,
+                     Event* event = nullptr) const {
         auto ev = event== nullptr ? nullptr : event->raw();
-        m_raw->copyTo(queue.raw(), dest.raw(), size * sizeof(T), ev);
+        m_raw->copyTo(queue.raw(), dest.raw(), size*sizeof(T), src_offset*sizeof(T), dst_offset*sizeof(T), ev);
     }
 
-    void copyTo(const Queue &queue, Buffer &dest, size_t size) const {
-        copyToAsync(queue, dest, size);
+    void copyTo(const Queue &queue, Buffer &dest, size_t size,
+                size_t src_offset = 0, size_t dst_offset = 0) const {
+        copyToAsync(queue, dest, size, src_offset, dst_offset);
         queue.finish();
     }
 };
