@@ -367,6 +367,95 @@ inline partition(const TensorT& X, int k, size_t n) {
     return partition(X, k, n, n, 1);
 }
 
+/**
+ * Assemble a tensor from nested blocks.
+ *
+ * Blocks in the innermost tensors are concatenated along the last dimension,
+ * then these are concatenated along the second-last dimension, and so on
+ * until the outermost dimension is reached.
+ *
+ * Blocks can be of any dimension, but will not be broadcasted using the normal
+ * rules. Instead, leading axes of size 1 are inserted, to make block rank the
+ * same for all blocks. This is primarily useful for working with scalars.
+ *
+ * When the nested tensor is two levels deep, this allow block matrices to be
+ * constructed from their components.
+ */
+template <typename TensorT>
+enable_if_tensor<TensorT, void>
+join(const Tensor<TensorT>& input, tensor_type<TensorT>& output) {
+    // Determine the final rank
+    auto rank = input.rank();
+    for (const auto& b : input) {
+        if (b.rank() > rank)
+            rank = b.rank();
+    }
+
+    // Normalize to the same rank
+    Tensor<tensor_view_type<TensorT>> blocks;
+    transformTo(unsqueeze_left(input, rank), blocks, [rank](const auto& b){
+        return unsqueeze_left(b, rank);
+    });
+
+    // Get dimensions on all axes
+    std::vector<std::vector<size_t>> axes_dims(rank);
+    std::vector<size_t> index(rank);
+
+    for (int axis = 0; axis < rank; ++axis) {
+        auto dim = blocks.extent(axis);
+        axes_dims[axis].resize(dim);
+        std::fill(index.begin(), index.end(), 0);
+        for (int i = 0; i < dim; ++i) {
+            index[axis] = i;
+            const auto& b = blocks.data()[blocks.shape().offset(index)];
+            axes_dims[axis][i] = b.extent(axis);
+        }
+    }
+
+    // Check dimensions on all inner tensors
+    std::fill(index.begin(), index.end(), 0);
+    for (const auto& b : blocks) {
+        for (int axis = 0; axis < rank; ++axis)
+            if (b.extent(axis) != axes_dims[axis][index[axis]])
+                throw shape_error("block: incompatible shape");
+        blocks.shape().next(index);
+    }
+
+    // Calculate offsets into sliced final result
+    std::vector<std::vector<int>> block_offsets(rank);
+    for (int axis = 0; axis < rank; ++axis) {
+        block_offsets[axis].resize(axes_dims[axis].size());
+        std::partial_sum(axes_dims[axis].begin(), axes_dims[axis].end()-1,
+                         block_offsets[axis].begin()+1); // first offset is 0
+    }
+
+    // Calculate the final shape
+    std::vector<size_t> final_dims(rank);
+    for (int i = 0; i < rank; ++i)
+        final_dims[i] = std::accumulate(axes_dims[i].begin(), axes_dims[i].end(), 0);
+    output.resize(Shape(final_dims));
+
+    // Concatenate blocks into final result
+    std::vector<SliceDim> slice_dims(rank);
+    std::fill(index.begin(), index.end(), 0);
+    for (const auto& b : blocks) {
+        for (int i = 0; i < rank; ++i) {
+            slice_dims[i].start = block_offsets[i][index[i]];
+            slice_dims[i].end   = slice_dims[i].start + b.extent(i);
+        }
+        reorder(b, output.slice(slice_dims));
+        blocks.shape().next(index);
+    }
+}
+
+template <typename TensorT>
+enable_if_tensor<TensorT, tensor_type<TensorT>>
+join(const Tensor<TensorT>& input) {
+    tensor_type<TensorT> output{};
+    join(input, output);
+    return output;
+}
+
 //==-------------------------------------------------------------------------
 // Convenient routines
 //==-------------------------------------------------------------------------

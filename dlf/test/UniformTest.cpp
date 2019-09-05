@@ -1443,6 +1443,35 @@ TEST(UniformTest, SplitGPU) {
     }
 }
 
+TEST(UnifromTest, Join) {
+    auto A = Tensor<int>::identity({2, 2}, 2);
+    auto B = Tensor<int>({2, 3}).fill(0);
+    auto C = Tensor<int>({3, 2}).fill(1);
+    auto D = Tensor<int>::identity({3, 3}, 3);
+
+    auto R = join(Matrix({
+        {A.view(), B.view()},
+        {C.view(), D.view()}
+    }));
+
+    EXPECT_EQ(R, Matrix({
+        {2, 0, 0, 0, 0},
+        {0, 2, 0, 0, 0},
+        {1, 1, 3, 0, 0},
+        {1, 1, 0, 3, 0},
+        {1, 1, 0, 0, 3}
+    }));
+
+    auto dev_R = join(Matrix({
+        {dev(A), dev(B)},
+        {dev(C), dev(D)}
+    }));
+    EXPECT_EQ(dev_R.read(), R);
+
+    EXPECT_EQ(join(Vector({Matrix({{1, 2}}), Scalar(3)})),
+              Matrix({{1, 2, 3}}));
+}
+
 TEST(UniformTest, Slice) {
     auto X = Tensor<float>::range({10, 10, 5}, 0);
     auto Y = Tensor<float>({3, 4, 5}, {

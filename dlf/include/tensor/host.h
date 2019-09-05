@@ -690,6 +690,11 @@ Tensor<T> make_tensor(nested_initializer_list_t<T, N> list) {
 }
 
 template <typename T>
+inline Tensor<T> Scalar(T value) {
+    return Tensor<T>::scalar(value);
+}
+
+template <typename T>
 inline Tensor<T> Vector(std::initializer_list<T> list) {
     return Tensor<T>(Shape(list.size()), list);
 }
