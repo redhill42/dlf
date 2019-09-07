@@ -488,7 +488,7 @@ void transform(const std::string& name,
         x_offset == 0 && y_offset == 0 && z_offset == 0) {
         auto y_desc = TensorDescriptor<T>(1, channels, 1, 1);
         auto z_desc = TensorDescriptor<T>(m/channels, channels, 1, n);
-        T alpha = 1, beta = 1;
+        T alpha{1}, beta{1};
         checkCUDNN(cudnnAddTensor(
             cudnn_handle(queue),
             &alpha, y_desc, cu::cuBuffer::unwrap(y_buffer),

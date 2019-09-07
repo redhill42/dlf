@@ -12,9 +12,7 @@
 // =================================================================================================
 
 #include <string>
-#include <vector>
 #include <chrono>
-#include <random>
 #include <iomanip>
 #include <cmath>
 
@@ -36,9 +34,9 @@ using namespace gpgpu;
 namespace gpgpu { namespace blas {
 // =================================================================================================
 
-const half PrecisionTraits<half>::Zero{FloatToHalf(0.0f)};
-const half PrecisionTraits<half>::One{FloatToHalf(1.0f)};
-const half PrecisionTraits<half>::NegOne{FloatToHalf(-1.0f)};
+const half PrecisionTraits<half>::Zero{0.f};
+const half PrecisionTraits<half>::One{1.f};
+const half PrecisionTraits<half>::NegOne{-1.f};
 
 template <> const Precision PrecisionTraits<float>::precision{Precision::Single};
 template <> const Precision PrecisionTraits<double>::precision{Precision::Double};
@@ -84,7 +82,7 @@ std::string ToString(double2 value) {
 // If not possible directly: special case for half-precision
 template <>
 std::string ToString(half value) {
-  return std::to_string(HalfToFloat(value));
+  return std::to_string(static_cast<float>(value));
 }
 
 // If not possible directly: special cases for GPGPU data-types
@@ -178,7 +176,7 @@ double SquaredDifference(const double2 val1, const double2 val2) {
 }
 template <>
 double SquaredDifference(const half val1, const half val2) {
-  return SquaredDifference(HalfToFloat(val1), HalfToFloat(val2));
+  return SquaredDifference(static_cast<float>(val1), static_cast<float>(val2));
 }
 
 // =================================================================================================

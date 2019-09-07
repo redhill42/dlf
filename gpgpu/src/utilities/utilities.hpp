@@ -31,9 +31,6 @@ namespace gpgpu { namespace blas {
 
 // =================================================================================================
 
-// Shorthands for half-precision
-using half = unsigned short; // the 'cl_half' OpenCL type is actually an 'unsigned short'
-
 // Shorthands for complex data-types
 using float2 = std::complex<float>;
 using double2 = std::complex<double>;
@@ -97,7 +94,7 @@ struct PrecisionTraits<half> {
   static bool Supported(const Device& device) { return device.supportsFP16(); }
 
   using RealArg = float;
-  static RealArg GetRealArg(const half value) { return HalfToFloat(value); }
+  static RealArg GetRealArg(const half value) { return static_cast<RealArg>(value); }
 };
 
 template <typename T> inline T ConstantZero()   { return PrecisionTraits<T>::Zero; }

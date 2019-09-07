@@ -16,6 +16,8 @@
 #include <variant>
 #endif
 
+#include <gblas_half.h>
+
 namespace dlf { namespace model {
 
 // Graph represents one "function" of computation. It uses a simple ownership
@@ -552,7 +554,9 @@ public:
     }
 
     template <typename Iterator>
-    std::enable_if_t<std::is_arithmetic<typename std::iterator_traits<Iterator>::value_type>::value>
+    std::enable_if_t<
+        std::is_arithmetic<typename std::iterator_traits<Iterator>::value_type>::value ||
+        std::is_same<gblas::half, typename std::iterator_traits<Iterator>::value_type>::value>
     set_data(Iterator first, Iterator last) {
         if (size() != std::distance(first, last)) {
             throw std::invalid_argument("invalid tensor data size");
@@ -568,6 +572,16 @@ public:
             clear();
             double_data().assign(first, last);
             break;
+
+        case DataType::FLOAT16: {
+            clear();
+            int32_data().resize(size());
+            std::transform(first, last, int32_data().begin(), [](auto x) {
+                gblas::half h = static_cast<float>(x);
+                return static_cast<int32_t>(h.x);
+            });
+            break;
+        }
 
         case DataType::UINT8:
         case DataType::INT8:
@@ -652,6 +666,8 @@ Tensor<T> TensorData::decode() const {
             return Tensor<float>::wrap(shape, reinterpret_cast<float*>(raw)).cast<T>();
         case DataType::DOUBLE:
             return Tensor<double>::wrap(shape, reinterpret_cast<double*>(raw)).cast<T>();
+        case DataType::FLOAT16:
+            return Tensor<gblas::half>::wrap(shape, reinterpret_cast<gblas::half*>(raw)).cast<T>();
         case DataType::UINT8:
             return Tensor<uint8_t>::wrap(shape, reinterpret_cast<uint8_t*>(raw)).cast<T>();
         case DataType::INT8:
@@ -680,6 +696,16 @@ Tensor<T> TensorData::decode() const {
 
         case DataType::DOUBLE:
             return Tensor<double>::wrap(shape, const_cast<double*>(double_data().data())).cast<T>();
+
+        case DataType::FLOAT16: {
+            Tensor<gblas::half> temp(shape);
+            std::transform(int32_data().begin(), int32_data().end(), temp.begin(), [](auto x) {
+                gblas::half h;
+                h.x = static_cast<unsigned short>(x);
+                return h;
+            });
+            return temp.cast<T>();
+        }
 
         case DataType::UINT8:
         case DataType::INT8:
