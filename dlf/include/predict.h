@@ -988,6 +988,41 @@ private:
         result = std::make_unique<TransposeOp>(this, n);
     }
 
+    struct PadOp : Operator {
+        TensorT<> X, Y;
+        std::vector<int> pads;
+        PadMode mode = PadMode::Constant;
+        T value{};
+
+        PadOp(OperatorFactory* of, model::Pad* n)
+            : X(of->alloc(n->input())), Y(of->alloc(n->output())),
+              pads(n->pads().begin(), n->pads().end()),
+              value(static_cast<T>(n->value()))
+        {
+            if (n->has_mode()) {
+                auto smode = n->mode();
+                if (smode == "constant") {
+                    this->mode = PadMode::Constant;
+                } else if (smode == "edge") {
+                    this->mode = PadMode::Edge;
+                } else if (smode == "reflect") {
+                    this->mode = PadMode::Reflect;
+                } else {
+                    throw std::runtime_error(cxx::string_concat(
+                        "Unsupported pad mode: ", smode));
+                }
+            }
+        }
+
+        void evaluate() override {
+            pad(X, Y, pads, mode, value);
+        }
+    };
+
+    void visit(model::Pad* n) override {
+        result = std::make_unique<PadOp>(this, n);
+    }
+
     struct SpaceToDepthOp : Operator {
         TensorT<> X, Y;
         int blocksize;

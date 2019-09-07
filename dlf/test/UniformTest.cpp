@@ -2289,3 +2289,61 @@ TEST(UniformTest, ReduceL2_GPU) {
     ExpectElementsEQ(reduce_l2(dev(X), {2}).read(), reduce_l2(X, {2}));
     ExpectElementsEQ(reduce_l2(dev(X), {0,2}).read(), reduce_l2(X, {0,2}));
 }
+
+TEST(UniformTest, Pad1D) {
+    auto A = Vector({1, 2, 3, 4, 5});
+    EXPECT_EQ(pad(A, {2, 3}), Vector({0, 0, 1, 2, 3, 4, 5, 0, 0, 0}));
+    EXPECT_EQ(pad(A, {2, 3}, PadMode::Edge), Vector({1, 1, 1, 2, 3, 4, 5, 5, 5, 5}));
+    EXPECT_EQ(pad(A, {2, 3}, PadMode::Reflect), Vector({3, 2, 1, 2, 3, 4, 5, 4, 3, 2}));
+    EXPECT_EQ(pad(A, {2, 3}, PadMode::Symmetric), Vector({2, 1, 1, 2, 3, 4, 5, 5, 4, 3}));
+
+    auto dev_A = dev(A);
+    EXPECT_EQ(pad(dev_A, {2, 3}).read(), Vector({0, 0, 1, 2, 3, 4, 5, 0, 0, 0}));
+    EXPECT_EQ(pad(dev_A, {2, 3}, PadMode::Edge).read(), Vector({1, 1, 1, 2, 3, 4, 5, 5, 5, 5}));
+    EXPECT_EQ(pad(dev_A, {2, 3}, PadMode::Reflect).read(), Vector({3, 2, 1, 2, 3, 4, 5, 4, 3, 2}));
+    EXPECT_EQ(pad(dev_A, {2, 3}, PadMode::Symmetric).read(), Vector({2, 1, 1, 2, 3, 4, 5, 5, 4, 3}));
+}
+
+TEST(UniformTest, Pad2D) {
+    auto A = Tensor<int>::range({3, 3}, 1);
+
+    EXPECT_EQ(pad(A, {2, 2, 2, 2}, PadMode::Constant, 3), Matrix({
+        {3, 3, 3, 3, 3, 3, 3},
+        {3, 3, 3, 3, 3, 3, 3},
+        {3, 3, 1, 2, 3, 3, 3},
+        {3, 3, 4, 5, 6, 3, 3},
+        {3, 3, 7, 8, 9, 3, 3},
+        {3, 3, 3, 3, 3, 3, 3},
+        {3, 3, 3, 3, 3, 3, 3}
+    }));
+
+    EXPECT_EQ(pad(A, {2, 2, 2, 2}, PadMode::Edge), Matrix({
+        {1, 1, 1, 2, 3, 3, 3},
+        {1, 1, 1, 2, 3, 3, 3},
+        {1, 1, 1, 2, 3, 3, 3},
+        {4, 4, 4, 5, 6, 6, 6},
+        {7, 7, 7, 8, 9, 9, 9},
+        {7, 7, 7, 8, 9, 9, 9},
+        {7, 7, 7, 8, 9, 9, 9}
+    }));
+
+    EXPECT_EQ(pad(A, {2, 2, 2, 2}, PadMode::Reflect), Matrix({
+        {9, 8, 7, 8, 9, 8, 7},
+        {6, 5, 4, 5, 6, 5, 4},
+        {3, 2, 1, 2, 3, 2, 1},
+        {6, 5, 4, 5, 6, 5, 4},
+        {9, 8, 7, 8, 9, 8, 7},
+        {6, 5, 4, 5, 6, 5, 4},
+        {3, 2, 1, 2, 3, 2, 1}
+    }));
+
+    EXPECT_EQ(pad(A, {2, 2, 2, 2}, PadMode::Symmetric), Matrix({
+        {5, 4, 4, 5, 6, 6, 5},
+        {2, 1, 1, 2, 3, 3, 2},
+        {2, 1, 1, 2, 3, 3, 2},
+        {5, 4, 4, 5, 6, 6, 5},
+        {8, 7, 7, 8, 9, 9, 8},
+        {8, 7, 7, 8, 9, 9, 8},
+        {5, 4, 4, 5, 6, 6, 5}
+    }));
+}

@@ -1431,9 +1431,11 @@ public:
 
         Dims output_shape;
         for (size_t i = 0; i < rank; i++) {
-            auto newdim = static_cast<int64_t>(input_shape[i]) + pads[i] + pads[i + rank];
-            if (newdim < 0) newdim = 0;
-            output_shape.append(static_cast<size_t>(newdim));
+            auto old_dim = static_cast<int64_t>(input_shape[i]);
+            auto new_dim = old_dim + pads[i] + pads[i + rank];
+            if (new_dim <= 0 || (pads[i]<0 && -pads[i]>old_dim) || (pads[i+rank]<0 && -pads[i+rank]>old_dim))
+                fail_shape_inference("Pad: the 'pads' attribute has incorrect value");
+            output_shape.append(static_cast<size_t>(new_dim));
         }
 
         n->output()->set_type(n->input()->type());

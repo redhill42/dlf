@@ -213,6 +213,31 @@ TYPED_TEST(PredictTest, Reduce) {
     }));
 }
 
+TYPED_TEST(PredictTest, Pad) {
+    using Context = TypeParam;
+    Graph g;
+
+    auto x = g.addInput("X", DataType::FLOAT, {3, 3});
+
+    auto a = g.append<Pad>()->pads({2, 2, 2, 2});
+    a->addInput(x);
+    g.addOutput(a->addOutput("A"));
+
+    Predictor<Context, float> predictor(g);
+    predictor.set(0, Tensor<float>::range({3, 3}, 1));
+    predictor.predict();
+
+    EXPECT_EQ(predictor.get(0), Matrix<float>({
+        {0, 0, 0, 0, 0, 0, 0},
+        {0, 0, 0, 0, 0, 0, 0},
+        {0, 0, 1, 2, 3, 0, 0},
+        {0, 0, 4, 5, 6, 0, 0},
+        {0, 0, 7, 8, 9, 0, 0},
+        {0, 0, 0, 0, 0, 0, 0},
+        {0, 0, 0, 0, 0, 0, 0},
+    }));
+}
+
 TYPED_PERFORMANCE_TEST(PredictTest, Performance) {
     std::fstream fs("data/resnet18v1.onnx", std::ios::in | std::ios::binary);
     auto g = import_model(fs);
