@@ -8,7 +8,7 @@
 #include <iomanip>
 
 #include "parallel.h"
-#include "os_blas.h"
+#include "cxxblas.h"
 
 namespace dlf {
 
@@ -340,6 +340,18 @@ public:
     TensorView() = default;
     TensorView(Shape shape, const Tensor<T>& src);
     TensorView(Shape shape, const TensorView<T>& src);
+
+    TensorView& resize(const Shape& shape) {
+        if (this->shape() != shape)
+            throw shape_error("incompatible shape");
+        return *this;
+    }
+
+    template <typename... Args>
+    std::enable_if_t<cxx::conjunction<std::is_integral<Args>...>::value, TensorView&>
+    resize(Args... args) {
+        return resize({static_cast<size_t>(args)...});
+    }
 
 public: // Container View
     using value_type                = T;
@@ -854,19 +866,22 @@ inline std::ostream& operator<<(std::ostream& out, const TensorView<T>& v) {
 template <typename T>
 template <typename F>
 inline Tensor<T>& Tensor<T>::apply(F f) {
-    return transformTo(*this, *this, f);
+    transformTo(*this, *this, f);
+    return *this;
 }
 
 template <typename T>
 template <typename F>
 inline TensorView<T>& TensorView<T>::apply(F f) {
-    return transformTo(*this, *this, f);
+    transformTo(*this, *this, f);
+    return *this;
 }
 
 template <typename T>
 template <typename U, typename F>
 inline Tensor<T>& Tensor<T>::apply(const Tensor<U>& y, F f) {
-    return transformTo(*this, y, *this, f);
+    transformTo(*this, y, *this, f);
+    return *this;
 }
 
 template <typename T>

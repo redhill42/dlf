@@ -112,560 +112,6 @@ TEST(UniformTest, TransformOnConstantElements) {
     B + B; matmul(B, B);
 }
 
-template <typename T> struct MatMulTest : public testing::Test {};
-using MatMulTestTypes = testing::Types<float, int>;
-TYPED_TEST_CASE(MatMulTest, MatMulTestTypes);
-
-TYPED_TEST(MatMulTest, MatMul) {
-    auto A = Tensor<TypeParam>::range({2, 3, 4}, 1);
-    auto B = Tensor<TypeParam>::range({2, 4, 5}, 1);
-    auto C = Tensor<TypeParam>({2, 3, 5}, {
-         110,  120,  130,  140,  150,
-         246,  272,  298,  324,  350,
-         382,  424,  466,  508,  550,
-
-        1678, 1736, 1794, 1852, 1910,
-        2134, 2208, 2282, 2356, 2430,
-        2590, 2680, 2770, 2860, 2950
-    });
-
-    EXPECT_EQ(matmul(A, B), C);
-    EXPECT_EQ(matmul(dev(A), dev(B)).read(), C);
-}
-
-TYPED_TEST(MatMulTest, LeftHandSideIsVector) {
-    auto A = Tensor<TypeParam>::range({4}, 1);
-    auto B = Tensor<TypeParam>::range({2, 4, 5}, 1);
-    auto C = Tensor<TypeParam>({2, 5}, {
-        110, 120, 130, 140, 150,
-        310, 320, 330, 340, 350,
-    });
-
-    EXPECT_EQ(matmul(A, B), C);
-    EXPECT_EQ(matmul(dev(A), dev(B)).read(), C);
-}
-
-TYPED_TEST(MatMulTest, RightHandSideIsVector) {
-    auto A = Tensor<TypeParam>::range({2, 3, 4}, 1);
-    auto B = Tensor<TypeParam>::range({4}, 1);
-    auto C = Tensor<TypeParam>({2, 3}, {
-         30,  70, 110,
-        150, 190, 230
-    });
-
-    EXPECT_EQ(matmul(A, B), C);
-    EXPECT_EQ(matmul(dev(A), dev(B)).read(), C);
-}
-
-TYPED_TEST(MatMulTest, VectorLike) {
-    auto A = Tensor<TypeParam>::range({1, 8}, 1);
-    auto B = Tensor<TypeParam>::range({8, 1}, 100);
-    auto C = Tensor<TypeParam>({1, 1}, {3768});
-    EXPECT_EQ(matmul(A, B), C);
-    EXPECT_EQ(matmul(dev(A), dev(B)).read(), C);
-}
-
-TYPED_TEST(MatMulTest, Broadcast3D) {
-    auto A = Tensor<TypeParam>::range({2, 3, 4}, 1);
-    auto B = Tensor<TypeParam>::range({4, 5}, 1);
-    auto C = Tensor<TypeParam>({2, 3, 5}, {
-        110,  120,  130,  140,  150,
-        246,  272,  298,  324,  350,
-        382,  424,  466,  508,  550,
-
-        518,  576,  634,  692,  750,
-        654,  728,  802,  876,  950,
-        790,  880,  970, 1060, 1150
-    });
-
-    EXPECT_EQ(matmul(A, B), C);
-    EXPECT_EQ(matmul(dev(A), dev(B)).read(), C);
-
-    auto B1 = unsqueeze(B, 0);
-    EXPECT_EQ(matmul(A, B1), C);
-    EXPECT_EQ(matmul(dev(A), dev(B1)).read(), C);
-}
-
-TYPED_TEST(MatMulTest, Broadcast4DLeft) {
-    {
-        auto A = Tensor<TypeParam>::range({3, 4}, 1);
-        auto B = Tensor<TypeParam>::range({2, 2, 4, 5}, 1);
-        auto C = Tensor<TypeParam>({2, 2, 3, 5}, {
-             110,  120,  130,  140,  150,
-             246,  272,  298,  324,  350,
-             382,  424,  466,  508,  550,
-
-             310,  320,  330,  340,  350,
-             766,  792,  818,  844,  870,
-            1222, 1264, 1306, 1348, 1390,
-
-             510,  520,  530,  540,  550,
-            1286, 1312, 1338, 1364, 1390,
-            2062, 2104, 2146, 2188, 2230,
-
-             710,  720,  730,  740,  750,
-            1806, 1832, 1858, 1884, 1910,
-            2902, 2944, 2986, 3028, 3070
-        });
-
-        EXPECT_EQ(matmul(A, B), C);
-        EXPECT_EQ(matmul(dev(A), dev(B)).read(), C);
-
-        auto A1 = unsqueeze(A, 0, 1);
-        EXPECT_EQ(matmul(A1, B), C);
-        EXPECT_EQ(matmul(dev(A1), dev(B)).read(), C);
-    }
-
-    {
-        auto A = Tensor<TypeParam>::range({1, 2, 3, 4}, 1);
-        auto B = Tensor<TypeParam>::range({2, 2, 4, 5}, 1);
-        auto C = Tensor<TypeParam>({2, 2, 3, 5}, {
-             110,  120,  130,  140,  150,
-             246,  272,  298,  324,  350,
-             382,  424,  466,  508,  550,
-
-            1678, 1736, 1794, 1852, 1910,
-            2134, 2208, 2282, 2356, 2430,
-            2590, 2680, 2770, 2860, 2950,
-
-             510,  520,  530,  540,  550,
-            1286, 1312, 1338, 1364, 1390,
-            2062, 2104, 2146, 2188, 2230,
-
-            3998, 4056, 4114, 4172, 4230,
-            5094, 5168, 5242, 5316, 5390,
-            6190, 6280, 6370, 6460, 6550
-        });
-
-        EXPECT_EQ(matmul(A, B), C);
-        EXPECT_EQ(matmul(dev(A), dev(B)).read(), C);
-    }
-
-    {
-        auto A = Tensor<TypeParam>::range({2, 1, 3, 4}, 1);
-        auto B = Tensor<TypeParam>::range({2, 2, 4, 5}, 1);
-        auto C = Tensor<TypeParam>({2, 2, 3, 5}, {
-             110,  120,  130,  140,  150,
-             246,  272,  298,  324,  350,
-             382,  424,  466,  508,  550,
-
-             310,  320,  330,  340,  350,
-             766,  792,  818,  844,  870,
-            1222, 1264, 1306, 1348, 1390,
-
-            2838, 2896, 2954, 3012, 3070,
-            3614, 3688, 3762, 3836, 3910,
-            4390, 4480, 4570, 4660, 4750,
-
-            3998, 4056, 4114, 4172, 4230,
-            5094, 5168, 5242, 5316, 5390,
-            6190, 6280, 6370, 6460, 6550
-        });
-
-        EXPECT_EQ(matmul(A, B), C);
-        EXPECT_EQ(matmul(dev(A), dev(B)).read(), C);
-    }
-}
-
-TYPED_TEST(MatMulTest, Broadcast4DRight) {
-    {
-        auto A = Tensor<TypeParam>::range({2, 2, 3, 4}, 1);
-        auto B = Tensor<TypeParam>::range({4, 5}, 1);
-        auto C = Tensor<TypeParam>({2, 2, 3, 5}, {
-             110,  120,  130,  140,  150,
-             246,  272,  298,  324,  350,
-             382,  424,  466,  508,  550,
-
-             518,  576,  634,  692,  750,
-             654,  728,  802,  876,  950,
-             790,  880,  970, 1060, 1150,
-
-             926, 1032, 1138, 1244, 1350,
-            1062, 1184, 1306, 1428, 1550,
-            1198, 1336, 1474, 1612, 1750,
-
-            1334, 1488, 1642, 1796, 1950,
-            1470, 1640, 1810, 1980, 2150,
-            1606, 1792, 1978, 2164, 2350
-        });
-
-        EXPECT_EQ(matmul(A, B), C);
-        EXPECT_EQ(matmul(dev(A), dev(B)).read(), C);
-
-        auto B1 = unsqueeze(B, 0, 1);
-        EXPECT_EQ(matmul(A, B1), C);
-        EXPECT_EQ(matmul(dev(A), dev(B1)).read(), C);
-    }
-
-    {
-        auto A = Tensor<TypeParam>::range({2, 2, 3, 4}, 1);
-        auto B = Tensor<TypeParam>::range({1, 2, 4, 5}, 1);
-        auto C = Tensor<TypeParam>({2, 2, 3, 5}, {
-             110,  120,  130,  140,  150,
-             246,  272,  298,  324,  350,
-             382,  424,  466,  508,  550,
-
-            1678, 1736, 1794, 1852, 1910,
-            2134, 2208, 2282, 2356, 2430,
-            2590, 2680, 2770, 2860, 2950,
-
-             926, 1032, 1138, 1244, 1350,
-            1062, 1184, 1306, 1428, 1550,
-            1198, 1336, 1474, 1612, 1750,
-
-            4414, 4568, 4722, 4876, 5030,
-            4870, 5040, 5210, 5380, 5550,
-            5326, 5512, 5698, 5884, 6070
-        });
-
-        EXPECT_EQ(matmul(A, B), C);
-        EXPECT_EQ(matmul(dev(A), dev(B)).read(), C);
-    }
-
-    {
-        auto A = Tensor<TypeParam>::range({2, 2, 3, 4}, 1);
-        auto B = Tensor<TypeParam>::range({2, 1, 4, 5}, 1);
-        auto C = Tensor<TypeParam>({2, 2, 3, 5}, {
-             110,  120,  130,  140,  150,
-             246,  272,  298,  324,  350,
-             382,  424,  466,  508,  550,
-
-             518,  576,  634,  692,  750,
-             654,  728,  802,  876,  950,
-             790,  880,  970, 1060, 1150,
-
-            3046, 3152, 3258, 3364, 3470,
-            3502, 3624, 3746, 3868, 3990,
-            3958, 4096, 4234, 4372, 4510,
-
-            4414, 4568, 4722, 4876, 5030,
-            4870, 5040, 5210, 5380, 5550,
-            5326, 5512, 5698, 5884, 6070
-        });
-
-        EXPECT_EQ(matmul(A, B), C);
-        EXPECT_EQ(matmul(dev(A), dev(B)).read(), C);
-    }
-}
-
-TYPED_TEST(MatMulTest, Broadcast4DBothSide) {
-    {
-        auto A = Tensor<TypeParam>::range({1, 2, 3, 4}, 1);
-        auto B = Tensor<TypeParam>::range({2, 1, 4, 5}, 1);
-        auto C = Tensor<TypeParam>({2, 2, 3, 5}, {
-             110,  120,  130,  140,  150,
-             246,  272,  298,  324,  350,
-             382,  424,  466,  508,  550,
-
-             518,  576,  634,  692,  750,
-             654,  728,  802,  876,  950,
-             790,  880,  970, 1060, 1150,
-
-             310,  320,  330,  340,  350,
-             766,  792,  818,  844,  870,
-            1222, 1264, 1306, 1348, 1390,
-
-            1678, 1736, 1794, 1852, 1910,
-            2134, 2208, 2282, 2356, 2430,
-            2590, 2680, 2770, 2860, 2950
-        });
-
-        EXPECT_EQ(matmul(A, B), C);
-        EXPECT_EQ(matmul(dev(A), dev(B)).read(), C);
-    }
-
-    {
-        auto A = Tensor<TypeParam>::range({2, 1, 3, 4}, 1);
-        auto B = Tensor<TypeParam>::range({1, 2, 4, 5}, 1);
-        auto C = Tensor<TypeParam>({2, 2, 3, 5}, {
-             110,  120,  130,  140,  150,
-             246,  272,  298,  324,  350,
-             382,  424,  466,  508,  550,
-
-             310,  320,  330,  340,  350,
-             766,  792,  818,  844,  870,
-            1222, 1264, 1306, 1348, 1390,
-
-             518,  576,  634,  692,  750,
-             654,  728,  802,  876,  950,
-             790,  880,  970, 1060, 1150,
-
-            1678, 1736, 1794, 1852, 1910,
-            2134, 2208, 2282, 2356, 2430,
-            2590, 2680, 2770, 2860, 2950
-        });
-
-        EXPECT_EQ(matmul(A, B), C);
-        EXPECT_EQ(matmul(dev(A), dev(B)).read(), C);
-    }
-}
-
-TYPED_TEST(MatMulTest, Slice) {
-    auto X = Tensor<TypeParam>::range({7, 9}, 1);
-    auto A = X["0:3, 0:4"]; // 2x3x4
-    auto B = X["3:7, 4:9"]; // 2x4x5
-    auto C = Tensor<TypeParam>({3, 5}, {
-         500,  510,  520,  530,  540,
-        2138, 2184, 2230, 2276, 2322,
-        3776, 3858, 3940, 4022, 4104,
-    });
-
-    EXPECT_EQ(matmul(A, B), C);
-
-    auto dev_X = dev(X);
-    auto dev_A = dev_X["0:3, 0:4"]; // 2x3x4
-    auto dev_B = dev_X["3:7, 4:9"]; // 2x4x5
-    EXPECT_EQ(matmul(dev_A, dev_B).read(), C);
-}
-
-TYPED_TEST(MatMulTest, BatchedSlice) {
-    auto X = Tensor<TypeParam>::range({2, 7, 9}, 1);
-    auto A = X[":, 0:3, 0:4"]; // 2x3x4
-    auto B = X[":, 3:7, 4:9"]; // 2x4x5
-    auto C = Tensor<TypeParam>({2, 3, 5}, {
-         500,  510,  520,  530,  540,
-        2138, 2184, 2230, 2276, 2322,
-        3776, 3858, 3940, 4022, 4104,
-
-        28472, 28734, 28996, 29258, 29520,
-        32378, 32676, 32974, 33272, 33570,
-        36284, 36618, 36952, 37286, 37620
-    });
-
-    EXPECT_EQ(matmul(A, B), C);
-
-    auto dev_X = dev(X);
-    auto dev_A = dev_X[":, 0:3, 0:4"]; // 2x3x4
-    auto dev_B = dev_X[":, 3:7, 4:9"]; // 2x4x5
-    EXPECT_EQ(matmul(dev_A, dev_B).read(), C);
-}
-
-TYPED_TEST(MatMulTest, NonContiguousSlice) {
-    auto X = Tensor<TypeParam>::range({2, 8, 8}, 1);
-    auto A = X[":, 0:7:2, 0:7:2"];
-    auto B = X[":, 1:8:2, 1:8:2"];
-    auto C = Tensor<TypeParam>({2, 4, 4}, {
-         704,   736,   768,   800,
-        2880,  3040,  3200,  3360,
-        5056,  5344,  5632,  5920,
-        7232,  7648,  8064,  8480,
-
-        26816, 27360, 27904, 28448,
-        33088, 33760, 34432, 35104,
-        39360, 40160, 40960, 41760,
-        45632, 46560, 47488, 48416
-    });
-
-    EXPECT_EQ(matmul(A, B), C);
-
-    auto dev_X = dev(X);
-    auto dev_A = dev_X[":, 0:7:2, 0:7:2"];
-    auto dev_B = dev_X[":, 1:8:2, 1:8:2"];
-    EXPECT_EQ(matmul(dev_A, dev_B).read(), C);
-}
-
-TYPED_TEST(MatMulTest, NonContiguousSliceWithBroadcast) {
-    auto X = Tensor<TypeParam>::range({2, 8, 8}, 1);
-    auto A = X[":, 0:7:2, 0:7:2"];
-    auto B = X["1, 1:8:2, 1:8:2"];
-    auto C = Tensor<TypeParam>({2, 4, 4}, {
-         1728,  1760,  1792,  1824,
-         8000,  8160,  8320,  8480,
-        14272, 14560, 14848, 15136,
-        20544, 20960, 21376, 21792,
-
-        26816, 27360, 27904, 28448,
-        33088, 33760, 34432, 35104,
-        39360, 40160, 40960, 41760,
-        45632, 46560, 47488, 48416
-    });
-
-    EXPECT_EQ(matmul(A, B), C);
-
-    auto dev_X = dev(X);
-    auto dev_A = dev_X[":, 0:7:2, 0:7:2"];
-    auto dev_B = dev_X["1, 1:8:2, 1:8:2"];
-    EXPECT_EQ(matmul(dev_A, dev_B).read(), C);
-}
-
-TYPED_TEST(MatMulTest, NonContiguousNonSquareSlice) {
-    auto X = Tensor<TypeParam>::range({2, 6, 8}, 1);
-    auto Y = Tensor<TypeParam>::range({2, 8, 10}, 1);
-    auto A = X[":, 0:6:2, 0:8:2"];  // 2x3x4
-    auto B = Y[":, 0:8:2, 0:10:2"]; // 2x4x5
-    auto C = Tensor<TypeParam>({2, 3, 5}, {
-          696,   728,   760,   792,   824,
-         2680,  2840,  3000,  3160,  3320,
-         4664,  4952,  5240,  5528,  5816,
-
-        23288, 23704, 24120, 24536, 24952,
-        30392, 30936, 31480, 32024, 32568,
-        37496, 38168, 38840, 39512, 40184
-    });
-
-    EXPECT_EQ(matmul(A, B), C);
-
-    auto dev_X = dev(X);
-    auto dev_Y = dev(Y);
-    auto dev_A = dev_X[":, 0:6:2, 0:8:2"];  // 2x3x4
-    auto dev_B = dev_Y[":, 0:8:2, 0:10:2"]; // 2x4x5
-    EXPECT_EQ(matmul(dev_A, dev_B).read(), C);
-}
-
-TYPED_TEST(MatMulTest, NonContiguousVector) {
-    auto X = Tensor<TypeParam>::range({8}, 1);
-    auto Y = Tensor<TypeParam>::scalar(100);
-    EXPECT_EQ(matmul(X["0:7:2"], X["1:8:2"]), Y);
-
-    auto dev_X = dev(X);
-    EXPECT_EQ(matmul(dev_X["0:7:2"], dev_X["1:8:2"]).read(), Y);
-}
-
-TYPED_TEST(MatMulTest, Transpose) {
-    auto A = Tensor<TypeParam>::range({4, 3}, 1);
-    auto B = Tensor<TypeParam>::range({4, 5}, 1);
-    auto C = Tensor<TypeParam>({3, 5}, {
-        262,  284,  306,  328,  350,
-        296,  322,  348,  374,  400,
-        330,  360,  390,  420,  450,
-    });
-
-    EXPECT_EQ(matmul(A.transpose(), B), C);
-    EXPECT_EQ(matmul(dev(A).transpose(), dev(B)).read(), C);
-}
-
-TYPED_TEST(MatMulTest, TransposeLast) {
-    auto A = Tensor<TypeParam>::range({2, 4, 3}, 1);
-    auto B = Tensor<TypeParam>::range({2, 4, 5}, 1);
-    auto C = Tensor<TypeParam>({2, 3, 5}, {
-        262,  284,  306,  328,  350,
-        296,  322,  348,  374,  400,
-        330,  360,  390,  420,  450,
-
-        2070, 2140, 2210, 2280, 2350,
-        2184, 2258, 2332, 2406, 2480,
-        2298, 2376, 2454, 2532, 2610
-    });
-
-    EXPECT_EQ(matmul(A.transpose(0, 2, 1), B), C);
-    EXPECT_EQ(matmul(dev(A).transpose(0, 2, 1), dev(B)).read(), C);
-}
-
-TYPED_TEST(MatMulTest, TransposePrefix) {
-    auto A = Tensor<TypeParam>::range({2, 3, 2, 3}, 1);
-    auto B = Tensor<TypeParam>::range({3, 1, 3, 2}, 1);
-    auto C = Tensor<TypeParam>({3, 2, 2, 2}, {
-          22,   28,   49,   64,
-         184,  244,  211,  280,
-         220,  244,  301,  334,
-         706,  784,  787,  874,
-         634,  676,  769,  820,
-        1444, 1540, 1579, 1684
-    });
-
-    EXPECT_EQ(matmul(A.transpose(1, 0, 2, 3), B), C);
-    EXPECT_EQ(matmul(dev(A).transpose(1, 0, 2, 3), dev(B)).read(), C);
-}
-
-TYPED_TEST(MatMulTest, TransposeAll) {
-    auto A = Tensor<TypeParam>::range({4, 3, 2}, 1);
-    auto B = Tensor<TypeParam>::range({2, 4, 5}, 1);
-    auto C = Tensor<TypeParam>({2, 3, 5}, {
-         490,  530,  570,  610,  650,
-         558,  606,  654,  702,  750,
-         626,  682,  738,  794,  850,
-
-        1404, 1448, 1492, 1536, 1580,
-        1632, 1684, 1736, 1788, 1840,
-        1860, 1920, 1980, 2040, 2100
-    });
-
-    EXPECT_EQ(matmul(A.transpose(), B), C);
-    EXPECT_EQ(matmul(dev(A).transpose(), dev(B)).read(), C);
-}
-
-TYPED_TEST(MatMulTest, MatrixAndVectorView) {
-    auto A = Tensor<TypeParam>::range({3, 4}, 1);
-    auto B = Tensor<TypeParam>::range({8, 2}, 1);
-    auto C = Tensor<TypeParam>({3, 1}, {
-         60, 140, 220,
-    });
-
-    EXPECT_EQ(matmul(A, B["0:4, 1"]), C);
-    EXPECT_EQ(matmul(dev(A), dev(B)["0:4, 1"]).read(), C);
-}
-
-TYPED_TEST(MatMulTest, BatchedMatrixAndVectorView) {
-    auto A = Tensor<TypeParam>::range({2, 3, 4}, 1);
-    auto B = Tensor<TypeParam>::range({8, 2}, 1);
-    auto C = Tensor<TypeParam>({2, 3, 1}, {
-         60, 140, 220,
-        300, 380, 460
-    });
-
-    EXPECT_EQ(matmul(A, B["0:4, 1"]), C);
-    EXPECT_EQ(matmul(dev(A), dev(B)["0:4, 1"]).read(), C);
-}
-
-TYPED_TEST(MatMulTest, TransposedMaxtrixAndVectorView) {
-    auto A = Tensor<TypeParam>::range({4, 3}, 1);
-    auto B = Tensor<TypeParam>::range({8, 2}, 1);
-    auto C = Tensor<TypeParam>({3, 1}, {
-        140, 160, 180,
-    });
-
-    EXPECT_EQ(matmul(A.transpose(), B["0:4, 1"]), C);
-    EXPECT_EQ(matmul(dev(A).transpose(), dev(B)["0:4, 1"]).read(), C);
-}
-
-TYPED_TEST(MatMulTest, BatchedTransposedMaxtrixAndVectorView) {
-    auto A = Tensor<TypeParam>::range({2, 4, 3}, 1);
-    auto B = Tensor<TypeParam>::range({8, 2}, 1);
-    auto C = Tensor<TypeParam>({2, 3, 1}, {
-        140, 160, 180,
-        380, 400, 420
-    });
-
-    EXPECT_EQ(matmul(A.transpose(0,2,1), B["0:4, 1"]), C);
-    EXPECT_EQ(matmul(dev(A).transpose(0,2,1), dev(B)["0:4, 1"]).read(), C);
-}
-
-TYPED_TEST(MatMulTest, ScalarBroadcast) {
-    auto A = Tensor<TypeParam>::range({2, 3, 4}, 1);
-    auto B = Tensor<TypeParam>::scalar(3);
-    auto C = Tensor<TypeParam>({2, 3, 5}, {
-         30,  30,  30,  30,  30,
-         78,  78,  78,  78,  78,
-        126, 126, 126, 126, 126,
-
-        174, 174, 174, 174, 174,
-        222, 222, 222, 222, 222,
-        270, 270, 270, 270, 270
-    });
-
-    EXPECT_EQ(matmul(A, B.broadcast({2, 4, 5})), C);
-    EXPECT_EQ(matmul(dev(A), dev(B).broadcast({2,4,5})).read(), C);
-}
-
-TYPED_TEST(MatMulTest, AsStrided) {
-    auto X = Tensor<TypeParam>::range({4, 4}, 0);
-    auto A = as_strided(X, {2,2,3,3}, {4,1,4,1});
-    auto B = Tensor<TypeParam>::range({3, 3}, 1);
-    auto C = Tensor<TypeParam>({2, 2, 3, 3}, {
-         18,  21,  24,  66,  81,  96, 114, 141, 168,
-         30,  36,  42,  78,  96, 114, 126, 156, 186,
-         66,  81,  96, 114, 141, 168, 162, 201, 240,
-         78,  96, 114, 126, 156, 186, 174, 216, 258
-    });
-
-    EXPECT_EQ(matmul(A, B), C);
-
-    auto dev_X = dev(X);
-    auto dev_A = as_strided(dev_X, {2,2,3,3}, {4,1,4,1});
-    auto dev_B = dev(B);
-    EXPECT_EQ(matmul(dev_A, dev_B).read(), C);
-}
-
 TEST(UniformTest, Dot) {
     auto A = Tensor<float>::range({2, 3, 4}, 0);
     auto B = Tensor<float>::range({3, 4, 5}, 0);
@@ -763,23 +209,32 @@ TEST(UniformTest, TensorDotSimple) {
 struct Expr {
     std::string s;
     Expr() = default;
-    Expr(char c) : s(1, c) {}
+    Expr(int i) : s(i == 0 ? "" : std::to_string(i)) {}
     Expr(const char* s) : s(s) {}
     Expr(std::string s) : s(std::move(s)) {}
 };
 
 inline Expr operator+(const Expr& x, const Expr& y) {
+    if (x.s.empty())
+        return y;
+    if (y.s.empty())
+        return x;
     return Expr(x.s + "+" + y.s);
 }
 
 inline Expr& operator+=(Expr& x, const Expr& y) {
-    if (!x.s.empty())
+    if (!x.s.empty() && !y.s.empty())
         x.s += "+";
-    x.s += y.s;
+    if (!y.s.empty())
+        x.s += y.s;
     return x;
 }
 
 inline Expr operator*(const Expr& x, const Expr& y) {
+    if (x.s == "1")
+        return y;
+    if (y.s == "1")
+        return x;
     return Expr(x.s + y.s);
 }
 
@@ -787,57 +242,57 @@ inline bool operator==(const Expr& a, const Expr& b) {
     return a.s == b.s;
 }
 
+inline bool operator!=(const Expr& a, const Expr& b) {
+    return a.s != b.s;
+}
+
 inline std::ostream& operator<<(std::ostream& out, const Expr& x) {
     return out << x.s;
 }
 
 TEST(UniformTest, TensorDotExt) {
-    auto a = Tensor<Expr>({2, 2, 2}, {'1', '2', '3', '4', '5', '6', '7', '8'});
-    auto A = Tensor<Expr>({2, 2}, {'a', 'b', 'c', 'd'});
+    auto a = Tensor<Expr>({2, 2, 2}, {1, 2, 3, 4, 5, 6, 7, 8});
+    auto A = Tensor<Expr>({2, 2}, {"a", "b", "c", "d"});
 
     EXPECT_EQ(tensordot(a, A), Tensor<Expr>({2}, {
-        "1a+2b+3c+4d", "5a+6b+7c+8d"
+        "a+2b+3c+4d", "5a+6b+7c+8d"
     }));
 
     EXPECT_EQ(tensordot(a, A, 1), Tensor<Expr>({2, 2, 2}, {
-        "1a+2c", "1b+2d",
+        "a+2c", "b+2d",
         "3a+4c", "3b+4d",
         "5a+6c", "5b+6d",
         "7a+8c", "7b+8d"
     }));
     EXPECT_EQ(tensordot(a, A, {0}, {1}), Tensor<Expr>({2, 2, 2}, {
-        "1a+5b", "1c+5d",
+        "a+5b", "c+5d",
         "2a+6b", "2c+6d",
         "3a+7b", "3c+7d",
         "4a+8b", "4c+8d"
     }));
     EXPECT_EQ(tensordot(a, A, {2}, {1}), Tensor<Expr>({2, 2, 2}, {
-        "1a+2b", "1c+2d",
+        "a+2b", "c+2d",
         "3a+4b", "3c+4d",
         "5a+6b", "5c+6d",
         "7a+8b", "7c+8d"
     }));
     EXPECT_EQ(tensordot(a, A, {0,1}, {0,1}), Tensor<Expr>({2}, {
-        "1a+3b+5c+7d", "2a+4b+6c+8d"
+        "a+3b+5c+7d", "2a+4b+6c+8d"
     }));
     EXPECT_EQ(tensordot(a, A, {2,1}, {1,0}), Tensor<Expr>({2}, {
-        "1a+3c+2b+4d", "5a+7c+6b+8d"
+        "a+3c+2b+4d", "5a+7c+6b+8d"
     }));
 
     EXPECT_EQ(tensordot(a, A, 0), outer(a, A));
     EXPECT_EQ(tensordot(a, A, 1), dot(a, A));
 }
 
-TEST(UniformTest, MatPowCPU) {
+TEST(UniformTest, MatPow) {
     auto A = Tensor<int>({2, 2}, {1, 1, 1, 0});
     EXPECT_EQ(matpow(A, 0)(0, 0), 1);
     EXPECT_EQ(matpow(A, 11)(0, 0), 144);
-}
-
-TEST(UniformTest, MatPowGPU) {
-    auto A = dev(Tensor<int>({2, 2}, {1, 1, 1, 0}));
-    EXPECT_EQ(matpow(A, 0).read()(0, 0), 1);
-    EXPECT_EQ(matpow(A, 11).read()(0, 0), 144);
+    EXPECT_EQ(matpow(dev(A), 0).read()(0, 0), 1);
+    EXPECT_EQ(matpow(dev(A), 11).read()(0, 0), 144);
 }
 
 TEST(UniformTest, Kronecker) {

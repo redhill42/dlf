@@ -223,6 +223,18 @@ public:
     DevTensorView(Shape shape, const DevTensor<T>& src);
     DevTensorView(Shape shape, const DevTensorView<T>& src);
 
+    DevTensorView& resize(const Shape& shape) {
+        if (this->shape() != shape)
+            throw shape_error("incompatible shape");
+        return *this;
+    }
+
+    template <typename... Args>
+    std::enable_if_t<cxx::conjunction<std::is_integral<Args>...>::value, DevTensorView&>
+    resize(Args... args) {
+        return resize({static_cast<size_t>(args)...});
+    }
+
 public:
     using Spatial<DevTensorView>::shape;
     using Spatial<DevTensorView>::size;

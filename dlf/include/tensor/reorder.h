@@ -83,7 +83,9 @@ std::enable_if_t<is_gpu_tensor<Src>::value && is_gpu_tensor<Dst>::value, bool>
 reorder_transpose(const Src& src, const Shape& src_shape, Dst& dst, const Shape& dst_shape) {
     if (src_shape.rank() != 2)
         return false;
-    if (src_shape.stride(0) != 1 || dst_shape.stride(1) != 1)
+    if (src_shape.stride(0) != 1 || static_cast<int>(src_shape.stride(1)) < src_shape.extent(0))
+        return false;
+    if (dst_shape.stride(1) != 1 || static_cast<int>(dst_shape.stride(0)) < dst_shape.extent(1))
         return false;
     gpgpu::blas::omatcopy(gpgpu::blas::Layout::RowMajor,
                           gpgpu::blas::Transpose::Trans,
