@@ -258,8 +258,8 @@ inline slice(const TensorT& src, TensorT& dst,
 
 template <typename TensorT>
 enable_if_non_view_tensor<TensorT, void>
-inline slice(const TensorT& src, TensorT& dst, const std::vector<SliceDim>& dims) {
-    reorder(src.slice(dims), dst);
+inline slice(const TensorT& src, TensorT& dst, const std::vector<Range>& range) {
+    reorder(src.slice(range), dst);
 }
 
 //==-------------------------------------------------------------------------
@@ -438,14 +438,14 @@ join(const Tensor<TensorT>& input, tensor_type<TensorT>& output) {
     output.resize(Shape(final_dims));
 
     // Concatenate blocks into final result
-    std::vector<SliceDim> slice_dims(rank);
+    std::vector<Range> slice_range(rank);
     std::fill(index.begin(), index.end(), 0);
     for (const auto& b : blocks) {
         for (int i = 0; i < rank; ++i) {
-            slice_dims[i].start = block_offsets[i][index[i]];
-            slice_dims[i].end   = slice_dims[i].start + b.extent(i);
+            slice_range[i].start = block_offsets[i][index[i]];
+            slice_range[i].end   = slice_range[i].start + b.extent(i);
         }
-        reorder(b, output.slice(slice_dims));
+        reorder(b, output.slice(slice_range));
         blocks.shape().next(index);
     }
 }
@@ -537,7 +537,7 @@ flip(const TensorT& X, std::vector<int> axes = {}) {
         detail::norm_axes(X.rank(), axes, true);
     }
 
-    std::vector<SliceDim> range;
+    std::vector<Range> range;
     for (int k = 0; k < X.rank(); ++k) {
         if (std::find(axes.begin(), axes.end(), k) != axes.end()) {
             range.push_back({-1, std::numeric_limits<int>::lowest(), -1});
@@ -848,7 +848,7 @@ pad(const TensorT& X, tensor_type<TensorT>& Y,
     Y.resize(Shape(y_dims));
 
     // Copy core data
-    std::vector<SliceDim> x_slice, y_slice;
+    std::vector<Range> x_slice, y_slice;
     for (int i = 0; i < rank; i++) {
         int x_start = 0, x_end = X.extent(i);
         int y_start = 0, y_end = Y.extent(i);

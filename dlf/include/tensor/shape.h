@@ -13,10 +13,14 @@ public:
     using std::logic_error::logic_error;
 };
 
-struct SliceDim {
-    int start, end, step;
+struct Range {
+    int start = 0;
+    int end = std::numeric_limits<int>::max();
+    int step = 1;
 
-    SliceDim(int start = 0, int end = std::numeric_limits<int>::max(), int step = 1) :
+    Range() = default;
+    Range(int start) : start(start), end(start), step(1) {}
+    Range(int start, int end, int step = 1) :
         start(start), end(end), step(step) {}
 };
 
@@ -218,7 +222,7 @@ public:
     /**
      * Numpy style slice.
      */
-    Shape slice(const std::vector<SliceDim>& dims) const;
+    Shape slice(const std::vector<Range>& range) const;
     Shape slice(const char* spec) const;
 
     /**
@@ -489,8 +493,8 @@ public:
         return self().view(m_shape.slice(starts, ends, axes, steps));
     }
 
-    auto slice(const std::vector<SliceDim>& dims) const {
-        return self().view(m_shape.slice(dims));
+    auto slice(const std::vector<Range>& range) const {
+        return self().view(m_shape.slice(range));
     }
 
     auto operator[](const char* spec) const {
@@ -506,11 +510,11 @@ public:
     }
 
     auto row(int index) const {
-        return self().view(m_shape.slice({{index, index+1}}).squeeze(0));
+        return self().view(m_shape.slice({{index}}).squeeze(0));
     }
 
     auto column(int index) const {
-        return self().view(m_shape.slice({{}, {index, index+1}}).squeeze(1));
+        return self().view(m_shape.slice({{}, {index}}).squeeze(1));
     }
 
     auto diagonal(int offset = 0, int axis1 = -2, int axis2 = -1) const {

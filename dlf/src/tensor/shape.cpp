@@ -437,8 +437,10 @@ Shape Shape::slice(
 
         // find output dim value for this axis
         auto temp = (end - start - (step<0 ? -1 : 1)) / step + 1;
-        if (temp <= 0)
+        if (temp < 0)
             throw shape_error("slice: incorrect start and end value");
+        if (temp == 0)
+            temp = 1;
         dims[axis].extent = temp;
         dims[axis].stride *= step;
         start_index[axis] = start;
@@ -450,23 +452,23 @@ Shape Shape::slice(
     return Shape(std::move(dims), size, offset(start_index));
 }
 
-Shape Shape::slice(const std::vector<SliceDim>& dims) const {
-    std::vector<int> axes(dims.size());
-    std::vector<int> starts(dims.size());
-    std::vector<int> ends(dims.size());
-    std::vector<int> steps(dims.size());
+Shape Shape::slice(const std::vector<Range>& range) const {
+    std::vector<int> axes(range.size());
+    std::vector<int> starts(range.size());
+    std::vector<int> ends(range.size());
+    std::vector<int> steps(range.size());
 
-    for (int i = 0; i < dims.size(); i++) {
+    for (int i = 0; i < range.size(); i++) {
         axes[i] = i;
-        starts[i] = dims[i].start;
-        ends[i] = dims[i].end;
-        steps[i] = dims[i].step;
+        starts[i] = range[i].start;
+        ends[i] = range[i].end;
+        steps[i] = range[i].step;
     }
     return slice(starts, ends, axes, steps);
 }
 
 Shape Shape::slice(const char* spec) const {
-    extern std::vector<SliceDim> parse_slice_range(const char* spec, size_t rank);
+    extern std::vector<Range> parse_slice_range(const char* spec, size_t rank);
     return slice(parse_slice_range(spec, rank()));
 }
 

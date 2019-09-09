@@ -12,7 +12,7 @@ class Parser {
     const char* input;
     int num;
     Token token;
-    std::vector<SliceDim> range;
+    std::vector<Range> range;
 
     static void parse_error(const char* reason) {
         throw std::runtime_error(reason);
@@ -70,7 +70,7 @@ class Parser {
         return token;
     }
 
-    SliceDim parse_dim() {
+    Range parse_range() {
         int  start     = 0;
         int  end       = std::numeric_limits<int>::max();
         int  step      = 1;
@@ -97,7 +97,7 @@ class Parser {
             start = std::numeric_limits<int>::max();
             end = std::numeric_limits<int>::lowest();
         }
-        return SliceDim(start, end, step);
+        return Range(start, end, step);
     }
 
 public:
@@ -105,7 +105,7 @@ public:
         next();
     }
 
-    std::vector<SliceDim> parse(size_t rank) {
+    std::vector<Range> parse(size_t rank) {
         int fill_ind = -1;
 
         for (int idim = 0;;) {
@@ -115,7 +115,7 @@ public:
                     parse_error();
                 fill_ind = idim;
             } else if (idim < rank) {
-                range.push_back(parse_dim());
+                range.push_back(parse_range());
                 idim++;
             } else {
                 parse_error("too many elements in slice range");
@@ -132,7 +132,7 @@ public:
             parse_error();
         if (fill_ind != -1) {
             while (range.size() < rank) {
-                range.insert(range.begin()+fill_ind, SliceDim{});
+                range.insert(range.begin()+fill_ind, Range{});
             }
         }
         return range;
@@ -141,7 +141,7 @@ public:
 
 } // anonymous namespace
 
-std::vector<SliceDim> parse_slice_range(const char* spec, size_t rank) {
+std::vector<Range> parse_slice_range(const char* spec, size_t rank) {
     Parser parser(spec);
     return parser.parse(rank);
 }
