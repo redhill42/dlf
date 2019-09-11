@@ -603,30 +603,48 @@ template void PUBLIC_API transform<double, bool>(
 
 template <typename T>
 void reduce(const std::string& name, const size_t m, const size_t n,
-            const std::vector<size_t>& dims, const std::vector<size_t>& strides,
+            const std::vector<size_t>& x_dims, const std::vector<size_t>& x_strides,
             const Buffer<T>& x_buffer, const size_t x_offset,
+            const std::vector<size_t>& y_dims, const std::vector<size_t>& y_strides,
             Buffer<T>& y_buffer, const size_t y_offset,
             const Queue& queue, Event* event)
 {
     auto routine = Xreduce<T>(queue, event);
-    routine.DoReduce(name, m, n, dims, strides, x_buffer, x_offset, y_buffer, y_offset);
+    routine.DoReduce(name, m, n,
+        x_dims, x_strides, x_buffer, x_offset,
+        y_dims, y_strides, y_buffer, y_offset);
 }
 
-template void PUBLIC_API reduce<half>  (const std::string&, const size_t, const size_t,
-                                        const std::vector<size_t>&, const std::vector<size_t>&,
-                                        const Buffer<half>&, const size_t,
-                                        Buffer<half>&, const size_t,
-                                        const Queue&, Event*);
-template void PUBLIC_API reduce<float> (const std::string&, const size_t, const size_t,
-                                        const std::vector<size_t>&, const std::vector<size_t>&,
-                                        const Buffer<float>&, const size_t,
-                                        Buffer<float>&, const size_t,
-                                        const Queue&, Event*);
-template void PUBLIC_API reduce<double>(const std::string&, const size_t, const size_t,
-                                        const std::vector<size_t>&, const std::vector<size_t>&,
-                                        const Buffer<double>&, const size_t,
-                                        Buffer<double>&, const size_t,
-                                        const Queue&, Event*);
+template void PUBLIC_API reduce<half>   (const std::string&, const size_t, const size_t,
+                                         const std::vector<size_t>&, const std::vector<size_t>&,
+                                         const Buffer<half>&, const size_t,
+                                         const std::vector<size_t>&, const std::vector<size_t>&,
+                                         Buffer<half>&, const size_t,
+                                         const Queue&, Event*);
+template void PUBLIC_API reduce<float>  (const std::string&, const size_t, const size_t,
+                                         const std::vector<size_t>&, const std::vector<size_t>&,
+                                         const Buffer<float>&, const size_t,
+                                         const std::vector<size_t>&, const std::vector<size_t>&,
+                                         Buffer<float>&, const size_t,
+                                         const Queue&, Event*);
+template void PUBLIC_API reduce<double> (const std::string&, const size_t, const size_t,
+                                         const std::vector<size_t>&, const std::vector<size_t>&,
+                                         const Buffer<double>&, const size_t,
+                                         const std::vector<size_t>&, const std::vector<size_t>&,
+                                         Buffer<double>&, const size_t,
+                                         const Queue&, Event*);
+template void PUBLIC_API reduce<int32_t>(const std::string&, const size_t, const size_t,
+                                         const std::vector<size_t>&, const std::vector<size_t>&,
+                                         const Buffer<int32_t>&, const size_t,
+                                         const std::vector<size_t>&, const std::vector<size_t>&,
+                                         Buffer<int32_t>&, const size_t,
+                                         const Queue&, Event*);
+template void PUBLIC_API reduce<int64_t>(const std::string&, const size_t, const size_t,
+                                         const std::vector<size_t>&, const std::vector<size_t>&,
+                                         const Buffer<int64_t>&, const size_t,
+                                         const std::vector<size_t>&, const std::vector<size_t>&,
+                                         Buffer<int64_t>&, const size_t,
+                                         const Queue&, Event*);
 
 template <typename T>
 void arg_reduce(const std::string& name, const size_t n, const size_t k,

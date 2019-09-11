@@ -13,7 +13,7 @@ void X##name(                                                           \
   const int id = get_global_id(0);                                      \
   if (id < n) {                                                         \
     const int x_off = unravel(id*k, rank, &shape[rank], shape);         \
-    const int x_inc = shape[2*rank - 1];                                  \
+    const int x_inc = shape[2*rank - 1];                                \
     real acc = xgm[x_off];                                              \
     int idx = 0;                                                        \
     for (int ik = 1; ik < k; ++ik) {                                    \

@@ -57,25 +57,13 @@ void Xcopy<T>::DoCopy(const size_t x_size, const Buffer<T>& x_buffer, const size
   }
 }
 
-static bool is_contiguous(const std::vector<size_t>& dim, const std::vector<size_t>& stride) {
-  size_t size = 1;
-  for (int i = dim.size(); --i >= 0; ) {
-      if (stride[i] == 0 && dim[i] == 1)
-          continue;
-      if (stride[i] != size)
-          return false;
-      size *= dim[i];
-  }
-  return true;
-}
-
 // The main routine
 template <typename T>
 void Xcopy<T>::DoCopyStrided(const size_t n, const std::vector<size_t>& dims,
     const Buffer<T>& x_buffer, const size_t x_offset, const std::vector<size_t>& x_stride,
     Buffer<T>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_stride)
 {
-    if (is_contiguous(dims, x_stride) && is_contiguous(dims, y_stride)) {
+    if (IsContiguous(dims, x_stride) && IsContiguous(dims, y_stride)) {
         DoCopy(n, x_buffer, x_offset, n, y_buffer, y_offset);
         return;
     }

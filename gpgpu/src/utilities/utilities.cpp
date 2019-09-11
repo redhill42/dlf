@@ -363,4 +363,17 @@ void EuclidGCD(int a, int b, int &p, int &q, int &r) {
 }
 
 // =================================================================================================
+
+bool IsContiguous(const std::vector<size_t>& dim, const std::vector<size_t>& stride) {
+  size_t size = 1;
+  for (int i = dim.size(); --i >= 0; ) {
+      if (stride[i] == 0 && dim[i] == 1)
+          continue;
+      if (stride[i] != size)
+          return false;
+      size *= dim[i];
+  }
+  return true;
+}
+
 }} // namespace gpgpu::blas

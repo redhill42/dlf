@@ -207,7 +207,9 @@ bool IsPostNVIDIAVolta(const Device& device);
 // a * p + b * q = r = GCD(a, b)
 void EuclidGCD(int a, int b, int &p, int &q, int &r);
 
+// =================================================================================================
+bool IsContiguous(const std::vector<size_t>& dim, const std::vector<size_t>& stride);
+
 }} // namespace gpgpu::blas
 
-// GPGPU_BLAS_UTILITIES_H_
-#endif
+#endif // GPGPU_BLAS_UTILITIES_H_
