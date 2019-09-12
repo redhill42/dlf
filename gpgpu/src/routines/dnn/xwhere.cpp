@@ -11,42 +11,23 @@ Xwhere<T>::Xwhere(const Queue& queue, Event* event, const std::string& name) :
     }) {
 }
 
-static Buffer<int> pack_shape(
-    const Context& context, const Queue& queue,
-    const std::vector<size_t>& dim, const std::vector<size_t>& stride)
-{
-    auto rank = dim.size();
-    assert(stride.size() == rank);
-
-    std::vector<int> shape(rank * 2);
-    std::copy(dim.begin(), dim.end(), shape.begin());
-    std::copy(stride.begin(), stride.end(), shape.begin() + rank);
-
-    return context.getSharedBuffer<int>(shape.data(), shape.size(), queue);
-}
-
 template <typename T>
 void Xwhere<T>::DoWhere(
-    const size_t n, const size_t rank,
-    const Buffer<bool>& c_buffer, const size_t c_offset,
-    const std::vector<size_t>& c_dim, const std::vector<size_t>& c_stride,
-    const Buffer<T>& x_buffer, const size_t x_offset,
-    const std::vector<size_t>& x_dim, const std::vector<size_t>& x_stride,
-    const Buffer<T>& y_buffer, const size_t y_offset,
-    const std::vector<size_t>& y_dim, const std::vector<size_t>& y_stride,
+    const size_t n, const std::vector<size_t>& dim,
+    const Buffer<bool>& c_buffer, const size_t c_offset, const std::vector<size_t>& c_stride,
+    const Buffer<T>& x_buffer, const size_t x_offset, const std::vector<size_t>& x_stride,
+    const Buffer<T>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_stride,
     Buffer<T>& z_buffer, const size_t z_offset)
 {
-    auto c_shape = pack_shape(context_, queue_, c_dim, c_stride);
-    auto x_shape = pack_shape(context_, queue_, x_dim, x_stride);
-    auto y_shape = pack_shape(context_, queue_, y_dim, y_stride);
-
+    auto shape_buffer = PackShape(dim, c_stride, x_stride, y_stride, context_, queue_);
     auto kernel = program_.getKernel("Xwhere");
     kernel.setArguments(
         static_cast<int>(n),
-        static_cast<int>(rank),
-        c_buffer, c_shape, static_cast<int>(c_offset),
-        x_buffer, x_shape, static_cast<int>(x_offset),
-        y_buffer, y_shape, static_cast<int>(y_offset),
+        static_cast<int>(dim.size()),
+        shape_buffer,
+        c_buffer, static_cast<int>(c_offset),
+        x_buffer, static_cast<int>(x_offset),
+        y_buffer, static_cast<int>(y_offset),
         z_buffer, static_cast<int>(z_offset));
 
     auto n_ceiled = Ceil(n, db_["WGS"]*db_["WPT"]);

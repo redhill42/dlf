@@ -1542,6 +1542,176 @@ TEST(UniformTest, WhereView_GPU) {
     EXPECT_EQ(Z.read(), Tensor<int>({2, 2}, {1, 6, 3, 8}));
 }
 
+TEST(UniformTest, Gather_0) {
+    auto A = Matrix<float>({{1, 2}, {3, 4}, {5, 6}});
+    auto indices = Matrix<int>({{0, 1}, {1, 2}});
+    auto B = Tensor<float>({2, 2, 2}, {1, 2, 3, 4, 3, 4, 5, 6});
+    EXPECT_EQ(gather(A, indices), B);
+    EXPECT_EQ(gather(dev(A), dev(indices)).read(), B);
+}
+
+TEST(UniformTest, Gather_1) {
+    auto A = Matrix<float>({{1, 2, 3}, {4, 5, 6}, {7, 8, 9}});
+    auto indices = Matrix<int>({{0, 2}});
+    auto B = Tensor<float>({3, 1, 2}, {1, 3, 4, 6, 7, 9});
+    auto C = Tensor<float>({3, 1, 2}, {1, 7, 2, 8, 3, 9});
+    EXPECT_EQ(gather(A, indices, 1), B);
+    EXPECT_EQ(gather(A.transpose(), indices, 1), C);
+    EXPECT_EQ(gather(dev(A), dev(indices), 1).read(), B);
+    EXPECT_EQ(gather(dev(A).transpose(), dev(indices), 1).read(), C);
+}
+
+TEST(UniformTest, GatherElements_0) {
+    auto A = Matrix<int>({{1, 2}, {3, 4}});
+    auto indices = Matrix<int>({{0, 0}, {1, 0}});
+    auto B = Matrix<int>({{1, 1}, {4, 3}});
+    EXPECT_EQ(gather_elements(A, indices, 1), B);
+    EXPECT_EQ(gather_elements(dev(A), dev(indices), 1).read(), B);
+}
+
+TEST(UniformTest, GatherElements_1) {
+    auto A = Matrix<int>({{1, 2, 3}, {4, 5, 6}, {7, 8, 9}});
+    auto indices = Matrix<int>({{1, 2, 0}, {2, 0, 0}});
+    auto B = Matrix<int>({{4, 8, 3}, {7, 2, 3}});
+    auto C = Matrix<int>({{2, 6, 7}, {3, 4, 7}});
+    EXPECT_EQ(gather_elements(A, indices, 0), B);
+    EXPECT_EQ(gather_elements(A.transpose(), indices, 0), C);
+    EXPECT_EQ(gather_elements(dev(A), dev(indices), 0).read(), B);
+    EXPECT_EQ(gather_elements(dev(A).transpose(), dev(indices), 0).read(), C);
+}
+
+TEST(UniformTest, GatherElements_NegativeIndices) {
+    auto A = Matrix<int>({{1, 2, 3}, {4, 5, 6}, {7, 8, 9}});
+    auto indices = Matrix<int>({{-1, -2, 0}, {-2, 0, 0}});
+    auto B = Matrix<int>({{7, 5, 3}, {4, 2, 3}});
+    auto C = Matrix<int>({{3, 5, 7}, {2, 4, 7}});
+    EXPECT_EQ(gather_elements(A, indices, 0), B);
+    EXPECT_EQ(gather_elements(A.transpose(), indices, 0), C);
+    EXPECT_EQ(gather_elements(dev(A), dev(indices), 0).read(), B);
+    EXPECT_EQ(gather_elements(dev(A).transpose(), dev(indices), 0).read(), C);
+}
+
+TEST(UniformTest, ScatterElements_0) {
+    auto A = Matrix<float>({{1, 2, 3, 4, 5}});
+    auto dev_A = dev(A);
+    auto indices = Matrix<int>({{1, 3}});
+    auto updates = Matrix<float>({{1.1, 2.1}});
+    auto B = Matrix<float>({{1, 1.1, 3, 2.1, 5}});
+
+    scatter_elements(A, indices, updates, 1);
+    EXPECT_EQ(A, B);
+
+    scatter_elements(dev_A, dev(indices), dev(updates), 1);
+    EXPECT_EQ(dev_A.read(), B);
+}
+
+TEST(UniformTest, ScatterElements_1) {
+    auto A = Tensor<float>({3, 3}).fill(0);
+    auto dev_A = dev(A);
+    auto indices = Matrix<int>({{1, 0, 2}, {0, 2, 1}});
+    auto updates = Matrix<float>({{1.0, 1.1, 1.2}, {2.0, 2.1, 2.2}});
+    auto B = Matrix<float>({
+        {2.0, 1.1, 0.0},
+        {1.0, 0.0, 2.2},
+        {0.0, 2.1, 1.2}
+    });
+
+    scatter_elements(A, indices, updates);
+    EXPECT_EQ(A, B);
+
+    scatter_elements(dev_A, dev(indices), dev(updates));
+    EXPECT_EQ(dev_A.read(), B);
+}
+
+TEST(UniformTest, ScatterElements_WithNegativeIndices) {
+    auto A = Matrix<float>({{1, 2, 3, 4, 5}});
+    auto dev_A = dev(A);
+    auto indices = Matrix<int>({{1, -3}});
+    auto updates = Matrix<float>({{1.1, 2.1}});
+    auto B = Matrix<float>({{1.0, 1.1, 2.1, 4.0, 5.0}});
+
+    scatter_elements(A, indices, updates, 1);
+    EXPECT_EQ(A, B);
+
+    scatter_elements(dev_A, dev(indices), dev(updates), 1);
+    EXPECT_EQ(dev_A.read(), B);
+}
+
+TEST(UniformTest, GatherND_1) {
+    auto A = Matrix({{0, 1}, {2, 3}});
+
+    auto I1 = Matrix({{0, 0,}, {1, 1}});
+    auto B1 = Vector({0, 3});
+    EXPECT_EQ(gather_nd(A, I1), B1);
+    EXPECT_EQ(gather_nd(dev(A), dev(I1)).read(), B1);
+
+    auto I2 = Matrix({{1}, {0}});
+    auto B2 = Matrix({{2, 3}, {0, 1}});
+    EXPECT_EQ(gather_nd(A, I2), B2);
+    EXPECT_EQ(gather_nd(dev(A), dev(I2)).read(), B2);
+}
+
+TEST(UniformTest, GatherND_2) {
+    auto A = make_tensor<int, 3>({{{0,1}, {2,3}}, {{4,5}, {6,7}}});
+
+    auto I1 = Matrix({{0,1}, {1,0}});
+    auto B1 = Matrix({{2,3}, {4,5}});
+    auto B1_t = Matrix({{1,3}, {4,6}});
+    EXPECT_EQ(gather_nd(A, I1), B1);
+    EXPECT_EQ(gather_nd(A.transpose(0,2,1), I1), B1_t);
+    EXPECT_EQ(gather_nd(dev(A), dev(I1)).read(), B1);
+    EXPECT_EQ(gather_nd(dev(A).transpose(0,2,1), dev(I1)).read(), B1_t);
+
+    auto I2 = make_tensor<int, 3>({{{0,1}}, {{1,0}}});
+    auto B2 = make_tensor<int, 3>({{{2,3}}, {{4,5}}});
+    auto B2_t = make_tensor<int, 3>({{{1,3}}, {{4,6}}});
+    EXPECT_EQ(gather_nd(A, I2), B2);
+    EXPECT_EQ(gather_nd(A.transpose(0,2,1), I2), B2_t);
+    EXPECT_EQ(gather_nd(dev(A), dev(I2)).read(), B2);
+    EXPECT_EQ(gather_nd(dev(A).transpose(0,2,1), dev(I2)).read(), B2_t);
+}
+
+TEST(UniformTest, ScatterND_1) {
+    auto A = Vector({1, 2, 3, 4, 5, 6, 7, 8});
+    auto dev_A = dev(A);
+    auto indices = Matrix({{4}, {3}, {1}, {7}});
+    auto updates = Vector({9, 10, 11, 12});
+    auto B = Vector({1, 11, 3, 10, 9, 6, 7, 12});
+
+    scatter_nd(A, indices, updates);
+    EXPECT_EQ(A, B);
+
+    scatter_nd(dev_A, dev(indices), dev(updates));
+    EXPECT_EQ(dev_A.read(), B);
+}
+
+TEST(UniformTest, ScatterND_2) {
+    auto A = make_tensor<int, 3>({
+        {{1, 2, 3, 4}, {5, 6, 7, 8}, {8, 7, 6, 5}, {4, 3, 2, 1}},
+        {{1, 2, 3, 4}, {5, 6, 7, 8}, {8, 7, 6, 5}, {4, 3, 2, 1}},
+        {{8, 7, 6, 5}, {4, 3, 2, 1}, {1, 2, 3, 4}, {5, 6, 7, 8}},
+        {{8, 7, 6, 5}, {4, 3, 2, 1}, {1, 2, 3, 4}, {5, 6, 7, 8}}
+    });
+    auto dev_A = dev(A);
+    auto indices = Matrix({{0}, {2}});
+    auto updates = make_tensor<int, 3>({
+        {{5, 5, 5, 5}, {6, 6, 6, 6}, {7, 7, 7, 7}, {8, 8, 8, 8}},
+        {{1, 1, 1, 1}, {2, 2, 2, 2}, {3, 3, 3, 3}, {4, 4, 4, 4}}
+    });
+    auto B = make_tensor<int, 3>({
+        {{5, 5, 5, 5}, {6, 6, 6, 6}, {7, 7, 7, 7}, {8, 8, 8, 8}},
+        {{1, 2, 3, 4}, {5, 6, 7, 8}, {8, 7, 6, 5}, {4, 3, 2, 1}},
+        {{1, 1, 1, 1}, {2, 2, 2, 2}, {3, 3, 3, 3}, {4, 4, 4, 4}},
+        {{8, 7, 6, 5}, {4, 3, 2, 1}, {1, 2, 3, 4}, {5, 6, 7, 8}}
+    });
+
+    scatter_nd(A, indices, updates);
+    EXPECT_EQ(A, B);
+
+    scatter_nd(dev_A, dev(indices), dev(updates));
+    EXPECT_EQ(dev_A.read(), B);
+}
+
 TEST(UniformTest, ReduceMax) {
     auto X = Tensor<float>({3, 2, 2}, {
         5, 1, 20, 2, 30, 1, 40, 2, 55, 1, 60, 2

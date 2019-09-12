@@ -720,4 +720,486 @@ split(const TensorT& input, int axis, int n_split) {
     return split(input, axis, splits);
 }
 
+//==-------------------------------------------------------------------------
+// Gather and scatter
+//==-------------------------------------------------------------------------
+
+namespace detail {
+inline int normalize_index(int index, const int max_item) {
+    if (index < 0)
+        index += max_item;
+    if (index < 0)
+        index = 0;
+    if (index >= max_item)
+        index = max_item-1;
+    return index;
+}
+
+template <typename TensorX, typename TensorY, typename TensorI>
+std::enable_if_t<is_cpu_tensor<TensorX>::value>
+gather(const TensorX& X, TensorY& Y, const TensorI& indices,
+       int m, int n, int chunk, int max_item)
+{
+    tbb::parallel_for(tbb::blocked_range2d<int>(0, m, 32, 0, n, 32), [&](auto r) {
+        auto px = X.begin() + r.rows().begin() * chunk * max_item;
+        for (int i = r.rows().begin(); i < r.rows().end(); ++i, px += chunk*max_item) {
+            auto pi = indices.begin() + r.cols().begin();
+            auto py = Y.begin() + (i*n + r.cols().begin()) * chunk;
+            for (int j = r.cols().size(); j > 0; --j, ++pi, py += chunk) {
+                auto id = normalize_index(*pi, max_item);
+                std::copy(px + id*chunk, px + (id+1)*chunk, py);
+            }
+        }
+    });
+}
+
+template <typename TensorX, typename TensorY, typename TensorI>
+std::enable_if_t<is_gpu_tensor<TensorX>::value>
+gather(const TensorX& X, TensorY& Y, const TensorI& indices,
+       int m, int n, int chunk, int max_item)
+{
+    gpgpu::dnn::gather(
+        m, n, chunk, max_item,
+        X.shape().extents(), X.shape().strides(),
+        X.data(), X.shape().offset(),
+        indices.shape().extents(), indices.shape().strides(),
+        indices.data(), indices.shape().offset(),
+        Y.shape().extents(), Y.shape().strides(),
+        Y.data(), Y.shape().offset());
+}
+} // namespace detail
+
+/**
+ * Take elements from an array along an axis.
+ */
+template <typename TensorX, typename TensorY, typename TensorI>
+std::enable_if_t<
+    is_exactly_same_tensor<TensorX, TensorY>::value &&
+    is_exactly_same_tensor<TensorI, tensor_type<TensorX, int>>::value &&
+    !std::is_const<std::remove_reference_t<TensorY>>::value>
+gather(const TensorX& X, TensorY&& Y, const TensorI& indices, int axis = 0) {
+    auto r = static_cast<int>(X.rank());
+    auto q = static_cast<int>(indices.rank());
+
+    if (r == 0)
+        throw shape_error("gather: input tensor must have rank >= 1");
+    detail::norm_axis(r, axis);
+
+    int nd = q + r - 1;
+    int m, n, chunk;
+    std::vector<size_t> dims;
+
+    m = n = chunk = 1;
+    for (int i = 0; i < nd; i++) {
+        size_t dim;
+        if (i < axis) {
+            dim = X.extent(i);
+            m *= dim;
+        } else if (i < axis + q) {
+            dim = indices.extent(i - axis);
+            n *= dim;
+        } else {
+            dim = X.extent(i - q + 1);
+            chunk *= dim;
+        }
+        dims.push_back(dim);
+    }
+
+    Y.resize(Shape(dims));
+    detail::gather(X, Y, indices, m, n, chunk, X.extent(axis));
+}
+
+template <typename TensorT, typename TensorI>
+std::enable_if_t<
+    is_exactly_same_tensor<TensorI, tensor_type<TensorT, int>>::value,
+    tensor_type<TensorT>>
+gather(const TensorT& X, const TensorI& indices, int axis = 0) {
+    tensor_type<TensorT> Y{};
+    gather(X, Y, indices, axis);
+    return Y;
+}
+
+namespace detail {
+template <typename TensorX, typename TensorY, typename TensorI>
+std::enable_if_t<is_cpu_tensor<TensorX>::value, void>
+gather_elements(const TensorX& X, TensorY& Y, const TensorI& indices, int axis) {
+    tbb::parallel_for(tbb::blocked_range<int>(0, indices.size(), GRAINSIZE), [&](auto r) {
+        const auto i_stride1 = indices.shape().partial_size(axis+1, indices.rank());
+        const auto i_stride2 = i_stride1 * indices.extent(axis);
+        const auto x_stride1 = X.shape().partial_size(axis+1, X.rank());
+        const auto x_stride2 = x_stride1 * X.extent(axis);
+
+        auto px = X.data();
+        auto pi = indices.begin() + r.begin();
+        auto py = Y.begin() + r.begin();
+
+        const bool x_contiguous = X.shape().is_contiguous();
+        const auto x_offset = X.shape().offset();
+        const auto max_item = static_cast<int>(X.extent(axis));
+
+        for (int id = r.begin(); id < r.end(); ++id, ++pi, ++py) {
+            auto tmp = normalize_index(*pi, max_item);
+            auto x_id = (id % i_stride1) + (tmp * x_stride1) + (id / i_stride2 * x_stride2);
+            *py = px[x_contiguous ? x_id + x_offset : X.shape().linear_offset(x_id)];
+        }
+    });
+}
+
+template <typename TensorX, typename TensorY, typename TensorI>
+std::enable_if_t<is_gpu_tensor<TensorX>::value, void>
+gather_elements(const TensorX& X, TensorY& Y, const TensorI& indices, int axis) {
+    gpgpu::dnn::gather_elements(
+        Y.size(), axis,
+        X.shape().extents(), X.shape().strides(),
+        X.data(), X.shape().offset(),
+        indices.shape().extents(), indices.shape().strides(),
+        indices.data(), indices.shape().offset(),
+        Y.shape().extents(), Y.shape().strides(),
+        Y.data(), Y.shape().offset());
+}
+} // namespace detail
+
+/**
+ * Takes two inputs data and indices of the same rank r >= 1 and an optional
+ * attribute axis that identifies an axis of data (by default, the outer-most
+ * axis, that is axis 0). It is an indexing operation that produces its output
+ * by indexing into the input data tensor at index positions determined by
+ * elements of the indices tensor. Its output shape is same as the shape of
+ * indices and consists of one value (gathered from the data) for each element
+ * in indices.
+ *
+ * For instance, in the 3-D case (r = 3), the output produced is determined by
+ * the following equations:
+ *
+ *   out[i][j][k] = input[index[i][j][k]][j][k] if axis = 0
+ *   out[i][j][k] = input[i][index[i][j][k]][k] if axis = 1
+ *   out[i][j][k] = input[i][j][index[i][j][k]] if axis = 2
+ */
+template <typename TensorX, typename TensorY, typename TensorI>
+std::enable_if_t<
+    is_exactly_same_tensor<TensorX, TensorY>::value &&
+    is_exactly_same_tensor<TensorI, tensor_type<TensorX, int>>::value &&
+    !std::is_const<std::remove_reference_t<TensorY>>::value>
+gather_elements(const TensorX& X, TensorY&& Y, const TensorI& indices, int axis = 0) {
+    if (X.rank() != indices.rank())
+        throw shape_error("gather_elements: shape mismatch");
+    for (int i = 0; i < X.rank(); i++)
+        if (indices.extent(i) > X.extent(i))
+            throw shape_error("gather_elements: shape mismatch");
+
+    detail::norm_axis(X.rank(), axis);
+    Y.resize(indices.shape());
+    detail::gather_elements(X, Y, indices, axis);
+}
+
+template <typename TensorX, typename TensorI>
+std::enable_if_t<
+    is_exactly_same_tensor<TensorI, tensor_type<TensorX, int>>::value,
+    tensor_type<TensorX>>
+gather_elements(const TensorX& X, const TensorI& indices, int axis = 0) {
+    tensor_type<TensorX> Y{};
+    gather_elements(X, Y, indices, axis);
+    return Y;
+}
+
+namespace detail {
+template <typename TensorX, typename TensorI, typename TensorY>
+std::enable_if_t<is_cpu_tensor<TensorX>::value>
+scatter_elements(TensorX& X, const TensorI& indices, const TensorY& updates, int axis) {
+    tbb::parallel_for(tbb::blocked_range<int>(0, updates.size(), GRAINSIZE), [&](auto r) {
+        const auto i_stride1 = indices.shape().partial_size(axis+1, indices.rank());
+        const auto i_stride2 = i_stride1 * indices.extent(axis);
+        const auto x_stride1 = X.shape().partial_size(axis+1, X.rank());
+        const auto x_stride2 = x_stride1 * X.extent(axis);
+
+        auto px = X.data();
+        auto pi = indices.begin() + r.begin();
+        auto pu = updates.begin() + r.begin();
+
+        const bool x_contiguous = X.shape().is_contiguous();
+        const auto x_offset = X.shape().offset();
+        const auto max_item = static_cast<int>(X.extent(axis));
+
+        for (int id = r.begin(); id < r.end(); ++id, ++pu, ++pi) {
+            auto tmp = normalize_index(*pi, max_item);
+            auto x_id = (id % i_stride1) + (tmp * x_stride1) + (id / i_stride2 * x_stride2);
+            px[x_contiguous ? x_id + x_offset : X.shape().linear_offset(x_id)] = *pu;
+        }
+    });
+}
+
+template <typename TensorX, typename TensorI, typename TensorY>
+std::enable_if_t<is_gpu_tensor<TensorX>::value>
+scatter_elements(TensorX& X, const TensorI& indices, const TensorY& updates, int axis) {
+    gpgpu::dnn::scatter_elements(
+        indices.size(), axis,
+        X.shape().extents(), X.shape().strides(),
+        X.data(), X.shape().offset(),
+        indices.shape().extents(), indices.shape().strides(),
+        indices.data(), indices.shape().offset(),
+        updates.shape().extents(), updates.shape().strides(),
+        updates.data(), updates.shape().offset());
+}
+} // namespace detail
+
+/**
+ * Takes three inputs data, updates, and indices of the same rank r >= 1 and
+ * an optional axis that identifies an axis of data (by default, the outer-most
+ * axis, that is axis 0). The operation updates data to values specified by
+ * updates at specific index positions specified by indices.
+ *
+ * For each entry in updates, the target index in data is obtained by combining
+ * the corresponding entry in indices with the index of the entry itself:
+ * the index-value for dimension = axis is obtained from the value of the
+ * corresponding entry in indices and the index value for dimension != axis is
+ * obtained from the index of the entry itself.
+ *
+ * For instance, in a 2-D tensor case, the update corresponding to the [i][j]
+ * entry is performed as below:
+ *
+ *    output[indices[i][j]][j] = updates[i][j] if axis = 0
+ *    output[i][indices[i][j]] = updates[i][j] if axis = 1
+ */
+template <typename TensorX, typename TensorI, typename TensorY>
+std::enable_if_t<
+    is_exactly_same_tensor<TensorX, TensorY>::value &&
+    is_exactly_same_tensor<TensorI, tensor_type<TensorX, int>>::value>
+scatter_elements(TensorX& X, const TensorI& indices, const TensorY& updates, int axis = 0) {
+    if (X.rank() != updates.rank() || X.rank() != indices.rank())
+        throw shape_error("scatter_elements: shape mismatch");
+    if (updates.shape() != indices.shape())
+        throw shape_error("scatter_elements: shape mismatch");
+
+    detail::norm_axis(X.rank(), axis);
+    detail::scatter_elements(X, indices, updates, axis);
+}
+
+namespace detail {
+template <typename TensorX, typename TensorY, typename TensorI>
+std::enable_if_t<is_cpu_tensor<TensorX>::value>
+gather_nd(const TensorX& X, TensorY& Y, const TensorI& indices,
+          const int n, const int k, const int chunk)
+{
+    tbb::parallel_for(tbb::blocked_range<int>(0, n, 64), [&](auto r) {
+        auto px = X.begin();
+        auto py = Y.begin() + r.begin()*chunk;
+        auto pi = indices.begin() + r.begin()*k;
+        auto dims = X.shape().extents();
+
+        for (int i = r.begin(); i < r.end(); ++i) {
+            // compute slice offset
+            int offset = 0, dim = 1;
+            for (int j = 0; j < k; ++j, ++pi) {
+                offset = offset*dim + normalize_index(*pi, dims[j]);
+                dim = dims[j];
+            }
+            offset *= chunk;
+
+            // copy slice
+            std::copy(px+offset, px+offset+chunk, py);
+            py += chunk;
+        }
+    });
+}
+
+template <typename TensorX, typename TensorY, typename TensorI>
+std::enable_if_t<is_gpu_tensor<TensorX>::value>
+gather_nd(const TensorX& X, TensorY& Y, const TensorI& indices,
+          const int n, const int k, const int chunk)
+{
+    gpgpu::dnn::gather_nd(
+        n, k, chunk,
+        X.shape().extents(), X.shape().strides(),
+        X.data(), X.shape().offset(),
+        indices.shape().extents(), indices.shape().strides(),
+        indices.data(), indices.shape().offset(),
+        Y.shape().extents(), Y.shape().strides(),
+        Y.data(), Y.shape().offset());
+}
+} // namespace detail
+
+/**
+ * Given data tensor of rank r >= 1, and indices tensor of rank q >= 1, this
+ * routine gathers slices of data into an output tensor of rank q + r -
+ * indices_shape[-1] - 1.
+ *
+ * indices is a q-dimensional integer tensor, best thought of as a (q-1)-dimensional
+ * tensor of index-tuples into data, where each element defines a slice of data.
+ *
+ * Some salient points about the inputs' rank and shape:
+ *
+ *   1. r >= 1 and q >= 1 are to be honored. There is no dependency condition
+ *      to be met between ranks r and q.
+ *
+ *   2. The indices_shape[-1] should have a value between 1 (inclusive) and
+ *      rank r (inclusive).
+ *
+ *   3. All values in indices are expected to be within bounds [-s, s-1] along
+ *      axis of size s (i.e.) -data_shape[i] <= indices[i...,i] <= data_shape[i]-1.
+ *      It is an error if any of the index values are out of bounds.
+ *
+ * The output is computed as follows:
+ *
+ * The output tensor is obtained by mapping each index-tuple in the indices tensor
+ * to the corresponding slice of the input data.
+ *
+ *   1. If indices-shape[-1] > r => error condition.
+ *
+ *   2. If indices-shape[-1] == r, since the rank of indices is q, indices can be
+ *      thought of as a (q-1)-dimensional tensor containing 1-D tensors of
+ *      dimension r. Let us think of each such r ranked tensor as indices_slice.
+ *      Each scalar value corresponding to data[indices_slice] is filled into
+ *      the corresponding location of the (q-1)-dimensional tensor to form the
+ *      output tensor.
+ *
+ *   3. If indices_shape[-1] < r, since the rank of indices is q, indices can be
+ *      thought of as a (q-1)-dimensional tensor containing 1-D tensors of
+ *      dimension < r. Let us think of each such tensors as indices_slice. Each
+ *      tensor slice corresponding to data[indices_slice, :] is filled into the
+ *      corresponding location of the (q-1)-dimensional tensor to form the output
+ *      tensor.
+ *
+ */
+template <typename TensorX, typename TensorY, typename TensorI>
+std::enable_if_t<
+    is_exactly_same_tensor<TensorX, TensorY>::value &&
+    is_exactly_same_tensor<TensorI, tensor_type<TensorX, int>>::value &&
+    !std::is_const<std::remove_reference_t<TensorY>>::value>
+gather_nd(const TensorX& X, TensorY&& Y, const TensorI& indices) {
+    auto r = static_cast<int>(X.rank());
+    auto q = static_cast<int>(indices.rank());
+
+    if (r == 0)
+        throw shape_error("gather_nd: input tensor must have rank >= 1");
+    if (q == 0)
+        throw shape_error("gather_nd: indices tensor must have rank >= 1");
+
+    auto k = static_cast<int>(indices.extent(-1));
+    if (k > r)
+        throw shape_error("gather_nd: last dimension of indices tensor must no be larger than the rank of input tensor");
+
+    std::vector<size_t> dims;
+    int n = 1, chunk = 1;
+    for (int i = 0; i < q-1; i++) {
+        dims.push_back(indices.extent(i));
+        n *= indices.extent(i);
+    }
+    for (int i = k; i < r; i++) {
+        dims.push_back(X.extent(i));
+        chunk *= X.extent(i);
+    }
+
+    Y.resize(Shape(dims));
+    detail::gather_nd(X, Y, indices, n, k, chunk);
+}
+
+template <typename TensorX, typename TensorI>
+std::enable_if_t<
+    is_exactly_same_tensor<TensorI, tensor_type<TensorX, int>>::value,
+    tensor_type<TensorX>>
+gather_nd(const TensorX& X, const TensorI& indices) {
+    tensor_type<TensorX> Y{};
+    gather_nd(X, Y, indices);
+    return Y;
+}
+
+namespace detail {
+template <typename TensorX, typename TensorI, typename TensorY>
+std::enable_if_t<is_cpu_tensor<TensorX>::value>
+scatter_nd(TensorX& X, const TensorI& indices, const TensorY& updates,
+           const int n, const int k, const int chunk)
+{
+    tbb::parallel_for(tbb::blocked_range<int>(0, n, 1), [&](auto r) {
+        auto px = X.begin();
+        auto py = updates.begin() + r.begin()*chunk;
+        auto pi = indices.begin() + r.begin()*k;
+        auto dims = X.shape().extents();
+
+        for (int i = r.begin(); i < r.end(); ++i) {
+            // compute slice offset
+            int offset = 0, dim = 1;
+            for (int j = 0; j < k; ++j, ++pi) {
+                offset = offset*dim + detail::normalize_index(*pi, dims[j]);
+                dim = dims[j];
+            }
+            offset *= chunk;
+
+            // copy slice
+            std::copy(py, py+chunk, px+offset);
+            py += chunk;
+        }
+    });
+}
+
+template <typename TensorX, typename TensorI, typename TensorY>
+std::enable_if_t<is_gpu_tensor<TensorX>::value>
+scatter_nd(TensorX& X, const TensorI& indices, const TensorY& updates,
+           const int n, const int k, const int chunk)
+{
+    gpgpu::dnn::scatter_nd(
+        n, k, chunk,
+        X.shape().extents(), X.shape().strides(),
+        X.data(), X.shape().offset(),
+        indices.shape().extents(), indices.shape().strides(),
+        indices.data(), indices.shape().offset(),
+        updates.shape().extents(), updates.shape().strides(),
+        updates.data(), updates.shape().offset());
+}
+} // namespace detail
+
+/**
+ * Takes three inputs, data tensor of rank r >= 1, indices tensor of rank q >= 1,
+ * and updates tensor of rank q + r - indices.shape[-1] - 1. Updating data inplace
+ * to values specified by updates at specific index positions specified by indices.
+ *
+ * `indices` is an integer tensor. Let k denote indices.shape[-1], the last
+ * dimension in the shape of indices. indices is treated as a (q-1)-dimensional
+ * tensor of k-tuples, where each k-tuple is a partial-index into data. Hence,
+ * k can be a value at most the rank of data. When k equals rank(data), each update
+ * entry specifies an update to a single element of the tensor. When k is less than
+ * rank(data) each update entry specifies an update to a slice of the tensor.
+ *
+ * `updates` is treated as a (q-1)-dimensional tensor of replacement-slice-values.
+ * Thus, the first (q-1) dimensions of updates.shape must match the first (q-1)
+ * dimensions of indices.shape. The remaining dimensions of `updates` correspond
+ * to the dimensions of the replacement-slice-values. Each replacement-slice-value
+ * is a (r-k) dimensional tensor, corresponding to the trailing (r-k) dimensions
+ * of data. Thus, the shape of `updates` must equal indices.shape[0:q-1]++data.shape[k:r-1],
+ * where ++ denotes the concatenation of shapes.
+ *
+ */
+template <typename TensorX, typename TensorI, typename TensorY>
+std::enable_if_t<
+    is_exactly_same_tensor<TensorX, TensorY>::value &&
+    is_exactly_same_tensor<TensorI, tensor_type<TensorX, int>>::value>
+scatter_nd(TensorX& X, const TensorI& indices, const TensorY& updates) {
+    auto r = static_cast<int>(X.rank());
+    auto q = static_cast<int>(indices.rank());
+
+    if (r == 0)
+        throw shape_error("scatter_nd: input tensor must have rank >= 1");
+    if (q == 0)
+        throw shape_error("scatter_nd: indices tensor must have rank >= 1");
+
+    auto k = static_cast<int>(indices.extent(-1));
+    if (k > r)
+        throw shape_error("scatter_nd: last dimension of indices tensor must not be larger than the rank of input tensor");
+
+    std::vector<size_t> dims;
+    int n = 1, chunk = 1;
+    for (int i = 0; i < q-1; i++) {
+        dims.push_back(indices.extent(i));
+        n *= indices.extent(i);
+    }
+    for (int i = k; i < r; i++) {
+        dims.push_back(X.extent(i));
+        chunk *= X.extent(i);
+    }
+    if (updates.shape() != Shape(dims)) {
+        throw shape_error("scatter_nd: updates tensor has incorrect dimensions");
+    }
+
+    detail::scatter_nd(X, indices, updates, n, k, chunk);
+}
+
 } // namespace dlf

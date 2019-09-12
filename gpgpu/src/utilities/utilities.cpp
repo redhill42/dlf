@@ -15,6 +15,7 @@
 #include <chrono>
 #include <iomanip>
 #include <cmath>
+#include <cassert>
 
 #include "utilities/utilities.hpp"
 #include "utilities/device_mapping.hpp"
@@ -374,6 +375,54 @@ bool IsContiguous(const std::vector<size_t>& dim, const std::vector<size_t>& str
       size *= dim[i];
   }
   return true;
+}
+
+Buffer<int> PackShape(const std::vector<size_t>& dim,
+                      const std::vector<size_t>& stride,
+                      const Context& context, const Queue& queue)
+{
+    auto rank = dim.size();
+    assert(stride.size() == rank);
+
+    std::vector<int> shape(rank * 2);
+    std::copy(dim.begin(), dim.end(), shape.begin());
+    std::copy(stride.begin(), stride.end(), shape.begin() + rank);
+    return context.getSharedBuffer<int>(shape.data(), shape.size(), queue);
+}
+
+Buffer<int> PackShape(const std::vector<size_t>& dim,
+                      const std::vector<size_t>& x_stride,
+                      const std::vector<size_t>& y_stride,
+                      const Context& context, const Queue& queue)
+{
+    auto rank = dim.size();
+    assert(x_stride.size() == rank);
+    assert(y_stride.size() == rank);
+
+    std::vector<int> shape(rank * 3);
+    std::copy(dim.begin(), dim.end(), shape.begin());
+    std::copy(x_stride.begin(), x_stride.end(), shape.begin() + rank);
+    std::copy(y_stride.begin(), y_stride.end(), shape.begin() + rank*2);
+    return context.getSharedBuffer<int>(shape.data(), shape.size(), queue);
+}
+
+Buffer<int> PackShape(const std::vector<size_t>& dim,
+                      const std::vector<size_t>& x_stride,
+                      const std::vector<size_t>& y_stride,
+                      const std::vector<size_t>& z_stride,
+                      const Context& context, const Queue& queue)
+{
+    auto rank = dim.size();
+    assert(x_stride.size() == rank);
+    assert(y_stride.size() == rank);
+    assert(z_stride.size() == rank);
+
+    std::vector<int> shape(rank * 4);
+    std::copy(dim.begin(), dim.end(), shape.begin());
+    std::copy(x_stride.begin(), x_stride.end(), shape.begin() + rank);
+    std::copy(y_stride.begin(), y_stride.end(), shape.begin() + rank*2);
+    std::copy(z_stride.begin(), z_stride.end(), shape.begin() + rank*3);
+    return context.getSharedBuffer<int>(shape.data(), shape.size(), queue);
 }
 
 }} // namespace gpgpu::blas

@@ -49,21 +49,15 @@ void Xtransform<T>::DoTransform(
     Buffer<T>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_stride)
 {
     // Create compact buffer to hold strides and dims
-    auto rank = dims.size();
-    assert(x_stride.size() == rank && y_stride.size() == rank);
-    std::vector<int> shape_data(rank * 3);
-    std::copy(dims.begin(), dims.end(), shape_data.begin());
-    std::copy(x_stride.begin(), x_stride.end(), shape_data.begin() + rank);
-    std::copy(y_stride.begin(), y_stride.end(), shape_data.begin() + rank*2);
-    auto shape_buffer = context_.getSharedBuffer<int>(shape_data.data(), shape_data.size(), queue_);
+    auto shape_buffer = PackShape(dims, x_stride, y_stride, context_, queue_);
 
     // Retrieve the transform kernel from the compiled binary
     auto kernel = program_.getKernel("X" + name + "Strided");
 
     // Sets the kernel arguments
     kernel.setArguments(
-        static_cast<int>(n), static_cast<int>(rank),
-        shape_buffer,
+        static_cast<int>(n),
+        static_cast<int>(dims.size()), shape_buffer,
         x_buffer, static_cast<int>(x_offset),
         y_buffer, static_cast<int>(y_offset));
 

@@ -35,18 +35,11 @@ void Xreduce<T>::DoReduce(
         auto local1 = std::vector<size_t>{db_["WGS1"], 1};
         RunKernel(kernel1, queue_, device_, global1, local1, nullptr);
     } else {
-        auto rank = x_dims.size();
-        assert(x_strides.size() == rank);
-        std::vector<int> shape_data(rank * 2);
-        std::copy(x_dims.begin(), x_dims.end(), shape_data.begin());
-        std::copy(x_strides.begin(), x_strides.end(), shape_data.begin() + rank);
-        auto shape_buffer = context_.getSharedBuffer<int>(
-            shape_data.data(), shape_data.size(), queue_);
-
+        auto shape_buffer = PackShape(x_dims, x_strides, context_, queue_);
         auto kernel1 = program_.getKernel("X" + name + "Strided");
         kernel1.setArguments(
             static_cast<int>(n),
-            static_cast<int>(rank),
+            static_cast<int>(x_dims.size()),
             shape_buffer,
             x_buffer,
             static_cast<int>(x_offset),
@@ -71,18 +64,11 @@ void Xreduce<T>::DoReduce(
         auto local2 = std::vector<size_t>{db_["WGS2"], 1};
         RunKernel(kernel2, queue_, device_, global2, local2, event_);
     } else {
-        auto rank =  y_dims.size();
-        assert(y_strides.size() == rank);
-        std::vector<int> shape_data(rank * 2);
-        std::copy(y_dims.begin(), y_dims.end(), shape_data.begin());
-        std::copy(y_strides.begin(), y_strides.end(), shape_data.begin() + rank);
-        auto shape_buffer = context_.getSharedBuffer<int>(
-            shape_data.data(), shape_data.size(), queue_);
-
+        auto shape_buffer = PackShape(y_dims, y_strides, context_, queue_);
         auto kernel2 = program_.getKernel("X" + name + "StridedEpilogue");
         kernel2.setArguments(
             static_cast<int>(n),
-            static_cast<int>(rank),
+            static_cast<int>(y_dims.size()),
             shape_buffer,
             temp_buffer,
             static_cast<int>(temp_buffer.offset()),

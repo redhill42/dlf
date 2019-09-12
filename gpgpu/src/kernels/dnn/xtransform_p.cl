@@ -31,7 +31,7 @@ void XclipStrided(
   const real high = GetRealArg(high_arg);
   for (int id = get_global_id(0); id < n; id += get_global_size(0)) {
     int x_id = x_offset, y_id = y_offset;
-    unravel2(id, &x_id, &y_id, rank, shape, &shape[rank], &shape[rank*2]);
+    unravel2(id, &x_id, &y_id, rank, shape);
     real x = xgm[x_id];
     ygm[y_id] = clamp(x, low, high);
   }
@@ -61,7 +61,7 @@ void XshrinkStrided(
   const real bias = GetRealArg(bias_arg);
   for (int id = get_global_id(0); id < n; id += get_global_size(0)) {
     int x_id = x_offset, y_id = y_offset;
-    unravel2(id, &x_id, &y_id, rank, shape, &shape[rank], &shape[rank*2]);
+    unravel2(id, &x_id, &y_id, rank, shape);
     real x = xgm[x_id];
     ygm[y_id] = x < -lambd ? x + bias : x > lambd ? x - bias : 0;
   }
@@ -87,7 +87,7 @@ void XreluStrided(
 {
   for (int id = get_global_id(0); id < n; id += get_global_size(0)) {
     int x_id = x_offset, y_id = y_offset;
-    unravel2(id, &x_id, &y_id, rank, shape, &shape[rank], &shape[rank*2]);
+    unravel2(id, &x_id, &y_id, rank, shape);
     real x = xgm[x_id];
     ygm[y_id] = max(ZERO, x);
   }
@@ -117,7 +117,7 @@ void Xleaky_reluStrided(
   const real alpha = GetRealArg(alpha_arg);
   for (int id = get_global_id(0); id < n; id += get_global_size(0)) {
     int x_id = x_offset, y_id = y_offset;
-    unravel2(id, &x_id, &y_id, rank, shape, &shape[rank], &shape[rank*2]);
+    unravel2(id, &x_id, &y_id, rank, shape);
     real x = xgm[x_id];
     if (x < ZERO)
       x *= alpha;
@@ -149,7 +149,7 @@ void Xthresholded_reluStrided(
   const real alpha = GetRealArg(alpha_arg);
   for (int id = get_global_id(0); id < n; id += get_global_size(0)) {
     int x_id = x_offset, y_id = y_offset;
-    unravel2(id, &x_id, &y_id, rank, shape, &shape[rank], &shape[rank*2]);
+    unravel2(id, &x_id, &y_id, rank, shape);
     real x = xgm[x_id];
     if (x <= alpha)
       x = ZERO;
@@ -184,7 +184,7 @@ void XseluStrided(
   const real gamma = GetRealArg(gamma_arg);
   for (int id = get_global_id(0); id < n; id += get_global_size(0)) {
     int x_id = x_offset, y_id = y_offset;
-    unravel2(id, &x_id, &y_id, rank, shape, &shape[rank], &shape[rank*2]);
+    unravel2(id, &x_id, &y_id, rank, shape);
     real x = xgm[x_id];
     if (x < ZERO)
       x = alpha * (exp(x) - 1);
@@ -217,7 +217,7 @@ void XeluStrided(
   const real alpha = GetRealArg(alpha_arg);
   for (int id = get_global_id(0); id < n; id += get_global_size(0)) {
     int x_id = x_offset, y_id = y_offset;
-    unravel2(id, &x_id, &y_id, rank, shape, &shape[rank], &shape[rank*2]);
+    unravel2(id, &x_id, &y_id, rank, shape);
     real x = xgm[x_id];
     if (x < ZERO)
       x = alpha * (exp(x) - ONE);
@@ -249,7 +249,7 @@ void Xhard_sigmoidStrided(
   const real beta = GetRealArg(beta_arg);
   for (int id = get_global_id(0); id < n; id += get_global_size(0)) {
     int x_id = x_offset, y_id = y_offset;
-    unravel2(id, &x_id, &y_id, rank, shape, &shape[rank], &shape[rank*2]);
+    unravel2(id, &x_id, &y_id, rank, shape);
     real x = xgm[x_id];
     ygm[y_id] = max(ZERO, min(ONE, alpha * x + beta));
   }
@@ -275,7 +275,7 @@ void XsoftsignStrided(
 {
   for (int id = get_global_id(0); id < n; id += get_global_size(0)) {
     int x_id = x_offset, y_id = y_offset;
-    unravel2(id, &x_id, &y_id, rank, shape, &shape[rank], &shape[rank*2]);
+    unravel2(id, &x_id, &y_id, rank, shape);
     real x = xgm[x_id];
     ygm[y_id] = x / (ONE + fabs(x));
   }
@@ -301,7 +301,7 @@ void XsoftplusStrided(
 {
   for (int id = get_global_id(0); id < n; id += get_global_size(0)) {
     int x_id = x_offset, y_id = y_offset;
-    unravel2(id, &x_id, &y_id, rank, shape, &shape[rank], &shape[rank*2]);
+    unravel2(id, &x_id, &y_id, rank, shape);
     real x = xgm[x_id];
     ygm[y_id] = log(exp(x) + ONE);
   }

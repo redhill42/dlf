@@ -54,7 +54,7 @@ void X##name##Strided(                                                  \
   real acc = identity;                                                  \
   int id = wgid*WGS1 + lid;                                             \
   while (id < n) {                                                      \
-    int xid = unravel(batch*n + id, rank, &shape[rank], shape);         \
+    int xid = unravel(batch*n + id, rank, shape);                       \
     real x = xgm[x_offset + xid];                                       \
     acc = accum(acc, x);                                                \
     id += WGS1*num_groups;                                              \
@@ -126,7 +126,7 @@ void X##name##StridedEpilogue(                                          \
                                                                         \
   /* Computes the final result */                                       \
   if (lid == 0) {                                                       \
-    int yid = unravel(batch, rank, &shape[rank], shape);                \
+    int yid = unravel(batch, rank, shape);                              \
     ygm[y_offset + yid] = post(lm[0], n);                               \
   }                                                                     \
 }                                                                       \

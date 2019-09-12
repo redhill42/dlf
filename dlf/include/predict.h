@@ -933,6 +933,132 @@ private:
         result = std::make_unique<SplitOp>(this, n);
     }
 
+    struct GatherOp : Operator {
+        TensorT<> input, output;
+        TensorT<int> indices;
+        int axis;
+
+        GatherOp(OperatorFactory* of, model::Gather* n)
+            : input(of->alloc(n->input())),
+              output(of->alloc(n->output())),
+              indices(of->alloc<int>(n->indices())),
+              axis(n->axis()) {}
+
+        void evaluate() override {
+            gather(input, output, indices, axis);
+        }
+    };
+
+    void visit(model::Gather* n) override {
+        result = std::make_unique<GatherOp>(this, n);
+    }
+
+    // deprecated, same as ScatterElements
+    struct ScatterOp : Operator {
+        TensorT<> input, output;
+        TensorT<int> indices;
+        TensorT<> updates;
+        int axis;
+
+        ScatterOp(OperatorFactory* of, model::Scatter* n)
+            : input(of->alloc(n->input())),
+              output(of->allocInplace(n->input(), n->output())),
+              indices(of->alloc<int>(n->indices())),
+              updates(of->alloc(n->updates())),
+              axis(n->axis()) {}
+
+        void evaluate() override {
+            flat_copy(input, output);
+            scatter_elements(output, indices, updates, axis);
+        }
+    };
+
+    void visit(model::Scatter* n) override {
+        result = std::make_unique<ScatterOp>(this, n);
+    }
+
+    struct GatherElementsOp : Operator {
+        TensorT<> input, output;
+        TensorT<int> indices;
+        int axis;
+
+        GatherElementsOp(OperatorFactory* of, model::GatherElements* n)
+            : input(of->alloc(n->input())),
+              output(of->alloc(n->output())),
+              indices(of->alloc<int>(n->indices())),
+              axis(n->axis()) {}
+
+        void evaluate() override {
+            gather_elements(input, output, indices, axis);
+        }
+    };
+
+    void visit(model::GatherElements* n) override {
+        result = std::make_unique<GatherElementsOp>(this, n);
+    }
+
+    struct ScatterElementsOp : Operator {
+        TensorT<> input, output;
+        TensorT<int> indices;
+        TensorT<> updates;
+        int axis;
+
+        ScatterElementsOp(OperatorFactory* of, model::ScatterElements* n)
+            : input(of->alloc(n->input())),
+              output(of->allocInplace(n->input(), n->output())),
+              indices(of->alloc<int>(n->indices())),
+              updates(of->alloc(n->updates())),
+              axis(n->axis()) {}
+
+        void evaluate() override {
+            flat_copy(input, output);
+            scatter_elements(output, indices, updates, axis);
+        }
+    };
+
+    void visit(model::ScatterElements* n) override {
+        result = std::make_unique<ScatterElementsOp>(this, n);
+    }
+
+    struct GatherNDOp : Operator {
+        TensorT<> input, output;
+        TensorT<int> indices;
+
+        GatherNDOp(OperatorFactory* of, model::GatherND* n)
+            : input(of->alloc(n->input())),
+              output(of->alloc(n->output())),
+              indices(of->alloc<int>(n->indices())) {}
+
+        void evaluate() override {
+            gather_nd(input, output, indices);
+        }
+    };
+
+    void visit(model::GatherND* n) override {
+        result = std::make_unique<GatherNDOp>(this, n);
+    }
+
+    struct ScatterNDOp : Operator {
+        TensorT<> input, output;
+        TensorT<int> indices;
+        TensorT<> updates;
+
+        ScatterNDOp(OperatorFactory* of, model::ScatterND* n)
+            : input(of->alloc(n->input())),
+              output(of->allocInplace(n->input(), n->output())),
+              indices(of->alloc<int>(n->indices())),
+              updates(of->alloc(n->updates())) {}
+
+        void evaluate() override {
+            flat_copy(input, output);
+            scatter_nd(output, indices, updates);
+        }
+    };
+
+    void visit(model::ScatterND* n) override {
+        result = std::make_unique<ScatterNDOp>(this, n);
+    }
+
     struct SliceOp : Operator {
         TensorT<> X, Y;
         DatumPtr starts, ends, axes, steps;

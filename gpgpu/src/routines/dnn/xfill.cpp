@@ -32,16 +32,10 @@ void Xfill<T>::DoFillStrided(const size_t n,
     const std::vector<size_t>& dims, const std::vector<size_t>& strides,
     Buffer<T>& x_buffer, const size_t x_offset, const T value)
 {
-    auto rank = dims.size();
-    assert(strides.size() == dims.size());
-    std::vector<int> shape_data(rank * 2);
-    std::copy(dims.begin(), dims.end(), shape_data.begin());
-    std::copy(strides.begin(), strides.end(), shape_data.begin() + rank);
-    auto shape_buffer = context_.getSharedBuffer<int>(shape_data.data(), shape_data.size(), queue_);
-
+    auto shape_buffer = PackShape(dims, strides, context_, queue_);
     auto kernel = program_.getKernel("XfillStrided");
     kernel.setArguments(
-        static_cast<int>(n), static_cast<int>(rank),
+        static_cast<int>(n), static_cast<int>(dims.size()),
         shape_buffer, x_buffer, static_cast<int>(x_offset),
         GetRealArg(value));
 

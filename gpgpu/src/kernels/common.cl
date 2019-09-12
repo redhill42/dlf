@@ -314,38 +314,34 @@ R"(
 
 // =================================================================================================
 
-INLINE_FUNC int unravel(int id, const int rank, __constant int* stride, __constant int* shape) {
+INLINE_FUNC int unravel(int id, const int rank, __constant int* dim) {
   int id_x = 0;
   for (int i = rank; --i >= 0; ) {
-    int tmp = id / shape[i];
-    int coord = id - tmp * shape[i];
-    id_x += coord * stride[i];
+    int tmp = id / dim[i];
+    int coord = id - tmp * dim[i];
+    id_x += coord * dim[i + rank];
     id = tmp;
   }
   return id_x;
 }
 
-INLINE_FUNC void unravel2(int id, int* x_id, int* y_id, const int rank,
-    __constant int* dim, __constant int* x_stride, __constant int* y_stride)
-{
+INLINE_FUNC void unravel2(int id, int* x_id, int* y_id, const int rank, __constant int* dim) {
   for (int i = rank; --i >= 0; ) {
     int tmp = id / dim[i];
     int coord = id - tmp * dim[i];
-    *x_id += coord * x_stride[i];
-    *y_id += coord * y_stride[i];
+    *x_id += coord * dim[i + rank];
+    *y_id += coord * dim[i + rank*2];
     id = tmp;
   }
 }
 
-INLINE_FUNC void unravel3(int id, int* x_id, int* y_id, int* z_id, const int rank,
-    __constant int* dim, __constant int* x_stride, __constant int* y_stride, __constant int* z_stride)
-{
+INLINE_FUNC void unravel3(int id, int* x_id, int* y_id, int* z_id, const int rank, __constant int* dim) {
   for (int i = rank; --i >= 0; ) {
     int tmp = id / dim[i];
     int coord = id - tmp * dim[i];
-    *x_id += coord * x_stride[i];
-    *y_id += coord * y_stride[i];
-    *z_id += coord * z_stride[i];
+    *x_id += coord * dim[i + rank];
+    *y_id += coord * dim[i + rank*2];
+    *z_id += coord * dim[i + rank*3];
     id = tmp;
   }
 }

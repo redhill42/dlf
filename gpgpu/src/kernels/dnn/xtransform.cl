@@ -21,7 +21,7 @@ void X##name##Strided(                                                  \
 {                                                                       \
   for (int id = get_global_id(0); id < n; id += get_global_size(0)) {   \
     int x_id = x_offset, y_id = y_offset;                               \
-    unravel2(id, &x_id, &y_id, rank, shape, &shape[rank], &shape[rank*2]);\
+    unravel2(id, &x_id, &y_id, rank, shape);                            \
     real x = xgm[x_id];                                                 \
     ygm[y_id] = op(x);                                                  \
   }                                                                     \

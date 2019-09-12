@@ -1257,84 +1257,477 @@ template void PUBLIC_API hardmax<double>(const size_t, const size_t,
                                          const Queue& queue, Event*);
 
 template <typename T>
-void where(const size_t n, const size_t rank,
-           const Buffer<bool>& c_buffer, const size_t c_offset,
-           const std::vector<size_t>& c_dim, const std::vector<size_t>& c_stride,
-           const Buffer<T>& x_buffer, const size_t x_offset,
-           const std::vector<size_t>& x_dim, const std::vector<size_t>& x_stride,
-           const Buffer<T>& y_buffer, const size_t y_offset,
-           const std::vector<size_t>& y_dim, const std::vector<size_t>& y_stride,
+void where(const size_t n, const std::vector<size_t>& dim,
+           const Buffer<bool>& c_buffer, const size_t c_offset, const std::vector<size_t>& c_stride,
+           const Buffer<T>& x_buffer, const size_t x_offset, const std::vector<size_t>& x_stride,
+           const Buffer<T>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_stride,
            Buffer<T>& z_buffer, const size_t z_offset,
            const Queue& queue, Event* event)
 {
     auto routine = Xwhere<T>(queue, event);
     routine.DoWhere(
-        n, rank,
-        c_buffer, c_offset, c_dim, c_stride,
-        x_buffer, x_offset, x_dim, x_stride,
-        y_buffer, y_offset, y_dim, y_stride,
+        n, dim,
+        c_buffer, c_offset, c_stride,
+        x_buffer, x_offset, x_stride,
+        y_buffer, y_offset, y_stride,
         z_buffer, z_offset);
 }
 
 template void PUBLIC_API where<int16_t>(
-    const size_t, const size_t,
-    const Buffer<bool>&, const size_t,
-    const std::vector<size_t>&, const std::vector<size_t>&,
-    const Buffer<int16_t>&, const size_t,
-    const std::vector<size_t>&, const std::vector<size_t>&,
-    const Buffer<int16_t>&, const size_t,
-    const std::vector<size_t>&, const std::vector<size_t>&,
+    const size_t, const std::vector<size_t>&,
+    const Buffer<bool>&, const size_t, const std::vector<size_t>&,
+    const Buffer<int16_t>&, const size_t, const std::vector<size_t>&,
+    const Buffer<int16_t>&, const size_t, const std::vector<size_t>&,
     Buffer<int16_t>&, const size_t,
     const Queue&, Event*);
 template void PUBLIC_API where<int32_t>(
-    const size_t, const size_t,
-    const Buffer<bool>&, const size_t,
-    const std::vector<size_t>&, const std::vector<size_t>&,
-    const Buffer<int32_t>&, const size_t,
-    const std::vector<size_t>&, const std::vector<size_t>&,
-    const Buffer<int32_t>&, const size_t,
-    const std::vector<size_t>&, const std::vector<size_t>&,
+    const size_t, const std::vector<size_t>&,
+    const Buffer<bool>&, const size_t, const std::vector<size_t>&,
+    const Buffer<int32_t>&, const size_t, const std::vector<size_t>&,
+    const Buffer<int32_t>&, const size_t, const std::vector<size_t>&,
     Buffer<int32_t>&, const size_t,
     const Queue&, Event*);
 template void PUBLIC_API where<int64_t>(
-    const size_t, const size_t,
-    const Buffer<bool>&, const size_t,
-    const std::vector<size_t>&, const std::vector<size_t>&,
-    const Buffer<int64_t>&, const size_t,
-    const std::vector<size_t>&, const std::vector<size_t>&,
-    const Buffer<int64_t>&, const size_t,
-    const std::vector<size_t>&, const std::vector<size_t>&,
+    const size_t, const std::vector<size_t>&,
+    const Buffer<bool>&, const size_t, const std::vector<size_t>&,
+    const Buffer<int64_t>&, const size_t, const std::vector<size_t>&,
+    const Buffer<int64_t>&, const size_t, const std::vector<size_t>&,
     Buffer<int64_t>&, const size_t,
     const Queue&, Event*);
 template void PUBLIC_API where<half>(
-    const size_t, const size_t,
-    const Buffer<bool>&, const size_t,
-    const std::vector<size_t>&, const std::vector<size_t>&,
-    const Buffer<half>&, const size_t,
-    const std::vector<size_t>&, const std::vector<size_t>&,
-    const Buffer<half>&, const size_t,
-    const std::vector<size_t>&, const std::vector<size_t>&,
+    const size_t, const std::vector<size_t>&,
+    const Buffer<bool>&, const size_t, const std::vector<size_t>&,
+    const Buffer<half>&, const size_t, const std::vector<size_t>&,
+    const Buffer<half>&, const size_t, const std::vector<size_t>&,
     Buffer<half>&, const size_t,
     const Queue&, Event*);
 template void PUBLIC_API where<float>(
-    const size_t, const size_t,
-    const Buffer<bool>&, const size_t,
-    const std::vector<size_t>&, const std::vector<size_t>&,
-    const Buffer<float>&, const size_t,
-    const std::vector<size_t>&, const std::vector<size_t>&,
-    const Buffer<float>&, const size_t,
-    const std::vector<size_t>&, const std::vector<size_t>&,
+    const size_t, const std::vector<size_t>&,
+    const Buffer<bool>&, const size_t, const std::vector<size_t>&,
+    const Buffer<float>&, const size_t, const std::vector<size_t>&,
+    const Buffer<float>&, const size_t, const std::vector<size_t>&,
     Buffer<float>&, const size_t,
     const Queue&, Event*);
 template void PUBLIC_API where<double>(
-    const size_t, const size_t,
-    const Buffer<bool>&, const size_t,
+    const size_t, const std::vector<size_t>&,
+    const Buffer<bool>&, const size_t, const std::vector<size_t>&,
+    const Buffer<double>&, const size_t, const std::vector<size_t>&,
+    const Buffer<double>&, const size_t, const std::vector<size_t>&,
+    Buffer<double>&, const size_t,
+    const Queue&, Event*);
+
+template <typename T>
+void gather(const size_t m, const size_t n, const size_t chunk, const size_t max_item,
+            const std::vector<size_t>& x_dim, const std::vector<size_t>& x_stride,
+            const Buffer<T>& x_buffer, const size_t x_offset,
+            const std::vector<size_t>& i_dim, const std::vector<size_t>& i_stride,
+            const Buffer<int>& i_buffer, const size_t i_offset,
+            const std::vector<size_t>& y_dim, const std::vector<size_t>& y_stride,
+            Buffer<T>& y_buffer, const size_t y_offset,
+            const Queue& queue, Event* event)
+{
+    auto routine = Xgather<T>(queue, event);
+    routine.DoGather(
+        m, n, chunk, max_item,
+        x_dim, x_stride, x_buffer, x_offset,
+        i_dim, i_stride, i_buffer, i_offset,
+        y_dim, y_stride, y_buffer, y_offset);
+}
+
+template void PUBLIC_API gather<half>(
+    const size_t, const size_t, const size_t, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<half>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<int>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<half>&, const size_t,
+    const Queue&, Event*);
+template void PUBLIC_API gather<float>(
+    const size_t, const size_t, const size_t, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<float>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<int>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<float>&, const size_t,
+    const Queue&, Event*);
+template void PUBLIC_API gather<double>(
+    const size_t, const size_t, const size_t, const size_t,
     const std::vector<size_t>&, const std::vector<size_t>&,
     const Buffer<double>&, const size_t,
     const std::vector<size_t>&, const std::vector<size_t>&,
-    const Buffer<double>&, const size_t,
+    const Buffer<int>&, const size_t,
     const std::vector<size_t>&, const std::vector<size_t>&,
     Buffer<double>&, const size_t,
+    const Queue&, Event*);
+template void PUBLIC_API gather<float2>(
+    const size_t, const size_t, const size_t, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<float2>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<int>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<float2>&, const size_t,
+    const Queue&, Event*);
+template void PUBLIC_API gather<double2>(
+    const size_t, const size_t, const size_t, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<double2>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<int>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<double2>&, const size_t,
+    const Queue&, Event*);
+template void PUBLIC_API gather<int32_t>(
+    const size_t, const size_t, const size_t, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<int32_t>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<int>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<int32_t>&, const size_t,
+    const Queue&, Event*);
+template void PUBLIC_API gather<int64_t>(
+    const size_t, const size_t, const size_t, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<int64_t>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<int>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<int64_t>&, const size_t,
+    const Queue&, Event*);
+
+template <typename T>
+void gather_elements(
+    const size_t n, const int axis,
+    const std::vector<size_t>& x_shape, const std::vector<size_t>& x_strides,
+    const Buffer<T>& x_buffer, const size_t x_offset,
+    const std::vector<size_t>& i_shape, const std::vector<size_t>& i_strides,
+    const Buffer<int>& i_buffer, const size_t i_offset,
+    const std::vector<size_t>& y_shape, const std::vector<size_t>& y_strides,
+    Buffer<T>& y_buffer, const size_t y_offset,
+    const Queue& queue, Event* event)
+{
+    auto routine = Xgather<T>(queue, event);
+    routine.DoGatherElements(
+        n, axis,
+        x_shape, x_strides, x_buffer, x_offset,
+        i_shape, i_strides, i_buffer, i_offset,
+        y_shape, y_strides, y_buffer, y_offset);
+}
+
+template void PUBLIC_API gather_elements<half>(
+    const size_t, const int,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<half>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<int>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<half>&, const size_t,
+    const Queue&, Event*);
+template void PUBLIC_API gather_elements<float>(
+    const size_t, const int,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<float>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<int>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<float>&, const size_t,
+    const Queue&, Event*);
+template void PUBLIC_API gather_elements<double>(
+    const size_t, const int,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<double>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<int>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<double>&, const size_t,
+    const Queue&, Event*);
+template void PUBLIC_API gather_elements<float2>(
+    const size_t, const int,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<float2>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<int>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<float2>&, const size_t,
+    const Queue&, Event*);
+template void PUBLIC_API gather_elements<double2>(
+    const size_t, const int,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<double2>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<int>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<double2>&, const size_t,
+    const Queue&, Event*);
+template void PUBLIC_API gather_elements<int32_t>(
+    const size_t, const int,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<int32_t>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<int>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<int32_t>&, const size_t,
+    const Queue&, Event*);
+template void PUBLIC_API gather_elements<int64_t>(
+    const size_t, const int,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<int64_t>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<int>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<int64_t>&, const size_t,
+    const Queue&, Event*);
+
+template <typename T>
+void scatter_elements(
+    const size_t n, const int axis,
+    const std::vector<size_t>& x_shape, const std::vector<size_t>& x_strides,
+    Buffer<T>& x_buffer, const size_t x_offset,
+    const std::vector<size_t>& i_shape, const std::vector<size_t>& i_strides,
+    const Buffer<int>& i_buffer, const size_t i_offset,
+    const std::vector<size_t>& y_shape, const std::vector<size_t>& y_strides,
+    const Buffer<T>& y_buffer, const size_t y_offset,
+    const Queue& queue, Event* event)
+{
+    auto routine = Xgather<T>(queue, event);
+    routine.DoScatterElements(
+        n, axis,
+        x_shape, x_strides, x_buffer, x_offset,
+        i_shape, i_strides, i_buffer, i_offset,
+        y_shape, y_strides, y_buffer, y_offset);
+}
+
+template void PUBLIC_API scatter_elements<half>(
+    const size_t, const int,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<half>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<int>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<half>&, const size_t,
+    const Queue&, Event*);
+template void PUBLIC_API scatter_elements<float>(
+    const size_t, const int,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<float>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<int>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<float>&, const size_t,
+    const Queue&, Event*);
+template void PUBLIC_API scatter_elements<double>(
+    const size_t, const int,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<double>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<int>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<double>&, const size_t,
+    const Queue&, Event*);
+template void PUBLIC_API scatter_elements<float2>(
+    const size_t, const int,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<float2>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<int>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<float2>&, const size_t,
+    const Queue&, Event*);
+template void PUBLIC_API scatter_elements<double2>(
+    const size_t, const int,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<double2>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<int>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<double2>&, const size_t,
+    const Queue&, Event*);
+template void PUBLIC_API scatter_elements<int32_t>(
+    const size_t, const int,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<int32_t>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<int>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<int32_t>&, const size_t,
+    const Queue&, Event*);
+template void PUBLIC_API scatter_elements<int64_t>(
+    const size_t, const int,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<int64_t>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<int>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<int64_t>&, const size_t,
+    const Queue&, Event*);
+
+template <typename T>
+void gather_nd(
+    const size_t n, const size_t k, const size_t chunk,
+    const std::vector<size_t>& x_shape, const std::vector<size_t>& x_strides,
+    const Buffer<T>& x_buffer, const size_t x_offset,
+    const std::vector<size_t>& i_shape, const std::vector<size_t>& i_strides,
+    const Buffer<int>& i_buffer, const size_t i_offset,
+    const std::vector<size_t>& y_shape, const std::vector<size_t>& y_strides,
+    Buffer<T>& y_buffer, const size_t y_offset,
+    const Queue& queue, Event* event)
+{
+    auto routine = Xgather<T>(queue, event);
+    routine.DoGatherND(
+        n, k, chunk,
+        x_shape, x_strides, x_buffer, x_offset,
+        i_shape, i_strides, i_buffer, i_offset,
+        y_shape, y_strides, y_buffer, y_offset);
+}
+
+template void PUBLIC_API gather_nd<half>(
+    const size_t, const size_t, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<half>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<int>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<half>&, const size_t,
+    const Queue&, Event*);
+template void PUBLIC_API gather_nd<float>(
+    const size_t, const size_t, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<float>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<int>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<float>&, const size_t,
+    const Queue&, Event*);
+template void PUBLIC_API gather_nd<double>(
+    const size_t, const size_t, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<double>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<int>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<double>&, const size_t,
+    const Queue&, Event*);
+template void PUBLIC_API gather_nd<float2>(
+    const size_t, const size_t, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<float2>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<int>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<float2>&, const size_t,
+    const Queue&, Event*);
+template void PUBLIC_API gather_nd<double2>(
+    const size_t, const size_t, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<double2>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<int>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<double2>&, const size_t,
+    const Queue&, Event*);
+template void PUBLIC_API gather_nd<int32_t>(
+    const size_t, const size_t, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<int32_t>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<int>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<int32_t>&, const size_t,
+    const Queue&, Event*);
+template void PUBLIC_API gather_nd<int64_t>(
+    const size_t, const size_t, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<int64_t>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<int>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<int64_t>&, const size_t,
+    const Queue&, Event*);
+
+template <typename T>
+void scatter_nd(
+    const size_t n, const size_t k, const size_t chunk,
+    const std::vector<size_t>& x_shape, const std::vector<size_t>& x_strides,
+    Buffer<T>& x_buffer, const size_t x_offset,
+    const std::vector<size_t>& i_shape, const std::vector<size_t>& i_strides,
+    const Buffer<int>& i_buffer, const size_t i_offset,
+    const std::vector<size_t>& y_shape, const std::vector<size_t>& y_strides,
+    const Buffer<T>& y_buffer, const size_t y_offset,
+    const Queue& queue, Event* event)
+{
+    auto routine = Xgather<T>(queue, event);
+    routine.DoScatterND(
+        n, k, chunk,
+        x_shape, x_strides, x_buffer, x_offset,
+        i_shape, i_strides, i_buffer, i_offset,
+        y_shape, y_strides, y_buffer, y_offset);
+}
+
+template void PUBLIC_API scatter_nd<half>(
+    const size_t, const size_t, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<half>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<int>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<half>&, const size_t,
+    const Queue&, Event*);
+template void PUBLIC_API scatter_nd<float>(
+    const size_t, const size_t, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<float>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<int>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<float>&, const size_t,
+    const Queue&, Event*);
+template void PUBLIC_API scatter_nd<double>(
+    const size_t, const size_t, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<double>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<int>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<double>&, const size_t,
+    const Queue&, Event*);
+template void PUBLIC_API scatter_nd<float2>(
+    const size_t, const size_t, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<float2>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<int>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<float2>&, const size_t,
+    const Queue&, Event*);
+template void PUBLIC_API scatter_nd<double2>(
+    const size_t, const size_t, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<double2>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<int>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<double2>&, const size_t,
+    const Queue&, Event*);
+template void PUBLIC_API scatter_nd<int32_t>(
+    const size_t, const size_t, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<int32_t>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<int>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<int32_t>&, const size_t,
+    const Queue&, Event*);
+template void PUBLIC_API scatter_nd<int64_t>(
+    const size_t, const size_t, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<int64_t>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<int>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<int64_t>&, const size_t,
     const Queue&, Event*);
 
 }} // namespace gpgpu::dnn

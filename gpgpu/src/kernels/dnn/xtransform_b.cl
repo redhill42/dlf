@@ -108,7 +108,7 @@ void name##Strided(const int n, const int rank, __constant int* shape,      \
 {                                                                           \
   for (int id = get_global_id(0); id < n; id += get_global_size(0)) {       \
     int x_id = x_offset, y_id = y_offset, z_id = z_offset;                  \
-    unravel3(id, &x_id, &y_id, &z_id, rank, shape, &shape[rank], &shape[rank*2], &shape[rank*3]);\
+    unravel3(id, &x_id, &y_id, &z_id, rank, shape);                         \
     real x_value = xgm[x_id], y_value = ygm[y_id];                          \
     real z_value;                                                           \
     op(z_value, x_value, y_value);                                          \
@@ -192,7 +192,7 @@ void name##Strided(const int n, const int rank, __constant int* shape,      \
 {                                                                           \
   for (int id = get_global_id(0); id < n; id += get_global_size(0)) {       \
     int x_id = x_offset, y_id = y_offset, z_id = z_offset;                  \
-    unravel3(id, &x_id, &y_id, &z_id, rank, shape, &shape[rank], &shape[rank*2], &shape[rank*3]);\
+    unravel3(id, &x_id, &y_id, &z_id, rank, shape);                         \
     zgm[z_id] = xgm[x_id] op ygm[y_id];                                     \
   }                                                                         \
 }

@@ -3,20 +3,16 @@
 R"(
 
 __kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
-void Xwhere(const int n, const int rank,
-            const __global char* restrict cgm,
-            __constant int* c_shape, const int c_offset,
-            const __global real* restrict xgm,
-            __constant int* x_shape, const int x_offset,
-            const __global real* restrict ygm,
-            __constant int* y_shape, const int y_offset,
+void Xwhere(const int n, const int rank, __constant int* shape,
+            const __global char* restrict cgm, const int c_offset,
+            const __global real* restrict xgm, const int x_offset,
+            const __global real* restrict ygm, const int y_offset,
             __global real* zgm, const int z_offset)
 {
   for (int id = get_global_id(0); id < n; id += get_global_size(0)) {
-    zgm[id + z_offset] =
-      cgm[unravel(id, rank, &c_shape[rank], c_shape) + c_offset]
-        ? xgm[unravel(id, rank, &x_shape[rank], x_shape) + x_offset]
-        : ygm[unravel(id, rank, &y_shape[rank], y_shape) + y_offset];
+    int c_id = c_offset, x_id = x_offset, y_id = y_offset;
+    unravel3(id, &c_id, &x_id, &y_id, rank, shape);
+    zgm[id + z_offset] = cgm[c_id] ? xgm[x_id] : ygm[y_id];
   }
 }
 

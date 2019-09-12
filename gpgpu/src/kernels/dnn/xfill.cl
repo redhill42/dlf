@@ -17,7 +17,7 @@ void XfillStrided(const int n, const int rank, __constant int* shape,
 {
   const real value = GetRealArg(value_arg);
   for (int id = get_global_id(0); id < n; id += get_global_size(0)) {
-    xgm[unravel(id, rank, &shape[rank], shape) + x_offset] = value;
+    xgm[unravel(id, rank, shape) + x_offset] = value;
   }
 }
 

@@ -210,6 +210,19 @@ void EuclidGCD(int a, int b, int &p, int &q, int &r);
 // =================================================================================================
 bool IsContiguous(const std::vector<size_t>& dim, const std::vector<size_t>& stride);
 
+Buffer<int> PackShape(const std::vector<size_t>& dim,
+                      const std::vector<size_t>& stride,
+                      const Context& context, const Queue& queue);
+Buffer<int> PackShape(const std::vector<size_t>& dim,
+                      const std::vector<size_t>& x_stride,
+                      const std::vector<size_t>& y_stride,
+                      const Context& context, const Queue& queue);
+Buffer<int> PackShape(const std::vector<size_t>& dim,
+                      const std::vector<size_t>& x_stride,
+                      const std::vector<size_t>& y_stride,
+                      const std::vector<size_t>& z_stride,
+                      const Context& context, const Queue& queue);
+
 }} // namespace gpgpu::blas
 
 #endif // GPGPU_BLAS_UTILITIES_H_

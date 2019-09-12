@@ -43,6 +43,8 @@
   _(Floor)                  \
   _(GRU)                    \
   _(Gather)                 \
+  _(GatherElements)         \
+  _(GatherND)               \
   _(Gemm)                   \
   _(GlobalAveragePool)      \
   _(GlobalLpPool)           \
@@ -110,6 +112,8 @@
   _(Round)                  \
   _(Scan)                   \
   _(Scatter)                \
+  _(ScatterElements)        \
+  _(ScatterND)              \
   _(Selu)                   \
   _(Shape)                  \
   _(Shrink)                 \

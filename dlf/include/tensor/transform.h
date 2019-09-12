@@ -649,10 +649,10 @@ inline where(const TensorC& C, const TensorX& X, const TensorY& Y, tensor_type<T
     auto y_shape = Y.shape().broadcast(final_shape);
 
     gpgpu::dnn::where(
-        final_shape.size(), final_shape.rank(),
-        C.data(), c_shape.offset(), c_shape.extents(), c_shape.strides(),
-        X.data(), x_shape.offset(), x_shape.extents(), x_shape.strides(),
-        Y.data(), y_shape.offset(), y_shape.extents(), y_shape.strides(),
+        final_shape.size(), final_shape.extents(),
+        C.data(), c_shape.offset(), c_shape.strides(),
+        X.data(), x_shape.offset(), x_shape.strides(),
+        Y.data(), y_shape.offset(), y_shape.strides(),
         Z.data(), 0);
 }
 

@@ -89,21 +89,14 @@ void Xtransform_b<T, R>::DoTransform(
         throw BLASError(StatusCode::kInvalidDimension);
 
     // Create compact buffer to hold strides and shapes
-    auto rank = dims.size();
-    assert(x_stride.size() == rank && y_stride.size() == rank);
-    std::vector<int> shape_data(rank * 4);
-    std::copy(dims.begin(), dims.end(), shape_data.begin());
-    std::copy(x_stride.begin(), x_stride.end(), shape_data.begin() + rank);
-    std::copy(y_stride.begin(), y_stride.end(), shape_data.begin() + rank*2);
-    std::copy(z_stride.begin(), z_stride.end(), shape_data.begin() + rank*3);
-    auto shape_buffer = context_.getSharedBuffer<int>(shape_data.data(), shape_data.size(), queue_);
+    auto shape_buffer = PackShape(dims, x_stride, y_stride, z_stride, context_, queue_);
 
     // Retrieves the kernel from the compiled binary
     auto kernel = program_.getKernel("X" + name + "Strided");
 
     // Sets the kernel arguments
     kernel.setArguments(static_cast<int>(n),
-                        static_cast<int>(rank),
+                        static_cast<int>(dims.size()),
                         shape_buffer,
                         x_buffer, static_cast<int>(x_offset),
                         y_buffer, static_cast<int>(y_offset),

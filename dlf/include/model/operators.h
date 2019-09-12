@@ -704,6 +704,25 @@ BEGIN_OPERATOR(Transpose)
     DEFINE_INTS_ATTRIBUTE(perm)
 END_OPERATOR()
 
+BEGIN_OPERATOR(Gather)
+    DEFINE_INT_ATTRIBUTE(axis, 0)
+
+    Value* data()    { return input(0); }
+    Value* indices() { return input(1); }
+END_OPERATOR()
+
+BEGIN_OPERATOR(GatherElements)
+    DEFINE_INT_ATTRIBUTE(axis, 0)
+
+    Value* data()    { return input(0); }
+    Value* indices() { return input(1); }
+END_OPERATOR()
+
+BEGIN_OPERATOR(GatherND)
+    Value* data()    { return input(0); }
+    Value* indices() { return input(1); }
+END_OPERATOR()
+
 BEGIN_OPERATOR(Scatter)
     DEFINE_INT_ATTRIBUTE(axis, 0)
 
@@ -712,11 +731,18 @@ BEGIN_OPERATOR(Scatter)
     Value* updates() { return input(2); }
 END_OPERATOR()
 
-BEGIN_OPERATOR(Gather)
+BEGIN_OPERATOR(ScatterElements)
     DEFINE_INT_ATTRIBUTE(axis, 0)
 
     Value* data()    { return input(0); }
     Value* indices() { return input(1); }
+    Value* updates() { return input(2); }
+END_OPERATOR()
+
+BEGIN_OPERATOR(ScatterND)
+    Value* data()    { return input(0); }
+    Value* indices() { return input(1); }
+    Value* updates() { return input(2); }
 END_OPERATOR()
 
 BEGIN_OPERATOR(Squeeze)

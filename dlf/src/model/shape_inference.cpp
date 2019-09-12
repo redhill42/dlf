@@ -1349,6 +1349,47 @@ public:
         n->output()->set_dims(output_shape);
     }
 
+    void visit(GatherElements* n) override {
+        if (!hasInput(n->data(), n->indices()))
+            return;
+
+        const auto& data_shape = n->data()->dims();
+        const auto& indices_shape = n->indices()->dims();
+        if (data_shape.rank() != indices_shape.rank())
+            fail_shape_inference("GatherElements: data tensor and indices tensor must have same rank");
+
+        n->output()->set_type(n->input()->type());
+        n->output()->set_dims(indices_shape);
+    }
+
+    void visit(GatherND* n) override {
+        if (!hasInput(n->data(), n->indices()))
+            return;
+
+        const auto& data_shape = n->data()->dims();
+        const auto& indices_shape = n->indices()->dims();
+        int r = static_cast<int>(data_shape.rank());
+        int q = static_cast<int>(indices_shape.rank());
+
+        if (r == 0)
+            fail_shape_inference("GatherND: data tensor must have rank >= 1");
+        if (q == 0)
+            fail_shape_inference("GatherND: indices tensor must have rank >= 1");
+
+        auto s = indices_shape[q-1];
+        if (s > r)
+            fail_shape_inference("GatherND: last dimension of indices tensor must not be larger than the rank of input tensor");
+
+        Dims output_shape;
+        for (int i = 0; i < q-1; i++)
+            output_shape.append(indices_shape[i]);
+        for (int i = s; i < r; i++)
+            output_shape.append(data_shape[i]);
+
+        n->output()->set_type(n->input()->type());
+        n->output()->set_dims(output_shape);
+    }
+
     void visit(Squeeze* n) override {
         if (!hasInput(n->input()))
             return;
