@@ -36,6 +36,20 @@ static void checkNVRTC(nvrtcResult status, const std::string& where) {
     }
 }
 
+static void checkCublas(cublasStatus_t status, const std::string& where) {
+    if (status != CUBLAS_STATUS_SUCCESS) {
+        throw APIError(static_cast<int>(status), where,
+            "CUBLAS error: " + where + ": " + std::to_string(status));
+    }
+}
+
+static void checkCudnn(cudnnStatus_t status, const std::string& where) {
+    if (status != CUDNN_STATUS_SUCCESS) {
+        throw APIError(static_cast<int>(status), where,
+            "CUDNN error: " + where + ": " + std::to_string(status));
+    }
+}
+
 static std::string trimCallString(const char* where) {
     const char* paren = strchr(where, '(');
     if (paren) {
@@ -48,6 +62,8 @@ static std::string trimCallString(const char* where) {
 #define CheckError(call) check(call, trimCallString(#call))
 #define CheckErrorDtor(call) checkDtor(call, trimCallString(#call))
 #define CheckNVRTC(call) checkNVRTC(call, trimCallString(#call))
+#define CheckCublas(call) checkCublas(call, trimCallString(#call))
+#define CheckCudnn(call) checkCudnn(call, trimCallString(#call))
 
 std::shared_ptr<rawPlatform> probe() {
     static std::shared_ptr<rawPlatform> platform;
@@ -140,6 +156,16 @@ void cuContext::deactivate() const {
     CheckError(cuCtxPopCurrent(nullptr));
 }
 
+struct context_guard {
+    context_guard(CUcontext context) {
+        CheckError(cuCtxPushCurrent(context));
+    }
+
+    ~context_guard() {
+        CheckError(cuCtxPopCurrent(nullptr));
+    }
+};
+
 cuContext::~cuContext() {
     if (m_context) {
         CheckErrorDtor(cuDevicePrimaryCtxRelease(m_device));
@@ -148,12 +174,14 @@ cuContext::~cuContext() {
 }
 
 std::shared_ptr<rawQueue> cuContext::createQueue() const {
+    context_guard guard(m_context);
     CUstream queue = nullptr;
     CheckError(cuStreamCreate(&queue, CU_STREAM_NON_BLOCKING));
     return std::make_shared<cuQueue>(queue);
 }
 
 std::shared_ptr<rawEvent> cuContext::createEvent() const {
+    context_guard guard(m_context);
     CUevent start = nullptr, end = nullptr;
     CheckError(cuEventCreate(&start, CU_EVENT_DEFAULT));
     CheckError(cuEventCreate(&end, CU_EVENT_DEFAULT));
@@ -161,6 +189,7 @@ std::shared_ptr<rawEvent> cuContext::createEvent() const {
 }
 
 std::shared_ptr<rawBuffer> cuContext::createBuffer(size_t size, BufferAccess access) const {
+    context_guard guard(m_context);
     CUdeviceptr buffer = 0;
     CheckError(cuMemAlloc(&buffer, size));
     return std::make_shared<cuBuffer>(access, buffer);
@@ -220,18 +249,16 @@ cuEvent::~cuEvent() {
 
 cublasHandle_t cuQueue::getCublasHandle() const {
     if (m_cublas == nullptr) {
-        // TODO: check error
-        cublasCreate(&m_cublas);
-        cublasSetStream(m_cublas, m_queue);
+        CheckCublas(cublasCreate(&m_cublas));
+        CheckCublas(cublasSetStream(m_cublas, m_queue));
     }
     return m_cublas;
 }
 
 cudnnHandle_t cuQueue::getCudnnHandle() const {
     if (m_cudnn == nullptr) {
-        // TODO: check error
-        cudnnCreate(&m_cudnn);
-        cudnnSetStream(m_cudnn, m_queue);
+        CheckCudnn(cudnnCreate(&m_cudnn));
+        CheckCudnn(cudnnSetStream(m_cudnn, m_queue));
     }
     return m_cudnn;
 }
