@@ -81,7 +81,7 @@ class Parser {
             start = num;
             has_start = true;
             if (next() != COLON) {
-                end = (start == -1) ? std::numeric_limits<int>::max() : (start + 1);
+                end = start;
             }
         }
         if (token == COLON && next() == NUM) {

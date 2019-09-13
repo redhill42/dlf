@@ -437,3 +437,65 @@ TEST(ViewTest, PartitionAndReduceMeanEquivalentToAveragePool) {
     auto C = dnn::average_pooling(A, dnn::Filter2D(A.shape(), 3, 3), false);
     EXPECT_EQ(B, C);
 }
+
+TEST(ViewTest, Tile_CPU) {
+    auto A = Vector({0, 1, 2});
+    EXPECT_EQ(tile(A, {2}), Vector({0, 1, 2, 0, 1, 2}));
+    EXPECT_EQ(tile(A, {2, 2}), Matrix({
+        {0, 1, 2, 0, 1, 2},
+        {0, 1, 2, 0, 1, 2}
+    }));
+    EXPECT_EQ(tile(A, {2, 1, 2}), Tensor<int>({2, 1, 6}, {
+        0, 1, 2, 0, 1, 2,
+        0, 1, 2, 0, 1, 2
+    }));
+
+    auto B = Matrix({{1, 2}, {3, 4}});
+    EXPECT_EQ(tile(B, {2}), Matrix({{1, 2, 1, 2}, {3, 4, 3, 4}}));
+    EXPECT_EQ(tile(B, {2, 1}), Matrix({{1, 2}, {3, 4}, {1, 2}, {3, 4}}));
+    EXPECT_EQ(tile(B, {2, 2}), Matrix({
+        {1, 2, 1, 2},
+        {3, 4, 3, 4},
+        {1, 2, 1, 2},
+        {3, 4, 3, 4}
+    }));
+
+    auto C = Vector({1, 2, 3, 4});
+    EXPECT_EQ(tile(C, {4, 1}), Matrix({
+        {1, 2, 3, 4},
+        {1, 2, 3, 4},
+        {1, 2, 3, 4},
+        {1, 2, 3, 4}
+    }));
+}
+
+TEST(ViewTest, Tile_GPU) {
+    auto A = dev(Vector({0, 1, 2}));
+    EXPECT_EQ(tile(A, {2}).read(), Vector({0, 1, 2, 0, 1, 2}));
+    EXPECT_EQ(tile(A, {2, 2}).read(), Matrix({
+        {0, 1, 2, 0, 1, 2},
+        {0, 1, 2, 0, 1, 2}
+    }));
+    EXPECT_EQ(tile(A, {2, 1, 2}).read(), Tensor<int>({2, 1, 6}, {
+        0, 1, 2, 0, 1, 2,
+        0, 1, 2, 0, 1, 2
+    }));
+
+    auto B = dev(Matrix({{1, 2}, {3, 4}}));
+    EXPECT_EQ(tile(B, {2}).read(), Matrix({{1, 2, 1, 2}, {3, 4, 3, 4}}));
+    EXPECT_EQ(tile(B, {2, 1}).read(), Matrix({{1, 2}, {3, 4}, {1, 2}, {3, 4}}));
+    EXPECT_EQ(tile(B, {2, 2}).read(), Matrix({
+        {1, 2, 1, 2},
+        {3, 4, 3, 4},
+        {1, 2, 1, 2},
+        {3, 4, 3, 4}
+    }));
+
+    auto C = dev(Vector({1, 2, 3, 4}));
+    EXPECT_EQ(tile(C, {4, 1}).read(), Matrix({
+        {1, 2, 3, 4},
+        {1, 2, 3, 4},
+        {1, 2, 3, 4},
+        {1, 2, 3, 4}
+    }));
+}

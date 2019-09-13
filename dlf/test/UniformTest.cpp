@@ -667,10 +667,11 @@ TEST(UniformTest, SplitCPU) {
         auto A = Tensor<int>({2, 3, 2});
         auto B = Tensor<int>({3, 3, 2});
         auto C = Tensor<int>({4, 3, 2});
-        split(0, X, {&A, &B, &C});
+        auto v = std::vector<TensorView<int>>{A.view(), B.view(), C.view()};
+        split(X, 0, v.begin(), v.end());
         EXPECT_EQ(A, Tensor<int>({2, 3, 2}, {
-            1, 2, 3,  4,  5,  6,
-            7, 8, 9, 10, 11, 12}));
+             1,  2,  3,  4,  5,  6,
+             7,  8,  9, 10, 11, 12}));
         EXPECT_EQ(B, Tensor<int>({3, 3, 2}, {
             13, 14, 15, 16, 17, 18,
             19, 20, 21, 22, 23, 24,
@@ -688,7 +689,8 @@ TEST(UniformTest, SplitCPU) {
         EXPECT_EQ(splits[2], C);
     }
 
-    /*
+    {
+        /*
              1,  2,  3,
              4,  5,  6,
              7,  8,  9,
@@ -708,13 +710,13 @@ TEST(UniformTest, SplitCPU) {
             49, 50, 51,
             52, 53, 54
 
-    */
-    {
+        */
         auto X = Tensor<int>::range({2, 9, 3}, 1);
         auto A = Tensor<int>({2, 2, 3});
         auto B = Tensor<int>({2, 3, 3});
         auto C = Tensor<int>({2, 4, 3});
-        split(1, X, {&A, &B, &C});
+        auto v = std::vector<TensorView<int>>{A.view(), B.view(), C.view()};
+        split(X, 1, v.begin(), v.end());
         EXPECT_EQ(A, Tensor<int>({2, 2, 3}, {
              1,  2,  3,
              4,  5,  6,
@@ -746,20 +748,21 @@ TEST(UniformTest, SplitCPU) {
         EXPECT_EQ(splits[2], C);
     }
 
-    /*
+    {
+        /*
              1,  2,  3,  4,  5,  6,  7,  8,  9,
             10, 11, 12, 13, 14, 15, 16, 17, 18,
             19, 20, 21, 22, 23, 24, 25, 26, 27,
             28, 29, 30, 31, 32, 33, 34, 35, 36,
             37, 38, 39, 40, 41, 42, 43, 44, 45,
             46, 47, 48, 49, 50, 51, 52, 53, 54
-     */
-    {
+         */
         auto X = Tensor<int>::range({2, 3, 9}, 1);
         auto A = Tensor<int>({2, 3, 2});
         auto B = Tensor<int>({2, 3, 3});
         auto C = Tensor<int>({2, 3, 4});
-        split(2, X, {&A, &B, &C});
+        auto v = std::vector<TensorView<int>>{A.view(), B.view(), C.view()};
+        split(X, 2, v.begin(), v.end());
         EXPECT_EQ(A, Tensor<int>({2, 3, 2}, {
             1, 2, 10, 11, 19, 20, 28, 29, 37, 38, 46, 47
         }));
@@ -786,7 +789,8 @@ TEST(UniformTest, SplitGPU) {
         auto A = dev(Tensor<int>({2, 3, 2}));
         auto B = dev(Tensor<int>({3, 3, 2}));
         auto C = dev(Tensor<int>({4, 3, 2}));
-        split(0, X, {&A, &B, &C});
+        auto v = std::vector<DevTensorView<int>>{A.view(), B.view(), C.view()};
+        split(X, 0, v.begin(), v.end());
         EXPECT_EQ(A.read(), Tensor<int>({2, 3, 2}, {
             1, 2, 3,  4,  5,  6,
             7, 8, 9, 10, 11, 12}));
@@ -808,31 +812,32 @@ TEST(UniformTest, SplitGPU) {
     }
 
     /*
-             1,  2,  3,
-             4,  5,  6,
-             7,  8,  9,
-            10, 11, 12,
-            13, 14, 15,
-            16, 17, 18,
-            19, 20, 21,
-            22, 23, 24,
-            25, 26, 27,
-            28, 29, 30,
-            31, 32, 33,
-            34, 35, 36,
-            37, 38, 39,
-            40, 41, 42,
-            43, 44, 45,
-            46, 47, 48,
-            49, 50, 51,
-            52, 53, 54
+         1,  2,  3,
+         4,  5,  6,
+         7,  8,  9,
+        10, 11, 12,
+        13, 14, 15,
+        16, 17, 18,
+        19, 20, 21,
+        22, 23, 24,
+        25, 26, 27,
+        28, 29, 30,
+        31, 32, 33,
+        34, 35, 36,
+        37, 38, 39,
+        40, 41, 42,
+        43, 44, 45,
+        46, 47, 48,
+        49, 50, 51,
+        52, 53, 54
      */
     {
         auto X = dev(Tensor<int>::range({2, 9, 3}, 1));
         auto A = dev(Tensor<int>({2, 2, 3}));
         auto B = dev(Tensor<int>({2, 3, 3}));
         auto C = dev(Tensor<int>({2, 4, 3}));
-        split(1, X, {&A, &B, &C});
+        auto v = std::vector<DevTensorView<int>>{A.view(), B.view(), C.view()};
+        split(X, 1, v.begin(), v.end());
         EXPECT_EQ(A.read(), Tensor<int>({2, 2, 3}, {
              1,  2,  3,
              4,  5,  6,
@@ -865,19 +870,20 @@ TEST(UniformTest, SplitGPU) {
     }
 
     /*
-             1,  2,  3,  4,  5,  6,  7,  8,  9,
-            10, 11, 12, 13, 14, 15, 16, 17, 18,
-            19, 20, 21, 22, 23, 24, 25, 26, 27,
-            28, 29, 30, 31, 32, 33, 34, 35, 36,
-            37, 38, 39, 40, 41, 42, 43, 44, 45,
-            46, 47, 48, 49, 50, 51, 52, 53, 54
+         1,  2,  3,  4,  5,  6,  7,  8,  9,
+        10, 11, 12, 13, 14, 15, 16, 17, 18,
+        19, 20, 21, 22, 23, 24, 25, 26, 27,
+        28, 29, 30, 31, 32, 33, 34, 35, 36,
+        37, 38, 39, 40, 41, 42, 43, 44, 45,
+        46, 47, 48, 49, 50, 51, 52, 53, 54
     */
     {
         auto X = dev(Tensor<int>::range({2, 3, 9}, 1));
         auto A = dev(Tensor<int>({2, 3, 2}));
         auto B = dev(Tensor<int>({2, 3, 3}));
         auto C = dev(Tensor<int>({2, 3, 4}));
-        split(2, X, {&A, &B, &C});
+        auto v = std::vector<DevTensorView<int>>{A.view(), B.view(), C.view()};
+        split(X, 2, v.begin(), v.end());
         EXPECT_EQ(A.read(), Tensor<int>({2, 3, 2}, {
             1, 2, 10, 11, 19, 20, 28, 29, 37, 38, 46, 47
         }));

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <unordered_set>
+
 namespace dlf {
 
 //==-------------------------------------------------------------------------
@@ -383,9 +385,13 @@ inline partition(const TensorT& X, int k, size_t n) {
  * When the nested tensor is two levels deep, this allow block matrices to be
  * constructed from their components.
  */
-template <typename TensorT>
-enable_if_tensor<TensorT, void>
-join(const Tensor<TensorT>& input, tensor_type<TensorT>& output) {
+template <typename Block, typename TensorR>
+std::enable_if_t<
+    is_cpu_tensor<Block>::value &&
+    is_tensor<tensor_value_type<Block>>::value &&
+    is_exactly_same_tensor<tensor_value_type<Block>, TensorR>::value &&
+    !std::is_const<std::remove_reference<TensorR>>::value>
+join(const Block& input, TensorR&& output) {
     // Determine the final rank
     auto rank = input.rank();
     for (const auto& b : input) {
@@ -394,7 +400,7 @@ join(const Tensor<TensorT>& input, tensor_type<TensorT>& output) {
     }
 
     // Normalize to the same rank
-    Tensor<tensor_view_type<TensorT>> blocks;
+    Tensor<tensor_view_type<tensor_value_type<Block>>> blocks{};
     transformTo(unsqueeze_left(input, rank), blocks, [rank](const auto& b){
         return unsqueeze_left(b, rank);
     });
@@ -450,12 +456,68 @@ join(const Tensor<TensorT>& input, tensor_type<TensorT>& output) {
     }
 }
 
-template <typename TensorT>
-enable_if_tensor<TensorT, tensor_type<TensorT>>
-join(const Tensor<TensorT>& input) {
-    tensor_type<TensorT> output{};
+template <typename Block>
+std::enable_if_t<
+    is_cpu_tensor<Block>::value && is_tensor<tensor_value_type<Block>>::value,
+    tensor_type<tensor_value_type<Block>>>
+join(const Block& input) {
+    tensor_type<tensor_value_type<Block>> output{};
     join(input, output);
     return output;
+}
+
+/**
+ * Construct a tensor by repeating X the number of times given by reps.
+ *
+ * If reps has length d, the result will have dimension of max(d, X.rank).
+ *
+ * If X.rank < d, A is promoted to be d-dimensional by prepending new axes.
+ * If X.rank > d, reps is promoted to X.rank by pre-pending 1's to it.
+ *
+ * @param X the input tensor.
+ * @param Y the output tensor.
+ * @param reps the number of repetitions of X along each axis.
+ */
+template <typename TensorT, typename TensorR>
+std::enable_if_t<
+    is_exactly_same_tensor<TensorT, TensorR>::value &&
+    !std::is_const<std::remove_reference<TensorR>>::value>
+tile(const TensorT& X, TensorR&& Y, std::vector<size_t> reps) {
+    auto rank = std::max(X.rank(), reps.size());
+    auto x_view = unsqueeze_left(X, rank);
+    reps.insert(reps.begin(), rank - reps.size(), 1);
+    join(Tensor<tensor_view_type<TensorT>>(Shape(reps), x_view), std::forward<TensorR>(Y));
+}
+
+template <typename TensorT>
+enable_if_tensor<TensorT>
+tile(const TensorT& X, const std::vector<size_t>& reps) {
+    tensor_type<TensorT> Y{};
+    tile(X, Y, reps);
+    return Y;
+}
+
+/**
+ * Repeat elements of a tensor.
+ */
+template <typename TensorT, typename TensorR>
+std::enable_if_t<
+    is_exactly_same_tensor<TensorT, TensorR>::value &&
+    !std::is_const<std::remove_reference<TensorR>>::value>
+repeat(const TensorT& X, TensorR&& Y, int repeats, int axis) {
+    assert(repeats > 0);
+    detail::norm_axis(X.rank(), axis);
+    std::vector<size_t> reps(X.rank(), 1);
+    reps[axis] = repeats;
+    tile(X, std::forward<TensorR>(Y), reps);
+}
+
+template <typename TensorT>
+enable_if_tensor<TensorT>
+repeat(const TensorT& X, int repeats, int axis) {
+    tensor_type<TensorT> Y{};
+    repeat(X, Y, repeats, axis);
+    return Y;
 }
 
 //==-------------------------------------------------------------------------
@@ -585,93 +647,62 @@ rot90(const TensorT& X, int k = 1, int axis1 = -2, int axis2 = -1) {
 // Concat and split
 //==-------------------------------------------------------------------------
 
-namespace detail {
-template <typename TensorT>
-void check_concat_shapes(int axis, std::vector<size_t>& dims, const TensorT& input) {
-    if (input.rank() != dims.size())
-        throw shape_error("concat: all tensors to concat must have same rank");
-    for (int i = 0; i < dims.size(); i++) {
-        if (i == axis) {
-            dims[i] += input.extent(i);
-        } else if (input.extent(i) != dims[i]) {
-            throw shape_error("concat: incompatible input tensor shape");
-        }
-    }
+template <typename Iterator, typename TensorR>
+std::enable_if_t<
+    is_exactly_same_tensor<TensorR, typename std::iterator_traits<Iterator>::value_type>::value &&
+    !std::is_const<std::remove_reference_t<TensorR>>::value>
+concat(int axis, Iterator first, Iterator last, TensorR&& output) {
+    auto rank = first->rank();
+    detail::norm_axis(rank, axis);
+
+    std::vector<size_t> dims(rank, 1);
+    dims[axis] = std::distance(first, last);
+
+    using TensorT = tensor_view_type<typename std::iterator_traits<Iterator>::value_type>;
+    auto block = Tensor<TensorT>(Shape(dims));
+    std::transform(first, last, block.begin(), [](const auto& x){ return x.view(); });
+    join(block, output);
 }
 
-template <typename TensorT, typename... Tensors>
-inline void check_concat_shapes(int axis, std::vector<size_t>& dims, const TensorT& first, const Tensors&... rest) {
-    check_concat_shapes(axis, dims, first);
-    check_concat_shapes(axis, dims, rest...);
-}
-
-template <typename TensorR, typename TensorT>
-void do_concat(int axis, int& offset, TensorR& output, const TensorT& input) {
-    int next = offset + input.extent(axis);
-    reorder(input, output.slice({offset}, {next}, {axis}, {1}));
-    offset = next;
-}
-
-template <typename TensorR, typename TensorT, typename... Tensors>
-inline void do_concat(int axis, int& offset, TensorR& output, const TensorT& first, const Tensors&... rest) {
-    do_concat(axis, offset, output, first);
-    do_concat(axis, offset, output, rest...);
-}
-} // namespace concat_detail
-
-template <typename TensorT>
-enable_if_tensor<TensorT, void>
-concat(int axis, const std::vector<const TensorT*>& inputs, tensor_type<TensorT>& output) {
-    if (inputs.empty())
-        throw std::logic_error("concat: no input tensors");
-
-    auto dims = inputs[0]->shape().extents();
-    detail::norm_axis(dims.size(), axis);
-
-    dims[axis] = 0;
-    for (auto t : inputs)
-        detail::check_concat_shapes(axis, dims, *t);
-    output.resize(Shape(dims));
-
-    int offset = 0;
-    for (auto t : inputs) {
-        detail::do_concat(axis, offset, output, *t);
-    }
+template <typename Iterator>
+std::enable_if_t<
+    is_tensor<typename std::iterator_traits<Iterator>::value_type>::value,
+    tensor_type<typename std::iterator_traits<Iterator>::value_type>>
+concat(int axis, Iterator first, Iterator last) {
+    tensor_type<typename std::iterator_traits<Iterator>::value_type> Y{};
+    concat(axis, first, last, Y);
+    return Y;
 }
 
 template <typename TensorT, typename... Tensors>
 std::enable_if_t<
     is_tensor<TensorT>::value &&
     cxx::conjunction<is_exactly_same_tensor<TensorT, Tensors>...>::value,
-    tensor_type<TensorT>
->
+    tensor_type<TensorT>>
 concat(int axis, const TensorT& first, const Tensors&... rest) {
-    detail::norm_axis(first.rank(), axis);
+    auto rank = first.rank();
+    detail::norm_axis(rank, axis);
 
-    auto dims = first.shape().extents();
-    dims[axis] = 0;
-    detail::check_concat_shapes(axis, dims, first, rest...);
-
-    auto output = tensor_type<TensorT>{Shape(dims)};
-    auto offset = 0;
-    detail::do_concat(axis, offset, output, first, rest...);
-    return output;
+    std::vector<size_t> dims(rank, 1);
+    dims[axis] = 1 + sizeof...(rest);
+    return join(Tensor<tensor_view_type<TensorT>>(Shape(dims), {first.view(), rest.view()...}));
 }
 
-template <typename TensorT>
-enable_if_tensor<TensorT, void>
-split(int axis, const TensorT& input, const std::vector<tensor_type<TensorT>*>& outputs) {
+template <typename TensorT, typename Iterator>
+std::enable_if_t<
+    is_exactly_same_tensor<TensorT, typename std::iterator_traits<Iterator>::value_type>::value>
+split(const TensorT& input, int axis, Iterator first, Iterator last) {
     auto rank = input.rank();
     detail::norm_axis(rank, axis);
 
     size_t dim_sum = 0;
-    for (auto t : outputs) {
-        if (t->rank() != rank)
+    for (auto it = first; it != last; ++it) {
+        if (it->rank() != rank)
             throw shape_error("split: all output tensors must have same rank");
-        for (int i = 0; i < rank; i++) {
+        for (int i = 0; i < rank; ++i) {
             if (i == axis) {
-                dim_sum += t->extent(i);
-            } else if (t->extent(i) != input.extent(i)) {
+                dim_sum += it->extent(i);
+            } else if (it->extent(i) != input.extent(i)) {
                 throw shape_error("split: incompatible output tensor shape");
             }
         }
@@ -681,9 +712,9 @@ split(int axis, const TensorT& input, const std::vector<tensor_type<TensorT>*>& 
     }
 
     int offset = 0;
-    for (auto t : outputs) {
-        int next = offset + t->extent(axis);
-        reorder(input.slice({offset}, {next}, {axis}, {1}), *t);
+    for (auto it = first; it != last; ++it) {
+        int next = offset + it->extent(axis);
+        reorder(input.slice({offset}, {next}, {axis}, {1}), *it);
         offset = next;
     }
 }
@@ -718,6 +749,118 @@ split(const TensorT& input, int axis, int n_split) {
     for (int i = 0; i < n_split; i++)
         splits.push_back(i < left_over ? chunk_size+1 : chunk_size);
     return split(input, axis, splits);
+}
+
+template <typename TensorT>
+enable_if_tensor<TensorT>
+erase(const TensorT& X, int axis, const std::vector<Range>& range) {
+    detail::norm_axis(X.rank(), axis);
+    auto max_item = X.extent(axis);
+
+    std::unordered_set<int> erased_items;
+    for (auto r : range) {
+        r = r.normalize(max_item);
+        for (int i = r.start, n = r.size(); n > 0; --n, i += r.step)
+            erased_items.insert(i);
+    }
+    if (erased_items.size() == max_item) {
+        throw std::logic_error("erase: cannot erase all items in an axis");
+    }
+
+    std::vector<tensor_view_type<TensorT>> slices;
+    for (int start = 0; start < max_item; start++) {
+        if (erased_items.find(start) == erased_items.end()) {
+            int end = start+1;
+            for (; end < max_item; end++) {
+                if (erased_items.find(end) != erased_items.end())
+                    break;
+            }
+            slices.push_back(X.slice({start}, {end}, {axis}, {1}));
+            start = end;
+        }
+    }
+
+    return concat(axis, slices.begin(), slices.end());
+}
+
+template <typename TensorT, typename TensorU>
+std::enable_if_t<
+    is_exactly_same_tensor<TensorT, TensorU>::value,
+    tensor_type<TensorT>>
+insert(const TensorT& X, int axis, const std::vector<int>& insertions, const TensorU& values) {
+    detail::norm_axis(X.rank(), axis);
+    auto max_item = X.extent(axis);
+
+    tensor_view_type<TensorT> value_view = values.view();
+    if (value_view.is_scalar()) {
+        auto dims = X.shape().extents();
+        dims[axis] = 1;
+        value_view = value_view.broadcast(Shape(dims));
+    }
+
+    std::vector<tensor_view_type<TensorT>> slices;
+    for (int start = 0; start < max_item; ) {
+        if (std::find(insertions.begin(), insertions.end(), start) != insertions.end()) {
+            slices.push_back(value_view);
+        }
+
+        int end = start+1;
+        for (; end < max_item; ++end) {
+            if (std::find(insertions.begin(), insertions.end(), end) != insertions.end())
+                break;
+        }
+        slices.push_back(X.slice({start}, {end}, {axis}, {1}));
+        start = end;
+    }
+    if (std::find(insertions.begin(), insertions.end(), max_item) != insertions.end()) {
+        slices.push_back(value_view);
+    }
+
+    return concat(axis, slices.begin(), slices.end());
+}
+
+template <typename TensorT, typename TensorU>
+std::enable_if_t<
+    is_exactly_same_tensor<TensorT, TensorU>::value,
+    tensor_type<TensorT>>
+replace(const TensorT& X, int axis, const std::vector<Range>& range, const TensorU& values) {
+    detail::norm_axis(X.rank(), axis);
+    auto max_item = X.extent(axis);
+
+    tensor_view_type<TensorT> value_view = values.view();
+    if (value_view.is_scalar()) {
+        auto dims = X.shape().extents();
+        dims[axis] = 1;
+        value_view = value_view.broadcast(Shape(dims));
+    }
+
+    std::unordered_set<int> erased_items;
+    for (auto r : range) {
+        r = r.normalize(max_item);
+        for (int i = r.start, n = r.size(); n > 0; --n, i += r.step)
+            erased_items.insert(i);
+    }
+
+    std::vector<tensor_view_type<TensorT>> slices;
+    for (int start = 0; start < max_item; ) {
+        if (erased_items.find(start) != erased_items.end()) {
+            slices.push_back(value_view);
+            for (++start; start < max_item; ++start) {
+                if (erased_items.find(start) == erased_items.end())
+                    break;
+            }
+        } else {
+            int end = start + 1;
+            for (; end < max_item; ++end) {
+                if (erased_items.find(end) != erased_items.end())
+                    break;
+            }
+            slices.push_back(X.slice({start}, {end}, {axis}, {1}));
+            start = end;
+        }
+    }
+
+    return concat(axis, slices.begin(), slices.end());
 }
 
 //==-------------------------------------------------------------------------

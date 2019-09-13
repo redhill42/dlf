@@ -534,8 +534,10 @@ private:
               output(of->alloc(n->output())) {}
 
         void evaluate() override {
-            if (inputs.size() == 0)
-                return; // FIXME: fill with zero?
+            if (inputs.size() == 0) {
+                output.fill(T{}); // fill with zero
+                return;
+            }
             if (inputs.size() == 1) {
                 assert(inputs.front().shape() == output.shape());
                 flat_copy(inputs.front(), output);
@@ -900,10 +902,7 @@ private:
               axis(n->axis()) {}
 
         void evaluate() override {
-            std::vector<const TensorT<>*> tmp;
-            for (const auto& t : inputs)
-                tmp.push_back(&t);
-            concat(axis, tmp, output);
+            concat(axis, inputs.begin(), inputs.end(), output);
         }
     };
 
@@ -922,10 +921,7 @@ private:
               axis(n->axis()) {}
 
         void evaluate() override {
-            std::vector<TensorT<>*> tmp;
-            for (auto& t : outputs)
-                tmp.push_back(&t);
-            split(axis, input, tmp);
+            split(input, axis, outputs.begin(), outputs.end());
         }
     };
 
@@ -1147,6 +1143,26 @@ private:
 
     void visit(model::Pad* n) override {
         result = std::make_unique<PadOp>(this, n);
+    }
+
+    struct TileOp : Operator {
+        TensorT<> X, Y;
+        DatumPtr reps;
+
+        TileOp(OperatorFactory* of, model::Tile* n)
+            : X(of->alloc(n->input())),
+              Y(of->alloc(n->output())),
+              reps(of->allocDatum<int>(n->repeats())) {}
+
+        void evaluate() override {
+            auto v = reps->template read<int>();
+            assert(v.rank() == 1);
+            tile(X, Y, std::vector<size_t>(v.begin(), v.end()));
+        }
+    };
+
+    void visit(model::Tile* n) override {
+        result = std::make_unique<TileOp>(this, n);
     }
 
     struct SpaceToDepthOp : Operator {

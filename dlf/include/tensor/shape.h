@@ -22,6 +22,33 @@ struct Range {
     Range(int start) : start(start), end(start), step(1) {}
     Range(int start, int end, int step = 1) :
         start(start), end(end), step(step) {}
+
+    Range normalize(int max_item) const noexcept {
+        int start = this->start;
+        if (start < 0)
+            start += max_item;
+        if (step < 0)
+            start = cxx::clamp(start, 0, max_item-1);
+        else
+            start = cxx::clamp(start, 0, max_item);
+
+        int end = this->end;
+        if (end < 0)
+            end += max_item;
+        if (step < 0)
+            end = cxx::clamp(end, -1, max_item);
+        else
+            end = cxx::clamp(end, 0, max_item);
+
+        return Range(start, end, step);
+    }
+
+    int size() const noexcept {
+        int len = (end - start - (step<0 ? -1 : 1)) / step + 1;
+        if (len == 0)
+            len = 1;
+        return len;
+    }
 };
 
 /**
