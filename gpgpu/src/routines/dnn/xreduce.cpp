@@ -84,6 +84,8 @@ void Xreduce<T>::DoReduce(
 template class Xreduce<half>;
 template class Xreduce<float>;
 template class Xreduce<double>;
+template class Xreduce<float2>;
+template class Xreduce<double2>;
 template class Xreduce<int32_t>;
 template class Xreduce<int64_t>;
 

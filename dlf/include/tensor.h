@@ -1,6 +1,18 @@
 #pragma once
 
+#include <functional>
+#include <unordered_set>
+#include <complex>
+#include <random>
+#include <iostream>
+#include <iomanip>
+#include <cstddef>
+#include <cstdlib>
+#include <cmath>
+
 #include "utility.h"
+#include "parallel.h"
+#include "cxxblas.h"
 
 #include "tensor/shape.h"
 #include "tensor/xfn.h"

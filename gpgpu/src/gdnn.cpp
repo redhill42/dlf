@@ -633,6 +633,18 @@ template void PUBLIC_API reduce<double> (const std::string&, const size_t, const
                                          const std::vector<size_t>&, const std::vector<size_t>&,
                                          Buffer<double>&, const size_t,
                                          const Queue&, Event*);
+template void PUBLIC_API reduce<float2> (const std::string&, const size_t, const size_t,
+                                         const std::vector<size_t>&, const std::vector<size_t>&,
+                                         const Buffer<float2>&, const size_t,
+                                         const std::vector<size_t>&, const std::vector<size_t>&,
+                                         Buffer<float2>&, const size_t,
+                                         const Queue&, Event*);
+template void PUBLIC_API reduce<double2>(const std::string&, const size_t, const size_t,
+                                         const std::vector<size_t>&, const std::vector<size_t>&,
+                                         const Buffer<double2>&, const size_t,
+                                         const std::vector<size_t>&, const std::vector<size_t>&,
+                                         Buffer<double2>&, const size_t,
+                                         const Queue&, Event*);
 template void PUBLIC_API reduce<int32_t>(const std::string&, const size_t, const size_t,
                                          const std::vector<size_t>&, const std::vector<size_t>&,
                                          const Buffer<int32_t>&, const size_t,

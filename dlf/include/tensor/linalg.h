@@ -1,26 +1,6 @@
 #pragma once
 
-#include <unordered_set>
-
 namespace dlf {
-
-namespace detail {
-template <typename T>
-std::enable_if_t<std::is_literal_type<T>::value, T>
-inline constexpr one() { return T{1}; }
-
-template <typename T>
-std::enable_if_t<!std::is_literal_type<T>::value, const T&>
-inline one() { static T one{1}; return one; }
-
-template <typename T>
-std::enable_if_t<std::is_literal_type<T>::value, T>
-inline constexpr zero() { return T{}; }
-
-template <typename T>
-std::enable_if_t<!std::is_literal_type<T>::value, const T&>
-inline zero() { static T zero{}; return zero; }
-}
 
 //==-------------------------------------------------------------------------
 // Low level BLAS routines
@@ -103,7 +83,7 @@ enable_if_non_view_tensor<TensorT, tensor_type<TensorT>>
 gemv(const TensorT& A, const TensorT& x) {
     using T = tensor_value_type<TensorT>;
     tensor_type<TensorT> y{};
-    gemv(cblas::Transpose::NoTrans, detail::one<T>(), A, x, detail::zero<T>(), y);
+    gemv(cblas::Transpose::NoTrans, xfn::one<T>(), A, x, xfn::zero<T>(), y);
     return y;
 }
 
@@ -124,12 +104,12 @@ gemm(cblas::Transpose transA, cblas::Transpose transB,
     if (transB != cblas::Transpose::NoTrans)
         std::swap(ldb, incB);
 
-    if (beta == detail::zero<T>()) {
+    if (beta == xfn::zero<T>()) {
         par::fill(C, C + m*n, beta);
-    } else if (beta != detail::one<T>()) {
+    } else if (beta != xfn::one<T>()) {
         par::transform(C, C + m*n, C, [&beta](const auto& x){ return beta*x; });
     }
-    if (alpha == detail::zero<T>()) {
+    if (alpha == xfn::zero<T>()) {
         return;
     }
 
@@ -376,7 +356,7 @@ enable_if_non_view_tensor<TensorT, tensor_type<TensorT>>
 symv(cblas::Triangle uplo, const TensorT& A, const TensorT& x) {
     using T = tensor_value_type<TensorT>;
     tensor_type<TensorT> y{};
-    symv(uplo, detail::one<T>(), A, x, detail::zero<T>(), y);
+    symv(uplo, xfn::one<T>(), A, x, xfn::zero<T>(), y);
     return y;
 }
 
@@ -409,7 +389,7 @@ enable_if_non_view_tensor<TensorT, tensor_type<TensorT>>
 symm(cblas::Side side, cblas::Triangle uplo, const TensorT& A, const TensorT& B) {
     using T = tensor_value_type<TensorT>;
     tensor_type<TensorT> C{};
-    symm(side, uplo, detail::one<T>(), A, B, detail::zero<T>(), C);
+    symm(side, uplo, xfn::one<T>(), A, B, xfn::zero<T>(), C);
     return C;
 }
 
@@ -425,11 +405,11 @@ void triangular_lower_to_squared(const T* A, int lda, T* X, int k, bool unit_dia
             T* px = X + i*k + r.cols().begin();
             for (int j = r.cols().begin(); j < r.cols().end(); j++, px++) {
                 if (unit_diagonal && i == j)
-                    *px = detail::one<T>();
+                    *px = xfn::one<T>();
                 else if (j <= i)
                     *px = A[i*lda + j];
                 else
-                    *px = detail::zero<T>();
+                    *px = xfn::zero<T>();
             }
         }
     });
@@ -442,11 +422,11 @@ void triangular_upper_to_squared(const T* A, int lda, T* X, int k, bool unit_dia
             T* px = X + i*k + r.cols().begin();
             for (int j = r.cols().begin(); j < r.cols().end(); j++, px++) {
                 if (unit_diagonal && i == j)
-                    *px = detail::one<T>();
+                    *px = xfn::one<T>();
                 else if (j >= i)
                     *px = A[i*lda + j];
                 else
-                    *px = detail::zero<T>();
+                    *px = xfn::zero<T>();
             }
         }
     });
@@ -462,7 +442,7 @@ trmv(cblas::Triangle uplo, cblas::Transpose trans, cblas::Diagonal diag,
         triangular_lower_to_squared(A, lda, t.get(), n, diag == cblas::Diagonal::Unit);
     else
         triangular_upper_to_squared(A, lda, t.get(), n, diag == cblas::Diagonal::Unit);
-    gemv(trans, n, n, detail::one<T>(), t.get(), n, x, incX, detail::zero<T>(), x, incX);
+    gemv(trans, n, n, xfn::one<T>(), t.get(), n, x, incX, xfn::zero<T>(), x, incX);
 }
 
 template <typename T>
@@ -505,12 +485,12 @@ trmm(cblas::Side side, cblas::Triangle uplo, cblas::Transpose transA, cblas::Dia
         gemm(transA, cblas::Transpose::NoTrans,
              m, n, k,
              alpha, X.get(), k, Y.get(), n,
-             detail::zero<T>(), B, ldb);
+             xfn::zero<T>(), B, ldb);
     } else {
         gemm(transA, cblas::Transpose::NoTrans,
              m, n, k,
              alpha, X.get(), k, Y.get(), n,
-             detail::zero<T>(), B, ldb);
+             xfn::zero<T>(), B, ldb);
     }
 }
 
@@ -589,7 +569,7 @@ trmm(cblas::Side side, cblas::Triangle uplo, cblas::Transpose transA, cblas::Dia
 {
     using T = tensor_value_type<TensorT>;
     tensor_type<TensorT> C{};
-    trmm(side, uplo, transA, diag, detail::one<T>(), A, B, C);
+    trmm(side, uplo, transA, diag, xfn::one<T>(), A, B, C);
     return C;
 }
 
@@ -787,9 +767,9 @@ matmul_cpu(int m, int n, int p,
            const T& beta, T* C, int ldc)
 {
     if (m == 1 && n == 1) {
-        auto v = (alpha == detail::zero<T>()) ? alpha : tbb::parallel_reduce(
+        auto v = (alpha == xfn::zero<T>()) ? alpha : tbb::parallel_reduce(
             tbb::blocked_range<int>(0, p, GRAINSIZE),
-            detail::zero<T>(),
+            xfn::zero<T>(),
             [=](auto r, T sum) {
                 auto px = A + r.begin()*incA;
                 auto py = B + r.begin()*ldb;
@@ -800,14 +780,14 @@ matmul_cpu(int m, int n, int p,
             std::plus<T>());
         *C = alpha * v + beta * *C;
     } else {
-        if (beta == detail::zero<T>()) {
+        if (beta == xfn::zero<T>()) {
             tbb::parallel_for(tbb::blocked_range<int>(0, m, 32), [=](auto r) {
                 for (int i = r.begin(); i < r.end(); i++) {
                     auto pc = C + i*ldc;
-                    std::fill(pc, pc + n, detail::zero<T>());
+                    std::fill(pc, pc + n, xfn::zero<T>());
                 }
             });
-        } else if (beta != detail::one<T>()) {
+        } else if (beta != xfn::one<T>()) {
             tbb::parallel_for(tbb::blocked_range<int>(0, m, 32), [=,&beta](auto r) {
                 for (int i = r.begin(); i < r.end(); i++) {
                     auto pc = C + i*ldc;
@@ -815,7 +795,7 @@ matmul_cpu(int m, int n, int p,
                 }
             });
         }
-        if (alpha == detail::zero<T>()) {
+        if (alpha == xfn::zero<T>()) {
             return;
         }
 
@@ -883,7 +863,7 @@ void matmul(int m, int n, int k,
             const Shape& shapeC, gpgpu::Buffer<T>& C, int ldc,
             int batch_size)
 {
-    if (batch_size == 1 && m == 1 && n == 1 && alpha == detail::one<T>() && beta == detail::zero<T>()) {
+    if (batch_size == 1 && m == 1 && n == 1 && alpha == xfn::one<T>() && beta == xfn::zero<T>()) {
         gblas::dot(
             k,
             A, shapeA.offset(), incA,
@@ -1088,7 +1068,7 @@ std::enable_if_t<
     !std::is_const<std::remove_reference_t<RET>>::value>
 matmul(const LHS& A, const RHS& B, RET&& C) {
     using T = tensor_value_type<LHS>;
-    matmul(detail::one<T>(), A, B, detail::zero<T>(), C);
+    matmul(xfn::one<T>(), A, B, xfn::zero<T>(), C);
 }
 
 template <typename LHS, typename RHS>
@@ -1564,6 +1544,109 @@ enable_if_tensor<TensorT> diag(const TensorT& diagonal) {
 template <typename TensorT>
 enable_if_tensor<TensorT> trace(const TensorT& X, int offset = 0, int axis1 = -2, int axis2 = -1) {
     return reduce_sum(X.diagonal(offset, axis1, axis2), {-1}, false);
+}
+
+/**
+ * Matrix or vector norm.
+ *
+ * This function is able to return one of eight different matrix norms, or one
+ * of an infinite number of vector norms (described below), depending on the
+ * value of the `ord` parameter.
+ *
+ * @param X Input tensor. If `axis` is omitted, `X` must be 1-D or 2D.
+ * @param ord Order of the norm (see table under Notes).
+ * @param axis Specifies the axis of `X` along which to compute the norms.
+ * @param keepdims If this is set to true, the axes which are normed over are
+ *        left in the result as dimensions with size one.
+ *
+ * @note
+ *
+ * The following norms can be calculated:
+ *
+ * =====  ============================  =======================
+ * ord    norm for matrices             norm for vectors
+ * =====  ============================  =======================
+ * inf    max(sum(abs(x), axis=1)       max(abs(x))
+ * 1      max(sum(abs(x), axis=0)       as below
+ * 2      2-norm (largest sing. value)  as below
+ * other  --                            sum(abs(x)^ord)^(1/ord)
+ * =====  ============================  =======================
+ */
+namespace detail {
+template <typename TensorT>
+std::enable_if_t<is_cpu_tensor<TensorT>::value, tensor_type<TensorT>>
+norm_p(const TensorT& X, float ord, int axis, bool keepdims) {
+    using T = tensor_value_type<TensorT>;
+    const auto p = static_cast<T>(ord);
+    return reduce(X, {axis}, keepdims,
+        xfn::zero<T>(),
+        [p](auto acc, auto x) -> T {
+            if (x == xfn::zero<T>())
+                return acc;
+            return acc + std::pow(std::abs(x), p);
+        },
+        [p](auto acc, auto) -> T {
+            return std::pow(acc, xfn::one<T>()/p);
+        });
+}
+
+template <typename TensorT>
+std::enable_if_t<!is_cpu_tensor<TensorT>::value, tensor_type<TensorT>>
+norm_p(const TensorT& X, float ord, int axis, bool keepdims) {
+    using T = tensor_value_type<TensorT>;
+    const auto p = static_cast<T>(ord);
+    return pow(reduce_sum(pow(abs(X), p), axis, keepdims), xfn::one<T>()/p);
+}
+} // namespace detail
+
+template <typename TensorT>
+enable_if_tensor<TensorT>
+norm(const TensorT& X, float ord, int axis, bool keepdims = false) {
+    if (ord < 1.f)
+        throw std::logic_error("norm: invalid norm order for vector");
+    if (std::isinf(ord))
+        return reduce_amax(X, axis, keepdims);
+    if (ord == 1.f) // special case for speed up
+        return reduce_asum(X, axis, keepdims);
+    if (std::isnan(ord) || ord == 2.f) // special case for speed up
+        return reduce_nrm2(X, axis, keepdims);
+    return detail::norm_p(X, ord, axis, keepdims);
+}
+
+template <typename TensorT>
+enable_if_tensor<TensorT>
+norm(const TensorT& X, float ord, int row_axis, int col_axis, bool keepdims = false) {
+    detail::norm_axes(X.rank(), row_axis, col_axis);
+
+    if (std::isnan(ord)) {
+        // Frobenius norm
+        return reduce_nrm2(X, {row_axis, col_axis}, keepdims);
+    }
+
+    if (ord > 0.f && std::isinf(ord)) {
+        if (row_axis > col_axis && !keepdims)
+            row_axis--;
+        return reduce_max(reduce_asum(X, col_axis, keepdims), row_axis, keepdims);
+    }
+
+    if (ord == 1.f) {
+        if (col_axis > row_axis && !keepdims)
+            col_axis--;
+        return reduce_max(reduce_asum(X, row_axis, keepdims), col_axis, keepdims);
+    }
+
+    // TODO: for ord == 2, we need singular value decomposition
+    throw std::logic_error("norm: invalid norm order for matrices");
+}
+
+template <typename TensorT>
+enable_if_tensor<TensorT>
+norm(const TensorT& X, float ord, bool keepdims = false) {
+    if (X.rank() == 1)
+        return norm(X, ord, 0, keepdims);
+    if (X.rank() == 2)
+        return norm(X, ord, 0, 1, keepdims);
+    throw shape_error("norm: improper number of dimensions to norm");
 }
 
 } // namespace dlf

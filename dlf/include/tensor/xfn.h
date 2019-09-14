@@ -1,15 +1,36 @@
 #pragma once
 
-#include <functional>
-#include <type_traits>
-#include <string>
-#include <cmath>
-
 namespace dlf { namespace xfn {
 
 template <typename T>
+std::enable_if_t<std::is_literal_type<T>::value, T>
+inline constexpr zero() { return T{}; }
+
+template <typename T>
+std::enable_if_t<!std::is_literal_type<T>::value, const T&>
+inline zero() { static T zero{}; return zero; }
+
+template <typename T>
+std::enable_if_t<std::is_literal_type<T>::value, T>
+inline constexpr one() { return T{1}; }
+
+template <typename T>
+std::enable_if_t<!std::is_literal_type<T>::value, const T&>
+inline one() { static T one{1}; return one; }
+
+template <typename T>
+std::enable_if_t<std::is_literal_type<T>::value, T>
+inline constexpr neg_one() { return T{-1}; }
+
+template <typename T>
+std::enable_if_t<!std::is_literal_type<T>::value, const T&>
+inline neg_one() { static T neg_one{-1}; return neg_one; }
+
+//==-------------------------------------------------------------------------
+
+template <typename T>
 struct parameterized_function {
-    const T alpha{0}, beta{0};
+    const T alpha = zero<T>(), beta = zero<T>();
     constexpr parameterized_function() = default;
     constexpr explicit parameterized_function(const T& alpha)
         : alpha(alpha) {}
@@ -43,7 +64,7 @@ template <typename T = void>
 struct sign : std::unary_function<T,T> {
     static constexpr auto name = "sign";
     constexpr T operator()(const T& x) const
-        { return (T() < x) - (x < T()); }
+        { return (zero<T>() < x) - (x < zero<T>()); }
 };
 
 template <>
@@ -51,9 +72,9 @@ struct sign<void> {
     static constexpr auto name = "sign";
     template <typename T>
     constexpr auto operator()(T&& x) const
-    noexcept(noexcept((T() < x) - (x < T())))
-    -> decltype      ((T() < x) - (x < T()))
-        { return      (T() < x) - (x < T()); }
+    noexcept(noexcept((zero<T>() < x) - (x < zero<T>())))
+    -> decltype      ((zero<T>() < x) - (x < zero<T>()))
+        { return      (zero<T>() < x) - (x < zero<T>()); }
 };
 
 #define DEFINE_UNARY_FUNCTION(fn, op) \
@@ -63,7 +84,7 @@ struct fn : std::unary_function<T,T> { \
     T operator()(const T& x) const { return op; } \
 };
 
-DEFINE_UNARY_FUNCTION(reciprocal, T(1)/x)
+DEFINE_UNARY_FUNCTION(reciprocal, one<T>()/x)
 DEFINE_UNARY_FUNCTION(floor, std::floor(x))
 DEFINE_UNARY_FUNCTION(ceil, std::ceil(x))
 DEFINE_UNARY_FUNCTION(round, std::round(x))
@@ -84,7 +105,7 @@ DEFINE_UNARY_FUNCTION(asinh, std::asinh(x))
 DEFINE_UNARY_FUNCTION(acosh, std::acosh(x))
 DEFINE_UNARY_FUNCTION(atanh, std::atanh(x))
 DEFINE_UNARY_FUNCTION(erf, std::erf(x))
-DEFINE_UNARY_FUNCTION(sigmoid, T(1)/(T(1)+std::exp(-x)))
+DEFINE_UNARY_FUNCTION(sigmoid, one<T>()/(one<T>()+std::exp(-x)))
 
 #undef DEFINE_UNARY_FUNCTION
 
@@ -171,9 +192,8 @@ struct max : std::binary_function<T,T,T> {
     const Compare comp{};
     constexpr max() = default;
     constexpr max(Compare comp) : comp(comp) {}
-    constexpr T operator()(const T& x, const T& y) const {
-        return std::max(x, y, comp);
-    }
+    constexpr T operator()(const T& x, const T& y) const
+        { return std::max(x, y, comp); }
 };
 
 template <typename T, typename Compare = std::less<>>
@@ -182,9 +202,8 @@ struct min : std::binary_function<T,T,T> {
     const Compare comp{};
     constexpr min() = default;
     constexpr min(Compare comp) : comp(comp) {}
-    constexpr T operator()(const T& x, const T& y) const {
-        return std::min(x, y, comp);
-    }
+    constexpr T operator()(const T& x, const T& y) const
+        { return std::min(x, y, comp); }
 };
 
 //==-------------------------------------------------------------------------
@@ -275,24 +294,22 @@ struct shrink : std::unary_function<T,T>, parameterized_function<T> {
         : parameterized_function<T>(lambd, bias) {}
     const T operator()(const T& x) const {
         return x < -this->alpha ? x + this->beta :
-               x >  this->alpha ? x - this->beta : 0;
+               x >  this->alpha ? x - this->beta : zero<T>();
     }
 };
 
 template <typename T>
 struct relu : std::unary_function<T,T>, parameterized_function<T> {
     static constexpr auto name = "relu";
-    constexpr T operator()(const T& x) const {
-        return std::max(T(), x);
-    }
+    constexpr T operator()(const T& x) const
+        { return std::max(zero<T>(), x); }
 };
 
 template <typename T>
 struct prelu : std::binary_function<T,T,T> {
     static constexpr auto name = "prelu";
-    constexpr T operator()(const T& x, const T& slope) const {
-        return x < T() ? x*slope : x;
-    }
+    constexpr T operator()(const T& x, const T& slope) const
+        { return x < zero<T>() ? x*slope : x; }
 };
 
 template <typename T>
@@ -300,9 +317,8 @@ struct leaky_relu : std::unary_function<T,T>, parameterized_function<T> {
     static constexpr auto name = "leaky_relu";
     constexpr leaky_relu(const T& alpha)
         : parameterized_function<T>(alpha) {}
-    constexpr T operator()(const T& x) const {
-        return x < T() ? x*this->alpha : x;
-    }
+    constexpr T operator()(const T& x) const
+        { return x < zero<T>() ? x*this->alpha : x; }
 };
 
 template <typename T>
@@ -310,9 +326,8 @@ struct thresholded_relu : std::unary_function<T,T>, parameterized_function<T> {
     static constexpr auto name = "thresholded_relu";
     constexpr thresholded_relu(const T& alpha)
         : parameterized_function<T>(alpha) {}
-    constexpr T operator()(const T& x) const {
-        return x > this->alpha ? x : T();
-    }
+    constexpr T operator()(const T& x) const
+        { return x > this->alpha ? x : zero<T>(); }
 };
 
 template <typename T>
@@ -320,18 +335,16 @@ struct selu : std::unary_function<T,T>, parameterized_function<T> {
     static constexpr auto name = "selu";
     selu(const T& alpha, const T& gamma)
         : parameterized_function<T>(alpha, gamma) {}
-    constexpr T operator()(const T& x) const {
-        return this->beta * (x < T() ? this->alpha*(std::exp(x) - T(1)) : x);
-    }
+    constexpr T operator()(const T& x) const
+        { return this->beta * (x < zero<T>() ? this->alpha*(std::exp(x) - one<T>()) : x); }
 };
 
 template <typename T>
 struct elu : std::unary_function<T,T>, parameterized_function<T> {
     static constexpr auto name = "elu";
     elu(const T& alpha) : parameterized_function<T>(alpha) {}
-    constexpr T operator()(const T& x) const {
-        return x < T() ? this->alpha*(std::exp(x) - T(1)) : x;
-    }
+    constexpr T operator()(const T& x) const
+        { return x < zero<T>() ? this->alpha*(std::exp(x) - one<T>()) : x; }
 };
 
 template <typename T>
@@ -339,75 +352,91 @@ struct hard_sigmoid : std::unary_function<T,T>, parameterized_function<T> {
     static constexpr auto name = "hard_sigmoid";
     constexpr hard_sigmoid(const T& alpha, const T& beta)
         : parameterized_function<T>(alpha, beta) {}
-    constexpr T operator()(const T& x) const {
-        return std::max(T(), std::min(T(1), this->alpha*x + this->beta));
-    }
+    constexpr T operator()(const T& x) const
+        { return std::max(zero<T>(), std::min(one<T>(), this->alpha*x + this->beta)); }
 };
 
 template <typename T>
 struct softsign : std::unary_function<T,T>, parameterized_function<T> {
     static constexpr auto name = "softsign";
-    constexpr T operator()(const T& x) const {
-        return x / (T(1) + std::abs(x));
-    }
+    constexpr T operator()(const T& x) const
+        { return x / (one<T>() + std::abs(x)); }
 };
 
 template <typename T>
 struct softplus : std::unary_function<T,T>, parameterized_function<T> {
     static constexpr auto name = "softplus";
-    constexpr T operator()(const T& x) const {
-        return std::log(std::exp(x) + T(1));
-    }
+    constexpr T operator()(const T& x) const
+        { return std::log(std::exp(x) + one<T>()); }
 };
 
 //==-------------------------------------------------------------------------
 
 template <typename T>
 struct post_reduce_identity {
-    constexpr T operator()(const T& acc, const int) {
-        return acc;
-    }
+    constexpr T operator()(const T& acc, const int) { return acc; }
 };
 
 template <typename T>
 struct post_reduce_mean {
-    constexpr T operator()(const T& acc, const int n) {
-        return acc / n;
-    }
+    constexpr T operator()(const T& acc, const int n) { return acc / n; }
 };
 
 template <typename T>
 struct post_reduce_log {
-    constexpr T operator()(const T& acc, const int) {
-        return std::log(acc);
-    }
+    constexpr T operator()(const T& acc, const int) { return std::log(acc); }
 };
 
 template <typename T>
 struct post_reduce_sqrt {
-    constexpr T operator()(const T& acc, const int) {
-        return std::sqrt(acc);
-    }
+    constexpr T operator()(const T& acc, const int) { return std::sqrt(acc); }
 };
 
 template <typename T>
 struct reduce_max : max<T> {
     static constexpr auto name = "reduce_max";
-    static constexpr T identity = std::numeric_limits<T>::lowest();
+    static constexpr T identity() { return std::numeric_limits<T>::lowest(); }
+    using Post = post_reduce_identity<T>;
+};
+
+template <typename T>
+struct reduce_amax {
+    static constexpr auto name = "reduce_amax";
+    static constexpr T identity() { return zero<T>(); }
+    constexpr T operator()(const T& acc, const T& x) const
+        { return std::max(acc, std::abs(x)); }
     using Post = post_reduce_identity<T>;
 };
 
 template <typename T>
 struct reduce_min : min<T> {
     static constexpr auto name = "reduce_min";
-    static constexpr T identity = std::numeric_limits<T>::max();
+    static constexpr T identity() { return std::numeric_limits<T>::max(); }
+    using Post = post_reduce_identity<T>;
+};
+
+template <typename T>
+struct reduce_amin {
+    static constexpr auto name = "reduce_amin";
+    static constexpr T identity() { return std::numeric_limits<T>::max(); }
+    constexpr T operator()(const T& acc, const T& x) const
+        { return std::min(acc, std::abs(x)); }
     using Post = post_reduce_identity<T>;
 };
 
 template <typename T>
 struct reduce_sum : plus<T> {
     static constexpr auto name = "reduce_sum";
-    static constexpr T identity{};
+    static constexpr T identity() { return zero<T>(); }
+    using Post = post_reduce_identity<T>;
+};
+
+template <typename T>
+struct reduce_asum {
+    static constexpr auto name = "reduce_asum";
+    static constexpr T identity() { return zero<T>(); }
+    constexpr T operator()(const T& acc, const T& x) const
+        { return acc + std::abs(x); }
     using Post = post_reduce_identity<T>;
 };
 
@@ -420,10 +449,19 @@ struct reduce_mean : reduce_sum<T> {
 template <typename T>
 struct reduce_sum_square {
     static constexpr auto name = "reduce_sum_square";
-    static constexpr T identity{};
+    static constexpr T identity() { return zero<T>(); }
     constexpr T operator()(const T& acc, const T& x) const
         { return acc + x*x; }
     using Post = post_reduce_identity<T>;
+};
+
+template <typename T>
+struct reduce_nrm2 {
+    static constexpr auto name = "reduce_nrm2";
+    static constexpr T identity() { return zero<T>(); }
+    const T operator()(const T& acc, const T& x) const
+        { const auto ax = std::abs(x); return acc + ax*ax; }
+    using Post = post_reduce_sqrt<T>;
 };
 
 template <typename T>
@@ -435,7 +473,7 @@ struct reduce_log_sum : reduce_sum<T> {
 template <typename T>
 struct reduce_log_sum_exp {
     static constexpr auto name = "reduce_log_sum_exp";
-    static constexpr T identity{};
+    static constexpr T identity() { return zero<T>(); }
     constexpr T operator()(const T& acc, const T& x) const
         { return acc + std::exp(x); }
     using Post = post_reduce_log<T>;
@@ -444,23 +482,8 @@ struct reduce_log_sum_exp {
 template <typename T>
 struct reduce_prod : multiplies<T> {
     static constexpr auto name = "reduce_prod";
-    static constexpr T identity{1};
+    static constexpr T identity() { return one<T>(); }
     using Post = post_reduce_identity<T>;
-};
-
-template <typename T>
-struct reduce_l1 {
-    static constexpr auto name = "reduce_l1";
-    static constexpr T identity{};
-    constexpr T operator()(const T& acc, const T& x) const
-        { return acc + std::abs(x); }
-    using Post = post_reduce_identity<T>;
-};
-
-template <typename T>
-struct reduce_l2 : reduce_sum_square<T> {
-    static constexpr auto name = "reduce_l2";
-    using Post = post_reduce_sqrt<T>;
 };
 
 }} // namespace dlf::xfn

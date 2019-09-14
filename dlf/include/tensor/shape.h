@@ -1,11 +1,5 @@
 #pragma once
 
-#include <vector>
-#include <iterator>
-#include <cassert>
-#include <cstdlib>
-#include <cstddef>
-
 namespace dlf {
 
 class shape_error : public std::logic_error {

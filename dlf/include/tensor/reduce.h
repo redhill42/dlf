@@ -7,68 +7,54 @@ namespace dlf {
 //==-------------------------------------------------------------------------
 
 namespace detail {
-template <typename T, typename Reduction, typename Post>
-void reduce(const Shape& x_shape, const T* x_data,
-            const Shape& y_shape, T* y_data,
-            size_t n, Reduction reduction, Post post)
+template <typename T, typename IteratorX, typename IteratorY, typename Reduction, typename Post>
+void reduce(size_t m, size_t n, const T& identity,
+            IteratorX x_begin, IteratorY y_begin,
+            Reduction reduction, Post post)
 {
-    auto m = x_shape.size() / n;
+    tbb::parallel_for(tbb::blocked_range<int>(0, m, 1), [&](auto r) {
+        auto px = x_begin + r.begin()*n;
+        auto py = y_begin + r.begin();
+        for (int i = r.size(); i > 0; --i, ++py) {
+            T acc = identity;
+            for (int j = 0; j < n; ++j, ++px)
+                acc = reduction(acc, *px);
+            *py = post(acc, n);
+        }
+    });
+}
 
+template <typename T, typename IteratorX, typename Reduction, typename Post>
+inline void reduce(size_t m, size_t n, const T& identity,
+                   IteratorX x_begin, const Shape& y_shape, T* y_data,
+                   Reduction reduction, Post post)
+{
     if (y_shape.is_contiguous()) {
-        if (x_shape.is_contiguous()) {
-            tbb::parallel_for(tbb::blocked_range<int>(0, m, 1), [&](auto r) {
-                auto py = y_data + r.begin() + y_shape.offset();
-                for (int i = r.begin(); i < r.end(); ++i, ++py) {
-                    auto px = x_data + i*n + x_shape.offset();
-                    T acc = Reduction::identity;
-                    for (int j = 0; j < n; ++j, ++px)
-                        acc = reduction(acc, *px);
-                    *py = post(acc, n);
-                }
-            });
-        } else {
-            tbb::parallel_for(tbb::blocked_range<int>(0, m, 1), [&](auto r) {
-                auto py = y_data + r.begin() + y_shape.offset();
-                for (int i = r.begin(); i < r.end(); ++i, ++py) {
-                    auto px = const_shaped_iterator<T>(x_shape, x_data, i*n);
-                    T acc = Reduction::identity;
-                    for (int j = 0; j < n; ++j, ++px)
-                        acc = reduction(acc, *px);
-                    *py = post(acc, n);
-                }
-            });
-        }
+        reduce(m, n, identity, x_begin, y_data + y_shape.offset(), reduction, post);
     } else {
-        if (x_shape.is_contiguous()) {
-            tbb::parallel_for(tbb::blocked_range<int>(0, m, 1), [&](auto r) {
-                auto py = shaped_iterator<T>(y_shape, y_data, r.begin());
-                for (int i = r.begin(); i < r.end(); ++i, ++py) {
-                    auto px = x_data + i*n + x_shape.offset();
-                    T acc = Reduction::identity;
-                    for (int j = 0; j < n; ++j, ++px)
-                        acc = reduction(acc, *px);
-                    *py =  post(acc, n);
-                }
-            });
-        } else {
-            tbb::parallel_for(tbb::blocked_range<int>(0, m, 1), [&](auto r) {
-                auto py = shaped_iterator<T>(y_shape, y_data, r.begin());
-                for (int i = r.begin(); i < r.end(); ++i, ++py) {
-                    auto px = const_shaped_iterator<T>(x_shape, x_data, i*n);
-                    T acc = Reduction::identity;
-                    for (int j = 0; j < n; ++j, ++px)
-                        acc = reduction(acc, *px);
-                    *py = post(acc, n);
-                }
-            });
-        }
+        reduce(m, n, identity, x_begin, shaped_iterator<T>(y_shape, y_data, 0), reduction, post);
     }
 }
 
 template <typename T, typename Reduction, typename Post>
-void reduce(const Shape& x_shape, const gpgpu::Buffer<T>& x_data,
+inline void reduce(size_t n, const T& identity,
+                   const Shape& x_shape, const T* x_data,
+                   const Shape& y_shape, T* y_data,
+                   Reduction reduction, Post post)
+{
+    auto m = x_shape.size() / n;
+    if (x_shape.is_contiguous()) {
+        reduce(m, n, identity, x_data + x_shape.offset(), y_shape, y_data, reduction, post);
+    } else {
+        reduce(m, n, identity, const_shaped_iterator<T>(x_shape, x_data, 0), y_shape, y_data, reduction, post);
+    }
+}
+
+template <typename T, typename Reduction, typename Post>
+void reduce(size_t n, const T&,
+            const Shape& x_shape, const gpgpu::Buffer<T>& x_data,
             const Shape& y_shape, gpgpu::Buffer<T>& y_data,
-            size_t n, Reduction, Post)
+            Reduction, Post)
 {
     gpgpu::dnn::reduce(Reduction::name, x_shape.size()/n, n,
                        x_shape.extents(), x_shape.strides(),
@@ -80,6 +66,7 @@ void reduce(const Shape& x_shape, const gpgpu::Buffer<T>& x_data,
 template <typename TensorX, typename TensorY, typename Reduction, typename Post>
 void reduce(const TensorX& X, TensorY& Y,
             std::vector<int>&& axes, bool keepdims,
+            const tensor_value_type<TensorX>& identity,
             Reduction reduction, Post post)
 {
     auto rank = X.rank();
@@ -105,10 +92,9 @@ void reduce(const TensorX& X, TensorY& Y,
         }
     }
 
+    auto x_shape = X.shape().transpose(transpose_perm);
     Y.resize(Shape(output_dims));
-    reduce(X.shape().transpose(transpose_perm), X.data(),
-           Y.shape(), Y.data(),
-           n, reduction, post);
+    reduce(n, identity, x_shape, X.data(), Y.shape(), Y.data(), reduction, post);
 }
 } // namespace detail
 
@@ -118,14 +104,28 @@ void reduce(const TensorX& X, TensorY& Y,
 
 template <typename TensorX, typename TensorY, typename Reduction, typename Post>
 std::enable_if_t<
+    is_cpu_tensor<TensorX>::value &&
     is_exactly_same_tensor<TensorX, TensorY>::value &&
     !std::is_const<std::remove_reference_t<TensorY>>::value>
 inline reduce(
     const TensorX& X, TensorY&& Y,
     std::vector<int> axes, bool keepdims,
+    const tensor_value_type<TensorX>& identity,
     Reduction reduction, Post post)
 {
-    detail::reduce(X, std::forward<TensorY>(Y), std::move(axes), keepdims, reduction, post);
+    detail::reduce(X, Y, std::move(axes), keepdims, identity, reduction, post);
+}
+
+template <typename TensorT, typename Reduction, typename Post>
+std::enable_if_t<is_cpu_tensor<TensorT>::value, tensor_type<TensorT>>
+inline reduce(
+    const TensorT& X, std::vector<int> axes, bool keepdims,
+    const tensor_value_type<TensorT>& identity,
+    Reduction reduction, Post post)
+{
+    tensor_type<TensorT> Y{};
+    detail::reduce(X, Y, std::move(axes), keepdims, identity, reduction, post);
+    return Y;
 }
 
 template <typename Reducer, typename Post = typename Reducer::Post,
@@ -134,24 +134,7 @@ std::enable_if_t<
     is_exactly_same_tensor<TensorX, TensorY>::value &&
     !std::is_const<std::remove_reference_t<TensorY>>::value>
 inline reduce(const TensorX& X, TensorY&& Y, std::vector<int> axes = {}, bool keepdims = false) {
-    detail::reduce(X, std::forward<TensorY>(Y), std::move(axes), keepdims, Reducer{}, Post{});
-}
-
-template <typename TensorT, typename Reduction, typename Post>
-enable_if_tensor<TensorT>
-inline reduce(
-    const TensorT& X, std::vector<int> axes, bool keepdims,
-    Reduction reduction, Post post)
-{
-    tensor_type<TensorT> Y;
-    reduce(X, Y, std::move(axes), keepdims, reduction, post);
-    return Y;
-}
-
-template <typename Reducer, typename Post = typename Reducer::Post, typename TensorT>
-enable_if_tensor<TensorT>
-inline reduce(const TensorT& X, std::vector<int> axes = {}, bool keepdims = false) {
-    return reduce(X, std::move(axes), keepdims, Reducer{}, Post{});
+    detail::reduce(X, Y, std::move(axes), keepdims, Reducer::identity(), Reducer{}, Post{});
 }
 
 #define DEFINE_REDUCE_OP(name)                                              \
@@ -172,18 +155,32 @@ name(const TensorT& X, std::vector<int> axes = {}, bool keepdims = false) { \
     tensor_type<TensorT> Y;                                                 \
     name(X, Y, std::move(axes), keepdims);                                  \
     return Y;                                                               \
+}                                                                           \
+                                                                            \
+template <typename TensorT>                                                 \
+inline enable_if_tensor<TensorT>                                            \
+name(const TensorT& X, std::initializer_list<int> axes, bool keepdims = false) { \
+    return name(X, std::vector<int>(axes), keepdims);                       \
+}                                                                           \
+                                                                            \
+template <typename TensorT>                                                 \
+inline enable_if_tensor<TensorT>                                            \
+name(const TensorT& X, int axis, bool keepdims = false) {                   \
+    return name(X, std::vector<int>{axis}, keepdims);                       \
 }
 
 DEFINE_REDUCE_OP(reduce_max)
 DEFINE_REDUCE_OP(reduce_min)
+DEFINE_REDUCE_OP(reduce_amax)
+DEFINE_REDUCE_OP(reduce_amin)
 DEFINE_REDUCE_OP(reduce_sum)
+DEFINE_REDUCE_OP(reduce_asum)
 DEFINE_REDUCE_OP(reduce_mean)
 DEFINE_REDUCE_OP(reduce_sum_square)
+DEFINE_REDUCE_OP(reduce_nrm2)
 DEFINE_REDUCE_OP(reduce_log_sum)
 DEFINE_REDUCE_OP(reduce_log_sum_exp)
 DEFINE_REDUCE_OP(reduce_prod)
-DEFINE_REDUCE_OP(reduce_l1)
-DEFINE_REDUCE_OP(reduce_l2)
 #undef DEFINE_REDUCE_OP
 
 template <typename TensorT>

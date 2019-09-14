@@ -47,7 +47,7 @@ void Xasum(const int n,
     real x = xgm[id*x_inc + x_offset];
     #if defined(ROUTINE_SUM) // non-absolute version
     #else
-      AbsoluteValue(x);
+      SetToAbsoluteValue(x);
     #endif
     Add(acc, acc, x);
     id += WGS1*num_groups;

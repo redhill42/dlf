@@ -1895,30 +1895,59 @@ TEST(UniformTest, ReduceProd_GPU) {
 
 TEST(UniformTest, ReduceL1) {
     auto X = Tensor<float>({3, 2, 2}).random(-10, 10);
-    EXPECT_EQ(reduce_l1(X, {1}), reduce_sum(abs(X), {1}));
+    EXPECT_EQ(reduce_asum(X, {1}), reduce_sum(abs(X), {1}));
 }
 
 TEST(UniformTest, ReduceL1_GPU) {
     auto X = Tensor<float>::range({3, 3, 3}, 0);
-    ExpectElementsEQ(reduce_l1(dev(X), {}).read(), reduce_l1(X, {}));
-    ExpectElementsEQ(reduce_l1(dev(X), {0}).read(), reduce_l1(X, {0}));
-    ExpectElementsEQ(reduce_l1(dev(X), {1}).read(), reduce_l1(X, {1}));
-    ExpectElementsEQ(reduce_l1(dev(X), {2}).read(), reduce_l1(X, {2}));
-    ExpectElementsEQ(reduce_l1(dev(X), {0,2}).read(), reduce_l1(X, {0,2}));
+    ExpectElementsEQ(reduce_asum(dev(X), {}).read(), reduce_asum(X, {}));
+    ExpectElementsEQ(reduce_asum(dev(X), {0}).read(), reduce_asum(X, {0}));
+    ExpectElementsEQ(reduce_asum(dev(X), {1}).read(), reduce_asum(X, {1}));
+    ExpectElementsEQ(reduce_asum(dev(X), {2}).read(), reduce_asum(X, {2}));
+    ExpectElementsEQ(reduce_asum(dev(X), {0,2}).read(), reduce_asum(X, {0,2}));
 }
 
 TEST(UniformTest, ReduceL2) {
     auto X = Tensor<float>({3, 2, 2}).random(-10, 10);
-    EXPECT_EQ(reduce_l2(X, {1}), sqrt(reduce_sum(X*X, {1})));
+    EXPECT_EQ(reduce_nrm2(X, {1}), sqrt(reduce_sum(X*X, {1})));
 }
 
 TEST(UniformTest, ReduceL2_GPU) {
     auto X = Tensor<float>::range({3, 3, 3}, 0);
-    ExpectElementsEQ(reduce_l2(dev(X), {}).read(), reduce_l2(X, {}));
-    ExpectElementsEQ(reduce_l2(dev(X), {0}).read(), reduce_l2(X, {0}));
-    ExpectElementsEQ(reduce_l2(dev(X), {1}).read(), reduce_l2(X, {1}));
-    ExpectElementsEQ(reduce_l2(dev(X), {2}).read(), reduce_l2(X, {2}));
-    ExpectElementsEQ(reduce_l2(dev(X), {0,2}).read(), reduce_l2(X, {0,2}));
+    ExpectElementsEQ(reduce_nrm2(dev(X), {}).read(), reduce_nrm2(X, {}));
+    ExpectElementsEQ(reduce_nrm2(dev(X), {0}).read(), reduce_nrm2(X, {0}));
+    ExpectElementsEQ(reduce_nrm2(dev(X), {1}).read(), reduce_nrm2(X, {1}));
+    ExpectElementsEQ(reduce_nrm2(dev(X), {2}).read(), reduce_nrm2(X, {2}));
+    ExpectElementsEQ(reduce_nrm2(dev(X), {0,2}).read(), reduce_nrm2(X, {0,2}));
+}
+
+TEST(UniformTest, ReduceL2_Complex) {
+    auto X = Tensor<std::complex<float>>({2}, {{3,4}, {5,12}});
+    EXPECT_EQ(reduce_nrm2(X, {0}), Scalar<std::complex<float>>(std::sqrt(194.f)));
+}
+
+TEST(UniformTest, Norm) {
+    auto a = Tensor<float>::range({9}) - 4;
+    auto b = reshape(a, {3, 3});
+
+    EXPECT_EQ(norm(a, std::numeric_limits<float>::infinity()), Scalar(4.0f));
+    EXPECT_EQ(norm(b, std::numeric_limits<float>::infinity()), Scalar(9.0f));
+    EXPECT_EQ(norm(a, 1), Scalar(20.0f));
+    EXPECT_EQ(norm(b, 1), Scalar(7.0f));
+
+    ExpectElementsEQ(norm(a, 3), Scalar(5.84804f));
+}
+
+TEST(UniformTest, Norm_GPU) {
+    auto a = dev(Tensor<float>::range({9}) - 4);
+    auto b = reshape(a, {3, 3});
+
+    EXPECT_EQ(norm(a, std::numeric_limits<float>::infinity()).read(), Scalar(4.0f));
+    EXPECT_EQ(norm(b, std::numeric_limits<float>::infinity()).read(), Scalar(9.0f));
+    EXPECT_EQ(norm(a, 1).read(), Scalar(20.0f));
+    EXPECT_EQ(norm(b, 1).read(), Scalar(7.0f));
+
+    ExpectElementsEQ(norm(a, 3).read(), Scalar(5.84804f));
 }
 
 TEST(UniformTest, Pad1D) {

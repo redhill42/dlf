@@ -15,11 +15,11 @@ void X##name(const int n,                                               \
   __local real lm[WGS1];                                                \
                                                                         \
   /* Perform loading and the first steps of the reduction */            \
-  real acc = identity;                                                  \
+  real acc; SetReal(acc, identity);                                     \
   int id = wgid*WGS1 + lid;                                             \
   while (id < n) {                                                      \
     real x = xgm[x_offset + batch*n + id];                              \
-    acc = accum(acc, x);                                                \
+    accum(acc, acc, x);                                                 \
     id += WGS1*num_groups;                                              \
   }                                                                     \
   lm[lid] = acc;                                                        \
@@ -28,7 +28,7 @@ void X##name(const int n,                                               \
   /* Perform reduction in local memory */                               \
   for (int s = WGS1/2; s > 0; s >>= 1) {                                \
     if (lid < s)                                                        \
-      lm[lid] = accum2(lm[lid], lm[lid + s]);                           \
+      accum2(lm[lid], lm[lid], lm[lid + s]);                            \
     barrier(CLK_LOCAL_MEM_FENCE);                                       \
   }                                                                     \
                                                                         \
@@ -51,12 +51,12 @@ void X##name##Strided(                                                  \
   __local real lm[WGS1];                                                \
                                                                         \
   /* Perform loading and the first steps of the reduction */            \
-  real acc = identity;                                                  \
+  real acc; SetReal(acc, identity);                                     \
   int id = wgid*WGS1 + lid;                                             \
   while (id < n) {                                                      \
     int xid = unravel(batch*n + id, rank, shape);                       \
     real x = xgm[x_offset + xid];                                       \
-    acc = accum(acc, x);                                                \
+    accum(acc, acc, x);                                                 \
     id += WGS1*num_groups;                                              \
   }                                                                     \
   lm[lid] = acc;                                                        \
@@ -65,7 +65,7 @@ void X##name##Strided(                                                  \
   /* Perform reduction in local memory */                               \
   for (int s = WGS1/2; s > 0; s >>= 1) {                                \
     if (lid < s)                                                        \
-      lm[lid] = accum2(lm[lid], lm[lid + s]);                           \
+      accum2(lm[lid], lm[lid], lm[lid + s]);                            \
     barrier(CLK_LOCAL_MEM_FENCE);                                       \
   }                                                                     \
                                                                         \
@@ -86,19 +86,19 @@ void X##name##Epilogue(const int n,                                     \
                                                                         \
   /* Performs the first step of the reduction while loading the data */ \
   xgm = &xgm[x_offset + batch*WGS2*2];                                  \
-  lm[lid] = accum2(xgm[lid], xgm[lid + WGS2]);                          \
+  accum2(lm[lid], xgm[lid], xgm[lid + WGS2]);                           \
   barrier(CLK_LOCAL_MEM_FENCE);                                         \
                                                                         \
   /* Perform reduction in local memory */                               \
   for (int s = WGS2/2; s > 0; s >>= 1) {                                \
     if (lid < s)                                                        \
-      lm[lid] = accum2(lm[lid], lm[lid + s]);                           \
+      accum2(lm[lid], lm[lid], lm[lid + s]);                            \
     barrier(CLK_LOCAL_MEM_FENCE);                                       \
   }                                                                     \
                                                                         \
   /* Computes the final result */                                       \
   if (lid == 0) {                                                       \
-    ygm[y_offset + batch] = post(lm[0], n);                             \
+    post(ygm[y_offset + batch], lm[0], n);                              \
   }                                                                     \
 }                                                                       \
                                                                         \
@@ -114,20 +114,20 @@ void X##name##StridedEpilogue(                                          \
                                                                         \
   /* Performs the first step of the reduction while loading the data */ \
   xgm = &xgm[x_offset + batch*WGS2*2];                                  \
-  lm[lid] = accum2(xgm[lid], xgm[lid + WGS2]);                          \
+  accum2(lm[lid], xgm[lid], xgm[lid + WGS2]);                           \
   barrier(CLK_LOCAL_MEM_FENCE);                                         \
                                                                         \
   /* Perform reduction in local memory */                               \
   for (int s = WGS2/2; s > 0; s >>= 1) {                                \
     if (lid < s)                                                        \
-      lm[lid] = accum2(lm[lid], lm[lid + s]);                           \
+      accum2(lm[lid], lm[lid], lm[lid + s]);                            \
     barrier(CLK_LOCAL_MEM_FENCE);                                       \
   }                                                                     \
                                                                         \
   /* Computes the final result */                                       \
   if (lid == 0) {                                                       \
     int yid = unravel(batch, rank, shape);                              \
-    ygm[y_offset + yid] = post(lm[0], n);                               \
+    post(ygm[y_offset + yid], lm[0], n);                                \
   }                                                                     \
 }                                                                       \
 
@@ -138,42 +138,53 @@ void X##name##StridedEpilogue(                                          \
   #define log  hlog
   #define exp  hexp
   #define sqrt hsqrt
-#elif PRECISION == 32
+#elif PRECISION == 32 || PRECISION == 3232
   #define log  logf
   #define exp  expf
   #define sqrt sqrtf
 #endif
 #endif
 
-#if PRECISION >= 10000
-  #define xabs abs
+#define Ident(c,a,n)    c = a
+#define Log(c,a,n)      SetReal(c, log(GetReal(a)))  /* FIXME */
+#define Sqrt(c,a,n)     SetReal(c, sqrt(GetReal(a))) /* FIXME */
+
+#if PRECISION == 3232 || PRECISION == 6464
+  #define Mean(c,a,n) c.x = a.x / n; c.y = a.y / n
 #else
-  #define xabs fabs
+  #define Mean(c,a,n) c = a / n
 #endif
 
-#define add(x,y)            ((x)+(y))
-#define add_abs(x,y)        ((x)+xabs(y))
-#define add_square(x,y)     ((x)+(y)*(y))
-#define add_exp(x,y)        ((x)+exp(y))
-#define mul(x,y)            ((x)*(y))
+#define AbsoluteMax(c,a,x) SetToAbsoluteValue(x); Max(c,a,x)
+#define AbsoluteMin(c,a,x) SetToAbsoluteValue(x); Min(c,a,x)
+#define AbsoluteAdd(c,a,x) SetToAbsoluteValue(x); Add(c,a,x)
 
-#define ident(x,n)          (x)
-#define mean(x,n)           ((x)/(n))
-#define log_r(x,n)          log(x)
-#define sqrt_r(x,n)         sqrt(x)
+/* Note: a is unused */
+#define AddSquare(c,a,x) MultiplyAdd(c,x,x)
 
-DEFINE_REDUCE_OP(reduce_max, SMALLEST, max, max, ident)
-DEFINE_REDUCE_OP(reduce_min, -SMALLEST, min, min, ident)
-DEFINE_REDUCE_OP(reduce_sum, ZERO, add, add, ident)
-DEFINE_REDUCE_OP(reduce_mean, ZERO, add, add, mean)
-DEFINE_REDUCE_OP(reduce_sum_square, ZERO, add_square, add, ident)
-DEFINE_REDUCE_OP(reduce_prod, ONE, mul, mul, ident)
-DEFINE_REDUCE_OP(reduce_l1, ZERO, add_abs, add, ident)
+#define AddNrm2(c,a,x1)     \
+  do {                      \
+    real x2 = x1;           \
+    COMPLEX_CONJUGATE(x2);  \
+    MultiplyAdd(c,x1,x2);   \
+  } while (0)
+
+#define AddExp(c,a,b) c = a + exp(b)
+
+DEFINE_REDUCE_OP(reduce_max, SMALLEST, Max, Max, Ident)
+DEFINE_REDUCE_OP(reduce_amax, ZERO, AbsoluteMax, Max, Ident)
+DEFINE_REDUCE_OP(reduce_min, -SMALLEST, Min, Min, Ident)
+DEFINE_REDUCE_OP(reduce_amin, -SMALLEST, AbsoluteMin, Min, Ident)
+DEFINE_REDUCE_OP(reduce_sum, ZERO, Add, Add, Ident)
+DEFINE_REDUCE_OP(reduce_asum, ZERO, AbsoluteAdd, Add, Ident)
+DEFINE_REDUCE_OP(reduce_mean, ZERO, Add, Add, Mean)
+DEFINE_REDUCE_OP(reduce_sum_square, ZERO, AddSquare, Add, Ident)
+DEFINE_REDUCE_OP(reduce_prod, ONE, Multiply, Multiply, Ident)
 
 #if PRECISION < 10000
-DEFINE_REDUCE_OP(reduce_log_sum, ZERO, add, add, log_r)
-DEFINE_REDUCE_OP(reduce_log_sum_exp, ZERO, add_exp, add, log_r)
-DEFINE_REDUCE_OP(reduce_l2, ZERO, add_square, add, sqrt_r)
+DEFINE_REDUCE_OP(reduce_log_sum, ZERO, Add, Add, Log)
+DEFINE_REDUCE_OP(reduce_log_sum_exp, ZERO, AddExp, Add, Log)
+DEFINE_REDUCE_OP(reduce_nrm2, ZERO, AddNrm2, Add, Sqrt)
 #endif
 
 )"

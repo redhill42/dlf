@@ -529,9 +529,9 @@ std::ostream& operator<<(std::ostream& os, const Shape& shape) {
 
 namespace detail {
 
-ptrdiff_t shape_indexer::update(int i, ptrdiff_t& linear_idx) noexcept {
-    auto dim = m_shape.extent(i);
-    auto index = linear_idx % dim;
+inline ptrdiff_t shape_indexer::update(int i, ptrdiff_t& linear_idx) noexcept {
+    const auto dim = m_shape.extent(i);
+    const auto index = linear_idx % dim;
     linear_idx /= dim;
     m_offset += index * m_shape.stride(i);
     return index;

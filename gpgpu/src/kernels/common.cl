@@ -72,10 +72,10 @@ R"(
 // Complex single-precision
 #elif PRECISION == 3232
   typedef float2 real;
-  typedef struct cfloat2 {real x; real y;} real2;
-  typedef struct cfloat4 {real x; real y; real z; real w;} real4;
-  typedef struct cfloat8 {real s0; real s1; real s2; real s3;
-                          real s4; real s5; real s6; real s7;} real8;
+  typedef struct cfloat2  {real x; real y;} real2;
+  typedef struct cfloat4  {real x; real y; real z; real w;} real4;
+  typedef struct cfloat8  {real s0; real s1; real s2; real s3;
+                           real s4; real s5; real s6; real s7;} real8;
   typedef struct cfloat16 {real s0; real s1; real s2; real s3;
                            real s4; real s5; real s6; real s7;
                            real s8; real s9; real sA; real sB;
@@ -87,10 +87,10 @@ R"(
 // Complex double-precision
 #elif PRECISION == 6464
   typedef double2 real;
-  typedef struct cdouble2 {real x; real y;} real2;
-  typedef struct cdouble4 {real x; real y; real z; real w;} real4;
-  typedef struct cdouble8 {real s0; real s1; real s2; real s3;
-                           real s4; real s5; real s6; real s7;} real8;
+  typedef struct cdouble2  {real x; real y;} real2;
+  typedef struct cdouble4  {real x; real y; real z; real w;} real4;
+  typedef struct cdouble8  {real s0; real s1; real s2; real s3;
+                            real s4; real s5; real s6; real s7;} real8;
   typedef struct cdouble16 {real s0; real s1; real s2; real s3;
                             real s4; real s5; real s6; real s7;
                             real s8; real s9; real sA; real sB;
@@ -167,6 +167,20 @@ R"(
   #define USE_CL_MAD 0
 #endif
 
+// Gets the real part of the complex
+#if PRECISION == 3232 || PRECISION == 6464
+  #define GetReal(a) (a).x
+#else
+  #define GetReal(a) (a)
+#endif
+
+// Sets the real part of the complex, the imaginary part set to zero
+#if PRECISION == 3232 || PRECISION == 6464
+  #define SetReal(a,b) a.x = b; a.y = ZERO
+#else
+  #define SetReal(a,b) a = b
+#endif
+
 // Sets a variable to zero
 #if PRECISION == 3232 || PRECISION == 6464
   #define SetToZero(a) a.x = ZERO; a.y = ZERO
@@ -197,12 +211,13 @@ R"(
 
 // The absolute value (component-wise)
 #if PRECISION == 3232 || PRECISION == 6464
-  #define AbsoluteValue(value) value.x = fabs(value.x); value.y = fabs(value.y)
+  #define AbsoluteValue(a) hypot(a.x, a.y)
 #elif INTEGER_PRECISION
-  #define AbsoluteValue(value) value = abs(value)
+  #define AbsoluteValue(a) abs(a)
 #else
-  #define AbsoluteValue(value) value = fabs(value)
+  #define AbsoluteValue(a) fabs(a)
 #endif
+#define SetToAbsoluteValue(a) SetReal(a, AbsoluteValue(a))
 
 // Negation (component-wise)
 #if PRECISION == 3232 || PRECISION == 6464
@@ -258,10 +273,21 @@ R"(
 
 // The scalar division function: full division
 #if PRECISION == 3232 || PRECISION == 6464
-  #define DivideFull(c,a,b) singlereal num_x = (a.x * b.x) + (a.y * b.y); singlereal num_y = (a.y * b.x) - (a.x * b.y); singlereal denom = (b.x * b.x) + (b.y * b.y); c.x = num_x / denom; c.y = num_y / denom
+  #define DivideFull(c,a,b)                             \
+    do {                                                \
+      singlereal num_x = (a.x * b.x) + (a.y * b.y);     \
+      singlereal num_y = (a.y * b.x) - (a.x * b.y);     \
+      singlereal denom = (b.x * b.x) + (b.y * b.y);     \
+      c.x = num_x / denom;                              \
+      c.y = num_y / denom;                              \
+    } while (0)
 #else
   #define DivideFull(c,a,b) c = a / b
 #endif
+
+// Update to maximum/minimum value
+#define Max(c,a,b) c = (GetReal(a) >= GetReal(b) ? (a) : (b))
+#define Min(c,a,b) c = (GetReal(a) <  GetReal(b) ? (a) : (b))
 
 // The scalar AXPBY function
 #if PRECISION == 3232 || PRECISION == 6464

@@ -22,7 +22,7 @@ template <size_t grainsize = GRAINSIZE, class ForwardIterator, typename T>
 inline void fill(ForwardIterator first, ForwardIterator last, const T& value) {
     tbb::parallel_for(tbb::blocked_range<ForwardIterator>(first, last, grainsize),
         [&](auto r) {
-            std::fill(first, last, value);
+            std::fill(r.begin(), r.end(), value);
         });
 }
 

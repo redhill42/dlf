@@ -638,11 +638,11 @@ private:
     }
 
     void visit(model::ReduceL1* n) override {
-        result = std::make_unique<ReductionOp<xfn::reduce_l1<T>>>(this, n);
+        result = std::make_unique<ReductionOp<xfn::reduce_asum<T>>>(this, n);
     }
 
     void visit(model::ReduceL2* n) override {
-        result = std::make_unique<ReductionOp<xfn::reduce_l2<T>>>(this, n);
+        result = std::make_unique<ReductionOp<xfn::reduce_nrm2<T>>>(this, n);
     }
 
     struct ArgMaxOp : Operator {
