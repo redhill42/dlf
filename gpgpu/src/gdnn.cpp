@@ -659,6 +659,55 @@ template void PUBLIC_API reduce<int64_t>(const std::string&, const size_t, const
                                          const Queue&, Event*);
 
 template <typename T>
+void scan(const std::string& name, const size_t m, const size_t n,
+          const bool exclusive, const std::vector<size_t>& dims,
+          const Buffer<T>& x_buffer, const size_t x_offset, const std::vector<size_t>& x_strides,
+          Buffer<T>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_strides,
+          const Queue& queue, Event* event)
+{
+    auto routine = Xscan<T>(queue, event);
+    routine.DoScan(name, m, n, exclusive, dims,
+                   x_buffer, x_offset, x_strides,
+                   y_buffer, y_offset, y_strides);
+}
+
+template void PUBLIC_API scan<half>   (const std::string&, const size_t, const size_t,
+                                       const bool, const std::vector<size_t>&,
+                                       const Buffer<half>&, const size_t, const std::vector<size_t>&,
+                                       Buffer<half>&, const size_t, const std::vector<size_t>&,
+                                       const Queue&, Event*);
+template void PUBLIC_API scan<float>  (const std::string&, const size_t, const size_t,
+                                       const bool, const std::vector<size_t>&,
+                                       const Buffer<float>&, const size_t, const std::vector<size_t>&,
+                                       Buffer<float>&, const size_t, const std::vector<size_t>&,
+                                       const Queue&, Event*);
+template void PUBLIC_API scan<double> (const std::string&, const size_t, const size_t,
+                                       const bool, const std::vector<size_t>&,
+                                       const Buffer<double>&, const size_t, const std::vector<size_t>&,
+                                       Buffer<double>&, const size_t, const std::vector<size_t>&,
+                                       const Queue&, Event*);
+template void PUBLIC_API scan<float2> (const std::string&, const size_t, const size_t,
+                                       const bool, const std::vector<size_t>&,
+                                       const Buffer<float2>&, const size_t, const std::vector<size_t>&,
+                                       Buffer<float2>&, const size_t, const std::vector<size_t>&,
+                                       const Queue&, Event*);
+template void PUBLIC_API scan<double2>(const std::string&, const size_t, const size_t,
+                                       const bool, const std::vector<size_t>&,
+                                       const Buffer<double2>&, const size_t, const std::vector<size_t>&,
+                                       Buffer<double2>&, const size_t, const std::vector<size_t>&,
+                                       const Queue&, Event*);
+template void PUBLIC_API scan<int32_t>(const std::string&, const size_t, const size_t,
+                                       const bool, const std::vector<size_t>&,
+                                       const Buffer<int32_t>&, const size_t, const std::vector<size_t>&,
+                                       Buffer<int32_t>&, const size_t, const std::vector<size_t>&,
+                                       const Queue&, Event*);
+template void PUBLIC_API scan<int64_t>(const std::string&, const size_t, const size_t,
+                                       const bool, const std::vector<size_t>&,
+                                       const Buffer<int64_t>&, const size_t, const std::vector<size_t>&,
+                                       Buffer<int64_t>&, const size_t, const std::vector<size_t>&,
+                                       const Queue&, Event*);
+
+template <typename T>
 void arg_reduce(const std::string& name, const size_t n, const size_t k,
                 const std::vector<size_t>& dims, const std::vector<size_t>& strides,
                 const Buffer<T>& x_buffer, const size_t x_offset, Buffer<int>& y_buffer,

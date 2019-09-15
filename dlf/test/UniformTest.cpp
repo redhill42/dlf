@@ -1950,6 +1950,89 @@ TEST(UniformTest, Norm_GPU) {
     ExpectElementsEQ(norm(a, 3).read(), Scalar(5.84804f));
 }
 
+TEST(UniformTest, Scan) {
+    auto A = Tensor<int>::range({5, 5}, 1);
+    EXPECT_EQ(cumsum(A, 0), Matrix({
+        { 1,  2,  3,  4,  5},
+        { 7,  9, 11, 13, 15},
+        {18, 21, 24, 27, 30},
+        {34, 38, 42, 46, 50},
+        {55, 60, 65, 70, 75}
+    }));
+    EXPECT_EQ(cumsum(A, 1), Matrix({
+        { 1,  3,  6, 10, 15},
+        { 6, 13, 21, 30, 40},
+        {11, 23, 36, 50, 65},
+        {16, 33, 51, 70, 90},
+        {21, 43, 66, 90,115}
+    }));
+    EXPECT_EQ(cumsum(A, 0, true), Matrix({
+        { 0,  0,  0,  0,  0},
+        { 1,  2,  3,  4,  5},
+        { 7,  9, 11, 13, 15},
+        {18, 21, 24, 27, 30},
+        {34, 38, 42, 46, 50},
+    }));
+    EXPECT_EQ(cumsum(A, 1, true), Matrix({
+        { 0,  1,  3,  6, 10},
+        { 0,  6, 13, 21, 30},
+        { 0, 11, 23, 36, 50},
+        { 0, 16, 33, 51, 70},
+        { 0, 21, 43, 66, 90}
+    }));
+    EXPECT_EQ(cumsum(A, 0, false, true), Matrix({
+        {55, 60, 65, 70, 75},
+        {54, 58, 62, 66, 70},
+        {48, 51, 54, 57, 60},
+        {37, 39, 41, 43, 45},
+        {21, 22, 23, 24, 25},
+    }));
+    EXPECT_EQ(cumsum(A, 0, true, true), Matrix({
+        {54, 58, 62, 66, 70},
+        {48, 51, 54, 57, 60},
+        {37, 39, 41, 43, 45},
+        {21, 22, 23, 24, 25},
+        { 0,  0,  0,  0,  0}
+    }));
+    EXPECT_EQ(cumsum(A, 1, false, true), Matrix({
+        {15, 14, 12,  9,  5},
+        {40, 34, 27, 19, 10},
+        {65, 54, 42, 29, 15},
+        {90, 74, 57, 39, 20},
+        {115,94, 72, 49, 25},
+    }));
+    EXPECT_EQ(cumsum(A, 1, true, true), Matrix({
+        {14, 12,  9,  5,  0},
+        {34, 27, 19, 10,  0},
+        {54, 42, 29, 15,  0},
+        {74, 57, 39, 20,  0},
+        {94, 72, 49, 25,  0},
+    }));
+
+    auto B = Tensor<int>::range({10}, 1);
+    EXPECT_EQ(scan(B, 0, 1, xfn::multiplies<>()), Vector({
+        1, 2, 6, 24, 120, 720, 5040, 40320, 362880, 3628800
+    }));
+}
+
+TEST(UniformTest, Scan_GPU) {
+    auto A = Tensor<int>::range({5, 5}, 1);
+    auto dev_A = dev(A);
+
+    EXPECT_EQ(cumsum(dev_A, 0).read(), cumsum(A, 0));
+    EXPECT_EQ(cumsum(dev_A, 1).read(), cumsum(A, 1));
+    EXPECT_EQ(cumsum(dev_A, 0, true).read(), cumsum(A, 0, true));
+    EXPECT_EQ(cumsum(dev_A, 1, true).read(), cumsum(A, 1, true));
+    EXPECT_EQ(cumsum(dev_A, 0, false, true).read(), cumsum(A, 0, false, true));
+    EXPECT_EQ(cumsum(dev_A, 1, false, true).read(), cumsum(A, 1, false, true));
+    EXPECT_EQ(cumsum(dev_A, 0, true, true).read(), cumsum(A, 0, true, true));
+    EXPECT_EQ(cumsum(dev_A, 1, true, true).read(), cumsum(A, 1, true, true));
+
+    auto B = Tensor<int>::range({10}, 1);
+    auto dev_B = dev(B);
+    EXPECT_EQ(cumprod(dev_B, 0).read(), cumprod(B, 0));
+}
+
 TEST(UniformTest, Pad1D) {
     auto A = Vector({1, 2, 3, 4, 5});
     EXPECT_EQ(pad(A, {2, 3}), Vector({0, 0, 1, 2, 3, 4, 5, 0, 0, 0}));

@@ -114,6 +114,7 @@ DEFINE_UNARY_FUNCTION(sigmoid, one<T>()/(one<T>()+std::exp(-x)))
 template <typename T = void>
 struct plus : std::plus<T> {
     static constexpr auto name = "add_v";
+    static constexpr auto cumulative = "cumsum";
 };
 
 template <typename T = void>
@@ -124,6 +125,7 @@ struct minus : std::minus<T> {
 template <typename T = void>
 struct multiplies : std::multiplies<T> {
     static constexpr auto name = "mul_v";
+    static constexpr auto cumulative = "cumprod";
 };
 
 template <typename T = void>

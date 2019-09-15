@@ -666,6 +666,12 @@ END_OPERATOR()
 
 #undef DEFINE_REDUCTION_OPERATOR
 
+BEGIN_OPERATOR(CumSum)
+    DEFINE_BOOL_ATTRIBUTE(exclusive, false)
+    DEFINE_BOOL_ATTRIBUTE(reverse, false)
+    Value* axis() { return input(1); }
+END_OPERATOR()
+
 //==-------------------------------------------------------------------------
 // Tensor operators
 //==-------------------------------------------------------------------------

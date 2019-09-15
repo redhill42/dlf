@@ -685,6 +685,29 @@ private:
         result = std::make_unique<ArgMinOp>(this, n);
     }
 
+    struct CumSumOp : Operator {
+        TensorT<> input, output;
+        bool exclusive, reverse;
+        DatumPtr axis;
+
+        CumSumOp(OperatorFactory* of, model::CumSum* n)
+            : input(of->alloc(n->input())),
+              output(of->allocInplace(n->input(), n->output())),
+              exclusive(n->exclusive()),
+              reverse(n->reverse()),
+              axis(of->allocDatum<int>(n->axis())) {}
+
+        void evaluate() override {
+            auto a = axis->template read<int>();
+            assert(a.rank() == 0);
+            cumsum(input, output, *a, exclusive, reverse);
+        }
+    };
+
+    void visit(model::CumSum* n) override {
+        result = std::make_unique<CumSumOp>(this, n);
+    }
+
     struct GemmOp : Operator {
         T alpha, beta;
         cblas::Transpose transA, transB;

@@ -286,4 +286,161 @@ argmin(const TensorT& X, int axis, bool keepdims = true) {
     return Y;
 }
 
+
+//==-------------------------------------------------------------------------
+// Scan
+//==-------------------------------------------------------------------------
+
+namespace detail {
+template <typename T, typename Op>
+void scan(int m, int n, bool exclusive, const T& id, Op op,
+          const Shape& x_shape, const T* x_data,
+          const Shape& y_shape, T* y_data)
+{
+    const auto grainsize = std::max(1, GRAINSIZE/n);
+    tbb::parallel_for(tbb::blocked_range<int>(0, m, grainsize), [&](const auto& r) {
+        for (int i = r.begin(); i < r.end(); ++i) {
+            tbb::parallel_scan(tbb::blocked_range<int>(0, n, GRAINSIZE),
+                id,
+                [&](const auto& c, auto acc, const bool is_final_scan) {
+                    auto px = x_data + x_shape.linear_offset(i*n + c.begin());
+                    auto py = y_data + y_shape.linear_offset(i*n + c.begin());
+                    auto incX = x_shape.stride(-1);
+                    auto incY = y_shape.stride(-1);
+
+                    if (is_final_scan && exclusive) {
+                        for (int j = c.size(); j > 0; --j, px += incX, py += incY) {
+                            *py = acc;
+                            acc = op(acc, *px);
+                        }
+                    } else if (is_final_scan && !exclusive) {
+                        for (int j = c.size(); j > 0; --j, px += incX, py += incY) {
+                            acc = op(acc, *px);
+                            *py = acc;
+                        }
+                    } else {
+                        for (int j = c.size(); j > 0; --j, px += incX) {
+                            acc = op(acc, *px);
+                        }
+                    }
+                    return acc;
+                },
+                op);
+        }
+    });
+}
+
+template <typename T, typename Op>
+void scan(int m, int n, bool exclusive, const T&, Op,
+          const Shape& x_shape, const gpgpu::Buffer<T>& x_buffer,
+          const Shape& y_shape, gpgpu::Buffer<T>& y_buffer)
+{
+    gpgpu::dnn::scan(Op::cumulative, m, n, exclusive, x_shape.extents(),
+                     x_buffer, x_shape.offset(), x_shape.strides(),
+                     y_buffer, y_shape.offset(), y_shape.strides());
+}
+} // namespace detail
+
+template <typename TensorT, typename TensorR, typename Op>
+std::enable_if_t<
+    is_exactly_same_tensor<TensorT, TensorR>::value &&
+    !std::is_const<std::remove_reference_t<TensorR>>::value>
+scan(const TensorT& X, TensorR&& Y,
+     int axis, bool exclusive, bool reverse,
+     const tensor_value_type<TensorT>& id, Op op)
+{
+    detail::norm_axis(X.rank(), axis);
+    int n = X.extent(axis);
+    int m = X.size() / n;
+    Y.resize(X.shape());
+
+    auto x_t = moveaxis(X, axis, -1);
+    auto y_t = moveaxis(Y, axis, -1);
+    if (reverse) {
+        x_t = flip(x_t, -1);
+        y_t = flip(y_t, -1);
+    }
+    detail::scan(m, n, exclusive, id, op,
+                 x_t.shape(), x_t.data(),
+                 y_t.shape(), y_t.data());
+}
+
+template <typename TensorT, typename Op>
+enable_if_tensor<TensorT>
+scan(const TensorT& X, int axis, bool exclusive, bool reverse,
+     const tensor_value_type<TensorT>& id, Op op)
+{
+    tensor_type<TensorT> Y{};
+    scan(X, Y, axis, exclusive, reverse, id, op);
+    return Y;
+}
+
+template <typename TensorT, typename Op>
+std::enable_if_t<
+    is_tensor<TensorT>::value && !is_tensor_view<TensorT>::value &&
+    !std::is_lvalue_reference<TensorT>::value,
+    tensor_type<TensorT>>
+inline scan(TensorT&& X, int axis, bool exclusive, bool reverse,
+            const tensor_value_type<TensorT>& id, Op op)
+{
+    scan(X, X, axis, exclusive, reverse, id, op);
+    return std::move(X);
+}
+
+template <typename TensorT, typename Op>
+enable_if_tensor<TensorT>
+inline scan(TensorT&& X, int axis, const tensor_value_type<TensorT>& id, Op op) {
+    return scan(std::forward<TensorT>(X), axis, false, false, id, op);
+}
+
+/**
+ * Returns the cumulative sum of the elements along a given axis.
+ */
+template <typename TensorT, typename TensorR>
+std::enable_if_t<
+    is_exactly_same_tensor<TensorT, TensorR>::value &&
+    !std::is_const<std::remove_reference_t<TensorR>>::value>
+inline cumsum(const TensorT& X, TensorR&& Y, int axis = -1,
+              bool exclusive = false, bool reverse = false)
+{
+    using T = tensor_value_type<TensorT>;
+    scan(X, std::forward<TensorR>(Y),
+         axis, exclusive, reverse,
+         xfn::zero<T>(), xfn::plus<>());
+}
+
+template <typename TensorT>
+enable_if_tensor<TensorT>
+inline cumsum(TensorT&& X, int axis = -1, bool exclusive = false, bool reverse = false) {
+    using T = tensor_value_type<TensorT>;
+    return scan(std::forward<TensorT>(X),
+                axis, exclusive, reverse,
+                xfn::zero<T>(), xfn::plus<>());
+}
+
+/**
+ * Returns the cumulative product of elements along a given axis.
+ */
+template <typename TensorT, typename TensorR>
+std::enable_if_t<
+    is_exactly_same_tensor<TensorT, TensorR>::value &&
+    !std::is_const<std::remove_reference_t<TensorR>>::value>
+inline cumprod(const TensorT& X, TensorR&& Y, int axis = -1,
+               bool exclusive = false, bool reverse = false)
+{
+    using T = tensor_value_type<TensorT>;
+    scan(X, std::forward<TensorR>(Y),
+         axis, exclusive, reverse,
+         xfn::one<T>(), xfn::multiplies<>());
+}
+
+template <typename TensorT>
+enable_if_tensor<TensorT>
+inline cumprod(TensorT&& X, int axis = -1, bool exclusive = false, bool reverse = false) {
+    using T = tensor_value_type<TensorT>;
+    return scan(std::forward<TensorT>(X),
+                axis, exclusive, reverse,
+                xfn::one<T>(), xfn::multiplies<>());
+}
+
 } // namespace dlf

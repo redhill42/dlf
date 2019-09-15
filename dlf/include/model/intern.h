@@ -30,6 +30,7 @@
   _(ConvTranspose)          \
   _(Cos)                    \
   _(Cosh)                   \
+  _(CumSum)                 \
   _(DepthToSpace)           \
   _(Div)                    \
   _(Dropout)                \
@@ -189,6 +190,7 @@
   _(epsilon)                    \
   _(eq)                         \
   _(equal)                      \
+  _(exclusive)                  \
   _(expand)                     \
   _(expm1)                      \
   _(exponent)                   \
@@ -250,6 +252,7 @@
   _(ratio)                      \
   _(reciprocal)                 \
   _(remainder)                  \
+  _(reverse)                    \
   _(round)                      \
   _(rsqrt)                      \
   _(sample_size)                \

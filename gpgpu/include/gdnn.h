@@ -82,6 +82,13 @@ void reduce(const std::string& name, const size_t m, const size_t n,
             const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 template <typename T>
+void scan(const std::string& name, const size_t m, const size_t n,
+          const bool exclusive, const std::vector<size_t>& dims,
+          const Buffer<T>& x_buffer, const size_t x_offset, const std::vector<size_t>& x_strides,
+          Buffer<T>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_strides,
+          const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
+
+template <typename T>
 void arg_reduce(const std::string& name, const size_t n, const size_t k,
                 const std::vector<size_t>& dims, const std::vector<size_t>& strides,
                 const Buffer<T>& x_buffer, const size_t x_offset, Buffer<int>& y_buffer,
