@@ -9,6 +9,7 @@ template <typename T>
 Xtransform<T>::Xtransform(const Queue& queue, Event* event, const std::string& name)
     : Routine(queue, event, name, {"Xaxpy"}, PrecisionValue<T>(), {}, {
     #include "../../kernels/level1/level1.cl"
+    #include "../../kernels/dnn/complex.cl"
     #include "../../kernels/dnn/xtransform.cl"
     }) {
 }
@@ -74,5 +75,7 @@ template class Xtransform<int64_t>;
 template class Xtransform<half>;
 template class Xtransform<float>;
 template class Xtransform<double>;
+template class Xtransform<float2>;
+template class Xtransform<double2>;
 
 }} // namespace gpgpu::dnn

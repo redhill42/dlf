@@ -81,7 +81,6 @@
 #include "routines/dnn/xfill.hpp"
 #include "routines/dnn/xtransform.hpp"
 #include "routines/dnn/xtransform_b.hpp"
-#include "routines/dnn/xtransform_c.hpp"
 #include "routines/dnn/xtransform_p.hpp"
 #include "routines/dnn/xreduce.hpp"
 #include "routines/dnn/xscan.hpp"

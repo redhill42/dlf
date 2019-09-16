@@ -4,7 +4,7 @@
 DOCKER_OSARCH := $(shell bash -c 'source build/detect-daemon-osarch && echo $${DOCKER_ENGINE_OSARCH:-$$DOCKER_CLIENT_OSARCH}')
 DOCKERFILE := $(shell bash -c 'source build/detect-daemon-osarch && echo $${DOCKERFILE}')
 
-CUDA_VERSION := $(if $(CUDA_VERSION),$(CUDA_VERSION),10.1)
+CUDA_VERSION := $(if $(CUDA_VERSION),$(CUDA_VERSION),10.0)
 DOCKER_BUILD_ARGS += --build-arg CUDA_VERSION="$(CUDA_VERSION)"
 
 # env vars passed through directly to Docker's build scripts

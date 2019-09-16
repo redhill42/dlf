@@ -6,9 +6,9 @@ using namespace gpgpu::blas;
 
 template <typename T, typename R>
 Xtransform_b<T, R>::Xtransform_b(const Queue& queue, Event* event, const std::string& name)
-    : Routine(queue, event, name, {"Xaxpy"}, PrecisionValue<T>(), {}, {
+    : Routine(queue, event, name, {"Xaxpy", "Copy"}, PrecisionValue<T>(), {}, {
     #include "../../kernels/level1/level1.cl"
-    #include "kernels/dnn/xtransform_b.cl"
+    #include "../../kernels/dnn/xtransform_b.cl"
 }) {
 }
 
@@ -46,7 +46,12 @@ void Xtransform_b<T, R>::DoTransform(
     // If possible, run the fast-version of the kernel
     auto kernel_name = "X" + name;
     kernel_name = use_fastest_kernel ? kernel_name + "Fastest" :
-                  use_faster_kernel  ? kernel_name + "Faster" : kernel_name;
+                  use_faster_kernel  ? kernel_name + "Faster"  :
+                  x_size == 1        ? kernel_name + "ExpandL" :
+                  y_size == 1        ? kernel_name + "ExpandR" :
+                  x_size < y_size    ? kernel_name + "RepeatL" :
+                  y_size < x_size    ? kernel_name + "RepeatR"
+                                     : kernel_name;
 
     // Retrieves the kernel from the compiled binary
     auto kernel = program_.getKernel(kernel_name);
@@ -78,7 +83,7 @@ void Xtransform_b<T, R>::DoTransform(
 }
 
 template <typename T, typename R>
-void Xtransform_b<T, R>::DoTransform(
+void Xtransform_b<T, R>::DoTransformStrided(
     const std::string& name, const size_t n, const std::vector<size_t>& dims,
     const Buffer<T>& x_buffer, const size_t x_offset, const std::vector<size_t>& x_stride,
     const Buffer<T>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_stride,
@@ -106,6 +111,37 @@ void Xtransform_b<T, R>::DoTransform(
     const auto n_ceiled = Ceil(n, db_["WGS"]*db_["WPT"]);
     auto global = std::vector<size_t>{n_ceiled/db_["WPT"]};
     auto local = std::vector<size_t>{db_["WGS"]};
+    RunKernel(kernel, queue_, device_, global, local, event_);
+}
+
+template <typename T, typename R>
+void Xtransform_b<T, R>::DoTransformChannel(
+    const std::string& name,
+    const size_t m, const size_t n, const size_t channels,
+    const Buffer<T>& x_buffer, const size_t x_offset,
+    const Buffer<T>& y_buffer, const size_t y_offset,
+    Buffer<R>& z_buffer, const size_t z_offset)
+{
+    // Make sure all dimensions are larger than zero
+    if (m == 0 || n == 0 || channels == 0)
+        throw BLASError(StatusCode::kInvalidDimension);
+
+    // Retrieves the kernel from the compiled binary
+    auto kernel = program_.getKernel("X" + name + "Channel");
+
+    // Sets the kernel arguments
+    kernel.setArguments(static_cast<int>(m),
+                        static_cast<int>(n),
+                        static_cast<int>(channels),
+                        x_buffer, static_cast<int>(x_offset),
+                        y_buffer, static_cast<int>(y_offset),
+                        z_buffer, static_cast<int>(z_offset));
+
+    // Launches the kernel
+    auto m_ceiled = Ceil(m, db_["COPY_DIMX"]);
+    auto n_ceiled = Ceil(m, db_["COPY_DIMY"]*db_["COPY_WPT"]);
+    auto global = std::vector<size_t>{m_ceiled, n_ceiled/db_["COPY_WPT"]};
+    auto local = std::vector<size_t>{db_["COPY_DIMX"], db_["COPY_DIMY"]};
     RunKernel(kernel, queue_, device_, global, local, event_);
 }
 

@@ -77,6 +77,33 @@ struct sign<void> {
         { return      (zero<T>() < x) - (x < zero<T>()); }
 };
 
+template <typename T = void>
+struct conj : std::unary_function<T,T> {
+    static constexpr auto name = "conj";
+    constexpr T operator()(const T& x) const
+        { return x; }
+};
+
+template <typename T>
+struct conj<std::complex<T>> {
+    static constexpr auto name = "conj";
+    constexpr std::complex<T> operator()(const std::complex<T>& x) const
+        { return std::conj(x); }
+};
+
+template <>
+struct conj<void> {
+    static constexpr auto name = "conj";
+    template <typename T>
+    constexpr T operator()(T&& x) const noexcept
+        { return std::forward<T>(x); }
+    template <typename T>
+    constexpr auto operator()(const std::complex<T>& x) const
+    noexcept(noexcept(std::conj(x)))
+    -> decltype      (std::conj(x))
+        { return      std::conj(x); }
+};
+
 #define DEFINE_UNARY_FUNCTION(fn, op) \
 template <typename T> \
 struct fn : std::unary_function<T,T> { \
@@ -141,6 +168,16 @@ struct power : std::binary_function<T,T,T> {
     }
 };
 
+template <>
+struct power<void> {
+    static constexpr auto name = "pow";
+    template <class T1, class T2>
+    auto operator()(T1&& x, T2&& y) const
+    noexcept(noexcept(std::pow(std::forward<T1>(x), std::forward<T2>(y))))
+    -> decltype      (std::pow(std::forward<T1>(x), std::forward<T2>(y)))
+        { return      std::pow(std::forward<T1>(x), std::forward<T2>(y)); }
+};
+
 template <typename T = void>
 struct modulus : std::binary_function<T, T, T> {
     static constexpr auto name = "mod";
@@ -176,16 +213,6 @@ struct modulus<void> {
     noexcept(noexcept(std::fmod(x, y)))
     -> decltype      (std::fmod(x, y))
         { return      std::fmod(x, y); }
-};
-
-template <>
-struct power<void> {
-    static constexpr auto name = "pow";
-    template <class T1, class T2>
-    auto operator()(T1&& x, T2&& y) const
-    noexcept(noexcept(std::pow(std::forward<T1>(x), std::forward<T2>(y))))
-    -> decltype      (std::pow(std::forward<T1>(x), std::forward<T2>(y)))
-        { return      std::pow(std::forward<T1>(x), std::forward<T2>(y)); }
 };
 
 template <typename T, typename Compare = std::less<>>

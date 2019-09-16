@@ -14,10 +14,17 @@ public:
         const size_t y_size, const Buffer<T>& y_buffer, const size_t y_offset,
         Buffer<R>& z_buffer, const size_t z_offset);
 
-    void DoTransform(const std::string& name, const size_t n, const std::vector<size_t>& dims,
+    void DoTransformStrided(
+        const std::string& name, const size_t n, const std::vector<size_t>& dims,
         const Buffer<T>& x_buffer, const size_t x_offset, const std::vector<size_t>& x_stride,
         const Buffer<T>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_stride,
         Buffer<R>& z_buffer, const size_t z_offset, const std::vector<size_t>& z_stride);
+
+    void DoTransformChannel(const std::string& name,
+        const size_t m, const size_t n, const size_t channels,
+        const Buffer<T>& x_buffer, const size_t x_offset,
+        const Buffer<T>& y_buffer, const size_t y_offset,
+        Buffer<R>& z_buffer, const size_t z_offset);
 };
 
 }}

@@ -63,6 +63,35 @@ TEST(DNNTest, Transform) {
     }
 }
 
+TEST(DNNTest, Transform_Complex) {
+    auto A = Tensor<std::complex<float>>({2}, {{1,2}, {3,4}});
+    auto dev_A = dev(A);
+
+    ExpectElementsEQ(abs(dev_A).read(), abs(A));
+    ExpectElementsEQ((-dev_A).read(), (-A));
+    ExpectElementsEQ(square(dev_A).read(), square(A));
+    ExpectElementsEQ(reciprocal(dev_A).read(), reciprocal(A));
+    ExpectElementsEQ(conj(dev_A).read(), conj(A));
+    ExpectElementsEQ(sqrt(dev_A).read(), sqrt(A));
+    ExpectElementsEQ(exp(dev_A).read(), exp(A));
+    ExpectElementsEQ(log(dev_A).read(), log(A));
+    ExpectElementsEQ(sin(dev_A).read(), sin(A));
+    ExpectElementsEQ(cos(dev_A).read(), cos(A));
+    ExpectElementsEQ(tan(dev_A).read(), tan(A));
+    ExpectElementsEQ(asin(dev_A).read(), asin(A));
+    ExpectElementsEQ(acos(dev_A).read(), acos(A));
+    ExpectElementsEQ(atan(dev_A).read(), atan(A));
+    ExpectElementsEQ(sinh(dev_A).read(), sinh(A));
+    ExpectElementsEQ(cosh(dev_A).read(), cosh(A));
+    ExpectElementsEQ(tanh(dev_A).read(), tanh(A));
+    ExpectElementsEQ(asinh(dev_A).read(), asinh(A));
+    ExpectElementsEQ(acosh(dev_A).read(), acosh(A));
+    ExpectElementsEQ(atanh(dev_A).read(), atanh(A));
+    ExpectElementsEQ(sigmoid(dev_A).read(), sigmoid(A));
+
+    ExpectElementsEQ(pow(dev_A, dev_A).read(), pow(A, A));
+}
+
 template <typename T> struct TransformTest : public testing::Test {};
 using TestTypes = testing::Types<int16_t, int32_t, int64_t, float>;
 TYPED_TEST_CASE(TransformTest, TestTypes);

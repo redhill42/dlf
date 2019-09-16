@@ -14,7 +14,7 @@
 ARG CUDA_VERSION
 FROM nvidia/cuda:${CUDA_VERSION}-cudnn7-devel
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         git cmake wget libprotobuf-dev protobuf-compiler libgmp-dev libopencv-dev && \
     wget -O- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS-2019.PUB | apt-key add - && \
     sh -c 'echo deb https://apt.repos.intel.com/mkl all main > /etc/apt/sources.list.d/intel-mkl.list' && \

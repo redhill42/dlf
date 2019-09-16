@@ -185,6 +185,14 @@ template void PUBLIC_API transform<double> (const std::string&, const size_t,
                                             const Buffer<double>&, const size_t,
                                             Buffer<double>&, const size_t,
                                             const Queue&, Event*);
+template void PUBLIC_API transform<float2> (const std::string&, const size_t,
+                                            const Buffer<float2>&, const size_t,
+                                            Buffer<float2>&, const size_t,
+                                            const Queue&, Event*);
+template void PUBLIC_API transform<double2>(const std::string&, const size_t,
+                                            const Buffer<double2>&, const size_t,
+                                            Buffer<double2>&, const size_t,
+                                            const Queue&, Event*);
 
 template <typename T>
 void transform(const std::string& name, size_t n, const std::vector<size_t>& dims,
@@ -225,6 +233,16 @@ template void PUBLIC_API transform<double>(
     const std::string&, const size_t, const std::vector<size_t>&,
     const Buffer<double>&, const size_t, const std::vector<size_t>&,
     Buffer<double>&, const size_t, const std::vector<size_t>&,
+    const Queue&, Event*);
+template void PUBLIC_API transform<float2>(
+    const std::string&, const size_t, const std::vector<size_t>&,
+    const Buffer<float2>&, const size_t, const std::vector<size_t>&,
+    Buffer<float2>&, const size_t, const std::vector<size_t>&,
+    const Queue&, Event*);
+template void PUBLIC_API transform<double2>(
+    const std::string&, const size_t, const std::vector<size_t>&,
+    const Buffer<double2>&, const size_t, const std::vector<size_t>&,
+    Buffer<double2>&, const size_t, const std::vector<size_t>&,
     const Queue&, Event*);
 
 template <typename T>
@@ -382,7 +400,7 @@ void transform(const std::string& name, const size_t n, const std::vector<size_t
                const Queue& queue, Event* event)
 {
     auto routine = Xtransform_b<T,R>(queue, event);
-    routine.DoTransform(name, n, dims,
+    routine.DoTransformStrided(name, n, dims,
         x_buffer, x_offset, x_stride,
         y_buffer, y_offset, y_stride,
         z_buffer, z_offset, z_stride);
@@ -497,8 +515,12 @@ void transform(const std::string& name,
     }
 #endif
 
-    auto routine = Xtransform_c<T,R>(queue, event);
-    routine.DoTransform(name, m, n, channels, x_buffer, x_offset, y_buffer, y_offset, z_buffer, z_offset);
+    auto routine = Xtransform_b<T,R>(queue, event);
+    routine.DoTransformChannel(
+        name, m, n, channels,
+        x_buffer, x_offset,
+        y_buffer, y_offset,
+        z_buffer, z_offset);
 }
 
 template void PUBLIC_API transform<int16_t, int16_t>(

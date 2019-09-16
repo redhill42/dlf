@@ -53,50 +53,73 @@ R"(
 
 #define DEFINE_BINARY(name, op)                                             \
 __kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))                   \
-void name(const int x_size, const __global real* restrict xgm, const int x_offset,\
-          const int y_size, const __global real* restrict ygm, const int y_offset,\
-          __global real *zgm, const int z_offset)                           \
+void name(                                                                  \
+  const int x_size, const __global real* restrict xgm, const int x_offset,  \
+  const int y_size, const __global real* restrict ygm, const int y_offset,  \
+  __global real *zgm, const int z_offset)                                   \
 {                                                                           \
-  if (x_size == 1) {                                                        \
-    real x_value = xgm[x_offset];                                           \
-    for (int id = get_global_id(0); id<y_size; id += get_global_size(0)) {  \
-      real y_value = ygm[id + y_offset];                                    \
-      real z_value;                                                         \
-      op(z_value, x_value, y_value);                                        \
-      zgm[id + z_offset] = z_value;                                         \
-    }                                                                       \
-  } else if (y_size == 1) {                                                 \
-    real y_value = ygm[y_offset];                                           \
-    for (int id = get_global_id(0); id<x_size; id += get_global_size(0)) {  \
-      real x_value = xgm[id + x_offset];                                    \
-      real z_value;                                                         \
-      op(z_value, x_value, y_value);                                        \
-      zgm[id + z_offset] = z_value;                                         \
-    }                                                                       \
-  } else if (x_size < y_size) {                                             \
-    for (int id = get_global_id(0); id<y_size; id += get_global_size(0)) {  \
-      real x_value = xgm[id % x_size + x_offset];                           \
-      real y_value = ygm[id + y_offset];                                    \
-      real z_value;                                                         \
-      op(z_value, x_value, y_value);                                        \
-      zgm[id + z_offset] = z_value;                                         \
-    }                                                                       \
-  } else if (x_size > y_size) {                                             \
-    for (int id = get_global_id(0); id<x_size; id += get_global_size(0)) {  \
-      real x_value = xgm[id + x_offset];                                    \
-      real y_value = ygm[id % y_size + y_offset];                           \
-      real z_value;                                                         \
-      op(z_value, x_value, y_value);                                        \
-      zgm[id + z_offset] = z_value;                                         \
-    }                                                                       \
-  } else {                                                                  \
-    for (int id = get_global_id(0); id<x_size; id += get_global_size(0)) {  \
-      real x_value = xgm[id + x_offset];                                    \
-      real y_value = ygm[id + y_offset];                                    \
-      real z_value;                                                         \
-      op(z_value, x_value, y_value);                                        \
-      zgm[id + z_offset] = z_value;                                         \
-    }                                                                       \
+  for (int id = get_global_id(0); id<x_size; id += get_global_size(0)) {    \
+    real x_value = xgm[id + x_offset];                                      \
+    real y_value = ygm[id + y_offset];                                      \
+    real z_value;                                                           \
+    op(z_value, x_value, y_value);                                          \
+    zgm[id + z_offset] = z_value;                                           \
+  }                                                                         \
+}                                                                           \
+__kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))                   \
+void name##ExpandL(                                                         \
+  const int x_size, const __global real* restrict xgm, const int x_offset,  \
+  const int y_size, const __global real* restrict ygm, const int y_offset,  \
+  __global real *zgm, const int z_offset)                                   \
+{                                                                           \
+  real x_value = xgm[x_offset];                                             \
+  for (int id = get_global_id(0); id<y_size; id += get_global_size(0)) {    \
+    real y_value = ygm[id + y_offset];                                      \
+    real z_value;                                                           \
+    op(z_value, x_value, y_value);                                          \
+    zgm[id + z_offset] = z_value;                                           \
+  }                                                                         \
+}                                                                           \
+__kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))                   \
+void name##ExpandR(                                                         \
+  const int x_size, const __global real* restrict xgm, const int x_offset,  \
+  const int y_size, const __global real* restrict ygm, const int y_offset,  \
+  __global real *zgm, const int z_offset)                                   \
+{                                                                           \
+  real y_value = ygm[y_offset];                                             \
+  for (int id = get_global_id(0); id<x_size; id += get_global_size(0)) {    \
+    real x_value = xgm[id + x_offset];                                      \
+    real z_value;                                                           \
+    op(z_value, x_value, y_value);                                          \
+    zgm[id + z_offset] = z_value;                                           \
+  }                                                                         \
+}                                                                           \
+__kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))                   \
+void name##RepeatL(                                                         \
+  const int x_size, const __global real* restrict xgm, const int x_offset,  \
+  const int y_size, const __global real* restrict ygm, const int y_offset,  \
+  __global real *zgm, const int z_offset)                                   \
+{                                                                           \
+  for (int id = get_global_id(0); id<y_size; id += get_global_size(0)) {    \
+    real x_value = xgm[id % x_size + x_offset];                             \
+    real y_value = ygm[id + y_offset];                                      \
+    real z_value;                                                           \
+    op(z_value, x_value, y_value);                                          \
+    zgm[id + z_offset] = z_value;                                           \
+  }                                                                         \
+}                                                                           \
+__kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))                   \
+void name##RepeatR(                                                         \
+  const int x_size, const __global real* restrict xgm, const int x_offset,  \
+  const int y_size, const __global real* restrict ygm, const int y_offset,  \
+  __global real *zgm, const int z_offset)                                   \
+{                                                                           \
+  for (int id = get_global_id(0); id<x_size; id += get_global_size(0)) {    \
+    real x_value = xgm[id + x_offset];                                      \
+    real y_value = ygm[id % y_size + y_offset];                             \
+    real z_value;                                                           \
+    op(z_value, x_value, y_value);                                          \
+    zgm[id + z_offset] = z_value;                                           \
   }                                                                         \
 }                                                                           \
                                                                             \
@@ -113,6 +136,25 @@ void name##Strided(const int n, const int rank, __constant int* shape,      \
     real z_value;                                                           \
     op(z_value, x_value, y_value);                                          \
     zgm[z_id] = z_value;                                                    \
+  }                                                                         \
+}                                                                           \
+                                                                            \
+__kernel __attribute__((reqd_work_group_size(COPY_DIMX, COPY_DIMY, 1)))     \
+void name##Channel(const int m, const int n, const int channels,            \
+                   const __global real* restrict xgm, const int x_offset,   \
+                   const __global real* restrict ygm, const int y_offset,   \
+                   __global real* zgm, const int z_offset)                  \
+{                                                                           \
+  const int rid = get_global_id(0);                                         \
+  if (rid < m) {                                                            \
+    const real y = ygm[rid % channels + y_offset];                          \
+    for (int id = get_global_id(1); id < n; id += get_global_size(1)) {     \
+      const int offset = rid*n + id;                                        \
+      real x = xgm[offset + x_offset];                                      \
+      real z;                                                               \
+      op(z, x, y);                                                          \
+      zgm[offset + z_offset] = z;                                           \
+    }                                                                       \
   }                                                                         \
 }
 
@@ -155,32 +197,55 @@ void name##Fastest(const int n,                                             \
 
 #define DEFINE_RELATION(name, op)                                           \
 __kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))                   \
-void name(const int x_size, const __global real* restrict xgm, const int x_offset,\
-          const int y_size, const __global real* restrict ygm, const int y_offset,\
-          __global char* zgm, const int z_offset)                           \
+void name(                                                                  \
+  const int x_size, const __global real* restrict xgm, const int x_offset,  \
+  const int y_size, const __global real* restrict ygm, const int y_offset,  \
+  __global char* zgm, const int z_offset)                                   \
 {                                                                           \
-  if (x_size == 1) {                                                        \
-    real x_value = xgm[x_offset];                                           \
-    for (int id = get_global_id(0); id<y_size; id += get_global_size(0)) {  \
-      zgm[id + z_offset] = x_value op ygm[id + y_offset];                   \
-    }                                                                       \
-  } else if (y_size == 1) {                                                 \
-    real y_value = ygm[y_offset];                                           \
-    for (int id = get_global_id(0); id<x_size; id += get_global_size(0)) {  \
-      zgm[id + z_offset] = xgm[id + x_offset] op y_value;                   \
-    }                                                                       \
-  } else if (x_size < y_size) {                                             \
-    for (int id = get_global_id(0); id<y_size; id += get_global_size(0)) {  \
-      zgm[id + z_offset] = xgm[id % x_size + x_offset] op ygm[id + y_offset];\
-    }                                                                       \
-  } else if (x_size > y_size) {                                             \
-    for (int id = get_global_id(0); id<x_size; id += get_global_size(0)) {  \
-      zgm[id + z_offset] = xgm[id + x_offset] op ygm[id % y_size + y_offset];\
-    }                                                                       \
-  } else {                                                                  \
-    for (int id = get_global_id(0); id<x_size; id += get_global_size(0)) {  \
-      zgm[id + z_offset] = xgm[id + x_offset] op ygm[id + y_offset];        \
-    }                                                                       \
+  for (int id = get_global_id(0); id<x_size; id += get_global_size(0)) {    \
+    zgm[id + z_offset] = xgm[id + x_offset] op ygm[id + y_offset];          \
+  }                                                                         \
+}                                                                           \
+__kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))                   \
+void name##ExpandL(                                                         \
+  const int x_size, const __global real* restrict xgm, const int x_offset,  \
+  const int y_size, const __global real* restrict ygm, const int y_offset,  \
+  __global char* zgm, const int z_offset)                                   \
+{                                                                           \
+  real x_value = xgm[x_offset];                                             \
+  for (int id = get_global_id(0); id<y_size; id += get_global_size(0)) {    \
+    zgm[id + z_offset] = x_value op ygm[id + y_offset];                     \
+  }                                                                         \
+}                                                                           \
+__kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))                   \
+void name##ExpandR(                                                         \
+  const int x_size, const __global real* restrict xgm, const int x_offset,  \
+  const int y_size, const __global real* restrict ygm, const int y_offset,  \
+  __global char* zgm, const int z_offset)                                   \
+{                                                                           \
+  real y_value = ygm[y_offset];                                             \
+  for (int id = get_global_id(0); id<x_size; id += get_global_size(0)) {    \
+    zgm[id + z_offset] = xgm[id + x_offset] op y_value;                     \
+  }                                                                         \
+}                                                                           \
+__kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))                   \
+void name##RepeatL(                                                         \
+  const int x_size, const __global real* restrict xgm, const int x_offset,  \
+  const int y_size, const __global real* restrict ygm, const int y_offset,  \
+  __global char* zgm, const int z_offset)                                   \
+{                                                                           \
+  for (int id = get_global_id(0); id<y_size; id += get_global_size(0)) {    \
+    zgm[id + z_offset] = xgm[id % x_size + x_offset] op ygm[id + y_offset]; \
+  }                                                                         \
+}                                                                           \
+__kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))                   \
+void name##RepeatR(                                                         \
+  const int x_size, const __global real* restrict xgm, const int x_offset,  \
+  const int y_size, const __global real* restrict ygm, const int y_offset,  \
+  __global char* zgm, const int z_offset)                                   \
+{                                                                           \
+  for (int id = get_global_id(0); id<x_size; id += get_global_size(0)) {    \
+    zgm[id + z_offset] = xgm[id + x_offset] op ygm[id % y_size + y_offset]; \
   }                                                                         \
 }                                                                           \
                                                                             \
@@ -194,6 +259,22 @@ void name##Strided(const int n, const int rank, __constant int* shape,      \
     int x_id = x_offset, y_id = y_offset, z_id = z_offset;                  \
     unravel3(id, &x_id, &y_id, &z_id, rank, shape);                         \
     zgm[z_id] = xgm[x_id] op ygm[y_id];                                     \
+  }                                                                         \
+}                                                                           \
+                                                                            \
+__kernel __attribute__((reqd_work_group_size(COPY_DIMX, COPY_DIMY, 1)))     \
+void name##Channel(const int m, const int n, const int channels,            \
+                   const __global real* restrict xgm, const int x_offset,   \
+                   const __global real* restrict ygm, const int y_offset,   \
+                   __global char* zgm, const int z_offset)                  \
+{                                                                           \
+  const int rid = get_global_id(0);                                         \
+  if (rid < m) {                                                            \
+    const real y = ygm[rid % channels + y_offset];                          \
+    for (int id = get_global_id(1); id < n; id += get_global_size(1)) {     \
+      const int offset = rid*n + id;                                        \
+      zgm[offset + z_offset] = xgm[offset + x_offset] op y;                 \
+    }                                                                       \
   }                                                                         \
 }
 
@@ -216,18 +297,45 @@ DEFINE_BINARY_V(Xsub_v, Subtract)
 DEFINE_BINARY_V(Xmul_v, Multiply)
 DEFINE_BINARY_V(Xdiv_v, Divide)
 
-#if PRECISION != 3232 && PRECISION != 6464
-
 #if INTEGER_PRECISION
-  #define xpow(x,y) pow((float)x,(float)y)
   #define xmod(x,y) (x%y)
-#elif defined(CUDA) && PRECISION == 32
-  #define xpow powf
-  #define xmod fmodf
+  #define xpow(x,y) pow((float)x,(float)y)
+#elif defined(CUDA) && (PRECISION == 32 || PRECISION == 3232)
+  #define xmod  fmodf
+  #define xpow  powf
+
+  #define exp   expf
+  #define log   logf
+  #define hypot hypotf
+  #define atan2 atan2f
+  #define sin   sinf
+  #define cos   cosf
 #else
-  #define xpow pow
   #define xmod fmod
+  #define xpow pow
 #endif
+
+#if PRECISION == 3232 || PRECISION == 6464
+INLINE_FUNC real zpow(real a, real b) {
+  // pow(a,b) = exp(b * log(a))
+  real z, t;
+  t.x = log(hypot(a.x, a.y));
+  t.y = atan2(a.y, a.x);
+  Multiply(z, b, t);
+
+  singlereal e = exp(z.x);
+  z.x = e * cos(z.y);
+  z.y = e * sin(z.y);
+  return z;
+}
+
+#define Pow(c,a,b) c = zpow(a,b)
+#else
+#define Pow(c,a,b) c = xpow(a,b)
+#endif
+DEFINE_BINARY(Xpow, Pow)
+
+#if PRECISION != 3232 && PRECISION != 6464
 
 #define Max(c,a,b) c = max(a,b)
 #define Min(c,a,b) c = min(a,b)
@@ -236,9 +344,6 @@ DEFINE_BINARY(Xmin, Min)
 
 #define Mod(c,a,b) c = xmod(a,b)
 DEFINE_BINARY(Xmod, Mod)
-
-#define Pow(c,a,b) c = xpow(a,b)
-DEFINE_BINARY(Xpow, Pow)
 
 #define PRelu(c,a,b) c = a<ZERO ? a*b : a
 DEFINE_BINARY(Xprelu, PRelu)
