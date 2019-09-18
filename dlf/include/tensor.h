@@ -24,6 +24,5 @@
 #include "tensor/aggregate.h"
 #include "tensor/reduce.h"
 #include "tensor/pad.h"
-#include "tensor/sorting.h"
 #include "tensor/linalg.h"
 #include "tensor/dnn.h"

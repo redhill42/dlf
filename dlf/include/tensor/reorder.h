@@ -1343,4 +1343,156 @@ scatter_nd(TensorX& X, const TensorI& indices, const TensorY& updates) {
     detail::scatter_nd(X, indices, updates, n, k, chunk);
 }
 
+//==-------------------------------------------------------------------------
+// Merge and sort
+//==-------------------------------------------------------------------------
+
+namespace detail {
+template <typename T, typename Compare>
+void merge(const Shape& x_shape, const T* x_data,
+           const Shape& y_shape, const T* y_data,
+           const Shape& z_shape, T* z_data,
+           Compare comp)
+{
+    const auto m     = x_shape.size() / x_shape.extent(-1);
+    const auto kx    = x_shape.extent(-1);
+    const auto ky    = y_shape.extent(-1);
+    const auto kz    = z_shape.extent(-1);
+    const auto x_inc = static_cast<int>(x_shape.stride(-1));
+    const auto y_inc = static_cast<int>(y_shape.stride(-1));
+    const auto z_inc = static_cast<int>(z_shape.stride(-1));
+
+    const auto grainsize = std::max(size_t(1), GRAINSIZE/std::max(kx, ky));
+    tbb::parallel_for(tbb::blocked_range<int>(0, m, grainsize), [&](auto r) {
+        for (int i = r.begin(); i < r.end(); ++i) {
+            auto px    = x_data + x_shape.linear_offset(i*kx);
+            auto x_end = px + kx*x_inc;
+            auto py    = y_data + y_shape.linear_offset(i*ky);
+            auto y_end = py + ky*y_inc;
+            auto pz    = z_data + z_shape.linear_offset(i*kz);
+
+            for (;; pz += z_inc) {
+                if (px == x_end) {
+                    while (py != y_end) {
+                        *pz = *py;
+                        py += y_inc;
+                        pz += z_inc;
+                    }
+                    break;
+                }
+                if (py == y_end) {
+                   while (px != x_end) {
+                       *pz = *px;
+                       px += x_inc;
+                       pz += z_inc;
+                   }
+                   break;
+                }
+                if (comp(*py, *px)) {
+                    *pz = *py;
+                    py += y_inc;
+                } else {
+                    *pz = *px;
+                    px += x_inc;
+                }
+            }
+        }
+    });
+}
+} // namespace detail
+
+/**
+ * Merges two sorted tensors into one sorted tensor. The input and output
+ * tensors are sorted on the given axis.
+ */
+template <typename LHS, typename RHS, typename RET, typename Compare>
+std::enable_if_t<
+    is_exactly_same_tensor<LHS, RET>::value &&
+    is_exactly_same_tensor<RHS, RET>::value &&
+    !std::is_const<std::remove_reference_t<RET>>::value>
+merge(const LHS& A, const RHS& B, RET&& C, int axis, Compare comp) {
+    auto rank = A.rank();
+    if (B.rank() != rank)
+        throw shape_error("merge: incompatible shape");
+
+    std::vector<size_t> dims(rank);
+    detail::norm_axis(rank, axis);
+    for (int i = 0; i < rank; i++) {
+        if (i == axis) {
+            dims[i] = A.extent(i) + B.extent(i);
+        } else if (A.extent(i) != B.extent(i)) {
+            throw shape_error("merge: incompatible shape");
+        } else {
+            dims[i] = A.extent(i);
+        }
+    }
+    C.resize(Shape(dims));
+
+    auto a_view = moveaxis(A, axis, -1);
+    auto b_view = moveaxis(B, axis, -1);
+    auto c_view = moveaxis(C, axis, -1);
+    detail::merge(a_view.shape(), a_view.data(),
+                  b_view.shape(), b_view.data(),
+                  c_view.shape(), c_view.data(),
+                  comp);
+}
+
+template <typename LHS, typename RHS, typename RET>
+std::enable_if_t<
+    is_exactly_same_tensor<LHS, RET>::value &&
+    is_exactly_same_tensor<RHS, RET>::value &&
+    !std::is_const<std::remove_reference_t<RET>>::value>
+inline merge(const LHS& A, const RHS& B, RET&& C, int axis) {
+    merge(A, B, C, axis, std::less<>());
+}
+
+template <typename LHS, typename RHS, typename Compare>
+std::enable_if_t<is_exactly_same_tensor<LHS, RHS>::value, tensor_type<LHS>>
+inline merge(const LHS& A, const RHS& B, int axis, Compare comp) {
+    tensor_type<LHS> C{};
+    merge(A, B, C, axis, comp);
+    return C;
+}
+
+template <typename LHS, typename RHS>
+std::enable_if_t<is_exactly_same_tensor<LHS, RHS>::value, tensor_type<LHS>>
+inline merge(const LHS& A, const RHS& B, int axis = -1) {
+    return merge(A, B, axis, std::less<>());
+}
+
+namespace detail {
+template <typename T, typename Compare>
+void sort(const Shape& shape, T* data, Compare comp) {
+    const auto n = shape.extent(-1);
+    const auto m = shape.size() / n;
+    const auto inc = static_cast<int>(shape.stride(-1));
+
+    const auto grainsize = std::max(size_t(1), GRAINSIZE/n);
+    tbb::parallel_for(tbb::blocked_range<int>(0, m, grainsize), [&](auto r) {
+        for (int i = r.begin(); i < r.end(); ++i) {
+            auto px = data + shape.linear_offset(i*n);
+            if (inc == 1)
+                tbb::parallel_sort(px, px+n, comp);
+            else
+                tbb::parallel_sort(strided_iterator<T>(px, inc, 0),
+                                   strided_iterator<T>(px, inc, n),
+                                   comp);
+        }
+    });
+}
+} // namespace detail
+
+template <typename TensorT, typename Compare>
+std::enable_if_t<is_cpu_tensor<TensorT>::value>
+sort(TensorT& X, int axis, Compare comp) {
+    auto x_view = moveaxis(X, axis, -1);
+    detail::sort(x_view.shape(), x_view.data(), comp);
+}
+
+template <typename TensorT>
+std::enable_if_t<is_cpu_tensor<TensorT>::value>
+inline sort(TensorT& X, int axis = -1) {
+    sort(X, axis, std::less<>());
+}
+
 } // namespace dlf

@@ -676,6 +676,100 @@ public:
     }
 };
 
+template <typename T>
+class strided_iterator {
+    T* m_data;
+    size_t m_stride;
+
+public:
+    using value_type = T;
+    using difference_type = ptrdiff_t;
+    using reference = value_type&;
+    using pointer = value_type*;
+    using iterator_category = std::random_access_iterator_tag;
+
+    strided_iterator(T* data, size_t stride, difference_type start)
+        : m_data(data + start*stride), m_stride(stride) {}
+
+    strided_iterator& operator++() noexcept { m_data += m_stride; return *this; }
+    strided_iterator& operator--() noexcept { m_data -= m_stride; return *this; }
+    strided_iterator  operator++(int) noexcept { auto t = *this; ++(*this); return t; }
+    strided_iterator  operator--(int) noexcept { auto t = *this; --(*this); return t; }
+    strided_iterator& operator+=(difference_type n) noexcept { m_data += n*m_stride; return *this; }
+    strided_iterator& operator-=(difference_type n) noexcept { m_data -= n*m_stride; return *this; }
+
+    strided_iterator operator+(difference_type n) const noexcept
+        { return strided_iterator(m_data, m_stride, n); }
+    strided_iterator operator-(difference_type n) const noexcept
+        { return strided_iterator(m_data, m_stride, -n); }
+    difference_type operator-(const strided_iterator& rhs) const noexcept
+        { return (m_data - rhs.m_data) / m_stride; }
+
+    reference operator*() const noexcept { return *m_data; }
+    pointer operator->() const noexcept { return m_data; }
+    reference operator[](int n) const noexcept { return m_data[n*m_stride]; }
+
+    bool operator==(const strided_iterator& rhs) const noexcept
+        { return m_data == rhs.m_data; }
+    bool operator!=(const strided_iterator& rhs) const noexcept
+        { return m_data != rhs.m_data; }
+    bool operator<(const strided_iterator& rhs) const noexcept
+        { return m_data < rhs.m_data; }
+    bool operator<=(const strided_iterator& rhs) const noexcept
+        { return m_data <= rhs.m_data; }
+    bool operator>(const strided_iterator& rhs) const noexcept
+        { return m_data > rhs.m_data; }
+    bool operator>=(const strided_iterator& rhs) const noexcept
+        { return m_data >= rhs.m_data; }
+};
+
+template <typename T>
+class const_strided_iterator {
+    const T* m_data;
+    size_t m_stride;
+
+public:
+    using value_type = T;
+    using difference_type = ptrdiff_t;
+    using reference = const value_type&;
+    using pointer = const value_type*;
+    using iterator_category = std::random_access_iterator_tag;
+
+    const_strided_iterator(const T* data, size_t stride, difference_type start)
+        : m_data(data + start*stride), m_stride(stride) {}
+
+    const_strided_iterator& operator++() noexcept { m_data += m_stride; return *this; }
+    const_strided_iterator& operator--() noexcept { m_data -= m_stride; return *this; }
+    const_strided_iterator  operator++(int) noexcept { auto t = *this; ++(*this); return t; }
+    const_strided_iterator  operator--(int) noexcept { auto t = *this; --(*this); return t; }
+    const_strided_iterator& operator+=(difference_type n) noexcept { m_data += n*m_stride; return *this; }
+    const_strided_iterator& operator-=(difference_type n) noexcept { m_data -= n*m_stride; return *this; }
+
+    const_strided_iterator operator+(difference_type n) const noexcept
+        { return strided_iterator(m_data, m_stride, n); }
+    const_strided_iterator operator-(difference_type n) const noexcept
+        { return strided_iterator(m_data, m_stride, -n); }
+    difference_type operator-(const const_strided_iterator& rhs) const noexcept
+        { return (m_data - rhs.m_data) / m_stride; }
+
+    reference operator*() const noexcept { return *m_data; }
+    pointer operator->() const noexcept { return m_data; }
+    reference operator[](int n) const noexcept { return m_data[n*m_stride]; }
+
+    bool operator==(const const_strided_iterator& rhs) const noexcept
+        { return m_data == rhs.m_data; }
+    bool operator!=(const const_strided_iterator& rhs) const noexcept
+        { return m_data != rhs.m_data; }
+    bool operator<(const const_strided_iterator& rhs) const noexcept
+        { return m_data < rhs.m_data; }
+    bool operator<=(const const_strided_iterator& rhs) const noexcept
+        { return m_data <= rhs.m_data; }
+    bool operator>(const const_strided_iterator& rhs) const noexcept
+        { return m_data > rhs.m_data; }
+    bool operator>=(const const_strided_iterator& rhs) const noexcept
+        { return m_data >= rhs.m_data; }
+};
+
 //---------------------------------------------------------------------------
 
 namespace detail {
