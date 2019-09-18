@@ -14,17 +14,20 @@ Xargreduce<T>::Xargreduce(const Queue& queue, Event* event, const std::string& n
 template <typename T>
 void Xargreduce<T>::DoArgReduce(
     const std::string& name, const size_t n, const size_t k,
-    const std::vector<size_t>& dims, const std::vector<size_t>& strides,
+    const std::vector<size_t>& x_dims, const std::vector<size_t>& x_strides,
     const Buffer<T>& x_buffer, const size_t x_offset,
-    Buffer<int>& y_buffer)
+    const std::vector<size_t>& y_dims, const std::vector<size_t>& y_strides,
+    Buffer<int>& y_buffer, const size_t y_offset)
 {
-    auto shape_buffer = PackShape(dims, strides, context_, queue_);
+    auto x_shape_buffer = PackShape(x_dims, x_strides, context_, queue_);
+    auto y_shape_buffer = PackShape(y_dims, y_strides, context_, queue_);
     auto kernel = program_.getKernel("X" + name);
     kernel.setArguments(
         static_cast<int>(n), static_cast<int>(k),
-        static_cast<int>(dims.size()), shape_buffer,
+        static_cast<int>(x_dims.size()), x_shape_buffer,
         x_buffer, static_cast<int>(x_offset),
-        y_buffer);
+        static_cast<int>(y_dims.size()), y_shape_buffer,
+        y_buffer, y_offset);
 
     auto global = std::vector<size_t>{Ceil(n, db_["WGS"])};
     auto local = std::vector<size_t>{db_["WGS"]};

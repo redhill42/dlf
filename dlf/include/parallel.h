@@ -5,7 +5,11 @@
 namespace dlf { namespace par {
 
 #ifndef GRAINSIZE
-#define GRAINSIZE 1000
+#  ifdef NDEBUG
+#    define GRAINSIZE 1024
+#  else
+#    define GRAINSIZE 4
+#  endif
 #endif
 
 template <size_t grainsize = GRAINSIZE, class InputIterator, class OutputIterator>

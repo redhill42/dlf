@@ -731,37 +731,53 @@ template void PUBLIC_API scan<int64_t>(const std::string&, const size_t, const s
 
 template <typename T>
 void arg_reduce(const std::string& name, const size_t n, const size_t k,
-                const std::vector<size_t>& dims, const std::vector<size_t>& strides,
-                const Buffer<T>& x_buffer, const size_t x_offset, Buffer<int>& y_buffer,
+                const std::vector<size_t>& x_dims, const std::vector<size_t>& x_strides,
+                const Buffer<T>& x_buffer, const size_t x_offset,
+                const std::vector<size_t>& y_dims, const std::vector<size_t>& y_strides,
+                Buffer<int>& y_buffer, const size_t y_offset,
                 const Queue& queue, Event* event)
 {
     auto routine = Xargreduce<T>(queue, event);
-    routine.DoArgReduce(name, n, k, dims, strides, x_buffer, x_offset, y_buffer);
+    routine.DoArgReduce(name, n, k,
+                        x_dims, x_strides, x_buffer, x_offset,
+                        y_dims, y_strides, y_buffer, y_offset);
 }
 
 template void PUBLIC_API arg_reduce<int16_t>(const std::string&, const size_t, const size_t,
                                              const std::vector<size_t>&, const std::vector<size_t>&,
-                                             const Buffer<int16_t>&, const size_t, Buffer<int>&,
+                                             const Buffer<int16_t>&, const size_t,
+                                             const std::vector<size_t>&, const std::vector<size_t>&,
+                                             Buffer<int>&, const size_t,
                                              const Queue&, Event*);
 template void PUBLIC_API arg_reduce<int32_t>(const std::string&, const size_t, const size_t,
                                              const std::vector<size_t>&, const std::vector<size_t>&,
-                                             const Buffer<int32_t>&, const size_t, Buffer<int>&,
+                                             const Buffer<int32_t>&, const size_t,
+                                             const std::vector<size_t>&, const std::vector<size_t>&,
+                                             Buffer<int>&, const size_t,
                                              const Queue&, Event*);
 template void PUBLIC_API arg_reduce<int64_t>(const std::string&, const size_t, const size_t,
                                              const std::vector<size_t>&, const std::vector<size_t>&,
-                                             const Buffer<int64_t>&, const size_t, Buffer<int>&,
+                                             const Buffer<int64_t>&, const size_t,
+                                             const std::vector<size_t>&, const std::vector<size_t>&,
+                                             Buffer<int>&, const size_t,
                                              const Queue&, Event*);
 template void PUBLIC_API arg_reduce<half>   (const std::string&, const size_t, const size_t,
                                              const std::vector<size_t>&, const std::vector<size_t>&,
-                                             const Buffer<half>&, const size_t, Buffer<int>&,
+                                             const Buffer<half>&, const size_t,
+                                             const std::vector<size_t>&, const std::vector<size_t>&,
+                                             Buffer<int>&, const size_t,
                                              const Queue&, Event*);
 template void PUBLIC_API arg_reduce<float>  (const std::string&, const size_t, const size_t,
                                              const std::vector<size_t>&, const std::vector<size_t>&,
-                                             const Buffer<float>&, const size_t, Buffer<int>&,
+                                             const Buffer<float>&, const size_t,
+                                             const std::vector<size_t>&, const std::vector<size_t>&,
+                                             Buffer<int>&, const size_t,
                                              const Queue&, Event*);
 template void PUBLIC_API arg_reduce<double> (const std::string&, const size_t, const size_t,
                                              const std::vector<size_t>&, const std::vector<size_t>&,
-                                             const Buffer<double>&, const size_t, Buffer<int>&,
+                                             const Buffer<double>&, const size_t,
+                                             const std::vector<size_t>&, const std::vector<size_t>&,
+                                             Buffer<int>&, const size_t,
                                              const Queue&, Event*);
 
 template <typename T>

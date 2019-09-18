@@ -10,9 +10,10 @@ public:
     Xargreduce(const Queue& queue, Event* event, const std::string& name = "ARGREDUCE");
 
     void DoArgReduce(const std::string& name, const size_t n, const size_t k,
-                     const std::vector<size_t>& dims, const std::vector<size_t>& strides,
+                     const std::vector<size_t>& x_dims, const std::vector<size_t>& x_strides,
                      const Buffer<T>& x_buffer, const size_t x_offset,
-                     Buffer<int>& y_buffer);
+                     const std::vector<size_t>& y_dims, const std::vector<size_t>& y_strides,
+                     Buffer<int>& y_buffer, const size_t y_offset);
 };
 
 }} // namespace gpgpu::dnn

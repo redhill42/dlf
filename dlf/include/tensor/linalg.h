@@ -1580,11 +1580,10 @@ norm_p(const TensorT& X, float ord, int axis, bool keepdims) {
     const auto p = static_cast<T>(ord);
     return reduce(X, {axis}, keepdims,
         xfn::zero<T>(),
-        [p](auto acc, auto x) -> T {
-            if (x == xfn::zero<T>())
-                return acc;
-            return acc + std::pow(std::abs(x), p);
+        [p](const auto& x) {
+            return std::pow(std::abs(x), p);
         },
+        xfn::plus<T>(),
         [p](auto acc, auto) -> T {
             return std::pow(acc, xfn::one<T>()/p);
         });

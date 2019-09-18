@@ -431,13 +431,6 @@ TEST(ViewTest, PartitionOnView) {
     }));
 }
 
-TEST(ViewTest, PartitionAndReduceMeanEquivalentToAveragePool) {
-    auto A = Tensor<float>({3, 3, 8, 10}).random(0, 1);
-    auto B = reduce_mean(partition(A, {3, 3}, {1, 1}), {-2, -1});
-    auto C = dnn::average_pooling(A, dnn::Filter2D(A.shape(), 3, 3), false);
-    EXPECT_EQ(B, C);
-}
-
 TEST(ViewTest, Tile_CPU) {
     auto A = Vector({0, 1, 2});
     EXPECT_EQ(tile(A, {2}), Vector({0, 1, 2, 0, 1, 2}));

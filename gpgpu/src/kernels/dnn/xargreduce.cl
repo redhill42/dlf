@@ -6,14 +6,16 @@ R"(
 __kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))               \
 void X##name(                                                           \
     const int n, const int k,                                           \
-    const int rank, __constant int* shape,                              \
+    const int x_rank, __constant int* x_shape,                          \
     const __global real* restrict xgm, const int x_offset,              \
-    __global int* ygm)                                                  \
+    const int y_rank, __constant int* y_shape,                          \
+    __global int* ygm, const int y_offset)                              \
 {                                                                       \
   const int id = get_global_id(0);                                      \
   if (id < n) {                                                         \
-    const int x_off = unravel(id*k, rank, shape);                       \
-    const int x_inc = shape[2*rank - 1];                                \
+    const int x_off = unravel(id*k, x_rank, x_shape) + x_offset;        \
+    const int x_inc = x_shape[2*x_rank - 1];                            \
+    const int y_off = unravel(id, y_rank, y_shape) + y_offset;          \
     real acc = xgm[x_off];                                              \
     int idx = 0;                                                        \
     for (int ik = 1; ik < k; ++ik) {                                    \
@@ -23,7 +25,7 @@ void X##name(                                                           \
         idx = ik;                                                       \
       }                                                                 \
     }                                                                   \
-    ygm[id] = idx;                                                      \
+    ygm[y_off] = idx;                                                   \
   }                                                                     \
 }
 

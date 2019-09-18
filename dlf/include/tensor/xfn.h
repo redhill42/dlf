@@ -39,6 +39,18 @@ struct parameterized_function {
 };
 
 template <typename T = void>
+struct identity : std::unary_function<T,T> {
+    constexpr T operator()(const T& x) const { return x; }
+};
+
+template <>
+struct identity<void> {
+    template <typename T>
+    constexpr T operator()(T&& x) const noexcept
+        { return std::forward<T>(x); }
+};
+
+template <typename T = void>
 struct abs : std::unary_function<T,T> {
     static constexpr auto name = "abs";
     constexpr T operator()(const T& x) const
@@ -102,6 +114,23 @@ struct conj<void> {
     noexcept(noexcept(std::conj(x)))
     -> decltype      (std::conj(x))
         { return      std::conj(x); }
+};
+
+template <typename T = void>
+struct norm : std::unary_function<T,T> {
+    static constexpr auto name = "norm";
+    constexpr T operator()(const T& x) const
+        { return std::norm(x); }
+};
+
+template <>
+struct norm<void> {
+    static constexpr auto name = "norm";
+    template <typename T>
+    constexpr auto operator()(T&& x) const
+    noexcept(noexcept(std::norm(x)))
+    -> decltype      (std::norm(x))
+        { return      std::norm(x); }
 };
 
 #define DEFINE_UNARY_FUNCTION(fn, op) \
@@ -401,118 +430,119 @@ struct softplus : std::unary_function<T,T>, parameterized_function<T> {
 
 //==-------------------------------------------------------------------------
 
+template <typename F>
+struct post_reduce {
+    static constexpr auto f = F();
+    template <typename T>
+    constexpr T operator()(const T& acc, const int) const
+    noexcept(noexcept(f(acc))) { return f(acc); }
+};
+
 template <typename T>
 struct post_reduce_identity {
-    constexpr T operator()(const T& acc, const int) { return acc; }
+    constexpr T operator()(const T& acc, const int) const noexcept { return acc; }
 };
 
 template <typename T>
-struct post_reduce_mean {
-    constexpr T operator()(const T& acc, const int n) { return acc / n; }
+struct post_reduce_average {
+    constexpr T operator()(const T& acc, const int n) const
+    noexcept(noexcept(acc / n)) { return acc / n; }
 };
 
 template <typename T>
-struct post_reduce_log {
-    constexpr T operator()(const T& acc, const int) { return std::log(acc); }
-};
-
-template <typename T>
-struct post_reduce_sqrt {
-    constexpr T operator()(const T& acc, const int) { return std::sqrt(acc); }
-};
-
-template <typename T>
-struct reduce_max : max<T> {
+struct reduce_max {
     static constexpr auto name = "reduce_max";
     static constexpr T identity() { return std::numeric_limits<T>::lowest(); }
-    using Post = post_reduce_identity<T>;
+    using Map = xfn::identity<T>;
+    using Reduce = xfn::max<T>;
+    using Final = post_reduce_identity<T>;
 };
 
 template <typename T>
 struct reduce_amax {
     static constexpr auto name = "reduce_amax";
     static constexpr T identity() { return zero<T>(); }
-    constexpr T operator()(const T& acc, const T& x) const
-        { return std::max(acc, std::abs(x)); }
-    using Post = post_reduce_identity<T>;
+    using Map = xfn::abs<T>;
+    using Reduce = xfn::max<T>;
+    using Final = post_reduce_identity<T>;
 };
 
 template <typename T>
-struct reduce_min : min<T> {
+struct reduce_min {
     static constexpr auto name = "reduce_min";
     static constexpr T identity() { return std::numeric_limits<T>::max(); }
-    using Post = post_reduce_identity<T>;
+    using Map = xfn::identity<T>;
+    using Reduce = xfn::min<T>;
+    using Final = post_reduce_identity<T>;
 };
 
 template <typename T>
 struct reduce_amin {
     static constexpr auto name = "reduce_amin";
     static constexpr T identity() { return std::numeric_limits<T>::max(); }
-    constexpr T operator()(const T& acc, const T& x) const
-        { return std::min(acc, std::abs(x)); }
-    using Post = post_reduce_identity<T>;
+    using Map = xfn::abs<T>;
+    using Reduce = xfn::min<T>;
+    using Final = post_reduce_identity<T>;
 };
 
 template <typename T>
-struct reduce_sum : plus<T> {
+struct reduce_sum {
     static constexpr auto name = "reduce_sum";
     static constexpr T identity() { return zero<T>(); }
-    using Post = post_reduce_identity<T>;
+    using Map = xfn::identity<T>;
+    using Reduce = xfn::plus<T>;
+    using Final = post_reduce_identity<T>;
 };
 
 template <typename T>
-struct reduce_asum {
+struct reduce_asum : reduce_sum<T> {
     static constexpr auto name = "reduce_asum";
-    static constexpr T identity() { return zero<T>(); }
-    constexpr T operator()(const T& acc, const T& x) const
-        { return acc + std::abs(x); }
-    using Post = post_reduce_identity<T>;
+    using Map = xfn::abs<T>;
 };
 
 template <typename T>
 struct reduce_mean : reduce_sum<T> {
     static constexpr auto name = "reduce_mean";
-    using Post = post_reduce_mean<T>;
+    using Final = post_reduce_average<T>;
 };
 
 template <typename T>
-struct reduce_sum_square {
+struct reduce_sum_square : reduce_sum<T> {
     static constexpr auto name = "reduce_sum_square";
-    static constexpr T identity() { return zero<T>(); }
-    constexpr T operator()(const T& acc, const T& x) const
-        { return acc + x*x; }
-    using Post = post_reduce_identity<T>;
+    using Map = xfn::square<T>;
 };
 
 template <typename T>
 struct reduce_nrm2 {
     static constexpr auto name = "reduce_nrm2";
     static constexpr T identity() { return zero<T>(); }
-    const T operator()(const T& acc, const T& x) const
-        { const auto ax = std::abs(x); return acc + ax*ax; }
-    using Post = post_reduce_sqrt<T>;
+    using Map = xfn::norm<T>;
+    using Reduce = xfn::plus<T>;
+    using Final = post_reduce<xfn::sqrt<T>>;
 };
 
 template <typename T>
 struct reduce_log_sum : reduce_sum<T> {
     static constexpr auto name = "reduce_log_sum";
-    using Post = post_reduce_log<T>;
+    using Final = post_reduce<xfn::log<T>>;
 };
 
 template <typename T>
 struct reduce_log_sum_exp {
     static constexpr auto name = "reduce_log_sum_exp";
     static constexpr T identity() { return zero<T>(); }
-    constexpr T operator()(const T& acc, const T& x) const
-        { return acc + std::exp(x); }
-    using Post = post_reduce_log<T>;
+    using Map = xfn::exp<T>;
+    using Reduce = xfn::plus<T>;
+    using Final = post_reduce<xfn::log<T>>;
 };
 
 template <typename T>
-struct reduce_prod : multiplies<T> {
+struct reduce_prod {
     static constexpr auto name = "reduce_prod";
     static constexpr T identity() { return one<T>(); }
-    using Post = post_reduce_identity<T>;
+    using Map = xfn::identity<T>;
+    using Reduce = xfn::multiplies<T>;
+    using Final = post_reduce_identity<T>;
 };
 
 }} // namespace dlf::xfn
