@@ -1347,53 +1347,97 @@ scatter_nd(TensorX& X, const TensorI& indices, const TensorY& updates) {
 // Merge and sort
 //==-------------------------------------------------------------------------
 
+// Reference:
+// https://library.technion.ac.il/projects/ele/2011/Merge_path.pdf
+
 namespace detail {
+template <typename T, typename Compare>
+void select(const T* X, int Lx, int dx, const T* Y, int Ly, int dy,
+            int k, int& ix, int& iy, Compare comp)
+{
+    int ix_start = std::min(k, Lx);
+    int ix_end   = std::max(0, k - Ly);
+    int iy_start = std::max(0, k - Lx);
+    int start = 0, end = ix_start - ix_end;
+
+    // Binary search diagonal intersection
+    while (start <= end) {
+        int m = (start + end) / 2;
+        ix = ix_start - m;
+        iy = iy_start + m;
+        if (iy != Ly && (ix == Lx || comp(Y[iy * dy], X[ix * dx]))) {
+            start = m + 1;
+        } else {
+            end = m - 1;
+        }
+    }
+
+    // Adjust boundary
+    if (ix > 0 && ix < Lx && iy < Ly && comp(Y[iy * dy], X[ix * dx]))
+        ix--, iy++;
+    if (iy > 0 && ix < Lx && comp(X[ix * dx], Y[(iy - 1) * dy]))
+        ix++, iy--;
+}
+
 template <typename T, typename Compare>
 void merge(const Shape& x_shape, const T* x_data,
            const Shape& y_shape, const T* y_data,
            const Shape& z_shape, T* z_data,
            Compare comp)
 {
-    const auto m     = x_shape.size() / x_shape.extent(-1);
-    const auto kx    = x_shape.extent(-1);
-    const auto ky    = y_shape.extent(-1);
-    const auto kz    = z_shape.extent(-1);
-    const auto x_inc = static_cast<int>(x_shape.stride(-1));
-    const auto y_inc = static_cast<int>(y_shape.stride(-1));
-    const auto z_inc = static_cast<int>(z_shape.stride(-1));
+    const auto Lx = static_cast<int>(x_shape.extent(-1));
+    const auto Ly = static_cast<int>(y_shape.extent(-1));
+    const auto Lz = static_cast<int>(z_shape.extent(-1));
+    const auto dx = static_cast<int>(x_shape.stride(-1));
+    const auto dy = static_cast<int>(y_shape.stride(-1));
+    const auto dz = static_cast<int>(z_shape.stride(-1));
+    const auto batch_count = z_shape.size() / Lz;
 
-    const auto grainsize = std::max(size_t(1), GRAINSIZE/std::max(kx, ky));
-    tbb::parallel_for(tbb::blocked_range<int>(0, m, grainsize), [&](auto r) {
-        for (int i = r.begin(); i < r.end(); ++i) {
-            auto px    = x_data + x_shape.linear_offset(i*kx);
-            auto x_end = px + kx*x_inc;
-            auto py    = y_data + y_shape.linear_offset(i*ky);
-            auto y_end = py + ky*y_inc;
-            auto pz    = z_data + z_shape.linear_offset(i*kz);
+    const auto grainsize = std::max(1, GRAINSIZE / Lz);
+    tbb::parallel_for(tbb::blocked_range2d<int>(0, batch_count, grainsize, 0, Lz, GRAINSIZE), [&](auto r) {
+        for (int batch = r.rows().begin(); batch < r.rows().end(); ++batch) {
+            auto k = r.cols().begin();
 
-            for (;; pz += z_inc) {
-                if (px == x_end) {
-                    while (py != y_end) {
-                        *pz = *py;
-                        py += y_inc;
-                        pz += z_inc;
+            auto px = x_data + x_shape.linear_offset(batch * Lx);
+            auto py = y_data + y_shape.linear_offset(batch * Ly);
+            auto pz = z_data + z_shape.linear_offset(batch * Lz + k);
+            auto px_end = px + Lx * dx;
+            auto py_end = py + Ly * dy;
+
+            int ix, iy;
+            select(px, Lx, dx, py, Ly, dy, k, ix, iy, comp);
+            assert(ix >= 0 && ix <= Lx);
+            assert(iy >= 0 && iy <= Ly);
+            assert(!(ix == Lx && iy == Ly));
+
+            px += ix * dx, py += iy * dy;
+            for (int cnt = r.cols().size(); cnt > 0; --cnt, pz += dz) {
+                if (py == py_end) {
+                    if (dx == 1 && dz == 1) {
+                        std::copy(px, px + cnt, pz);
+                    } else {
+                        for (; cnt > 0; --cnt, px += dx, pz += dz) {
+                            *pz = *px;
+                        }
                     }
                     break;
-                }
-                if (py == y_end) {
-                   while (px != x_end) {
-                       *pz = *px;
-                       px += x_inc;
-                       pz += z_inc;
-                   }
-                   break;
-                }
-                if (comp(*py, *px)) {
-                    *pz = *py;
-                    py += y_inc;
+                } else if (px == px_end) {
+                    if (dy == 1 && dz == 1) {
+                        std::copy(py, py + cnt, pz);
+                    } else {
+                        for (; cnt > 0; --cnt, py += dy, pz += dz) {
+                            *pz = *py;
+                        }
+                    }
+                    break;
                 } else {
-                    *pz = *px;
-                    px += x_inc;
+                    if (comp(*py, *px)) {
+                        *pz = *py;
+                        py += dy;
+                    } else {
+                        *pz = *px;
+                        px += dx;
+                    }
                 }
             }
         }

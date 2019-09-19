@@ -2090,3 +2090,23 @@ TEST(UniformTest, Pad2D) {
         {5, 4, 4, 5, 6, 6, 5}
     }));
 }
+
+TEST(UniformTest, Merge) {
+    constexpr int M = 2000;
+    constexpr int N = 3000;
+
+    auto A = Tensor<int>({M}).random();
+    auto B = Tensor<int>({N}).random();
+    auto C = Tensor<int>();
+    auto D = Tensor<int>({M+N}, 0);
+
+    sort(A); sort(B);
+    merge(A, B, C, -1);
+    std::merge(A.begin(), A.end(), B.begin(), B.end(), D.begin());
+    EXPECT_EQ(C, D);
+
+    // When fail, dump the test data for debugging
+    if (C != D) {
+        std::cout << A << B;
+    }
+}
