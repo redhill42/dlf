@@ -46,6 +46,7 @@ R"(
   #define ZERO 0
   #define ONE 1
   #define SMALLEST -1.0e14
+  #define LARGEST 1.0e14
 
 // Single-precision
 #elif PRECISION == 32
@@ -56,7 +57,8 @@ R"(
   typedef float16 real16;
   #define ZERO 0.0f
   #define ONE 1.0f
-  #define SMALLEST -1.0e37f
+  #define SMALLEST -3.40282e+38f
+  #define LARGEST   3.40282e+38f
 
 // Double-precision 
 #elif PRECISION == 64
@@ -67,7 +69,8 @@ R"(
   typedef double16 real16;
   #define ZERO 0.0
   #define ONE 1.0
-  #define SMALLEST -1.0e37
+  #define SMALLEST -1.79769e+308
+  #define LARGEST   1.79769e+308
 
 // Complex single-precision
 #elif PRECISION == 3232
@@ -82,7 +85,8 @@ R"(
                            real sC; real sD; real sE; real sF;} real16;
   #define ZERO 0.0f
   #define ONE 1.0f
-  #define SMALLEST -1.0e37f
+  #define SMALLEST -3.40282e+38f
+  #define LARGEST   3.40282e+38f
 
 // Complex double-precision
 #elif PRECISION == 6464
@@ -97,7 +101,8 @@ R"(
                             real sC; real sD; real sE; real sF;} real16;
   #define ZERO 0.0
   #define ONE 1.0
-  #define SMALLEST -1.0e37
+  #define SMALLEST -1.79769e+308
+  #define LARGEST   1.79769e+308
 
 // 16 bit integer
 #elif PRECISION == 10016
@@ -109,6 +114,7 @@ R"(
   #define ZERO 0
   #define ONE 1
   #define SMALLEST 0x8000
+  #define LARGEST  0x7FFF
 
 // 32 bit integer
 #elif PRECISION == 10032
@@ -120,6 +126,7 @@ R"(
   #define ZERO 0
   #define ONE 1
   #define SMALLEST 0x80000000
+  #define LARGEST  0x7FFFFFFF
 
 // 64 bit integer
 #elif PRECISION == 10064
@@ -131,6 +138,7 @@ R"(
   #define ZERO 0L
   #define ONE 1L
   #define SMALLEST 0x8000000000000000L
+  #define LARGEST  0x7FFFFFFFFFFFFFFFL
 #endif
 
 #define INTEGER_PRECISION (PRECISION > 10000)

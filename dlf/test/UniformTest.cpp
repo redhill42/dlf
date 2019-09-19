@@ -2105,8 +2105,14 @@ TEST(UniformTest, Merge) {
     std::merge(A.begin(), A.end(), B.begin(), B.end(), D.begin());
     EXPECT_EQ(C, D);
 
+    auto dev_A = dev(A);
+    auto dev_B = dev(B);
+    auto dev_C = DevTensor<int>();
+    merge(dev_A, dev_B, dev_C, -1);
+    EXPECT_EQ(dev_C.read(), D);
+
     // When fail, dump the test data for debugging
-    if (C != D) {
+    if (C != D || dev_C.read() != D) {
         std::cout << A << B;
     }
 }

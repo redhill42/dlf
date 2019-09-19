@@ -1373,7 +1373,7 @@ void select(const T* X, int Lx, int dx, const T* Y, int Ly, int dy,
     }
 
     // Adjust boundary
-    if (ix > 0 && ix < Lx && iy < Ly && comp(Y[iy * dy], X[ix * dx]))
+    if (ix > 0 && iy < Ly && (ix == Lx || comp(Y[iy * dy], X[ix * dx])))
         ix--, iy++;
     if (iy > 0 && ix < Lx && comp(X[ix * dx], Y[(iy - 1) * dy]))
         ix++, iy--;
@@ -1414,7 +1414,7 @@ void merge(const Shape& x_shape, const T* x_data,
             for (int cnt = r.cols().size(); cnt > 0; --cnt, pz += dz) {
                 if (py == py_end) {
                     if (dx == 1 && dz == 1) {
-                        std::copy(px, px + cnt, pz);
+                        std::copy(px, px_end, pz);
                     } else {
                         for (; cnt > 0; --cnt, px += dx, pz += dz) {
                             *pz = *px;
@@ -1423,7 +1423,7 @@ void merge(const Shape& x_shape, const T* x_data,
                     break;
                 } else if (px == px_end) {
                     if (dy == 1 && dz == 1) {
-                        std::copy(py, py + cnt, pz);
+                        std::copy(py, py_end, pz);
                     } else {
                         for (; cnt > 0; --cnt, py += dy, pz += dz) {
                             *pz = *py;
@@ -1442,6 +1442,20 @@ void merge(const Shape& x_shape, const T* x_data,
             }
         }
     });
+}
+
+template <typename T, typename Compare>
+void merge(const Shape& x_shape, const gpgpu::Buffer<T>& x_data,
+           const Shape& y_shape, const gpgpu::Buffer<T>& y_data,
+           const Shape& z_shape, gpgpu::Buffer<T>& z_data,
+           Compare /*FIXME*/)
+{
+    gpgpu::dnn::merge(x_shape.extents(), x_shape.strides(),
+                      x_data, x_shape.offset(),
+                      y_shape.extents(), y_shape.strides(),
+                      y_data, y_shape.offset(),
+                      z_shape.extents(), z_shape.strides(),
+                      z_data, z_shape.offset());
 }
 } // namespace detail
 
@@ -1486,7 +1500,7 @@ std::enable_if_t<
     is_exactly_same_tensor<LHS, RET>::value &&
     is_exactly_same_tensor<RHS, RET>::value &&
     !std::is_const<std::remove_reference_t<RET>>::value>
-inline merge(const LHS& A, const RHS& B, RET&& C, int axis) {
+inline merge(const LHS& A, const RHS& B, RET&& C, int axis = -1) {
     merge(A, B, C, axis, std::less<>());
 }
 

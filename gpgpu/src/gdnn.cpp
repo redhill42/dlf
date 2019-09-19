@@ -781,6 +781,62 @@ template void PUBLIC_API arg_reduce<double> (const std::string&, const size_t, c
                                              const Queue&, Event*);
 
 template <typename T>
+void merge(const std::vector<size_t>& x_dims, const std::vector<size_t>& x_strides,
+           const Buffer<T>& x_buffer, const size_t x_offset,
+           const std::vector<size_t>& y_dims, const std::vector<size_t>& y_strides,
+           const Buffer<T>& y_buffer, const size_t y_offset,
+           const std::vector<size_t>& z_dims, const std::vector<size_t>& z_strides,
+           Buffer<T>& z_buffer, const size_t z_offset,
+           const Queue& queue, Event* event)
+{
+    auto routine = Xmerge<T>(queue, event);
+    routine.DoMerge(x_dims, x_strides, x_buffer, x_offset,
+                    y_dims, y_strides, y_buffer, y_offset,
+                    z_dims, z_strides, z_buffer, z_offset);
+}
+
+template void PUBLIC_API merge<int32_t>(
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<int32_t>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<int32_t>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<int32_t>&, const size_t,
+    const Queue&, Event*);
+template void PUBLIC_API merge<int64_t>(
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<int64_t>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<int64_t>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<int64_t>&, const size_t,
+    const Queue&, Event*);
+template void PUBLIC_API merge<half>(
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<half>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<half>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<half>&, const size_t,
+    const Queue&, Event*);
+template void PUBLIC_API merge<float>(
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<float>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<float>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<float>&, const size_t,
+    const Queue&, Event*);
+template void PUBLIC_API merge<double>(
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<double>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    const Buffer<double>&, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<double>&, const size_t,
+    const Queue&, Event*);
+
+template <typename T>
 void batch_norm(const std::vector<size_t>& dims,
                 const Buffer<T>& x_buffer,
                       Buffer<T>& y_buffer,
