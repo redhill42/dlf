@@ -199,8 +199,8 @@ public: // Constructors
      * @param low the lowest random value
      * @param high the highest random value
      */
-    Tensor& random(T low, T high) &;
-    Tensor random(T low, T high) &&;
+    Tensor& random(T low = 0, T high = std::numeric_limits<T>::max()) &;
+    Tensor random(T low = 0, T high = std::numeric_limits<T>::max()) &&;
 
     // Copy and move constructors/assignments.
     Tensor(const Tensor& t);
@@ -730,53 +730,37 @@ TensorView<T>::TensorView(Shape shape, const TensorView<T>& src)
 // Tensor randomize
 //==-------------------------------------------------------------------------
 
-template <typename T>
-class randomize_detail {
-    template <typename TensorT>
-    static TensorT& randomize(TensorT& t, T low, T high);
-
-    friend class Tensor<T>;
-    friend class TensorView<T>;
-};
-
-template <typename T>
-template <typename TensorT>
-TensorT& randomize_detail<T>::randomize(TensorT& t, T low, T high) {
-    static_assert(std::is_integral<T>::value, "randomize: requires integral type");
+namespace detail {
+template <typename TensorT, typename T>
+std::enable_if_t<std::is_integral<T>::value, TensorT&>
+inline randomize(TensorT& t, T low, T high) {
     std::random_device rd;
     std::default_random_engine eng(rd());
     return t.generate(std::bind(std::uniform_int_distribution<T>(low, high), eng));
 }
 
-template <>
-template <typename TensorT>
-TensorT& randomize_detail<float>::randomize(TensorT& t, float low, float high) {
+template <typename TensorT, typename T>
+std::enable_if_t<std::is_floating_point<T>::value, TensorT&>
+inline randomize(TensorT& t, T low, T high) {
     std::random_device rd;
     std::default_random_engine eng(rd());
-    return t.generate(std::bind(std::uniform_real_distribution<float>(low, high), eng));
+    return t.generate(std::bind(std::uniform_real_distribution<T>(low, high), eng));
 }
-
-template <>
-template <typename TensorT>
-TensorT& randomize_detail<double>::randomize(TensorT& t, double low, double high) {
-    std::random_device rd;
-    std::default_random_engine eng(rd());
-    return t.generate(std::bind(std::uniform_real_distribution<double>(low, high), eng));
-}
+} // namespace detail
 
 template <typename T>
 inline Tensor<T>& Tensor<T>::random(T low, T high) & {
-    return randomize_detail<T>::randomize(*this, low, high);
+    return detail::randomize(*this, low, high);
 }
 
 template <typename T>
 inline Tensor<T> Tensor<T>::random(T low, T high) && {
-    return std::move(randomize_detail<T>::randomize(*this, low, high));
+    return std::move(detail::randomize(*this, low, high));
 }
 
 template <typename T>
 inline TensorView<T>& TensorView<T>::random(T low, T high) {
-    return randomize_detail<T>::randomize(*this, low, high);
+    return detail::randomize(*this, low, high);
 }
 
 //==-------------------------------------------------------------------------
