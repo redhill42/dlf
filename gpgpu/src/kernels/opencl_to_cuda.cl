@@ -21,32 +21,32 @@ R"(
 #define LOCAL_PTR  // pointers to local memory don't have to be annotated in CUDA
 
 // Replaces the OpenCL get_xxx_ID with CUDA equivalents
-__device__ int get_local_id(const int x) {
+__inline__ __device__ int get_local_id(const int x) {
   if (x == 0) { return threadIdx.x; }
   if (x == 1) { return threadIdx.y; }
   return threadIdx.z;
 }
-__device__ int get_group_id(const int x) {
+__inline__ __device__ int get_group_id(const int x) {
   if (x == 0) { return blockIdx.x; }
   if (x == 1) { return blockIdx.y; }
   return blockIdx.z;
 }
-__device__ int get_local_size(const int x) {
+__inline__ __device__ int get_local_size(const int x) {
   if (x == 0) { return blockDim.x; }
   if (x == 1) { return blockDim.y; }
   return blockDim.z;
 }
-__device__ int get_num_groups(const int x) {
+__inline__ __device__ int get_num_groups(const int x) {
   if (x == 0) { return gridDim.x; }
   if (x == 1) { return gridDim.y; }
   return gridDim.z;
 }
-__device__ int get_global_size(const int x) {
+__inline__ __device__ int get_global_size(const int x) {
   if (x == 0) { return gridDim.x * blockDim.x; }
   if (x == 1) { return gridDim.y * blockDim.y; }
   return gridDim.z * blockDim.z;
 }
-__device__ int get_global_id(const int x) {
+__inline__ __device__ int get_global_id(const int x) {
   if (x == 0) { return blockIdx.x*blockDim.x + threadIdx.x; }
   if (x == 1) { return blockIdx.y*blockDim.y + threadIdx.y; }
   return blockIdx.z*blockDim.z + threadIdx.z;
@@ -91,7 +91,7 @@ typedef struct { long s0; long s1; long s2; long s3;
 #define __local __shared__
 #define restrict __restrict__
 #define __constant const
-#define inline __device__ // assumes all device functions are annotated with inline in OpenCL
+#define inline __inline__ __device__ // assumes all device functions are annotated with inline in OpenCL
 
 // Kernel attributes (don't replace currently)
 #define reqd_work_group_size(x, y, z)

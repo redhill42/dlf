@@ -448,7 +448,8 @@ struct post_reduce_identity {
 template <typename T>
 struct post_reduce_average {
     constexpr T operator()(const T& acc, const int n) const
-    noexcept(noexcept(acc / n)) { return acc / n; }
+    noexcept(noexcept(acc / static_cast<T>(n)))
+        { return acc / static_cast<T>(n); }
 };
 
 template <typename T>

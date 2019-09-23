@@ -13,17 +13,20 @@ Xreduce<T>::Xreduce(const Queue& queue, Event* event, const std::string& name) :
 
 template <typename T>
 void Xreduce<T>::DoReduce(
-    const std::string& name, const size_t m, const size_t n,
+    const size_t m, const size_t n,
     const std::vector<size_t>& x_dims, const std::vector<size_t>& x_strides,
     const gpgpu::Buffer<T>& x_buffer, const size_t x_offset,
     const std::vector<size_t>& y_dims, const std::vector<size_t>& y_strides,
     gpgpu::Buffer<T>& y_buffer, const size_t y_offset)
 {
-    auto temp_size = 2*db_["WGS2"];
+    const size_t WGS1 = (m == 1) ? db_["WGS1"] : 32;
+    const size_t WGS2 = db_["WGS2"];
+
+    auto temp_size = 2*WGS2;
     auto temp_buffer = context_.getTemporaryBuffer<T>(temp_size * m);
 
     if (IsContiguous(x_dims, x_strides)) {
-        auto kernel1 = program_.getKernel("X" + name);
+        auto kernel1 = program_.getKernel(m == 1 ? "Xreduce" : "XreduceBatched");
         kernel1.setArguments(
             static_cast<int>(n),
             x_buffer,
@@ -31,12 +34,12 @@ void Xreduce<T>::DoReduce(
             temp_buffer,
             static_cast<int>(temp_buffer.offset()));
 
-        auto global1 = std::vector<size_t>{db_["WGS1"]*temp_size, m};
-        auto local1 = std::vector<size_t>{db_["WGS1"], 1};
+        auto global1 = std::vector<size_t>{WGS1*temp_size, m};
+        auto local1 = std::vector<size_t>{WGS1, 1};
         RunKernel(kernel1, queue_, device_, global1, local1, nullptr);
     } else {
         auto shape_buffer = PackShape(x_dims, x_strides, context_, queue_);
-        auto kernel1 = program_.getKernel("X" + name + "Strided");
+        auto kernel1 = program_.getKernel(m == 1 ? "XreduceStrided" : "XreduceStridedBatched");
         kernel1.setArguments(
             static_cast<int>(n),
             static_cast<int>(x_dims.size()),
@@ -46,13 +49,13 @@ void Xreduce<T>::DoReduce(
             temp_buffer,
             static_cast<int>(temp_buffer.offset()));
 
-        auto global1 = std::vector<size_t>{db_["WGS1"]*temp_size, m};
-        auto local1 = std::vector<size_t>{db_["WGS1"], 1};
+        auto global1 = std::vector<size_t>{WGS1*temp_size, m};
+        auto local1 = std::vector<size_t>{WGS1, 1};
         RunKernel(kernel1, queue_, device_, global1, local1, nullptr);
     }
 
     if (IsContiguous(y_dims, y_strides)) {
-        auto kernel2 = program_.getKernel("X" + name + "Epilogue");
+        auto kernel2 = program_.getKernel("XreduceEpilogue");
         kernel2.setArguments(
             static_cast<int>(n),
             temp_buffer,
@@ -60,12 +63,12 @@ void Xreduce<T>::DoReduce(
             y_buffer,
             static_cast<int>(y_offset));
 
-        auto global2 = std::vector<size_t>{db_["WGS2"], m};
-        auto local2 = std::vector<size_t>{db_["WGS2"], 1};
+        auto global2 = std::vector<size_t>{WGS2, m};
+        auto local2 = std::vector<size_t>{WGS2, 1};
         RunKernel(kernel2, queue_, device_, global2, local2, event_);
     } else {
         auto shape_buffer = PackShape(y_dims, y_strides, context_, queue_);
-        auto kernel2 = program_.getKernel("X" + name + "StridedEpilogue");
+        auto kernel2 = program_.getKernel("XreduceEpilogueStrided");
         kernel2.setArguments(
             static_cast<int>(n),
             static_cast<int>(y_dims.size()),
@@ -75,8 +78,8 @@ void Xreduce<T>::DoReduce(
             y_buffer,
             static_cast<int>(y_offset));
 
-        auto global2 = std::vector<size_t>{db_["WGS2"], m};
-        auto local2 = std::vector<size_t>{db_["WGS2"], 1};
+        auto global2 = std::vector<size_t>{WGS2, m};
+        auto local2 = std::vector<size_t>{WGS2, 1};
         RunKernel(kernel2, queue_, device_, global2, local2, event_);
     }
 }

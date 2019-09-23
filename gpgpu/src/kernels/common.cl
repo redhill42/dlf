@@ -316,6 +316,8 @@ R"(
 // Force inlining functions or not: some compilers don't support the inline keyword
 #ifdef USE_INLINE_KEYWORD
   #define INLINE_FUNC inline
+#elif defined(CUDA)
+  #define INLINE_FUNC __inline__ __device__
 #else
   #define INLINE_FUNC static
 #endif

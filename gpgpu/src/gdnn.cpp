@@ -631,8 +631,8 @@ void reduce(const std::string& name, const size_t m, const size_t n,
             Buffer<T>& y_buffer, const size_t y_offset,
             const Queue& queue, Event* event)
 {
-    auto routine = Xreduce<T>(queue, event);
-    routine.DoReduce(name, m, n,
+    auto routine = Xreduce<T>(queue, event, name);
+    routine.DoReduce(m, n,
         x_dims, x_strides, x_buffer, x_offset,
         y_dims, y_strides, y_buffer, y_offset);
 }

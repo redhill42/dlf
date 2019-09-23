@@ -2031,6 +2031,9 @@ TEST(UniformTest, Scan_GPU) {
     auto B = Tensor<int>::range({10}, 1);
     auto dev_B = dev(B);
     EXPECT_EQ(cumprod(dev_B, 0).read(), cumprod(B, 0));
+
+    auto X = Tensor<int>({2, 100'000}).random();
+    EXPECT_EQ(cumsum(X), cumsum(dev(X)).read());
 }
 
 TEST(UniformTest, Pad1D) {
