@@ -687,8 +687,8 @@ void scan(const std::string& name, const size_t m, const size_t n,
           Buffer<T>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_strides,
           const Queue& queue, Event* event)
 {
-    auto routine = Xscan<T>(queue, event);
-    routine.DoScan(name, m, n, exclusive, dims,
+    auto routine = Xscan<T>(queue, event, name);
+    routine.DoScan(m, n, exclusive, dims,
                    x_buffer, x_offset, x_strides,
                    y_buffer, y_offset, y_strides);
 }

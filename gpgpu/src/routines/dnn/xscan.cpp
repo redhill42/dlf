@@ -12,7 +12,7 @@ Xscan<T>::Xscan(const Queue& queue, Event* event, const std::string& name) :
 
 template <typename T>
 void Xscan<T>::DoScan(
-    const std::string& name, const size_t m, const size_t n,
+    const size_t m, const size_t n,
     const bool exclusive, const std::vector<size_t>& dims,
     const gpgpu::Buffer<T>& x_buffer, const size_t x_offset,  const std::vector<size_t>& x_strides,
     gpgpu::Buffer<T>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_strides)
@@ -21,7 +21,7 @@ void Xscan<T>::DoScan(
     auto incX = x_strides.back();
     auto incY = y_strides.back();
 
-    auto kernel = program_.getKernel("X" + name);
+    auto kernel = program_.getKernel("Xscan");
     kernel.setArguments(
         static_cast<int>(n), static_cast<int>(exclusive),
         static_cast<int>(dims.size()), shape_buffer,

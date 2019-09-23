@@ -247,6 +247,7 @@ struct modulus<void> {
 template <typename T, typename Compare = std::less<>>
 struct max : std::binary_function<T,T,T> {
     static constexpr auto name = "max";
+    static constexpr auto cumulative = "cummax";
     const Compare comp{};
     constexpr max() = default;
     constexpr max(Compare comp) : comp(comp) {}
@@ -257,6 +258,7 @@ struct max : std::binary_function<T,T,T> {
 template <typename T, typename Compare = std::less<>>
 struct min : std::binary_function<T,T,T> {
     static constexpr auto name = "min";
+    static constexpr auto cumulative = "cummin";
     const Compare comp{};
     constexpr min() = default;
     constexpr min(Compare comp) : comp(comp) {}
