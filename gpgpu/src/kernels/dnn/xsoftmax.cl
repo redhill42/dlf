@@ -10,7 +10,7 @@ void Xsoftmax(const int n, const __global real* restrict xgm, __global real* ygm
   real max = xgm[data_off];
   for (int i = 1; i < n; ++i) {
     real x = xgm[data_off + i];
-    max = x > max ? x : max;
+    max = maxval(max, x);
   }
 
   real denom = ZERO;
@@ -31,7 +31,7 @@ void Xlogsoftmax(const int n, const __global real* restrict xgm, __global real* 
   real max = xgm[data_off];
   for (int i = 1; i < n; ++i) {
     real x = xgm[data_off + i];
-    max = x > max ? x : max;
+    max = maxval(max, x);
   }
 
   real sum = ZERO;

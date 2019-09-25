@@ -101,6 +101,35 @@ typedef struct { long s0; long s1; long s2; long s3;
 
 // =================================================================================================
 
+#if PRECISION == 32 || PRECISION == 3232
+#define acos        acosf
+#define acosh       acoshf
+#define asin        asinf
+#define asinh       asinhf
+#define atan2       atan2f
+#define atan        atanf
+#define atanh       atanhf
+#define cbrt        cbrtf
+#define ceil        ceilf
+#define copysign    copysignf
+#define cos         cosf
+#define cosh        coshf
+#define erf         erff
+#define exp         expf
+#define floor       floorf
+#define fmod        fmodf
+#define hypot       hypotf
+#define log         logf
+#define pow         powf
+#define round       roundf
+#define sin         sinf
+#define sinh        sinhf
+#define sqrt        sqrtf
+#define tan         tanf
+#define tanh        tanhf
+#define trunc       truncf
+#endif
+
 // End of the C++11 raw string literal
 )"
 

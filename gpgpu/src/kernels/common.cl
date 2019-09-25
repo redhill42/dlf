@@ -217,6 +217,12 @@ R"(
   #define IsZero(a) (a == ZERO)
 #endif
 
+#if defined(CUDA) && (PRECISION == 32 || PRECISION == 3232)
+#  define fabs  fabsf
+#  define fmax  fmaxf
+#  define fmin  fminf
+#endif
+
 // The absolute value (component-wise)
 #if PRECISION == 3232 || PRECISION == 6464
   #define AbsoluteValue(a) hypot(a.x, a.y)
@@ -226,6 +232,22 @@ R"(
   #define AbsoluteValue(a) fabs(a)
 #endif
 #define SetToAbsoluteValue(a) SetReal(a, AbsoluteValue(a))
+
+// Maximum and minimum values
+#if INTEGER_PRECISION
+#  define maxval(a,b)   max((a),(b))
+#  define minval(a,b)   min((a),(b))
+#elif PRECISION == 3232 || PRECISION == 6464
+#  define maxval(a,b)   ((a).x >= (b).x ? (a) : (b))
+#  define minval(a,b)   ((a).x <  (b).x ? (a) : (b))
+#else
+#  define maxval(a,b)   fmax((a),(b))
+#  define minval(a,b)   fmin((a),(b))
+#endif
+
+// Update to maximum/minimum value
+#define Max(c,a,b) c = maxval(a,b)
+#define Min(c,a,b) c = minval(a,b)
 
 // Negation (component-wise)
 #if PRECISION == 3232 || PRECISION == 6464
@@ -292,10 +314,6 @@ R"(
 #else
   #define DivideFull(c,a,b) c = a / b
 #endif
-
-// Update to maximum/minimum value
-#define Max(c,a,b) c = (GetReal(a) >= GetReal(b) ? (a) : (b))
-#define Min(c,a,b) c = (GetReal(a) <  GetReal(b) ? (a) : (b))
 
 // The scalar AXPBY function
 #if PRECISION == 3232 || PRECISION == 6464

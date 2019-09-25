@@ -46,7 +46,7 @@ void Xshrink(const int n, const real_arg lambd_arg, const real_arg bias_arg,
   const real bias = GetRealArg(bias_arg);
   for (int id = get_global_id(0); id < n; id += get_global_size(0)) {
     real x = xgm[id + x_offset];
-    ygm[id + y_offset] = x < -lambd ? x + bias : x > lambd ? x - bias : 0;
+    ygm[id + y_offset] = x < -lambd ? x + bias : x > lambd ? x - bias : ZERO;
   }
 }
 
@@ -63,7 +63,7 @@ void XshrinkStrided(
     int x_id = x_offset, y_id = y_offset;
     unravel2(id, &x_id, &y_id, rank, shape);
     real x = xgm[x_id];
-    ygm[y_id] = x < -lambd ? x + bias : x > lambd ? x - bias : 0;
+    ygm[y_id] = x < -lambd ? x + bias : x > lambd ? x - bias : ZERO;
   }
 }
 
@@ -74,7 +74,7 @@ void Xrelu(const int n, const real_arg alpha_arg, const real_arg beta_arg,
 {
   for (int id = get_global_id(0); id < n; id += get_global_size(0)) {
     real x = xgm[id + x_offset];
-    ygm[id + y_offset] = max(ZERO, x);
+    ygm[id + y_offset] = maxval(ZERO, x);
   }
 }
 
@@ -89,7 +89,7 @@ void XreluStrided(
     int x_id = x_offset, y_id = y_offset;
     unravel2(id, &x_id, &y_id, rank, shape);
     real x = xgm[x_id];
-    ygm[y_id] = max(ZERO, x);
+    ygm[y_id] = maxval(ZERO, x);
   }
 }
 
@@ -167,7 +167,7 @@ void Xselu(const int n, const real_arg alpha_arg, const real_arg gamma_arg,
   for (int id = get_global_id(0); id < n; id += get_global_size(0)) {
     real x = xgm[id + x_offset];
     if (x < ZERO)
-      x = alpha * (exp(x) - 1);
+      x = alpha * (exp(x) - ONE);
     x *= gamma;
     ygm[id + y_offset] = x;
   }
@@ -187,7 +187,7 @@ void XseluStrided(
     unravel2(id, &x_id, &y_id, rank, shape);
     real x = xgm[x_id];
     if (x < ZERO)
-      x = alpha * (exp(x) - 1);
+      x = alpha * (exp(x) - ONE);
     x *= gamma;
     ygm[y_id] = x;
   }
@@ -234,7 +234,7 @@ void Xhard_sigmoid(const int n, const real_arg alpha_arg, const real_arg beta_ar
   const real beta = GetRealArg(beta_arg);
   for (int id = get_global_id(0); id < n; id += get_global_size(0)) {
     real x = xgm[id + x_offset];
-    ygm[id + y_offset] = max(ZERO, min(ONE, alpha * x + beta));
+    ygm[id + y_offset] = maxval(ZERO, minval(ONE, alpha * x + beta));
   }
 }
 
@@ -251,7 +251,7 @@ void Xhard_sigmoidStrided(
     int x_id = x_offset, y_id = y_offset;
     unravel2(id, &x_id, &y_id, rank, shape);
     real x = xgm[x_id];
-    ygm[y_id] = max(ZERO, min(ONE, alpha * x + beta));
+    ygm[y_id] = maxval(ZERO, minval(ONE, alpha * x + beta));
   }
 }
 

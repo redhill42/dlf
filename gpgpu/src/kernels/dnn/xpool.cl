@@ -34,7 +34,7 @@ void Xmaxpool(const int channels, const int input_h, const int input_w,
           const int w_index = kw_id * dilation_w + stride_w * w_id - pad_w;
           if (w_index >= 0 && w_index < input_w) {
             const int input_index = ((b_id*channels + c_id)*input_h + h_index)*input_w + w_index;
-            val = max(val, x_buffer[input_index + x_offset]);
+            val = maxval(val, x_buffer[input_index + x_offset]);
           }
         }
       }
@@ -85,14 +85,6 @@ void Xavgpool(const int channels, const int input_h, const int input_w,
   }
 }
 
-#if defined(CUDA) && PRECISION == 32
-  #define xpow powf
-  #define xabs fabsf
-#else
-  #define xpow pow
-  #define xabs fabs
-#endif
-
 __kernel __attribute__((reqd_work_group_size(COPY_DIMX, COPY_DIMY, 1)))
 void Xlppool(const int channels, const int input_h, const int input_w,
              const int output_h, const int output_w,
@@ -119,16 +111,15 @@ void Xlppool(const int channels, const int input_h, const int input_w,
           if (w_index >= 0 && w_index < input_w) {
             const int input_index = ((b_id*channels + c_id)*input_h + h_index)*input_w + w_index;
             real x = x_buffer[input_index + x_offset];
-            val += xpow(xabs(x), p);
+            val += pow(fabs(x), p);
           }
         }
       }
     }
 
     const int output_index = ((b_id*channels + c_id)*output_h + h_id)*output_w + w_id;
-    y_buffer[output_index + y_offset] = xpow(val, ONE/p);
+    y_buffer[output_index + y_offset] = pow(val, ONE/p);
   }
 }
 
-// End of the C++11 raw string literal
-)"
+)" // End of the C++11 raw string literal

@@ -4,17 +4,6 @@ R"(
 
 //---------------------------------------------------------------------------
 
-#if defined(CUDA) && (PRECISION == 32 || PRECISION == 3232)
-  #define log       logf
-  #define exp       expf
-  #define sqrt      sqrtf
-  #define cos       cosf
-  #define sin       sinf
-  #define hypot     hypotf
-  #define atan2     atan2f
-  #define copysign  copysignf
-#endif
-
 #if defined(ROUTINE_reduce_max)
 #  define INIT(x)           SetReal(x, SMALLEST)
 #  define MAP_REDUCE(c,x)   Max(c,c,x)

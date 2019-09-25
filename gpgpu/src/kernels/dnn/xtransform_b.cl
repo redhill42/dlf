@@ -278,93 +278,63 @@ void name##Channel(const int m, const int n, const int channels,            \
   }                                                                         \
 }
 
-// The scalar division function
-#if PRECISION == 3232 || PRECISION == 6464
-  #define Divide(c,a,b) \
-    do { \
-      singlereal num_x = (a.x * b.x) + (a.y * b.y); \
-      singlereal num_y = (a.y * b.x) - (a.x * b.y); \
-      singlereal denom = (b.x * b.x) + (b.y * b.y); \
-      c.x = num_x / denom; \
-      c.y = num_y / denom; \
-    } while (0)
-#else
-  #define Divide(c,a,b) c = a / b
-#endif
-
 DEFINE_BINARY_V(Xadd_v, Add)
 DEFINE_BINARY_V(Xsub_v, Subtract)
 DEFINE_BINARY_V(Xmul_v, Multiply)
-DEFINE_BINARY_V(Xdiv_v, Divide)
+DEFINE_BINARY_V(Xdiv_v, DivideFull)
 
-#if INTEGER_PRECISION
-  #define xmod(x,y) (x%y)
+#if PRECISION == 3232 || PRECISION == 6464
+  INLINE_FUNC real xpow(real a, real b) {
+    // pow(a,b) = exp(b * log(a))
+    real z, t;
+    t.x = log(hypot(a.x, a.y));
+    t.y = atan2(a.y, a.x);
+    Multiply(z, b, t);
+
+    singlereal e = exp(z.x);
+    z.x = e * cos(z.y);
+    z.y = e * sin(z.y);
+    return z;
+  }
+#elif INTEGER_PRECISION
   #define xpow(x,y) pow((float)x,(float)y)
-#elif defined(CUDA) && (PRECISION == 32 || PRECISION == 3232)
-  #define xmod  fmodf
-  #define xpow  powf
-
-  #define exp   expf
-  #define log   logf
-  #define hypot hypotf
-  #define atan2 atan2f
-  #define sin   sinf
-  #define cos   cosf
 #else
-  #define xmod fmod
   #define xpow pow
 #endif
 
-#if PRECISION == 3232 || PRECISION == 6464
-INLINE_FUNC real zpow(real a, real b) {
-  // pow(a,b) = exp(b * log(a))
-  real z, t;
-  t.x = log(hypot(a.x, a.y));
-  t.y = atan2(a.y, a.x);
-  Multiply(z, b, t);
-
-  singlereal e = exp(z.x);
-  z.x = e * cos(z.y);
-  z.y = e * sin(z.y);
-  return z;
-}
-
-#define Pow(c,a,b) c = zpow(a,b)
-#else
 #define Pow(c,a,b) c = xpow(a,b)
-#endif
 DEFINE_BINARY(Xpow, Pow)
 
 #if PRECISION != 3232 && PRECISION != 6464
+  DEFINE_BINARY(Xmax, Max)
+  DEFINE_BINARY(Xmin, Min)
 
-#define Max(c,a,b) c = max(a,b)
-#define Min(c,a,b) c = min(a,b)
-DEFINE_BINARY(Xmax, Max)
-DEFINE_BINARY(Xmin, Min)
+  #if INTEGER_PRECISION
+    #define Mod(c,a,b) c = a % b
+  #else
+    #define Mod(c,a,b) c = fmod(a, b)
+  #endif
+  DEFINE_BINARY(Xmod, Mod)
 
-#define Mod(c,a,b) c = xmod(a,b)
-DEFINE_BINARY(Xmod, Mod)
+  #define PRelu(c,a,b) c = a<ZERO ? a*b : a
+  DEFINE_BINARY(Xprelu, PRelu)
 
-#define PRelu(c,a,b) c = a<ZERO ? a*b : a
-DEFINE_BINARY(Xprelu, PRelu)
-
-DEFINE_RELATION(Xequal_to, ==)
-DEFINE_RELATION(Xnot_equal_to, !=)
-DEFINE_RELATION(Xless, <)
-DEFINE_RELATION(Xless_equal, <=)
-DEFINE_RELATION(Xgreater, >)
-DEFINE_RELATION(Xgreater_equal, >=)
-
+  DEFINE_RELATION(Xequal_to, ==)
+  DEFINE_RELATION(Xnot_equal_to, !=)
+  DEFINE_RELATION(Xless, <)
+  DEFINE_RELATION(Xless_equal, <=)
+  DEFINE_RELATION(Xgreater, >)
+  DEFINE_RELATION(Xgreater_equal, >=)
 #endif
 
 #if INTEGER_PRECISION
-#define BitAnd(c,a,b) c = a & b;
-#define BitOr(c,a,b)  c = a | b;
-#define BitXor(c,a,b) c = a ^ b;
+  #define BitAnd(c,a,b) c = a & b;
+  #define BitOr(c,a,b)  c = a | b;
+  #define BitXor(c,a,b) c = a ^ b;
 
-DEFINE_BINARY(Xbit_and, BitAnd)
-DEFINE_BINARY(Xbit_or,  BitOr)
-DEFINE_BINARY(Xbit_xor, BitXor)
+  DEFINE_BINARY(Xbit_and, BitAnd)
+  DEFINE_BINARY(Xbit_or,  BitOr)
+  DEFINE_BINARY(Xbit_xor, BitXor)
 #endif
 
 )" // End of the C++11 raw string literal
