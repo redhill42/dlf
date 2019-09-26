@@ -104,6 +104,49 @@ R"(
 
 //---------------------------------------------------------------------------
 
+__kernel __attribute__((reqd_work_group_size(WGS1, 1, 1)))
+void XreduceDirect(
+    const int m, const int n,
+    const __global real* restrict xgm, const int x_offset,
+    __global real* ygm, const int y_offset)
+{
+    const int batch = get_global_id(0);
+    if (batch >= m) return;
+
+    xgm += x_offset + batch*n;
+    ygm += y_offset + batch;
+
+    real acc; INIT(acc);
+    for (int i = 0; i < n; i++) {
+        real x = xgm[i];
+        MAP_REDUCE(acc, x);
+    }
+    FINAL(ygm[0], acc, n);
+}
+
+__kernel __attribute__((reqd_work_group_size(WGS1, 1, 1)))
+void XreduceDirectStrided(
+    const int m, const int n,
+    const int x_rank, __constant int* x_shape,
+    const __global real* restrict xgm, const int x_offset,
+    const int y_rank, __constant int* y_shape,
+    __global real* ygm, const int y_offset)
+{
+    const int batch = get_global_id(0);
+    if (batch >= m) return;
+
+    real acc; INIT(acc);
+    for (int i = 0; i < n; i++) {
+        real x = xgm[x_offset + unravel(batch*n + i, x_rank, x_shape)];
+        MAP_REDUCE(acc, x);
+    }
+
+    const int y_id = y_offset + unravel(batch, y_rank, y_shape);
+    FINAL(ygm[y_id], acc, n);
+}
+
+//---------------------------------------------------------------------------
+
 #define BATCH_WGS 32
 
 INLINE_FUNC void Reduce(const int n, LOCAL_PTR real* lm,

@@ -15,9 +15,63 @@ template <typename T>
 void Xreduce<T>::DoReduce(
     const size_t m, const size_t n,
     const std::vector<size_t>& x_dims, const std::vector<size_t>& x_strides,
-    const gpgpu::Buffer<T>& x_buffer, const size_t x_offset,
+    const Buffer<T>& x_buffer, const size_t x_offset,
     const std::vector<size_t>& y_dims, const std::vector<size_t>& y_strides,
-    gpgpu::Buffer<T>& y_buffer, const size_t y_offset)
+    Buffer<T>& y_buffer, const size_t y_offset)
+{
+    if (n < 2*db_["WGS2"]) {
+        DoReduceDirect(m, n,
+            x_dims, x_strides, x_buffer, x_offset,
+            y_dims, y_strides, y_buffer, y_offset);
+    } else {
+        DoReduceIndirect(m, n,
+            x_dims, x_strides, x_buffer, x_offset,
+            y_dims, y_strides, y_buffer, y_offset);
+    }
+}
+
+template <typename T>
+void Xreduce<T>::DoReduceDirect(
+    const size_t m, const size_t n,
+    const std::vector<size_t>& x_dims, const std::vector<size_t>& x_strides,
+    const Buffer<T>& x_buffer, const size_t x_offset,
+    const std::vector<size_t>& y_dims, const std::vector<size_t>& y_strides,
+    Buffer<T>& y_buffer, const size_t y_offset)
+{
+    if (IsContiguous(x_dims, x_strides) && IsContiguous(y_dims, y_strides)) {
+        auto kernel = program_.getKernel("XreduceDirect");
+        kernel.setArguments(
+            static_cast<int>(m), static_cast<int>(n),
+            x_buffer, static_cast<int>(x_offset),
+            y_buffer, static_cast<int>(y_offset));
+
+        auto global = std::vector<size_t>{Ceil(m, db_["WGS1"])};
+        auto local = std::vector<size_t>{db_["WGS1"]};
+        RunKernel(kernel, queue_, device_, global, local, event_);
+    } else {
+        auto x_shape = PackShape(x_dims, x_strides, context_, queue_);
+        auto y_shape = PackShape(y_dims, y_strides, context_, queue_);
+        auto kernel = program_.getKernel("XreduceDirectStrided");
+        kernel.setArguments(
+            static_cast<int>(m), static_cast<int>(n),
+            static_cast<int>(x_dims.size()), x_shape,
+            x_buffer, static_cast<int>(x_offset),
+            static_cast<int>(y_dims.size()), y_shape,
+            y_buffer, static_cast<int>(y_offset));
+
+        auto global = std::vector<size_t>{Ceil(m, db_["WGS1"])};
+        auto local = std::vector<size_t>{db_["WGS1"]};
+        RunKernel(kernel, queue_, device_, global, local, event_);
+    }
+}
+
+template <typename T>
+void Xreduce<T>::DoReduceIndirect(
+    const size_t m, const size_t n,
+    const std::vector<size_t>& x_dims, const std::vector<size_t>& x_strides,
+    const Buffer<T>& x_buffer, const size_t x_offset,
+    const std::vector<size_t>& y_dims, const std::vector<size_t>& y_strides,
+    Buffer<T>& y_buffer, const size_t y_offset)
 {
     const size_t WGS1 = (m == 1) ? db_["WGS1"] : 32;
     const size_t WGS2 = db_["WGS2"];
