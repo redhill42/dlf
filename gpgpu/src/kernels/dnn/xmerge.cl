@@ -25,6 +25,8 @@ void IntersectDiagonals(
     y_end   = min(k, y_len);;
     found   = 0;
 
+    barrier(CLK_LOCAL_MEM_FENCE);
+
     xgm  += x_offset + unravel(batch * x_len, x_rank, x_shape);
     ygm  += y_offset + unravel(batch * y_len, y_rank, y_shape);
     diag += diag_offset + batch*(WGS+1)*2;

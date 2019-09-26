@@ -910,7 +910,7 @@ TEST(DNNTest, Hardmax) {
 }
 
 TEST(DNNTest, HardmaxOneHot) {
-    // For multiple occurrances of the maximal calues, the first
+    // For multiple occurrences of the maximal values, the first
     // occurrence is selected for one-hot output
     auto X = Tensor<float>({1, 4}, {3, 3, 3, 1});
     auto R = Tensor<float>({1, 4}, {1, 0, 0, 0});
