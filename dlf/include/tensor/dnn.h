@@ -721,7 +721,7 @@ void softmax(const size_t m, const size_t n, Tensor<T>& X) {
 
 template <typename T>
 inline void softmax(const size_t m, const size_t n, DevTensor<T>& X) {
-    gpgpu::dnn::softmax(m, n, X.data(), X.data());
+    gpgpu::dnn::softmax(m, n, X.data(), 0);
 }
 } // namespace detail
 
@@ -784,7 +784,7 @@ void logsoftmax(const size_t m, const size_t n, Tensor<T>& X) {
 
 template <typename T>
 inline void logsoftmax(const size_t m, const size_t n, DevTensor<T>& X) {
-    gpgpu::dnn::logsoftmax(m, n, X.data(), X.data());
+    gpgpu::dnn::logsoftmax(m, n, X.data(), 0);
 }
 } // namespace detail
 
@@ -843,7 +843,7 @@ void hardmax(const size_t m, const size_t n, Tensor<T>& X) {
 
 template <typename T>
 inline void hardmax(const size_t m, const size_t n, DevTensor<T>& X) {
-    gpgpu::dnn::hardmax(m, n, X.data(), X.data());
+    gpgpu::dnn::hardmax(m, n, X.data(), 0);
 }
 } // namespace detail
 

@@ -242,6 +242,7 @@ DEFINE_REDUCE_OP(reduce_mean)
 DEFINE_REDUCE_OP(reduce_sum_square)
 DEFINE_REDUCE_OP(reduce_nrm2)
 DEFINE_REDUCE_OP(reduce_log_sum)
+DEFINE_REDUCE_OP(reduce_sum_exp)
 DEFINE_REDUCE_OP(reduce_log_sum_exp)
 DEFINE_REDUCE_OP(reduce_prod)
 #undef DEFINE_REDUCE_OP

@@ -139,7 +139,7 @@ void Xtransform_b<T, R>::DoTransformChannel(
 
     // Launches the kernel
     auto m_ceiled = Ceil(m, db_["COPY_DIMX"]);
-    auto n_ceiled = Ceil(m, db_["COPY_DIMY"]*db_["COPY_WPT"]);
+    auto n_ceiled = Ceil(n, db_["COPY_DIMY"]*db_["COPY_WPT"]);
     auto global = std::vector<size_t>{m_ceiled, n_ceiled/db_["COPY_WPT"]};
     auto local = std::vector<size_t>{db_["COPY_DIMX"], db_["COPY_DIMY"]};
     RunKernel(kernel, queue_, device_, global, local, event_);

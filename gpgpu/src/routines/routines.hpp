@@ -89,6 +89,7 @@
 #include "routines/dnn/xnorm.hpp"
 #include "routines/dnn/xpool.hpp"
 #include "routines/dnn/xsoftmax.hpp"
+#include "routines/dnn/xhardmax.hpp"
 #include "routines/dnn/xwhere.hpp"
 #include "routines/dnn/xgather.hpp"
 

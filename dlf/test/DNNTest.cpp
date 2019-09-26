@@ -884,6 +884,9 @@ TEST(DNNTest, LogSoftmax) {
     auto Y = dnn::logsoftmax(X);
     ExpectElementsEQ(Y, R);
 
+    auto dev_Y = dnn::logsoftmax(dev(X));
+    ExpectElementsEQ(dev_Y.read(), R);
+
     auto Y1 = dnn::logsoftmax(std::move(X));
     ExpectElementsEQ(Y1, R);
 }

@@ -13,7 +13,7 @@ Xargreduce<T>::Xargreduce(const Queue& queue, Event* event, const std::string& n
 
 template <typename T>
 void Xargreduce<T>::DoArgReduce(
-    const std::string& name, const size_t n, const size_t k,
+    const size_t n, const size_t k,
     const std::vector<size_t>& x_dims, const std::vector<size_t>& x_strides,
     const Buffer<T>& x_buffer, const size_t x_offset,
     const std::vector<size_t>& y_dims, const std::vector<size_t>& y_strides,
@@ -21,7 +21,7 @@ void Xargreduce<T>::DoArgReduce(
 {
     auto x_shape_buffer = PackShape(x_dims, x_strides, context_, queue_);
     auto y_shape_buffer = PackShape(y_dims, y_strides, context_, queue_);
-    auto kernel = program_.getKernel("X" + name);
+    auto kernel = program_.getKernel("Xargreduce");
     kernel.setArguments(
         static_cast<int>(n), static_cast<int>(k),
         static_cast<int>(x_dims.size()), x_shape_buffer,

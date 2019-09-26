@@ -737,8 +737,8 @@ void arg_reduce(const std::string& name, const size_t n, const size_t k,
                 Buffer<int>& y_buffer, const size_t y_offset,
                 const Queue& queue, Event* event)
 {
-    auto routine = Xargreduce<T>(queue, event);
-    routine.DoArgReduce(name, n, k,
+    auto routine = Xargreduce<T>(queue, event, name);
+    routine.DoArgReduce(n, k,
                         x_dims, x_strides, x_buffer, x_offset,
                         y_dims, y_strides, y_buffer, y_offset);
 }
@@ -1330,85 +1330,65 @@ template void PUBLIC_API lppool<double>(const size_t, const size_t, const size_t
                                         const Queue&, Event*);
 
 template <typename T>
-void softmax(const size_t m, const size_t n, const Buffer<T>& x_buffer, Buffer<T>& y_buffer,
+void softmax(const size_t m, const size_t n,
+             Buffer<T>& x_buffer, const size_t x_offset,
              const Queue& queue, Event* event)
 {
-#if HAS_CUDA
-    if (IsCUDA(queue.context().device())) {
-        TensorDescriptor<T> xy_desc(m, 1, 1, n);
-        T alpha = 1, beta = 0;
-        checkCUDNN(cudnnSoftmaxForward(
-            cudnn_handle(queue),
-            cudnnSoftmaxAlgorithm_t::CUDNN_SOFTMAX_ACCURATE,
-            cudnnSoftmaxMode_t::CUDNN_SOFTMAX_MODE_INSTANCE,
-            &alpha, xy_desc, cu::cuBuffer::unwrap(x_buffer),
-            &beta,  xy_desc, cu::cuBuffer::unwrap(y_buffer)));
-        return;
-    }
-#endif
-
-    auto routine = Xsoftmax<T>(queue, event);
-    routine.DoSoftmax(m, n, x_buffer, y_buffer);
+    auto routine = Xsoftmax<T>(queue, event, "softmax");
+    routine.DoSoftmax(m, n, x_buffer, x_offset);
 }
 
 template void PUBLIC_API softmax<half>  (const size_t, const size_t,
-                                         const Buffer<half>&, Buffer<half>&,
+                                         Buffer<half>&, const size_t,
                                          const Queue& queue, Event*);
 template void PUBLIC_API softmax<float> (const size_t, const size_t,
-                                         const Buffer<float>&, Buffer<float>&,
+                                         Buffer<float>&, const size_t,
                                          const Queue& queue, Event*);
 template void PUBLIC_API softmax<double>(const size_t, const size_t,
-                                         const Buffer<double>&, Buffer<double>&,
+                                         Buffer<double>&, const size_t,
                                          const Queue& queue, Event*);
 
 template <typename T>
-void logsoftmax(const size_t m, const size_t n, const Buffer<T>& x_buffer, Buffer<T>& y_buffer,
-             const Queue& queue, Event* event)
+void logsoftmax(const size_t m, const size_t n,
+                Buffer<T>& x_buffer, const size_t x_offset,
+                const Queue& queue, Event* event)
 {
-#if HAS_CUDA
-    if (IsCUDA(queue.context().device())) {
-        TensorDescriptor<T> xy_desc(m, 1, 1, n);
-        T alpha = 1, beta = 0;
-        checkCUDNN(cudnnSoftmaxForward(
-            cudnn_handle(queue),
-            cudnnSoftmaxAlgorithm_t::CUDNN_SOFTMAX_LOG,
-            cudnnSoftmaxMode_t::CUDNN_SOFTMAX_MODE_INSTANCE,
-            &alpha, xy_desc, cu::cuBuffer::unwrap(x_buffer),
-            &beta,  xy_desc, cu::cuBuffer::unwrap(y_buffer)));
-        return;
-    }
-#endif
-
-    auto routine = Xsoftmax<T>(queue, event);
-    routine.DoLogSoftmax(m, n, x_buffer, y_buffer);
+    auto routine = Xsoftmax<T>(queue, event, "logsoftmax");
+    routine.DoSoftmax(m, n, x_buffer, x_offset);
 }
 
 template void PUBLIC_API logsoftmax<half>  (const size_t, const size_t,
-                                            const Buffer<half>&, Buffer<half>&,
+                                            Buffer<half>&, const size_t,
                                             const Queue& queue, Event*);
 template void PUBLIC_API logsoftmax<float> (const size_t, const size_t,
-                                            const Buffer<float>&, Buffer<float>&,
+                                            Buffer<float>&, const size_t,
                                             const Queue& queue, Event*);
 template void PUBLIC_API logsoftmax<double>(const size_t, const size_t,
-                                            const Buffer<double>&, Buffer<double>&,
+                                            Buffer<double>&, const size_t,
                                             const Queue& queue, Event*);
 
 template <typename T>
-void hardmax(const size_t m, const size_t n, const Buffer<T>& x_buffer, Buffer<T>& y_buffer,
+void hardmax(const size_t m, const size_t n, Buffer<T>& x_buffer, const size_t x_offset,
              const Queue& queue, Event* event)
 {
-    auto routine = Xsoftmax<T>(queue, event);
-    routine.DoHardmax(m, n, x_buffer, y_buffer);
+    auto routine = Xhardmax<T>(queue, event);
+    routine.DoHardmax(m, n, x_buffer, x_offset);
 }
 
 template void PUBLIC_API hardmax<half>  (const size_t, const size_t,
-                                         const Buffer<half>&, Buffer<half>&,
+                                         Buffer<half>&, const size_t,
                                          const Queue& queue, Event*);
 template void PUBLIC_API hardmax<float> (const size_t, const size_t,
-                                         const Buffer<float>&, Buffer<float>&,
+                                         Buffer<float>&, const size_t,
                                          const Queue& queue, Event*);
 template void PUBLIC_API hardmax<double>(const size_t, const size_t,
-                                         const Buffer<double>&, Buffer<double>&,
+                                         Buffer<double>&, const size_t,
+                                         const Queue& queue, Event*);
+template void PUBLIC_API hardmax<int32_t>(const size_t, const size_t,
+                                         Buffer<int32_t>&, const size_t,
+                                         const Queue& queue, Event*);
+template void PUBLIC_API hardmax<int64_t>(const size_t, const size_t,
+                                         Buffer<int64_t>&, const size_t,
                                          const Queue& queue, Event*);
 
 template <typename T>

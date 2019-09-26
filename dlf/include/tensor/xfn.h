@@ -531,11 +531,15 @@ struct reduce_log_sum : reduce_sum<T> {
 };
 
 template <typename T>
-struct reduce_log_sum_exp {
+struct reduce_sum_exp : reduce_sum<T> {
+    static constexpr auto name = "reduce_sum_exp";
+    using Map = xfn::exp<T>;
+};
+
+template <typename T>
+struct reduce_log_sum_exp : reduce_sum_exp<T> {
     static constexpr auto name = "reduce_log_sum_exp";
     static constexpr T identity() { return zero<T>(); }
-    using Map = xfn::exp<T>;
-    using Reduce = xfn::plus<T>;
     using Final = post_reduce<xfn::log<T>>;
 };
 

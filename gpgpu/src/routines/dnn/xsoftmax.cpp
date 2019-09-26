@@ -1,64 +1,67 @@
 #include "xsoftmax.hpp"
+#include "xreduce.hpp"
+#include "xtransform_b.hpp"
 
 namespace gpgpu { namespace dnn {
 using namespace gpgpu::blas;
 
 template <typename T>
 Xsoftmax<T>::Xsoftmax(const Queue& queue, Event* event, const std::string& name) :
-    Routine(queue, event, name, {"Xaxpy"}, PrecisionValue<T>(), {}, {
+    Routine(queue, event, name, {"Xdot"}, PrecisionValue<T>(), {}, {
     #include "../../kernels/dnn/xsoftmax.cl"
     }) {
 }
 
 template <typename T>
-void Xsoftmax<T>::DoSoftmax(const size_t m, const size_t n,
-                            const Buffer<T>& x_buffer,
-                            Buffer<T>& y_buffer)
+void Xsoftmax<T>::DoSoftmax(
+    const size_t m, const size_t n,
+    Buffer<T>& x_buffer, const size_t x_offset)
 {
-    // Retrieves the kernel from the compiled binary
-    auto kernel = program_.getKernel("Xsoftmax");
+    auto bias_buffer = context_.getTemporaryBuffer<T>(m);
 
-    // Sets the kernel arguments
-    kernel.setArguments(static_cast<int>(n), x_buffer, y_buffer);
+    auto WGS1 = db_["WGS1"], WGS2 = db_["WGS2"];
+    auto temp_size = 2*WGS2;
+    auto temp_buffer = context_.getTemporaryBuffer<T>(temp_size * m);
 
-    // Launches the kernel
-    auto global = std::vector<size_t>{m};
-    auto local = std::vector<size_t>{1};
-    RunKernel(kernel, queue_, device_, global, local, event_);
-}
+    auto reduce_max = Xreduce<T>(queue_, nullptr, "reduce_max");
+    reduce_max.DoReduce(m, n,
+        {m, n}, {n, 1}, x_buffer, x_offset,
+        {m, 1}, {1, 1}, bias_buffer, bias_buffer.offset());
 
-template <typename T>
-void Xsoftmax<T>::DoLogSoftmax(const size_t m, const size_t n,
-                               const Buffer<T>& x_buffer,
-                               Buffer<T>& y_buffer)
-{
-    // Retrieves the kernel from the compiled binary
-    auto kernel = program_.getKernel("Xlogsoftmax");
+    auto kernel1 = program_.getKernel("Xsoftmax");
+    kernel1.setArguments(
+        static_cast<int>(n),
+        x_buffer, static_cast<int>(x_offset),
+        bias_buffer, static_cast<int>(bias_buffer.offset()),
+        temp_buffer, static_cast<int>(temp_buffer.offset()));
 
-    // Sets the kernel arguments
-    kernel.setArguments(static_cast<int>(n), x_buffer, y_buffer);
+    auto global1 = std::vector<size_t>{WGS1*temp_size, m};
+    auto local1 = std::vector<size_t>{WGS1, 1};
+    RunKernel(kernel1, queue_, device_, global1, local1, nullptr);
 
-    // Launches the kernel
-    auto global = std::vector<size_t>{m};
-    auto local = std::vector<size_t>{1};
-    RunKernel(kernel, queue_, device_, global, local, event_);
-}
+    auto kernel2 = program_.getKernel("XsoftmaxEpilogue");
+    kernel2.setArguments(
+        static_cast<int>(n),
+        temp_buffer, static_cast<int>(temp_buffer.offset()),
+        bias_buffer, static_cast<int>(bias_buffer.offset()));
 
-template <typename T>
-void Xsoftmax<T>::DoHardmax(const size_t m, const size_t n,
-                            const Buffer<T>& x_buffer,
-                            Buffer<T>& y_buffer)
-{
-    // Retrieves the kernel from the compiled binary
-    auto kernel = program_.getKernel("Xhardmax");
+    auto global2 = std::vector<size_t>{WGS2, m};
+    auto local2 = std::vector<size_t>{WGS2, 1};
+    RunKernel(kernel2, queue_, device_, global2, local2, event_);
 
-    // Sets the kernel arguments
-    kernel.setArguments(static_cast<int>(n), x_buffer, y_buffer);
-
-    // Launches the kernel
-    auto global = std::vector<size_t>{m};
-    auto local = std::vector<size_t>{1};
-    RunKernel(kernel, queue_, device_, global, local, event_);
+    auto xform_name = routine_name_ == "softmax" ? "div_v" : "sub_v";
+    auto xform = Xtransform_b<T,T>(queue_, event_);
+    if (m == 1) {
+        xform.DoTransform(xform_name,
+            m * n, x_buffer, x_offset,
+            m, bias_buffer, bias_buffer.offset(),
+            x_buffer, x_offset);
+    } else {
+        xform.DoTransformChannel(xform_name, m, n, m,
+            x_buffer, x_offset,
+            bias_buffer, bias_buffer.offset(),
+            x_buffer, x_offset);
+    }
 }
 
 template class Xsoftmax<half>;

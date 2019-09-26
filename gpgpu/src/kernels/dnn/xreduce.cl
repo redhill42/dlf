@@ -50,15 +50,8 @@ R"(
 #  define INIT(x)           SetToZero(x)
 #  define MAP_REDUCE(c,x)   Add(c,c,x)
 #  define REDUCE(c,x,y)     Add(c,x,y)
-#  if PRECISION == 3232 || PRECISION == 6464
-#    define FINAL(z,a,n)            \
-       z.x = log(hypot(a.x, a.y));  \
-       z.y = atan2(a.y, a.x);
-#  else
-#    define FINAL(c,x,n)    c = log(x)
-#  endif
 
-#elif defined(ROUTINE_reduce_log_sum_exp)
+#elif defined(ROUTINE_reduce_sum_exp) || defined(ROUTINE_reduce_log_sum_exp)
 #  define INIT(x)           SetToZero(x)
 #  define REDUCE(c,x,y)     Add(c,x,y)
 #  if PRECISION == 3232 || PRECISION == 6464
@@ -68,12 +61,8 @@ R"(
           z.x += e * cos(a.x);      \
           z.y += e * sin(a.y);      \
        } while (0)
-#    define FINAL(z,a,n)            \
-       z.x = log(hypot(a.x, a.y));  \
-       z.y = atan2(a.y, a.x);
 #  else
 #    define MAP_REDUCE(c,x) c += exp(x)
-#    define FINAL(c,x,n)    c = log(x)
 #  endif
 
 #elif defined(ROUTINE_reduce_nrm2)
@@ -97,6 +86,16 @@ R"(
 #  endif
 #else
 #  error "Unsupported reduce routine"
+#endif
+
+#if defined(ROUTINE_reduce_log_sum) || defined(ROUTINE_reduce_log_sum_exp)
+#  if PRECISION == 3232 || PRECISION == 6464
+#    define FINAL(z,a,n)            \
+       z.x = log(hypot(a.x, a.y));  \
+       z.y = atan2(a.y, a.x);
+#  else
+#    define FINAL(c,x,n)    c = log(x)
+#  endif
 #endif
 
 #ifndef FINAL
