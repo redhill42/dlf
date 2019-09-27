@@ -8,6 +8,11 @@ namespace dlf {
 
 template <typename T> class TensorView;
 
+template <typename T, typename D>
+using is_random_distribution_type = cxx::conjunction<
+    std::is_same<T, typename D::result_type>,
+    std::is_same<D, typename D::param_type::distribution_type>>;
+
 /**
  * Tensor is a geometric object that maps in a multi-linear manner geometric
  * vectors, scalars, and other tensors to a resulting tensor.
@@ -195,6 +200,19 @@ public: // Constructors
 
     /**
      * Fill the tensor with random data.
+     *
+     * @param dist the random distribution.
+     */
+    template <typename D>
+    std::enable_if_t<is_random_distribution_type<T, D>::value, Tensor&>
+    random(D&& d) &;
+
+    template <typename D>
+    std::enable_if_t<is_random_distribution_type<T, D>::value, Tensor>
+    random(D&& d) &&;
+
+    /**
+     * Fill the tensor with random data with uniform distribution.
      *
      * @param low the lowest random value
      * @param high the highest random value
@@ -448,7 +466,11 @@ public: // Operations
         return *this;
     }
 
-    TensorView& random(T low, T high);
+    template <typename D>
+    std::enable_if_t<is_random_distribution_type<T, D>::value, TensorView&>
+    random(D&& d);
+
+    TensorView& random(T low = 0, T high = std::numeric_limits<T>::max());
 };
 
 //==-------------------------------------------------------------------------
@@ -731,11 +753,18 @@ TensorView<T>::TensorView(Shape shape, const TensorView<T>& src)
 //==-------------------------------------------------------------------------
 
 namespace detail {
+template <typename T, typename TensorT, typename D>
+inline TensorT& randomize(TensorT& t, D&& d) {
+    std::random_device rd;
+    std::mt19937 eng(rd());
+    return t.generate(std::bind(std::forward<D>(d), eng));
+}
+
 template <typename TensorT, typename T>
 std::enable_if_t<std::is_integral<T>::value, TensorT&>
 inline randomize(TensorT& t, T low, T high) {
     std::random_device rd;
-    std::default_random_engine eng(rd());
+    std::mt19937 eng(rd());
     return t.generate(std::bind(std::uniform_int_distribution<T>(low, high), eng));
 }
 
@@ -743,10 +772,24 @@ template <typename TensorT, typename T>
 std::enable_if_t<std::is_floating_point<T>::value, TensorT&>
 inline randomize(TensorT& t, T low, T high) {
     std::random_device rd;
-    std::default_random_engine eng(rd());
+    std::mt19937 eng(rd());
     return t.generate(std::bind(std::uniform_real_distribution<T>(low, high), eng));
 }
 } // namespace detail
+
+template <typename T>
+template <typename D>
+std::enable_if_t<is_random_distribution_type<T, D>::value, Tensor<T>&>
+inline Tensor<T>::random(D&& d) & {
+    return detail::randomize<T>(*this, std::forward<D>(d));
+}
+
+template <typename T>
+template <typename D>
+std::enable_if_t<is_random_distribution_type<T, D>::value, Tensor<T>>
+inline Tensor<T>::random(D&& d) && {
+    return detail::randomize<T>(*this, std::forward<D>(d));
+}
 
 template <typename T>
 inline Tensor<T>& Tensor<T>::random(T low, T high) & {
@@ -756,6 +799,13 @@ inline Tensor<T>& Tensor<T>::random(T low, T high) & {
 template <typename T>
 inline Tensor<T> Tensor<T>::random(T low, T high) && {
     return std::move(detail::randomize(*this, low, high));
+}
+
+template <typename T>
+template <typename D>
+std::enable_if_t<is_random_distribution_type<T, D>::value, TensorView<T>&>
+inline TensorView<T>::random(D&& d) {
+    return detail::randomize(*this, std::forward<D>(d));
 }
 
 template <typename T>

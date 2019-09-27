@@ -152,6 +152,64 @@ template void PUBLIC_API fill<double2> (const size_t, const std::vector<size_t>&
                                        const Queue&, Event*);
 
 template <typename T>
+void random(const size_t n, const std::vector<size_t>& dims, const std::vector<size_t>& strides,
+            Buffer<T>& x_buffer, const size_t x_offset,
+            const uint64_t seed, const T low, const T high,
+            const Queue& queue, Event* event)
+{
+    auto routine = Xrandom<T>(queue, event);
+    routine.DoRandom(n, dims, strides, x_buffer, x_offset, seed, low, high);
+}
+
+template void PUBLIC_API random<int16_t>(
+    const size_t, const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<int16_t>&, const size_t,
+    const uint64_t, const int16_t, const int16_t,
+    const Queue&, Event*);
+template void PUBLIC_API random<int32_t>(
+    const size_t, const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<int32_t>&, const size_t,
+    const uint64_t, const int32_t, const int32_t,
+    const Queue&, Event*);
+template void PUBLIC_API random<int64_t>(
+    const size_t, const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<int64_t>&, const size_t,
+    const uint64_t, const int64_t, const int64_t,
+    const Queue&, Event*);
+template void PUBLIC_API random<float>(
+    const size_t, const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<float>&, const size_t,
+    const uint64_t, const float, const float,
+    const Queue&, Event*);
+template void PUBLIC_API random<double>(
+    const size_t, const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<double>&, const size_t,
+    const uint64_t, const double, const double,
+    const Queue&, Event*);
+
+template <typename T>
+void random_normal(
+    const size_t n, const std::vector<size_t>& dims, const std::vector<size_t>& strides,
+    Buffer<T>& x_buffer, const size_t x_offset,
+    const uint64_t seed, const T mean, const T stdev,
+    const Queue& queue, Event* event)
+{
+    auto routine = Xrandom<T>(queue, event);
+    routine.DoRandomNormal(n, dims, strides, x_buffer, x_offset, seed, mean, stdev);
+}
+
+template void PUBLIC_API random_normal<float>(
+    const size_t, const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<float>&, const size_t,
+    const uint64_t, const float, const float,
+    const Queue&, Event*);
+template void PUBLIC_API random_normal<double>(
+    const size_t, const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<double>&, const size_t,
+    const uint64_t, const double, const double,
+    const Queue&, Event*);
+
+template <typename T>
 void transform(const std::string& name, const size_t n,
                const Buffer<T>& x_buffer, const size_t x_offset,
                Buffer<T>& y_buffer, const size_t y_offset,

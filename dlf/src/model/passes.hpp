@@ -93,12 +93,12 @@ public:
     }
 
     bool patternMatchPredicate(Node* node) override {
-        return node->input()->has_initializer()
-            && node->input()->uses().size() == 1
-            && (node->kind() == kReshape
+        return (node->kind() == kReshape
              || node->kind() == kSqueeze
              || node->kind() == kUnsqueeze
-             || node->kind() == kFlatten);
+             || node->kind() == kFlatten)
+             && node->input()->has_initializer()
+             && node->input()->uses().size() == 1;
     }
 
     bool runTransform(Node* node, Graph& graph, NodeDestroyType& destroyCurrent) override {

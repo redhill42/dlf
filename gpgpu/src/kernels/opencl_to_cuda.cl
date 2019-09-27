@@ -123,6 +123,7 @@ typedef struct { long s0; long s1; long s2; long s3;
 #define pow         powf
 #define round       roundf
 #define sin         sinf
+#define sincos      sincosf
 #define sinh        sinhf
 #define sqrt        sqrtf
 #define tan         tanf

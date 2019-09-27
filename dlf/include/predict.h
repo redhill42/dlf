@@ -227,6 +227,42 @@ private:
         throw std::runtime_error(cxx::string_concat("Unsupported operator ", n->kind().str()));
     }
 
+    struct RandomNormalOp : Operator {
+        TensorT<> output;
+        T mean, scale;
+        RandomNormalOp(OperatorFactory* of, model::Node* n, T mean, T scale)
+            : output(of->alloc(n->output())), mean(mean), scale(scale) {}
+        void evaluate() override {
+            output.random(std::normal_distribution<T>(mean, scale));
+        }
+    };
+
+    void visit(model::RandomNormal* n) override {
+        result = std::make_unique<RandomNormalOp>(this, n, n->mean(), n->scale());
+    }
+
+    void visit(model::RandomNormalLike* n) override {
+        result = std::make_unique<RandomNormalOp>(this, n, n->mean(), n->scale());
+    }
+
+    struct RandomUniformOp : Operator {
+        TensorT<> output;
+        T low, high;
+        RandomUniformOp(OperatorFactory* of, model::Node* n, T low, T high)
+            : output(of->alloc(n->output())), low(low), high(high) {}
+        void evaluate() override {
+            output.random(low, high);
+        }
+    };
+
+    void visit(model::RandomUniform* n) override {
+        result = std::make_unique<RandomUniformOp>(this, n, n->low(), n->high());
+    }
+
+    void visit(model::RandomUniformLike* n) override {
+        result = std::make_unique<RandomUniformOp>(this, n, n->low(), n->high());
+    }
+
     template <typename Fn>
     struct UnaryOp : Operator {
         TensorT<> X, Y;

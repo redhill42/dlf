@@ -192,6 +192,23 @@ public:
     DevTensor fill(const T& value) &&;
 
     /**
+     * Fill then tensor with random data.
+     */
+    template <typename D>
+    std::enable_if_t<is_random_distribution_type<T, D>::value, DevTensor&>
+    random(D&& d) &;
+
+    template <typename D>
+    std::enable_if_t<is_random_distribution_type<T, D>::value, DevTensor>
+    random(D&& d) &&;
+
+    /**
+     * Fill the tensor with random data with uniform distribution.
+     */
+    DevTensor& random(T low = 0, T high = std::numeric_limits<T>::max()) &;
+    DevTensor random(T low = 0, T high = std::numeric_limits<T>::max()) &&;
+
+    /**
      * Create an identity tensor.
      */
     static DevTensor identity(Shape shape, const T& value = T{1});
@@ -280,6 +297,12 @@ public:
     }
 
     DevTensorView& fill(const T& value);
+
+    template <typename D>
+    std::enable_if_t<is_random_distribution_type<T, D>::value, DevTensorView&>
+    random(D&& d);
+
+    DevTensorView& random(T low = 0, T high = std::numeric_limits<T>::max());
 };
 
 template <typename T>
@@ -344,6 +367,84 @@ DevTensor<T> DevTensor<T>::identity(Shape shape, const T& value) {
     DevTensor res(std::move(shape), T{});
     res.diagonal().fill(value);
     return res;
+}
+
+namespace detail {
+template <typename D>
+struct is_uniform_distribution : std::false_type {};
+
+template <typename T>
+struct is_uniform_distribution<std::uniform_int_distribution<T>> : std::true_type {};
+
+template <typename T>
+struct is_uniform_distribution<std::uniform_real_distribution<T>> : std::true_type {};
+
+template <typename TensorT, typename D>
+std::enable_if_t<is_uniform_distribution<D>::value, TensorT&>
+gpu_randomize(TensorT& t, D&& d) {
+    std::random_device rd;
+    std::uniform_int_distribution<uint64_t> rng;
+    gpgpu::dnn::random(
+        t.size(), t.shape().extents(), t.shape().strides(),
+        t.data(), t.shape().offset(), rng(rd), d.a(), d.b());
+    return t;
+}
+
+template <typename T, typename TensorT>
+TensorT& gpu_randomize(TensorT& t, const std::normal_distribution<T>& d) {
+    std::random_device rd;
+    std::uniform_int_distribution<uint64_t> rng;
+    gpgpu::dnn::random_normal(
+        t.size(), t.shape().extents(), t.shape().strides(),
+        t.data(), t.shape().offset(), rng(rd), d.mean(), d.stddev());
+    return t;
+}
+
+template <typename TensorT, typename T>
+TensorT& gpu_randomize(TensorT& t, T low, T high) {
+    std::random_device rd;
+    std::uniform_int_distribution<uint64_t> rng;
+    gpgpu::dnn::random(
+        t.size(), t.shape().extents(), t.shape().strides(),
+        t.data(), t.shape().offset(), rng(rd), low, high);
+    return t;
+}
+} // namespace detail
+
+template <typename T>
+template <typename D>
+std::enable_if_t<is_random_distribution_type<T, D>::value, DevTensor<T>&>
+inline DevTensor<T>::random(D&& d) & {
+    return detail::gpu_randomize<T>(*this, std::forward<D>(d));
+}
+
+template <typename T>
+template <typename D>
+std::enable_if_t<is_random_distribution_type<T, D>::value, DevTensor<T>>
+inline DevTensor<T>::random(D&& d) && {
+    return std::move(detail::gpu_randomize<T>(*this, std::forward<D>(d)));
+}
+
+template <typename T>
+inline DevTensor<T>& DevTensor<T>::random(T low, T high) & {
+    return detail::gpu_randomize(*this, low, high);
+}
+
+template <typename T>
+inline DevTensor<T> DevTensor<T>::random(T low, T high) && {
+    return std::move(detail::gpu_randomize(*this, low, high));
+}
+
+template <typename T>
+template <typename D>
+std::enable_if_t<is_random_distribution_type<T, D>::value, DevTensorView<T>&>
+inline DevTensorView<T>::random(D&& d) {
+    return detail::gpu_randomize<T>(*this, std::forward<D>(d));
+}
+
+template <typename T>
+inline DevTensorView<T>& DevTensorView<T>::random(T low, T high) {
+    return detail::gpu_randomize(*this, low, high);
 }
 
 } // namespace dlf
