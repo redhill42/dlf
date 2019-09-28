@@ -356,8 +356,8 @@ TEST_F(TensorTest, ShapeBroadcastArthimetic) {
     }
 
     {
-        auto A = Tensor<int>::range({3, 1, 2, 1}, 1);
-        auto B = Tensor<int>::range(   {4, 1, 5}, 1);
+        auto A = Tensor<int>({3, 1, 2, 1}).range(1);
+        auto B = Tensor<int>(   {4, 1, 5}).range(1);
 
         // Computed by numpy
         auto C = Tensor<int>({3, 4, 2, 5}, {
@@ -485,7 +485,7 @@ TEST_F(TensorTest, MatrixOuter) {
 }
 
 TEST_F(TensorTest, MatrixOuterView) {
-    auto A = Tensor<int>::range({5, 2}, 1);
+    auto A = Tensor<int>({5, 2}).range(1);
     auto C = outer(A.slice({{0,2}}), A.slice({{2,5}}));
     EXPECT_EQ(C, Tensor<int>({2, 2, 3, 2}, {
          5,  6,  7,  8,  9, 10,

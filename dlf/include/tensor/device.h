@@ -175,21 +175,30 @@ public:
         return DevTensorView<T>(std::move(shape), *this);
     }
 
+public:
     /**
      * Create a scalar.
      */
-    static DevTensor scalar(const T& value) {
-        DevTensor<T> res{Shape()};
-        res.data().write(gpgpu::current::queue(), &value, 1);
-        return res;
-    }
+    static DevTensor scalar(const T& value);
 
-public:
+    /**
+     * Create an identity tensor.
+     */
+
+    static DevTensor identity(Shape shape, const T& value = T{1});
+
     /**
      * Fill data fill scalar value.
      */
     DevTensor& fill(const T& value) &;
     DevTensor fill(const T& value) &&;
+
+    /**
+     * Fill data containing a sequence of numbers that begin at start
+     * and extends by increments of delta.
+     */
+    DevTensor& range(T start = 0, T delta = 1) &;
+    DevTensor range(T start = 0, T delta = 1) &&;
 
     /**
      * Fill then tensor with random data.
@@ -207,11 +216,6 @@ public:
      */
     DevTensor& random(T low = 0, T high = std::numeric_limits<T>::max()) &;
     DevTensor random(T low = 0, T high = std::numeric_limits<T>::max()) &&;
-
-    /**
-     * Create an identity tensor.
-     */
-    static DevTensor identity(Shape shape, const T& value = T{1});
 
 public: // Shape operations
     using Spatial<DevTensor>::reshape;
@@ -296,7 +300,9 @@ public:
         return reorder().read();
     }
 
+public:
     DevTensorView& fill(const T& value);
+    DevTensorView& range(T start = 0, T delta = 1);
 
     template <typename D>
     std::enable_if_t<is_random_distribution_type<T, D>::value, DevTensorView&>
@@ -341,6 +347,20 @@ inline void flat_copy(const DevTensor<T>& src, DevTensor<T>& dst) {
 }
 
 template <typename T>
+DevTensor<T> DevTensor<T>::scalar(const T& value) {
+    DevTensor<T> res{Shape()};
+    res.data().write(gpgpu::current::queue(), &value, 1);
+    return res;
+}
+
+template <typename T>
+DevTensor<T> DevTensor<T>::identity(Shape shape, const T& value) {
+    DevTensor res(std::move(shape), T{});
+    res.diagonal().fill(value);
+    return res;
+}
+
+template <typename T>
 inline DevTensor<T>& DevTensor<T>::fill(const T& value) & {
     gpgpu::dnn::fill(size(), data(), 0, value);
     return *this;
@@ -363,10 +383,25 @@ DevTensorView<T>& DevTensorView<T>::fill(const T& value) {
 }
 
 template <typename T>
-DevTensor<T> DevTensor<T>::identity(Shape shape, const T& value) {
-    DevTensor res(std::move(shape), T{});
-    res.diagonal().fill(value);
-    return res;
+inline DevTensor<T>& DevTensor<T>::range(T start, T delta) & {
+    gpgpu::dnn::range(size(), start, delta, data(), 0);
+    return *this;
+}
+
+template <typename T>
+inline DevTensor<T> DevTensor<T>::range(T start, T delta) && {
+    gpgpu::dnn::range(size(), start, delta, data(), 0);
+    return std::move(*this);
+}
+
+template <typename T>
+DevTensorView<T>& DevTensorView<T>::range(T start, T delta) {
+    if (shape().is_contiguous()) {
+        gpgpu::dnn::range(size(), start, delta, data(), shape().offset());
+    } else {
+        gpgpu::dnn::range(size(), start, delta, shape().extents(), shape().strides(), data(), shape().offset());
+    }
+    return *this;
 }
 
 namespace detail {

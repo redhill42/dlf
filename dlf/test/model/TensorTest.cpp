@@ -38,7 +38,7 @@ TEST(TensorData, SetIncompatibleData) {
 }
 
 TEST(TensorData, Encode) {
-    auto dt = TensorData("test", dlf::Tensor<int32_t>::range({2, 3, 4}, 1));
+    auto dt = TensorData("test", dlf::Tensor<int32_t>({2, 3, 4}).range(1));
     EXPECT_EQ(dt.dims(), Dims({2, 3, 4}));
     EXPECT_EQ(dt.int32_data().size(), 24);
 }
@@ -47,7 +47,7 @@ TEST(TensorData, Decode) {
     std::vector<int32_t> data(24);
     std::iota(data.begin(), data.end(), 1);
     TensorData dt("test", {2, 3, 4}, data);
-    EXPECT_EQ(dt.decode<int16_t>(), dlf::Tensor<int16_t>::range({2, 3, 4}, 1));
+    EXPECT_EQ(dt.decode<int16_t>(), dlf::Tensor<int16_t>({2, 3, 4}).range(1));
 }
 
 TEST(TensorData, DecodeString) {

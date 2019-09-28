@@ -79,6 +79,7 @@
 // DNN includes
 #include "routines/dnn/xcopy.hpp"
 #include "routines/dnn/xfill.hpp"
+#include "routines/dnn/xrange.hpp"
 #include "routines/dnn/xrandom.hpp"
 #include "routines/dnn/xtransform.hpp"
 #include "routines/dnn/xtransform_b.hpp"

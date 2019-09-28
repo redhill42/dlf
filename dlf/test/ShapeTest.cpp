@@ -121,10 +121,10 @@ TEST(ShapeIterator, BroadcastColumnBackward) {
 }
 
 PERFORMANCE_TEST(Shape, BroadcastPerformance) {
-    auto A1 = Tensor<int>::range({1024, 1024}, 1);
-    auto A2 = Tensor<int>::range({1024, 1}, 1);
-    auto B1 = Tensor<int>::range({1024, 1024}, 1);
-    auto B2 = Tensor<int>::range({1024}, 1);
+    auto A1 = Tensor<int>({1024, 1024}).range(1);
+    auto A2 = Tensor<int>({1024, 1}).range(1);
+    auto B1 = Tensor<int>({1024, 1024}).range(1);
+    auto B2 = Tensor<int>({1024}).range(1);
 
     for (int i = 0; i < 3; i++) {
         timing("No broadcast", 100, [&]() {
@@ -156,10 +156,10 @@ PERFORMANCE_TEST(Shape, BroadcastPerformance) {
 }
 
 PERFORMANCE_TEST(Shape, GPUBroadcastPerformance) {
-    auto A1 = dev(Tensor<float>::range({1024, 1024}, 1));
-    auto A2 = dev(Tensor<float>::range({1024, 1}, 1));
-    auto B1 = dev(Tensor<float>::range({1024, 1024}, 1));
-    auto B2 = dev(Tensor<float>::range({1024}, 1));
+    auto A1 = DevTensor<float>({1024, 1024}).range(1);
+    auto A2 = DevTensor<float>({1024, 1}).range(1);
+    auto B1 = DevTensor<float>({1024, 1024}).range(1);
+    auto B2 = DevTensor<float>({1024}).range(1);
 
     for (int i = 0; i < 3; i++) {
         timing("GPU no broadcast", 1, [&]() {
@@ -211,9 +211,9 @@ PERFORMANCE_TEST(Shape, GPUBroadcastPerformance) {
 }
 
 PERFORMANCE_TEST(Shape, CPUTransposePerformance) {
-    auto A1 = Tensor<float>::range({1024, 1024}, 1);
+    auto A1 = Tensor<float>({1024, 1024}).range(1);
     auto B1 = Tensor<float>({1024, 1024});
-    auto A2 = Tensor<float>::range({1024, 256, 4}, 1);
+    auto A2 = Tensor<float>({1024, 256, 4}).range(1);
     auto B2 = Tensor<float>({4, 256, 1024});
     auto B3 = Tensor<float>({1024, 256, 4});
 
@@ -235,8 +235,8 @@ PERFORMANCE_TEST(Shape, CPUTransposePerformance) {
 }
 
 PERFORMANCE_TEST(Shape, GPUTransposePerformance) {
-    auto A1 = dev(Tensor<float>::range({1024, 1024}, 1));
-    auto A2 = dev(Tensor<float>::range({1024, 256, 4}, 1));
+    auto A1 = DevTensor<float>({1024, 1024}).range(1);
+    auto A2 = DevTensor<float>({1024, 256, 4}).range(1);
 
     for (int i = 0; i < 3; i++) {
         timing("GPU 2D transpose", 1, [&]() {

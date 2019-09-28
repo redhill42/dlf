@@ -99,7 +99,7 @@ TYPED_TEST(PredictTest, Conv) {
     x->addInput(g.addInitializer(TensorData("B", DataType::FLOAT, {1}, {1})));
     g.addOutput(x->addOutput("Y"));
 
-    auto X = Tensor<float>::range({1, 1, 5, 5}, 0);
+    auto X = Tensor<float>({1, 1, 5, 5}).range(0);
     auto W = Tensor<float>({1, 1, 3, 3}, 1);
 
     Predictor<Context, float> predictor(g);
@@ -126,7 +126,7 @@ TYPED_TEST(PredictTest, Slice) {
     x->addInput(g.addInitializer(TensorData("ends", DataType::INT32, {2}, {5, 7})));
     g.addOutput(x->addOutput("Y"));
 
-    auto X = Tensor<float>::range({10, 10, 5}, 0);
+    auto X = Tensor<float>({10, 10, 5}).range(0);
 
     Predictor<Context, float> predictor(g);
     predictor.set(0, X);
@@ -174,7 +174,7 @@ TYPED_TEST(PredictTest, Where) {
     g.addOutput(c->addOutput("Z"));
 
     Predictor<Context, float> predictor(g);
-    predictor.set(0, Tensor<float>::range({10}, 0));
+    predictor.set(0, Tensor<float>({10}).range(0));
     predictor.predict();
 
     EXPECT_EQ(predictor.get(0), Tensor<float>({10}, {
@@ -201,7 +201,7 @@ TYPED_TEST(PredictTest, Reduce) {
     g.addOutput(c->addOutput("C"));
 
     Predictor<Context, float> predictor(g);
-    predictor.set(0, Tensor<float>::range({3, 2, 2}, 1));
+    predictor.set(0, Tensor<float>({3, 2, 2}).range(1));
     predictor.predict();
 
     EXPECT_EQ(predictor.get(0), Tensor<float>({1,1,1}, {78}));
@@ -224,7 +224,7 @@ TYPED_TEST(PredictTest, Pad) {
     g.addOutput(a->addOutput("A"));
 
     Predictor<Context, float> predictor(g);
-    predictor.set(0, Tensor<float>::range({3, 3}, 1));
+    predictor.set(0, Tensor<float>({3, 3}).range(1));
     predictor.predict();
 
     EXPECT_EQ(predictor.get(0), Matrix<float>({

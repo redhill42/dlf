@@ -152,6 +152,69 @@ template void PUBLIC_API fill<double2> (const size_t, const std::vector<size_t>&
                                        const Queue&, Event*);
 
 template <typename T>
+void range(const size_t n, const T start, const T delta,
+           Buffer<T>& x_buffer, const size_t x_offset,
+           const Queue& queue , Event* event)
+{
+    auto routine = Xrange<T>(queue, event);
+    routine.DoRange(n, start, delta, x_buffer, x_offset);
+}
+
+template void PUBLIC_API range<int16_t>(const size_t, const int16_t, const int16_t,
+                                        Buffer<int16_t>&, const size_t,
+                                        const Queue&, Event*);
+template void PUBLIC_API range<int32_t>(const size_t, const int32_t, const int32_t,
+                                        Buffer<int32_t>&, const size_t,
+                                        const Queue&, Event*);
+template void PUBLIC_API range<int64_t>(const size_t, const int64_t, const int64_t,
+                                        Buffer<int64_t>&, const size_t,
+                                        const Queue&, Event*);
+template void PUBLIC_API range<half>   (const size_t, const half, const half,
+                                        Buffer<half>&, const size_t,
+                                        const Queue&, Event*);
+template void PUBLIC_API range<float>  (const size_t, const float, const float,
+                                        Buffer<float>&, const size_t,
+                                        const Queue&, Event*);
+template void PUBLIC_API range<double> (const size_t, const double, const double,
+                                        Buffer<double>&, const size_t,
+                                        const Queue&, Event*);
+
+template <typename T>
+void range(const size_t n, const T start, const T delta,
+           const std::vector<size_t>& dims, const std::vector<size_t>& strides,
+           Buffer<T>& x_buffer, const size_t x_offset,
+           const Queue& queue, Event* event)
+{
+    auto routine = Xrange<T>(queue, event);
+    routine.DoRangeStrided(n, start, delta, dims, strides, x_buffer, x_offset);
+}
+
+template void PUBLIC_API range<int16_t>(const size_t, const int16_t, const int16_t,
+                                        const std::vector<size_t>&, const std::vector<size_t>&,
+                                        Buffer<int16_t>&, const size_t,
+                                        const Queue&, Event*);
+template void PUBLIC_API range<int32_t>(const size_t, const int32_t, const int32_t,
+                                        const std::vector<size_t>&, const std::vector<size_t>&,
+                                        Buffer<int32_t>&, const size_t,
+                                        const Queue&, Event*);
+template void PUBLIC_API range<int64_t>(const size_t, const int64_t, const int64_t,
+                                        const std::vector<size_t>&, const std::vector<size_t>&,
+                                        Buffer<int64_t>&, const size_t,
+                                        const Queue&, Event*);
+template void PUBLIC_API range<half>   (const size_t, const half, const half,
+                                        const std::vector<size_t>&, const std::vector<size_t>&,
+                                        Buffer<half>&, const size_t,
+                                        const Queue&, Event*);
+template void PUBLIC_API range<float>  (const size_t, const float, const float,
+                                        const std::vector<size_t>&, const std::vector<size_t>&,
+                                        Buffer<float>&, const size_t,
+                                        const Queue&, Event*);
+template void PUBLIC_API range<double> (const size_t, const double, const double,
+                                        const std::vector<size_t>&, const std::vector<size_t>&,
+                                        Buffer<double>&, const size_t,
+                                        const Queue&, Event*);
+
+template <typename T>
 void random(const size_t n, const std::vector<size_t>& dims, const std::vector<size_t>& strides,
             Buffer<T>& x_buffer, const size_t x_offset,
             const uint64_t seed, const T low, const T high,

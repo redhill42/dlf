@@ -13,7 +13,7 @@ void ExpectElementsEQ(const Tensor<T>& a, const Tensor<T>& b) {
 }
 
 TEST(UniformTest, ScalarRobust) {
-    auto V = Tensor<int>::range({5}, 1);
+    auto V = Tensor<int>({5}).range(1);
     auto x = Tensor<int>::scalar(3);
     auto y = Tensor<int>::scalar(7);
     auto v = Tensor<int>({1}, 3); // a vector instead of scalar
@@ -69,8 +69,8 @@ TEST(UniformTest, ScalarRobust) {
 }
 
 TEST(UniformTest, BroadcastTransform) {
-    auto X = Tensor<float>::range({2, 3, 2, 2}, 1);
-    auto Y = Tensor<float>::range({3, 1, 1}, 1);
+    auto X = Tensor<float>({2, 3, 2, 2}).range(1);
+    auto Y = Tensor<float>({3, 1, 1}).range(1);
     auto Z = X + Y;
     EXPECT_EQ(Z, Tensor<float>({2, 3, 2, 2}, {
          2,  3,  4,  5,
@@ -87,7 +87,7 @@ TEST(UniformTest, BroadcastTransform) {
 }
 
 TEST(UniformTest, BroadcastTransformOnView) {
-    auto X = Tensor<float>::range({2, 3, 2, 2}, 1);
+    auto X = Tensor<float>({2, 3, 2, 2}).range(1);
     auto Y = Tensor<float>({6, 1, 1}, {4, 5, 6, 1, 2, 3});
     auto Z = X + Y["3:6"];
     EXPECT_EQ(Z, Tensor<float>({2, 3, 2, 2}, {
@@ -113,8 +113,8 @@ TEST(UniformTest, TransformOnConstantElements) {
 }
 
 TEST(UniformTest, Dot) {
-    auto A = Tensor<float>::range({2, 3, 4}, 0);
-    auto B = Tensor<float>::range({3, 4, 5}, 0);
+    auto A = Tensor<float>({2, 3, 4}).range(0);
+    auto B = Tensor<float>({3, 4, 5}).range(0);
     auto C = Tensor<float>({2, 3, 3, 5}, {
           70, 76,  82,  88,   94,
          190, 196, 202, 208, 214,
@@ -146,9 +146,9 @@ TEST(UniformTest, Dot) {
 }
 
 TEST(UniformTest, MultiDot) {
-    auto A = Tensor<int>::range({2, 3});
-    auto B = Tensor<int>::range({3, 4});
-    auto C = Tensor<int>::range({4, 5});
+    auto A = Tensor<int>({2, 3}).range();
+    auto B = Tensor<int>({3, 4}).range();
+    auto C = Tensor<int>({4, 5}).range();
     auto D = multi_dot(A, B, C);
 
     EXPECT_EQ(D, Tensor<int>({2, 5}, {
@@ -159,9 +159,9 @@ TEST(UniformTest, MultiDot) {
 }
 
 TEST(UniformTest, MultiDotVectorFirst) {
-    auto A = Tensor<int>::range({3});
-    auto B = Tensor<int>::range({3, 4});
-    auto C = Tensor<int>::range({4, 5});
+    auto A = Tensor<int>({3}).range();
+    auto B = Tensor<int>({3, 4}).range();
+    auto C = Tensor<int>({4, 5}).range();
     auto D = multi_dot(A, B, C);
 
     EXPECT_EQ(D, Tensor<int>({5}, {810, 908, 1006, 1104, 1202}));
@@ -169,9 +169,9 @@ TEST(UniformTest, MultiDotVectorFirst) {
 }
 
 TEST(UniformTest, MultiDotVectorLast) {
-    auto A = Tensor<int>::range({2, 3});
-    auto B = Tensor<int>::range({3, 4});
-    auto C = Tensor<int>::range({4});
+    auto A = Tensor<int>({2, 3}).range();
+    auto B = Tensor<int>({3, 4}).range();
+    auto C = Tensor<int>({4}).range();
     auto D = multi_dot(A, B, C);
 
     EXPECT_EQ(D, Tensor<int>({2}, {162, 504}));
@@ -179,9 +179,9 @@ TEST(UniformTest, MultiDotVectorLast) {
 }
 
 TEST(UniformTest, MultiDotVectorFirstAndLast) {
-    auto A = Tensor<int>::range({3});
-    auto B = Tensor<int>::range({3, 4});
-    auto C = Tensor<int>::range({4});
+    auto A = Tensor<int>({3}).range();
+    auto B = Tensor<int>({3, 4}).range();
+    auto C = Tensor<int>({4}).range();
     auto D = multi_dot(A, B, C);
 
     EXPECT_EQ(D, Tensor<int>::scalar(162));
@@ -189,8 +189,8 @@ TEST(UniformTest, MultiDotVectorFirstAndLast) {
 }
 
 TEST(UniformTest, TensorDotSimple) {
-    auto A = Tensor<float>::range({3,4,5}, 0);
-    auto B = Tensor<float>::range({4,3,2}, 0);
+    auto A = Tensor<float>({3,4,5}).range();
+    auto B = Tensor<float>({4,3,2}).range();
     auto C = Tensor<float>({5, 2}, {
         4400, 4730,
         4532, 4874,
@@ -296,8 +296,8 @@ TEST(UniformTest, MatPow) {
 }
 
 TEST(UniformTest, Kronecker) {
-    auto A = Tensor<int>::range({2, 2, 3}, 1);
-    auto B = Tensor<int>::range({2, 2, 2}, 1);
+    auto A = Tensor<int>({2, 2, 3}).range(1);
+    auto B = Tensor<int>({2, 2, 2}).range(1);
     auto C = kronecker(A, B);
 
     EXPECT_EQ(C, Tensor<int>({4, 4, 6}, {
@@ -338,13 +338,13 @@ TEST(UnifromTest, PowGPU) {
 }
 
 TEST(UniformTest, ModCPU) {
-    auto A = Tensor<int>::range({10}, 1);
+    auto A = Tensor<int>({10}).range(1);
     auto B = A % 7;
     EXPECT_EQ(B, Tensor<int>({10}, {1, 2, 3, 4, 5, 6, 0, 1, 2, 3}));
 }
 
 TEST(UniformTest, ModGPU) {
-    auto A = dev(Tensor<float>::range({10}, 1));
+    auto A = DevTensor<float>({10}).range(1);
     auto B = A % 7.f;
     EXPECT_EQ(B.read(), Tensor<float>({10}, {1, 2, 3, 4, 5, 6, 0, 1, 2, 3}));
 }
@@ -368,8 +368,8 @@ TEST(UniformTest, NestedTensor) {
 }
 
 TEST(UniformTest, AggregateCPU) {
-    auto A = Tensor<int>::range({3, 4}, 1);
-    auto B = Tensor<int>::range({2, 3, 1}, 1);
+    auto A = Tensor<int>({3, 4}).range(1);
+    auto B = Tensor<int>({2, 3, 1}).range(1);
     auto C = Tensor<int>({4}, {1, 2, 3, 4});
 
     EXPECT_EQ(sum(A, B, C), Tensor<int>({2, 3, 4}, {
@@ -410,8 +410,8 @@ TEST(UniformTest, AggregateCPU) {
 }
 
 TEST(UniformTest, AggregateGPU) {
-    auto A = dev(Tensor<int>::range({3, 4}, 1));
-    auto B = dev(Tensor<int>::range({2, 3, 1}, 1));
+    auto A = DevTensor<int>({3, 4}).range(1);
+    auto B = DevTensor<int>({2, 3, 1}).range(1);
     auto C = dev(Tensor<int>({4}, {1, 2, 3, 4}));
 
     EXPECT_EQ(sum(A, B, C).read(), Tensor<int>({2, 3, 4}, {
@@ -459,14 +459,14 @@ TEST(UniformTest, MinMaxGPU) {
 }
 
 TEST(UniformTest, BitwiseCPU) {
-    auto A = Tensor<short>::range({4}, 0);
+    auto A = Tensor<short>({4}).range();
     EXPECT_EQ(A | 1, Tensor<int>({4}, {1, 1, 3, 3}));
     EXPECT_EQ(A & 1, Tensor<int>({4}, {0, 1, 0, 1}));
     EXPECT_EQ(A ^ 1, Tensor<int>({4}, {1, 0, 3, 2}));
 }
 
 TEST(UniformTest, BitwiseGPU) {
-    auto A = dev(Tensor<int>::range({4}, 0));
+    auto A = DevTensor<int>({4}).range();
     EXPECT_EQ((A | 1).read(), Tensor<int>({4}, {1, 1, 3, 3}));
     EXPECT_EQ((A & 1).read(), Tensor<int>({4}, {0, 1, 0, 1}));
     EXPECT_EQ((A ^ 1).read(), Tensor<int>({4}, {1, 0, 3, 2}));
@@ -505,28 +505,28 @@ TEST(UniformTest, ReshapeGPU) {
 }
 
 TEST(UniformTest, FlattenCPU) {
-    auto A = Tensor<int>::range({2, 3, 4}, 1);
-    EXPECT_EQ(flatten(A, 0), Tensor<int>::range({1, 24}, 1));
-    EXPECT_EQ(flatten(A, 1), Tensor<int>::range({2, 12}, 1));
-    EXPECT_EQ(flatten(A, 2), Tensor<int>::range({6, 4}, 1));
-    EXPECT_EQ(flatten(A, 3), Tensor<int>::range({24, 1}, 1));
+    auto A = Tensor<int>({2, 3, 4}).range(1);
+    EXPECT_EQ(flatten(A, 0), Tensor<int>({1, 24}).range(1));
+    EXPECT_EQ(flatten(A, 1), Tensor<int>({2, 12}).range(1));
+    EXPECT_EQ(flatten(A, 2), Tensor<int>({6, 4}).range(1));
+    EXPECT_EQ(flatten(A, 3), Tensor<int>({24, 1}).range(1));
     EXPECT_ANY_THROW(flatten(A, 4));
 }
 
 TEST(UniformTest, FlattenGPU) {
-    auto A = dev(Tensor<int>::range({2, 3, 4}, 1));
-    EXPECT_EQ(flatten(A, 0).read(), Tensor<int>::range({1, 24}, 1));
-    EXPECT_EQ(flatten(A, 1).read(), Tensor<int>::range({2, 12}, 1));
-    EXPECT_EQ(flatten(A, 2).read(), Tensor<int>::range({6, 4}, 1));
-    EXPECT_EQ(flatten(A, 3).read(), Tensor<int>::range({24, 1}, 1));
+    auto A = DevTensor<int>({2, 3, 4}).range(1);
+    EXPECT_EQ(flatten(A, 0).read(), Tensor<int>({1, 24}).range(1));
+    EXPECT_EQ(flatten(A, 1).read(), Tensor<int>({2, 12}).range(1));
+    EXPECT_EQ(flatten(A, 2).read(), Tensor<int>({6, 4}).range(1));
+    EXPECT_EQ(flatten(A, 3).read(), Tensor<int>({24, 1}).range(1));
     EXPECT_ANY_THROW(flatten(A, 4));
 }
 
 TEST(UniformTest, SqueezeCPU) {
-    auto A = Tensor<int>::range({2, 1, 3, 1, 4}, 1);
-    EXPECT_EQ(squeeze(A), Tensor<int>::range({2, 3, 4}, 1));
-    EXPECT_EQ(squeeze(A, 1), Tensor<int>::range({2, 3, 1, 4}, 1));
-    EXPECT_EQ(squeeze(A, -2), Tensor<int>::range({2, 1, 3, 4}, 1));
+    auto A = Tensor<int>({2, 1, 3, 1, 4}).range(1);
+    EXPECT_EQ(squeeze(A), Tensor<int>({2, 3, 4}).range(1));
+    EXPECT_EQ(squeeze(A, 1), Tensor<int>({2, 3, 1, 4}).range(1));
+    EXPECT_EQ(squeeze(A, -2), Tensor<int>({2, 1, 3, 4}).range(1));
     EXPECT_ANY_THROW(squeeze(A, 0));
 }
 
@@ -536,16 +536,16 @@ TEST(UniformTest, SqueezeToScalar) {
 }
 
 TEST(UniformTest, UnsqueezeCPU) {
-    auto A = Tensor<int>::range({2, 3, 4}, 1);
-    EXPECT_EQ(unsqueeze(A, 1, -2), Tensor<int>::range({2, 1, 3, 1, 4}, 1));
+    auto A = Tensor<int>({2, 3, 4}).range(1);
+    EXPECT_EQ(unsqueeze(A, 1, -2), Tensor<int>({2, 1, 3, 1, 4}).range(1));
     EXPECT_ANY_THROW(unsqueeze(A, 1, 5));
 }
 
 TEST(UniformTest, ConcatCPU) {
     {
-        auto A = Tensor<int>::range({2, 3, 2}, 1);
-        auto B = Tensor<int>::range({3, 3, 2}, -1, -1);
-        auto C = Tensor<int>::range({4, 3, 2}, 24, -1);
+        auto A = Tensor<int>({2, 3, 2}).range(1);
+        auto B = Tensor<int>({3, 3, 2}).range(-1, -1);
+        auto C = Tensor<int>({4, 3, 2}).range(24, -1);
         auto D = concat(0, A, B, C);
         EXPECT_EQ(D, Tensor<int>({9, 3, 2}, {
                1,   2,   3,   4,   5,   6,
@@ -561,9 +561,9 @@ TEST(UniformTest, ConcatCPU) {
     }
 
     {
-        auto A = Tensor<int>::range({2, 2, 2}, 1);
-        auto B = Tensor<int>::range({2, 3, 2}, -1, -1);
-        auto C = Tensor<int>::range({2, 4, 2}, 16, -1);
+        auto A = Tensor<int>({2, 2, 2}).range(1);
+        auto B = Tensor<int>({2, 3, 2}).range(-1, -1);
+        auto C = Tensor<int>({2, 4, 2}).range(16, -1);
         auto D = concat(1, A, B, C);
         EXPECT_EQ(D, Tensor<int>({2, 9, 2}, {
              1,   2,   3,   4,
@@ -576,9 +576,9 @@ TEST(UniformTest, ConcatCPU) {
     }
 
     {
-        auto A = Tensor<int>::range({2, 2, 2}, 1);
-        auto B = Tensor<int>::range({2, 2, 3}, -1, -1);
-        auto C = Tensor<int>::range({2, 2, 4}, 16, -1);
+        auto A = Tensor<int>({2, 2, 2}).range(1);
+        auto B = Tensor<int>({2, 2, 3}).range(-1, -1);
+        auto C = Tensor<int>({2, 2, 4}).range(16, -1);
         auto D = concat(2, A, B, C);
         EXPECT_EQ(D, Tensor<int>({2, 2, 9}, {
              1,  2,  -1,  -2,  -3,  16,  15,  14,  13,
@@ -589,8 +589,8 @@ TEST(UniformTest, ConcatCPU) {
     }
 
     {
-        auto A = Tensor<int>::range({2, 3, 4}, 1);
-        auto B = Tensor<int>::range({4, 3, 2}, 1);
+        auto A = Tensor<int>({2, 3, 4}).range(1);
+        auto B = Tensor<int>({4, 3, 2}).range(1);
         auto C = concat(1, A.transpose(), B);
         EXPECT_EQ(C, Tensor<int>({4, 6, 2}, {
             1, 13, 5, 17,  9, 21,  1,  2,  3,  4,  5,  6,
@@ -603,9 +603,9 @@ TEST(UniformTest, ConcatCPU) {
 
 TEST(UniformTest, ConcatGPU) {
     {
-        auto A = dev(Tensor<int>::range({2, 3, 2}, 1));
-        auto B = dev(Tensor<int>::range({3, 3, 2}, -1, -1));
-        auto C = dev(Tensor<int>::range({4, 3, 2}, 24, -1));
+        auto A = DevTensor<int>({2, 3, 2}).range(1);
+        auto B = DevTensor<int>({3, 3, 2}).range(-1, -1);
+        auto C = DevTensor<int>({4, 3, 2}).range(24, -1);
         auto D = concat(0, A, B, C);
         EXPECT_EQ(D.read(), Tensor<int>({9, 3, 2}, {
                1,   2,   3,   4,   5,   6,
@@ -621,9 +621,9 @@ TEST(UniformTest, ConcatGPU) {
     }
 
     {
-        auto A = dev(Tensor<int>::range({2, 2, 2}, 1));
-        auto B = dev(Tensor<int>::range({2, 3, 2}, -1, -1));
-        auto C = dev(Tensor<int>::range({2, 4, 2}, 16, -1));
+        auto A = DevTensor<int>({2, 2, 2}).range(1);
+        auto B = DevTensor<int>({2, 3, 2}).range(-1, -1);
+        auto C = DevTensor<int>({2, 4, 2}).range(16, -1);
         auto D = concat(1, A, B, C);
         EXPECT_EQ(D.read(), Tensor<int>({2, 9, 2}, {
              1,   2,   3,   4,
@@ -636,9 +636,9 @@ TEST(UniformTest, ConcatGPU) {
     }
 
     {
-        auto A = dev(Tensor<int>::range({2, 2, 2}, 1));
-        auto B = dev(Tensor<int>::range({2, 2, 3}, -1, -1));
-        auto C = dev(Tensor<int>::range({2, 2, 4}, 16, -1));
+        auto A = DevTensor<int>({2, 2, 2}).range(1);
+        auto B = DevTensor<int>({2, 2, 3}).range(-1, -1);
+        auto C = DevTensor<int>({2, 2, 4}).range(16, -1);
         auto D = concat(2, A, B, C);
         EXPECT_EQ(D.read(), Tensor<int>({2, 2, 9}, {
              1,  2,  -1,  -2,  -3,  16,  15,  14,  13,
@@ -649,8 +649,8 @@ TEST(UniformTest, ConcatGPU) {
     }
 
     {
-        auto A = dev(Tensor<int>::range({2, 3, 4}, 1));
-        auto B = dev(Tensor<int>::range({4, 3, 2}, 1));
+        auto A = DevTensor<int>({2, 3, 4}).range(1);
+        auto B = DevTensor<int>({4, 3, 2}).range(1);
         auto C = concat(1, A.transpose(), B);
         EXPECT_EQ(C.read(), Tensor<int>({4, 6, 2}, {
             1, 13, 5, 17,  9, 21,  1,  2,  3,  4,  5,  6,
@@ -663,7 +663,7 @@ TEST(UniformTest, ConcatGPU) {
 
 TEST(UniformTest, SplitCPU) {
     {
-        auto X = Tensor<int>::range({9, 3, 2}, 1);
+        auto X = Tensor<int>({9, 3, 2}).range(1);
         auto A = Tensor<int>({2, 3, 2});
         auto B = Tensor<int>({3, 3, 2});
         auto C = Tensor<int>({4, 3, 2});
@@ -711,7 +711,7 @@ TEST(UniformTest, SplitCPU) {
             52, 53, 54
 
         */
-        auto X = Tensor<int>::range({2, 9, 3}, 1);
+        auto X = Tensor<int>({2, 9, 3}).range(1);
         auto A = Tensor<int>({2, 2, 3});
         auto B = Tensor<int>({2, 3, 3});
         auto C = Tensor<int>({2, 4, 3});
@@ -757,7 +757,7 @@ TEST(UniformTest, SplitCPU) {
             37, 38, 39, 40, 41, 42, 43, 44, 45,
             46, 47, 48, 49, 50, 51, 52, 53, 54
          */
-        auto X = Tensor<int>::range({2, 3, 9}, 1);
+        auto X = Tensor<int>({2, 3, 9}).range(1);
         auto A = Tensor<int>({2, 3, 2});
         auto B = Tensor<int>({2, 3, 3});
         auto C = Tensor<int>({2, 3, 4});
@@ -785,10 +785,10 @@ TEST(UniformTest, SplitCPU) {
 
 TEST(UniformTest, SplitGPU) {
     {
-        auto X = dev(Tensor<int>::range({9, 3, 2}, 1));
-        auto A = dev(Tensor<int>({2, 3, 2}));
-        auto B = dev(Tensor<int>({3, 3, 2}));
-        auto C = dev(Tensor<int>({4, 3, 2}));
+        auto X = DevTensor<int>({9, 3, 2}).range(1);
+        auto A = DevTensor<int>({2, 3, 2});
+        auto B = DevTensor<int>({3, 3, 2});
+        auto C = DevTensor<int>({4, 3, 2});
         auto v = std::vector<DevTensorView<int>>{A.view(), B.view(), C.view()};
         split(X, 0, v.begin(), v.end());
         EXPECT_EQ(A.read(), Tensor<int>({2, 3, 2}, {
@@ -832,10 +832,10 @@ TEST(UniformTest, SplitGPU) {
         52, 53, 54
      */
     {
-        auto X = dev(Tensor<int>::range({2, 9, 3}, 1));
-        auto A = dev(Tensor<int>({2, 2, 3}));
-        auto B = dev(Tensor<int>({2, 3, 3}));
-        auto C = dev(Tensor<int>({2, 4, 3}));
+        auto X = DevTensor<int>({2, 9, 3}).range(1);
+        auto A = DevTensor<int>({2, 2, 3});
+        auto B = DevTensor<int>({2, 3, 3});
+        auto C = DevTensor<int>({2, 4, 3});
         auto v = std::vector<DevTensorView<int>>{A.view(), B.view(), C.view()};
         split(X, 1, v.begin(), v.end());
         EXPECT_EQ(A.read(), Tensor<int>({2, 2, 3}, {
@@ -878,10 +878,10 @@ TEST(UniformTest, SplitGPU) {
         46, 47, 48, 49, 50, 51, 52, 53, 54
     */
     {
-        auto X = dev(Tensor<int>::range({2, 3, 9}, 1));
-        auto A = dev(Tensor<int>({2, 3, 2}));
-        auto B = dev(Tensor<int>({2, 3, 3}));
-        auto C = dev(Tensor<int>({2, 3, 4}));
+        auto X = DevTensor<int>({2, 3, 9}).range(1);
+        auto A = DevTensor<int>({2, 3, 2});
+        auto B = DevTensor<int>({2, 3, 3});
+        auto C = DevTensor<int>({2, 3, 4});
         auto v = std::vector<DevTensorView<int>>{A.view(), B.view(), C.view()};
         split(X, 2, v.begin(), v.end());
         EXPECT_EQ(A.read(), Tensor<int>({2, 3, 2}, {
@@ -934,7 +934,7 @@ TEST(UnifromTest, Join) {
 }
 
 TEST(UniformTest, Slice) {
-    auto X = Tensor<float>::range({10, 10, 5}, 0);
+    auto X = Tensor<float>({10, 10, 5}).range();
     auto Y = Tensor<float>({3, 4, 5}, {
         115, 116, 117, 118, 119,
         120, 121, 122, 123, 124,
@@ -957,7 +957,7 @@ TEST(UniformTest, Slice) {
 }
 
 TEST(UniformTest, SliceWithStep) {
-    auto X = Tensor<float>::range({10, 10, 5}, 0);
+    auto X = Tensor<float>({10, 10, 5}).range(0);
     auto Y2 = Tensor<float>({3, 2, 5}, {
         115, 116, 117, 118, 119,
         125, 126, 127, 128, 129,
@@ -995,7 +995,7 @@ TEST(UniformTest, SliceWithStep) {
 }
 
 TEST(UniformTest, SliceWithNegativeStep) {
-    auto X = Tensor<float>::range({10, 10, 5}, 0);
+    auto X = Tensor<float>({10, 10, 5}).range(0);
     auto Y1 = Tensor<float>({3, 4, 5}, {
         135, 136, 137, 138, 139,
         130, 131, 132, 133, 134,
@@ -1051,7 +1051,7 @@ TEST(UniformTest, SliceWithNegativeStep) {
 }
 
 TEST(UniformTest, SliceOfSlice) {
-    auto X = Tensor<float>::range({10, 10, 5}, 0);
+    auto X = Tensor<float>({10, 10, 5}).range();
     auto Y = Tensor<float>({2, 2, 5});
 
     auto shape = X.shape().slice({{2, 5}, {3, 7}}).slice({{1, 3}, {1, 3}});
@@ -1073,7 +1073,7 @@ TEST(UniformTest, SliceOfSlice) {
 }
 
 TEST(UniformTest, SliceAndTranspose) {
-    auto X = Tensor<float>::range({10, 10, 5}, 0);
+    auto X = Tensor<float>({10, 10, 5}).range();
     auto Y = Tensor<float>({5, 4, 3});
 
     auto shape = X.shape().slice({{2, 5}, {3, 7}}).transpose();
@@ -1116,7 +1116,7 @@ TEST(UniformTest, SliceAndTranspose) {
 }
 
 TEST(UniformTest, CopyNonContiguousSlice) {
-    auto X = Tensor<float>::range({2, 2, 10}, 0);
+    auto X = Tensor<float>({2, 2, 10}).range();
     auto X1 = X;
     auto dev_X = dev(X);
     auto dev_X1 = dev(X1);
@@ -1143,7 +1143,7 @@ TEST(UniformTest, CopyNonContiguousSlice) {
 }
 
 TEST(UniformTest, CopyContiguousSlice) {
-    auto X = Tensor<float>::range({3, 2, 10}, 0);
+    auto X = Tensor<float>({3, 2, 10}).range(0);
     auto X1 = X;
     auto dev_X = dev(X);
     auto dev_X1 = dev(X1);
@@ -1174,7 +1174,7 @@ TEST(UniformTest, CopyContiguousSlice) {
 }
 
 TEST(UniformTest, CopyToSlice) {
-    auto X = Tensor<float>::range({3, 3, 5}, 0);
+    auto X = Tensor<float>({3, 3, 5}).range();
     auto X1 = X;
     auto Y = Tensor<float>({2, 2, 2}, {1, 4, 2, 8, 5, 7, 6, 9});
 
@@ -1212,7 +1212,7 @@ TEST(UniformTest, CopyToSlice) {
 
 TEST(UniformTest, BroadcastCopyToSlice) {
     auto X = Tensor<float>({5}, {-1, -2, -3, -4, -5});
-    auto Y = Tensor<float>::range({3, 3, 5}, 0);
+    auto Y = Tensor<float>({3, 3, 5}).range();
     auto X1 = X, Y1 = Y;
 
     auto dev_X = dev(X);
@@ -1260,7 +1260,7 @@ TEST(UniformTest, BroadcastSlice) {
      * 4 5 6 7
      * 4 5 6 7
      */
-    auto X = Tensor<float>::range({2, 1, 4}, 0);
+    auto X = Tensor<float>({2, 1, 4}).range(0);
     auto Y = Tensor<float>({2, 2, 2});
     auto Y1 = Y;
 
@@ -1293,7 +1293,7 @@ TEST(UniformTest, SliceBroadcast) {
      * 16 17 18 19
      * 20 21 22 23
      */
-    auto X = Tensor<float>::range({2, 3, 4}, 0);
+    auto X = Tensor<float>({2, 3, 4}).range(0);
     auto Y = Tensor<float>({2, 3, 4});
     auto Y1 = Y;
 
@@ -1338,31 +1338,31 @@ TYPED_TEST(TransposeTest, Transpose1D_GPU) {
 }
 
 TYPED_TEST(TransposeTest, TransposeSquare_CPU) {
-    auto A = Tensor<TypeParam>::range({3, 3}, 1);
+    auto A = Tensor<TypeParam>({3, 3}).range(1);
     auto B = Tensor<TypeParam>({3, 3}, {1, 4, 7, 2, 5, 8, 3, 6, 9});
     EXPECT_EQ(A.transpose(), B);
 }
 
 TYPED_TEST(TransposeTest, TransposeSquare_GPU) {
-    auto A = dev(Tensor<TypeParam>::range({3, 3}, 1));
+    auto A = DevTensor<TypeParam>({3, 3}).range(1);
     auto B = Tensor<TypeParam>({3, 3}, {1, 4, 7, 2, 5, 8, 3, 6, 9});
     EXPECT_EQ(A.transpose().read(), B);
 }
 
 TYPED_TEST(TransposeTest, Transpose2D_CPU) {
-    auto A = Tensor<TypeParam>::range({3, 4}, 1);
+    auto A = Tensor<TypeParam>({3, 4}).range(1);
     auto B = Tensor<TypeParam>({4, 3}, {1, 5, 9, 2, 6, 10, 3, 7, 11, 4, 8, 12});
     EXPECT_EQ(A.transpose(), B);
 }
 
 TYPED_TEST(TransposeTest, Transpose2D_GPU) {
-    auto A = dev(Tensor<TypeParam>::range({3, 4}, 1));
+    auto A = DevTensor<TypeParam>({3, 4}).range(1);
     auto B = Tensor<TypeParam>({4, 3}, {1, 5, 9, 2, 6, 10, 3, 7, 11, 4, 8, 12});
     EXPECT_EQ(A.transpose().read(), B);
 }
 
 TYPED_TEST(TransposeTest, Transpose3D_CPU) {
-    auto A = Tensor<TypeParam>::range({2, 3, 4}, 1);
+    auto A = Tensor<TypeParam>({2, 3, 4}).range(1);
     auto B = Tensor<TypeParam>({4, 3, 2}, {
         1, 13, 5, 17,  9, 21,
         2, 14, 6, 18, 10, 22,
@@ -1373,7 +1373,7 @@ TYPED_TEST(TransposeTest, Transpose3D_CPU) {
 }
 
 TYPED_TEST(TransposeTest, Transpose3D_GPU) {
-    auto A = dev(Tensor<TypeParam>::range({2, 3, 4}, 1));
+    auto A = DevTensor<TypeParam>({2, 3, 4}).range(1);
     auto B = Tensor<TypeParam>({4, 3, 2}, {
         1, 13, 5, 17,  9, 21,
         2, 14, 6, 18, 10, 22,
@@ -1384,7 +1384,7 @@ TYPED_TEST(TransposeTest, Transpose3D_GPU) {
 }
 
 TYPED_TEST(TransposeTest, TransposePerm_CPU) {
-    auto A = Tensor<TypeParam>::range({2, 3, 4}, 1);
+    auto A = Tensor<TypeParam>({2, 3, 4}).range(1);
     auto B1 = Tensor<TypeParam>({3, 2, 4}, {
          1,  2,  3,  4,
         13, 14, 15, 16,
@@ -1408,7 +1408,7 @@ TYPED_TEST(TransposeTest, TransposePerm_CPU) {
 }
 
 TYPED_TEST(TransposeTest, TransposePerm_GPU) {
-    auto A = dev(Tensor<TypeParam>::range({2, 3, 4}, 1));
+    auto A = DevTensor<TypeParam>({2, 3, 4}).range(1);
     auto B1 = Tensor<TypeParam>({3, 2, 4}, {
          1,  2,  3,  4,
         13, 14, 15, 16,
@@ -1441,14 +1441,14 @@ TEST(UniformTest, MoveAxis) {
 }
 
 TYPED_TEST(TransposeTest, SwapAxes) {
-    auto A = Tensor<TypeParam>::range({2, 2, 2}, 0);
+    auto A = Tensor<TypeParam>({2, 2, 2}).range(0);
     auto B = Tensor<TypeParam>({2, 2, 2}, {0, 4, 2, 6, 1, 5, 3, 7});
     EXPECT_EQ(swapaxes(A, 0, 2), B);
     EXPECT_EQ(swapaxes(dev(A), 0, 2).read(), B);
 }
 
 TEST(UniformTest, Flip) {
-    auto A = Tensor<float>::range({2, 2, 2}, 0);
+    auto A = Tensor<float>({2, 2, 2}).range();
 
     EXPECT_EQ(flip(A, 0), Tensor<float>({2, 2, 2}, {
         4, 5, 6, 7, 0, 1, 2, 3
@@ -1477,7 +1477,7 @@ TEST(UniformTest, Rot90) {
     EXPECT_EQ(rot90(rot90(A)), rot90(A, 2));
     EXPECT_EQ(rot90(rot90(rot90(A))), rot90(A, 3));
 
-    auto B = Tensor<float>::range({2, 3, 4}, 0);
+    auto B = Tensor<float>({2, 3, 4}).range();
     EXPECT_EQ(rot90(B, 1, 0, 1), Tensor<float>({3, 2, 4}, {
         8,  9, 10, 11, 20, 21, 22, 23,
         4,  5,  6,  7, 16, 17, 18, 19,
@@ -1523,13 +1523,13 @@ TEST(UniformTest, Where_GPU) {
 }
 
 TEST(UniformTest, WhereExpr_CPU) {
-    auto X = Tensor<int>::range({10}, 0);
+    auto X = Tensor<int>({10}).range();
     auto Y = where(X<5, X, 10*X);
     EXPECT_EQ(Y, Tensor<int>({10}, {0, 1, 2, 3, 4, 50, 60, 70, 80, 90}));
 }
 
 TEST(UniformTest, WhereExpr_GPU) {
-    auto X = dev(Tensor<int>::range({10}, 0));
+    auto X = DevTensor<int>({10}).range();
     auto Y = where(X<5, X, 10*X);
     EXPECT_EQ(Y.read(), Tensor<int>({10}, {0, 1, 2, 3, 4, 50, 60, 70, 80, 90}));
 }
@@ -1763,7 +1763,7 @@ TEST(UniformTest, ReduceMin_GPU) {
 }
 
 TEST(UniformTest, ReduceSum) {
-    auto X = Tensor<float>::range({3,3,3}, 0);
+    auto X = Tensor<float>({3,3,3}).range();
 
     EXPECT_EQ(reduce_sum(X, {0}), Tensor<float>({3,3}, {
         27, 30, 33,
@@ -1787,7 +1787,7 @@ TEST(UniformTest, ReduceSum) {
 }
 
 TEST(UniformTest, ReduceSum_GPU) {
-    auto X = Tensor<float>::range({3, 3, 3}, 0);
+    auto X = Tensor<float>({3, 3, 3}).range();
     EXPECT_EQ(reduce_sum(dev(X), {}).read(), reduce_sum(X, {}));
     EXPECT_EQ(reduce_sum(dev(X), {0}).read(), reduce_sum(X, {0}));
     EXPECT_EQ(reduce_sum(dev(X), {1}).read(), reduce_sum(X, {1}));
@@ -1796,7 +1796,7 @@ TEST(UniformTest, ReduceSum_GPU) {
 }
 
 TEST(UniformTest, ReduceMean) {
-    auto X = Tensor<float>::range({3,3,3}, 0);
+    auto X = Tensor<float>({3,3,3}).range();
 
     EXPECT_EQ(reduce_mean(X, {0}, true), Tensor<float>({1, 3, 3}, {
          9, 10, 11,
@@ -1820,7 +1820,7 @@ TEST(UniformTest, ReduceMean) {
 }
 
 TEST(UniformTest, ReduceMean_GPU) {
-    auto X = Tensor<float>::range({3, 3, 3}, 0);
+    auto X = Tensor<float>({3, 3, 3}).range();
     EXPECT_EQ(round(reduce_mean(dev(X), {}).read()), reduce_mean(X, {}));
     EXPECT_EQ(round(reduce_mean(dev(X), {0}).read()), reduce_mean(X, {0}));
     EXPECT_EQ(round(reduce_mean(dev(X), {1}).read()), reduce_mean(X, {1}));
@@ -1829,12 +1829,12 @@ TEST(UniformTest, ReduceMean_GPU) {
 }
 
 TEST(UniformTest, ReduceSumSquare) {
-    auto X = Tensor<float>::range({3, 2, 2}, 1);
+    auto X = Tensor<float>({3, 2, 2}).range(1);
     EXPECT_EQ(reduce_sum_square(X, {1}), reduce_sum(X*X, {1}));
 }
 
 TEST(UniformTest, ReduceSumSquare_GPU) {
-    auto X = Tensor<float>::range({3, 3, 3}, 0);
+    auto X = Tensor<float>({3, 3, 3}).range();
     ExpectElementsEQ(reduce_sum_square(dev(X), {}).read(), reduce_sum_square(X, {}));
     ExpectElementsEQ(reduce_sum_square(dev(X), {0}).read(), reduce_sum_square(X, {0}));
     ExpectElementsEQ(reduce_sum_square(dev(X), {1}).read(), reduce_sum_square(X, {1}));
@@ -1848,7 +1848,7 @@ TEST(UniformTest, ReduceLogSum) {
 }
 
 TEST(UniformTest, ReduceLogSum_GPU) {
-    auto X = Tensor<float>::range({3, 3, 3}, 0);
+    auto X = Tensor<float>({3, 3, 3}).range();
     ExpectElementsEQ(reduce_log_sum(dev(X), {}).read(), reduce_log_sum(X, {}));
     ExpectElementsEQ(reduce_log_sum(dev(X), {0}).read(), reduce_log_sum(X, {0}));
     ExpectElementsEQ(reduce_log_sum(dev(X), {1}).read(), reduce_log_sum(X, {1}));
@@ -1862,7 +1862,7 @@ TEST(UniformTest, ReduceLogSumExp) {
 }
 
 TEST(UniformTest, ReduceLogSumExp_GPU) {
-    auto X = Tensor<float>::range({3, 3, 3}, 0);
+    auto X = Tensor<float>({3, 3, 3}).range();
     ExpectElementsEQ(reduce_log_sum_exp(dev(X), {}).read(), reduce_log_sum_exp(X, {}));
     ExpectElementsEQ(reduce_log_sum_exp(dev(X), {0}).read(), reduce_log_sum_exp(X, {0}));
     ExpectElementsEQ(reduce_log_sum_exp(dev(X), {1}).read(), reduce_log_sum_exp(X, {1}));
@@ -1871,7 +1871,7 @@ TEST(UniformTest, ReduceLogSumExp_GPU) {
 }
 
 TEST(UniformTest, ReduceProd) {
-    auto X = Tensor<float>::range({3, 2, 2}, 1);
+    auto X = Tensor<float>({3, 2, 2}).range(1);
 
     ExpectElementsEQ(reduce_prod(X, {}, true), Tensor<float>({1,1,1}, {
         4.790016e+08
@@ -1885,7 +1885,7 @@ TEST(UniformTest, ReduceProd) {
 }
 
 TEST(UniformTest, ReduceProd_GPU) {
-    auto X = Tensor<float>::range({3, 3, 3}, 0);
+    auto X = Tensor<float>({3, 3, 3}).range();
     ExpectElementsEQ(reduce_prod(dev(X), {}).read(), reduce_prod(X, {}));
     ExpectElementsEQ(reduce_prod(dev(X), {0}).read(), reduce_prod(X, {0}));
     ExpectElementsEQ(reduce_prod(dev(X), {1}).read(), reduce_prod(X, {1}));
@@ -1899,7 +1899,7 @@ TEST(UniformTest, ReduceL1) {
 }
 
 TEST(UniformTest, ReduceL1_GPU) {
-    auto X = Tensor<float>::range({3, 3, 3}, 0);
+    auto X = Tensor<float>({3, 3, 3}).range();
     ExpectElementsEQ(reduce_asum(dev(X), {}).read(), reduce_asum(X, {}));
     ExpectElementsEQ(reduce_asum(dev(X), {0}).read(), reduce_asum(X, {0}));
     ExpectElementsEQ(reduce_asum(dev(X), {1}).read(), reduce_asum(X, {1}));
@@ -1913,7 +1913,7 @@ TEST(UniformTest, ReduceL2) {
 }
 
 TEST(UniformTest, ReduceL2_GPU) {
-    auto X = Tensor<float>::range({3, 3, 3}, 0);
+    auto X = Tensor<float>({3, 3, 3}).range();
     ExpectElementsEQ(reduce_nrm2(dev(X), {}).read(), reduce_nrm2(X, {}));
     ExpectElementsEQ(reduce_nrm2(dev(X), {0}).read(), reduce_nrm2(X, {0}));
     ExpectElementsEQ(reduce_nrm2(dev(X), {1}).read(), reduce_nrm2(X, {1}));
@@ -1927,7 +1927,7 @@ TEST(UniformTest, ReduceL2_Complex) {
 }
 
 TEST(UniformTest, Norm) {
-    auto a = Tensor<float>::range({9}) - 4;
+    auto a = Tensor<float>({9}).range() - 4;
     auto b = reshape(a, {3, 3});
 
     EXPECT_EQ(norm(a, std::numeric_limits<float>::infinity()), Scalar(4.0f));
@@ -1939,7 +1939,7 @@ TEST(UniformTest, Norm) {
 }
 
 TEST(UniformTest, Norm_GPU) {
-    auto a = dev(Tensor<float>::range({9}) - 4);
+    auto a = dev(Tensor<float>({9}).range() - 4);
     auto b = reshape(a, {3, 3});
 
     EXPECT_EQ(norm(a, std::numeric_limits<float>::infinity()).read(), Scalar(4.0f));
@@ -1951,7 +1951,7 @@ TEST(UniformTest, Norm_GPU) {
 }
 
 TEST(UniformTest, Scan) {
-    auto A = Tensor<int>::range({5, 5}, 1);
+    auto A = Tensor<int>({5, 5}).range(1);
     EXPECT_EQ(cumsum(A, 0), Matrix({
         { 1,  2,  3,  4,  5},
         { 7,  9, 11, 13, 15},
@@ -2009,14 +2009,14 @@ TEST(UniformTest, Scan) {
         {94, 72, 49, 25,  0},
     }));
 
-    auto B = Tensor<int>::range({10}, 1);
+    auto B = Tensor<int>({10}).range(1);
     EXPECT_EQ(scan(B, 0, 1, xfn::multiplies<>()), Vector({
         1, 2, 6, 24, 120, 720, 5040, 40320, 362880, 3628800
     }));
 }
 
 TEST(UniformTest, Scan_GPU) {
-    auto A = Tensor<int>::range({5, 5}, 1);
+    auto A = Tensor<int>({5, 5}).range(1);
     auto dev_A = dev(A);
 
     EXPECT_EQ(cumsum(dev_A, 0).read(), cumsum(A, 0));
@@ -2028,7 +2028,7 @@ TEST(UniformTest, Scan_GPU) {
     EXPECT_EQ(cumsum(dev_A, 0, true, true).read(), cumsum(A, 0, true, true));
     EXPECT_EQ(cumsum(dev_A, 1, true, true).read(), cumsum(A, 1, true, true));
 
-    auto B = Tensor<int>::range({10}, 1);
+    auto B = Tensor<int>({10}).range(1);
     auto dev_B = dev(B);
     EXPECT_EQ(cumprod(dev_B, 0).read(), cumprod(B, 0));
 
@@ -2051,7 +2051,7 @@ TEST(UniformTest, Pad1D) {
 }
 
 TEST(UniformTest, Pad2D) {
-    auto A = Tensor<int>::range({3, 3}, 1);
+    auto A = Tensor<int>({3, 3}).range(1);
 
     EXPECT_EQ(pad(A, {2, 2, 2, 2}, PadMode::Constant, 3), Matrix({
         {3, 3, 3, 3, 3, 3, 3},

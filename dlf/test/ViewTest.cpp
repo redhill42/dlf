@@ -4,8 +4,8 @@
 using namespace dlf;
 
 TEST(ViewTest, TransformTensorToView) {
-    auto X = Tensor<int>::range({2, 2}, 1);
-    auto Y = Tensor<int>::range({4, 4}, 1);
+    auto X = Tensor<int>({2, 2}).range(1);
+    auto Y = Tensor<int>({4, 4}).range(1);
 
     auto dev_X = dev(X);
     auto dev_Y = dev(Y);
@@ -23,8 +23,8 @@ TEST(ViewTest, TransformTensorToView) {
 }
 
 TEST(ViewTest, TransformViewToTensor) {
-    auto X = Tensor<int>::range({4, 4}, 1);
-    auto Y = Tensor<int>::range({2, 2}, 1);
+    auto X = Tensor<int>({4, 4}).range(1);
+    auto Y = Tensor<int>({2, 2}).range(1);
 
     auto dev_X = dev(X);
     auto dev_Y = dev(Y);
@@ -40,8 +40,8 @@ TEST(ViewTest, TransformViewToTensor) {
 }
 
 TEST(ViewTest, TransformViewToView) {
-    auto X = Tensor<int>::range({4, 4}, 1);
-    auto Y = Tensor<int>::range({4, 4}, 1);
+    auto X = Tensor<int>({4, 4}).range(1);
+    auto Y = Tensor<int>({4, 4}).range(1);
 
     auto dev_X = dev(X);
     auto dev_Y = dev(Y);
@@ -59,7 +59,7 @@ TEST(ViewTest, TransformViewToView) {
 }
 
 TEST(ViewTest, CalculateOnView) {
-    auto X = Tensor<int>::range({4, 4}, 1);
+    auto X = Tensor<int>({4, 4}).range(1);
     auto Y = X["0:2, 0:2"] + X["0:2, 2:4"] + X["2:4, 0:2"] + X["2:4, 2:4"];
     EXPECT_EQ(Y, Tensor<int>({2, 2}, {
         24, 28,
@@ -72,7 +72,7 @@ TEST(ViewTest, CalculateOnView) {
 }
 
 TEST(ViewTest, AggregateOnView) {
-    auto X = Tensor<int>::range({4, 4}, 1);
+    auto X = Tensor<int>({4, 4}).range(1);
     auto Y = sum(X["0:2, 0:2"], X["0:2, 2:4"], X["2:4, 0:2"], X["2:4, 2:4"]);
     EXPECT_EQ(Y, Tensor<int>({2, 2}, {
         24, 28,
@@ -85,7 +85,7 @@ TEST(ViewTest, AggregateOnView) {
 }
 
 TEST(ViewTest, UpdateOnView) {
-    auto X = Tensor<int>::range({4, 4}, 1);
+    auto X = Tensor<int>({4, 4}).range(1);
     auto dev_X = dev(X);
 
     X["1:3, 1:3"] *= 2;
@@ -101,49 +101,49 @@ TEST(ViewTest, UpdateOnView) {
 }
 
 TEST(ViewTest, Diagonal) {
-    auto X = Tensor<int>::range({2, 2, 2}, 0);
+    auto X = Tensor<int>({2, 2, 2}).range();
     auto Y = Tensor<int>({2, 2}, {0, 6, 1, 7});
     EXPECT_EQ(X.diagonal(0, 0, 1), Y);
     EXPECT_EQ(dev(X).diagonal(0, 0, 1).read(), Y);
 }
 
 TEST(ViewTest, DiagonalWithPositiveOffset) {
-    auto X = Tensor<int>::range({8, 8}, 0);
+    auto X = Tensor<int>({8, 8}).range();
     auto Y = Tensor<int>({6}, {2, 11, 20, 29, 38, 47});
     EXPECT_EQ(X.diagonal(2), Y);
     EXPECT_EQ(dev(X).diagonal(2).read(), Y);
 }
 
 TEST(ViewTest, DiagonalWithNegativeOffset) {
-    auto X = Tensor<int>::range({8, 8}, 0);
+    auto X = Tensor<int>({8, 8}).range();
     auto Y = Tensor<int>({5}, {24, 33, 42, 51, 60});
     EXPECT_EQ(X.diagonal(-3), Y);
     EXPECT_EQ(dev(X).diagonal(-3).read(), Y);
 }
 
 TEST(ViewTest, DiagonalOfNonSquareMatrix) {
-    auto X = Tensor<int>::range({4, 5}, 0);
+    auto X = Tensor<int>({4, 5}).range();
     auto Y = Tensor<int>({4}, {0, 6, 12, 18});
     EXPECT_EQ(X.diagonal(), Y);
     EXPECT_EQ(dev(X).diagonal().read(), Y);
 }
 
 TEST(ViewTest, DiagonalOfNonSquareMatrixWithPositiveOffset) {
-    auto X = Tensor<int>::range({4, 5}, 0);
+    auto X = Tensor<int>({4, 5}).range();
     auto Y = Tensor<int>({3}, {1, 7, 13});
     EXPECT_EQ(X.diagonal(1), Y);
     EXPECT_EQ(dev(X).diagonal(1).read(), Y);
 }
 
 TEST(ViewTest, DiagonalOfNonSquareMatrixWithNegativeOffset) {
-    auto X = Tensor<int>::range({4, 5}, 0);
+    auto X = Tensor<int>({4, 5}).range();
     auto Y = Tensor<int>({3}, {5, 11, 17});
     EXPECT_EQ(X.diagonal(-1), Y);
     EXPECT_EQ(dev(X).diagonal(-1).read(), Y);
 }
 
 TEST(ViewTest, FillDiagonal) {
-    auto X = Tensor<int>::range({4, 4}, 1);
+    auto X = Tensor<int>({4, 4}).range(1);
     X.diagonal().fill(0);
     EXPECT_EQ(X, Tensor<int>({4, 4}, {
          0,  2,  3,  4,
@@ -154,7 +154,7 @@ TEST(ViewTest, FillDiagonal) {
 }
 
 TEST(ViewTest, Diag) {
-    auto diagonal = Tensor<int>::range({2, 4}, 1);
+    auto diagonal = Tensor<int>({2, 4}).range(1);
     auto Y = Tensor<int>({2, 4, 4}, {
         1, 0, 0, 0,
         0, 2, 0, 0,
@@ -172,7 +172,7 @@ TEST(ViewTest, Diag) {
 }
 
 TEST(ViewTest, Trace) {
-    auto X = Tensor<float>::range({2, 2, 2, 3}, 0);
+    auto X = Tensor<float>({2, 2, 2, 3}).range();
     auto Y = Tensor<float>({2, 3}, {18, 20, 22, 24, 26, 28});
     EXPECT_EQ(trace(X, 0, 0, 1), Y);
     EXPECT_EQ(trace(dev(X), 0, 0, 1).read(), Y);
@@ -208,7 +208,7 @@ TEST(ViewTest, AsStrided) {
 }
 
 TEST(ViewTest, SlidingWindow) {
-    auto X = Tensor<int>::range({1, 1, 4, 4}, 0);
+    auto X = Tensor<int>({1, 1, 4, 4}).range();
     auto Y = as_strided(X, {2,2,3,3}, {4,1,4,1});
 
     EXPECT_EQ(Y, Tensor<int>({2,2,3,3}, {
@@ -225,7 +225,7 @@ TEST(ViewTest, SlidingWindow) {
 }
 
 TEST(ViewTest, Partition1D) {
-    auto A = Tensor<int>::range({6}, 1);
+    auto A = Tensor<int>({6}).range(1);
     EXPECT_EQ(partition(A, 0, 2), Tensor<int>({3, 2}, {
         1, 2, 3, 4, 5, 6
     }));
@@ -376,7 +376,7 @@ TEST(ViewTest, Parition3D) {
         223, 224, 233, 234
     }));
 
-    auto B = Tensor<int>::range({4, 4, 4}, 1);
+    auto B = Tensor<int>({4, 4, 4}).range(1);
     EXPECT_EQ(partition(B, 0, 2), reshape(B, {2, 2, 4, 4}));
     EXPECT_EQ(partition(B, 1, 2), reshape(B, {4, 2, 2, 4}));
     EXPECT_EQ(partition(B, 2, 2), reshape(B, {4, 4, 2, 2}));

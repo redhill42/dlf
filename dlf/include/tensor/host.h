@@ -171,15 +171,6 @@ public: // Constructors
     static Tensor identity(Shape shape, const T& value = T{1});
 
     /**
-     * Create a tensor with values starting from n.
-     *
-     * @param shape the tensor dimension
-     * @param n the starting value in the tensor data.
-     * @param step the increment step
-     */
-    static Tensor range(Shape shape, T n = T{0}, T step = T{1});
-
-    /**
      * Fill tensor with generator function.
      *
      * @param f the generator function
@@ -197,6 +188,16 @@ public: // Constructors
      */
     Tensor& fill(const T& value) &;
     Tensor fill(const T& value) &&;
+
+    /**
+     * Fill data containing a sequence of numbers that begin at start
+     * and extends by increments of delta.
+     *
+     * @param start the starting value in the tensor data.
+     * @param delta the increment delta
+     */
+    Tensor& range(T start = 0, T delta = 1) &;
+    Tensor range(T start = 0, T delta = 1) &&;
 
     /**
      * Fill the tensor with random data.
@@ -455,16 +456,12 @@ public: // Operations
     template <typename U>
     Tensor<U> cast() const;
 
-    TensorView& fill(const T& value) {
-        std::fill(begin(), end(), value);
-        return *this;
-    }
-
     template <typename F>
-    TensorView& generate(F f) {
-        std::generate(begin(), end(), f);
-        return *this;
-    }
+    TensorView& generate(F f);
+
+    TensorView& fill(const T& value);
+
+    TensorView& range(T start = 0, T delta = 1);
 
     template <typename D>
     std::enable_if_t<is_random_distribution_type<T, D>::value, TensorView&>
@@ -541,41 +538,6 @@ Tensor<T> Tensor<T>::identity(Shape shape, const T& value) {
     Tensor res(std::move(shape), T{});
     res.diagonal().fill(value);
     return res;
-}
-
-template <typename T>
-Tensor<T> Tensor<T>::range(Shape shape, T n, T step) {
-    Tensor<T> res(std::move(shape));
-    T* p = res.data();
-    for (size_t k = res.size(); k-- != 0; n += step)
-        *p++ = n;
-    return res;
-}
-
-template <typename T>
-template <typename F>
-inline Tensor<T>& Tensor<T>::generate(F f) & {
-    std::generate(begin(), end(), f);
-    return *this;
-}
-
-template <typename T>
-template <typename F>
-inline Tensor<T> Tensor<T>::generate(F f) && {
-    std::generate(begin(), end(), f);
-    return std::move(*this);
-}
-
-template <typename T>
-inline Tensor<T>& Tensor<T>::fill(const T& value) & {
-    std::fill(begin(), end(), value);
-    return *this;
-}
-
-template <typename T>
-inline Tensor<T> Tensor<T>::fill(const T& value) && {
-    std::fill(begin(), end(), value);
-    return std::move(*this);
 }
 
 template <typename T>
@@ -747,6 +709,83 @@ TensorView<T>::TensorView(Shape shape, const TensorView<T>& src)
       m_data(src.m_data),
       m_alloc_data(src.m_alloc_data)
 {}
+
+//==-------------------------------------------------------------------------
+// Extra tensor initializer
+//==-------------------------------------------------------------------------
+
+template <typename T>
+template <typename F>
+inline Tensor<T>& Tensor<T>::generate(F f) & {
+    std::generate(begin(), end(), f);
+    return *this;
+}
+
+template <typename T>
+template <typename F>
+inline Tensor<T> Tensor<T>::generate(F f) && {
+    std::generate(begin(), end(), f);
+    return std::move(*this);
+}
+
+template <typename T>
+template <typename F>
+inline TensorView<T>& TensorView<T>::generate(F f) {
+    std::generate(begin(), end(), f);
+    return *this;
+}
+
+template <typename T>
+inline Tensor<T>& Tensor<T>::fill(const T& value) & {
+    std::fill(begin(), end(), value);
+    return *this;
+}
+
+template <typename T>
+inline Tensor<T> Tensor<T>::fill(const T& value) && {
+    std::fill(begin(), end(), value);
+    return std::move(*this);
+}
+
+template <typename T>
+inline TensorView<T>& TensorView<T>::fill(const T& value) {
+    std::fill(begin(), end(), value);
+    return *this;
+}
+
+namespace detail {
+template <typename T, typename Iterator>
+void range(int n, Iterator begin, T start, T delta) {
+    tbb::parallel_for(tbb::blocked_range<int>(0, n, GRAINSIZE), [&](auto r) {
+        auto p = begin + r.begin();
+        auto v = r.begin() * delta + start;
+        for (int k = static_cast<int>(r.size()); k != 0; --k, ++p, v += delta)
+            *p = v;
+    });
+}
+} // namespace detail
+
+template <typename T>
+inline Tensor<T>& Tensor<T>::range(T start, T delta) & {
+    detail::range(size(), data(), start, delta);
+    return *this;
+}
+
+template <typename T>
+inline Tensor<T> Tensor<T>::range(T start, T delta) && {
+    detail::range(size(), data(), start, delta);
+    return std::move(*this);
+}
+
+template <typename T>
+TensorView<T>& TensorView<T>::range(T start, T delta) {
+    if (shape().is_contiguous()) {
+        detail::range(size(), data() + shape().offset(), start, delta);
+    } else {
+        detail::range(size(), begin(), start, delta);
+    }
+    return *this;
+}
 
 //==-------------------------------------------------------------------------
 // Tensor randomize

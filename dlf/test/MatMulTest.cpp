@@ -8,8 +8,8 @@ using MatMulTestTypes = testing::Types<float, int>;
 TYPED_TEST_CASE(MatMulTest, MatMulTestTypes);
 
 TYPED_TEST(MatMulTest, MatMul) {
-    auto A = Tensor<TypeParam>::range({2, 3, 4}, 1);
-    auto B = Tensor<TypeParam>::range({2, 4, 5}, 1);
+    auto A = Tensor<TypeParam>({2, 3, 4}).range(1);
+    auto B = Tensor<TypeParam>({2, 4, 5}).range(1);
     auto C = Tensor<TypeParam>({2, 3, 5}, {
          110,  120,  130,  140,  150,
          246,  272,  298,  324,  350,
@@ -25,8 +25,8 @@ TYPED_TEST(MatMulTest, MatMul) {
 }
 
 TYPED_TEST(MatMulTest, LeftHandSideIsVector) {
-    auto A = Tensor<TypeParam>::range({4}, 1);
-    auto B = Tensor<TypeParam>::range({2, 4, 5}, 1);
+    auto A = Tensor<TypeParam>({4}).range(1);
+    auto B = Tensor<TypeParam>({2, 4, 5}).range(1);
     auto C = Tensor<TypeParam>({2, 5}, {
         110, 120, 130, 140, 150,
         310, 320, 330, 340, 350,
@@ -37,8 +37,8 @@ TYPED_TEST(MatMulTest, LeftHandSideIsVector) {
 }
 
 TYPED_TEST(MatMulTest, RightHandSideIsVector) {
-    auto A = Tensor<TypeParam>::range({2, 3, 4}, 1);
-    auto B = Tensor<TypeParam>::range({4}, 1);
+    auto A = Tensor<TypeParam>({2, 3, 4}).range(1);
+    auto B = Tensor<TypeParam>({4}).range(1);
     auto C = Tensor<TypeParam>({2, 3}, {
          30,  70, 110,
         150, 190, 230
@@ -49,16 +49,16 @@ TYPED_TEST(MatMulTest, RightHandSideIsVector) {
 }
 
 TYPED_TEST(MatMulTest, VectorLike) {
-    auto A = Tensor<TypeParam>::range({1, 8}, 1);
-    auto B = Tensor<TypeParam>::range({8, 1}, 100);
+    auto A = Tensor<TypeParam>({1, 8}).range(1);
+    auto B = Tensor<TypeParam>({8, 1}).range(100);
     auto C = Tensor<TypeParam>({1, 1}, {3768});
     EXPECT_EQ(matmul(A, B), C);
     EXPECT_EQ(matmul(dev(A), dev(B)).read(), C);
 }
 
 TYPED_TEST(MatMulTest, Broadcast3D) {
-    auto A = Tensor<TypeParam>::range({2, 3, 4}, 1);
-    auto B = Tensor<TypeParam>::range({4, 5}, 1);
+    auto A = Tensor<TypeParam>({2, 3, 4}).range(1);
+    auto B = Tensor<TypeParam>({4, 5}).range(1);
     auto C = Tensor<TypeParam>({2, 3, 5}, {
         110,  120,  130,  140,  150,
         246,  272,  298,  324,  350,
@@ -79,8 +79,8 @@ TYPED_TEST(MatMulTest, Broadcast3D) {
 
 TYPED_TEST(MatMulTest, Broadcast4DLeft) {
     {
-        auto A = Tensor<TypeParam>::range({3, 4}, 1);
-        auto B = Tensor<TypeParam>::range({2, 2, 4, 5}, 1);
+        auto A = Tensor<TypeParam>({3, 4}).range(1);
+        auto B = Tensor<TypeParam>({2, 2, 4, 5}).range(1);
         auto C = Tensor<TypeParam>({2, 2, 3, 5}, {
              110,  120,  130,  140,  150,
              246,  272,  298,  324,  350,
@@ -108,8 +108,8 @@ TYPED_TEST(MatMulTest, Broadcast4DLeft) {
     }
 
     {
-        auto A = Tensor<TypeParam>::range({1, 2, 3, 4}, 1);
-        auto B = Tensor<TypeParam>::range({2, 2, 4, 5}, 1);
+        auto A = Tensor<TypeParam>({1, 2, 3, 4}).range(1);
+        auto B = Tensor<TypeParam>({2, 2, 4, 5}).range(1);
         auto C = Tensor<TypeParam>({2, 2, 3, 5}, {
              110,  120,  130,  140,  150,
              246,  272,  298,  324,  350,
@@ -133,8 +133,8 @@ TYPED_TEST(MatMulTest, Broadcast4DLeft) {
     }
 
     {
-        auto A = Tensor<TypeParam>::range({2, 1, 3, 4}, 1);
-        auto B = Tensor<TypeParam>::range({2, 2, 4, 5}, 1);
+        auto A = Tensor<TypeParam>({2, 1, 3, 4}).range(1);
+        auto B = Tensor<TypeParam>({2, 2, 4, 5}).range(1);
         auto C = Tensor<TypeParam>({2, 2, 3, 5}, {
              110,  120,  130,  140,  150,
              246,  272,  298,  324,  350,
@@ -160,8 +160,8 @@ TYPED_TEST(MatMulTest, Broadcast4DLeft) {
 
 TYPED_TEST(MatMulTest, Broadcast4DRight) {
     {
-        auto A = Tensor<TypeParam>::range({2, 2, 3, 4}, 1);
-        auto B = Tensor<TypeParam>::range({4, 5}, 1);
+        auto A = Tensor<TypeParam>({2, 2, 3, 4}).range(1);
+        auto B = Tensor<TypeParam>({4, 5}).range(1);
         auto C = Tensor<TypeParam>({2, 2, 3, 5}, {
              110,  120,  130,  140,  150,
              246,  272,  298,  324,  350,
@@ -189,8 +189,8 @@ TYPED_TEST(MatMulTest, Broadcast4DRight) {
     }
 
     {
-        auto A = Tensor<TypeParam>::range({2, 2, 3, 4}, 1);
-        auto B = Tensor<TypeParam>::range({1, 2, 4, 5}, 1);
+        auto A = Tensor<TypeParam>({2, 2, 3, 4}).range(1);
+        auto B = Tensor<TypeParam>({1, 2, 4, 5}).range(1);
         auto C = Tensor<TypeParam>({2, 2, 3, 5}, {
              110,  120,  130,  140,  150,
              246,  272,  298,  324,  350,
@@ -214,8 +214,8 @@ TYPED_TEST(MatMulTest, Broadcast4DRight) {
     }
 
     {
-        auto A = Tensor<TypeParam>::range({2, 2, 3, 4}, 1);
-        auto B = Tensor<TypeParam>::range({2, 1, 4, 5}, 1);
+        auto A = Tensor<TypeParam>({2, 2, 3, 4}).range(1);
+        auto B = Tensor<TypeParam>({2, 1, 4, 5}).range(1);
         auto C = Tensor<TypeParam>({2, 2, 3, 5}, {
              110,  120,  130,  140,  150,
              246,  272,  298,  324,  350,
@@ -241,8 +241,8 @@ TYPED_TEST(MatMulTest, Broadcast4DRight) {
 
 TYPED_TEST(MatMulTest, Broadcast4DBothSide) {
     {
-        auto A = Tensor<TypeParam>::range({1, 2, 3, 4}, 1);
-        auto B = Tensor<TypeParam>::range({2, 1, 4, 5}, 1);
+        auto A = Tensor<TypeParam>({1, 2, 3, 4}).range(1);
+        auto B = Tensor<TypeParam>({2, 1, 4, 5}).range(1);
         auto C = Tensor<TypeParam>({2, 2, 3, 5}, {
              110,  120,  130,  140,  150,
              246,  272,  298,  324,  350,
@@ -266,8 +266,8 @@ TYPED_TEST(MatMulTest, Broadcast4DBothSide) {
     }
 
     {
-        auto A = Tensor<TypeParam>::range({2, 1, 3, 4}, 1);
-        auto B = Tensor<TypeParam>::range({1, 2, 4, 5}, 1);
+        auto A = Tensor<TypeParam>({2, 1, 3, 4}).range(1);
+        auto B = Tensor<TypeParam>({1, 2, 4, 5}).range(1);
         auto C = Tensor<TypeParam>({2, 2, 3, 5}, {
              110,  120,  130,  140,  150,
              246,  272,  298,  324,  350,
@@ -292,7 +292,7 @@ TYPED_TEST(MatMulTest, Broadcast4DBothSide) {
 }
 
 TYPED_TEST(MatMulTest, Slice) {
-    auto X = Tensor<TypeParam>::range({7, 9}, 1);
+    auto X = Tensor<TypeParam>({7, 9}).range(1);
     auto A = X["0:3, 0:4"]; // 2x3x4
     auto B = X["3:7, 4:9"]; // 2x4x5
     auto C = Tensor<TypeParam>({3, 5}, {
@@ -310,7 +310,7 @@ TYPED_TEST(MatMulTest, Slice) {
 }
 
 TYPED_TEST(MatMulTest, BatchedSlice) {
-    auto X = Tensor<TypeParam>::range({2, 7, 9}, 1);
+    auto X = Tensor<TypeParam>({2, 7, 9}).range(1);
     auto A = X[":, 0:3, 0:4"]; // 2x3x4
     auto B = X[":, 3:7, 4:9"]; // 2x4x5
     auto C = Tensor<TypeParam>({2, 3, 5}, {
@@ -332,7 +332,7 @@ TYPED_TEST(MatMulTest, BatchedSlice) {
 }
 
 TYPED_TEST(MatMulTest, NonContiguousSlice) {
-    auto X = Tensor<TypeParam>::range({2, 8, 8}, 1);
+    auto X = Tensor<TypeParam>({2, 8, 8}).range(1);
     auto A = X[":, 0:7:2, 0:7:2"];
     auto B = X[":, 1:8:2, 1:8:2"];
     auto C = Tensor<TypeParam>({2, 4, 4}, {
@@ -356,7 +356,7 @@ TYPED_TEST(MatMulTest, NonContiguousSlice) {
 }
 
 TYPED_TEST(MatMulTest, NonContiguousSliceWithBroadcast) {
-    auto X = Tensor<TypeParam>::range({2, 8, 8}, 1);
+    auto X = Tensor<TypeParam>({2, 8, 8}).range(1);
     auto A = X[":, 0:7:2, 0:7:2"];
     auto B = X["1, 1:8:2, 1:8:2"];
     auto C = Tensor<TypeParam>({2, 4, 4}, {
@@ -380,8 +380,8 @@ TYPED_TEST(MatMulTest, NonContiguousSliceWithBroadcast) {
 }
 
 TYPED_TEST(MatMulTest, NonContiguousNonSquareSlice) {
-    auto X = Tensor<TypeParam>::range({2, 6, 8}, 1);
-    auto Y = Tensor<TypeParam>::range({2, 8, 10}, 1);
+    auto X = Tensor<TypeParam>({2, 6, 8}).range(1);
+    auto Y = Tensor<TypeParam>({2, 8, 10}).range(1);
     auto A = X[":, 0:6:2, 0:8:2"];  // 2x3x4
     auto B = Y[":, 0:8:2, 0:10:2"]; // 2x4x5
     auto C = Tensor<TypeParam>({2, 3, 5}, {
@@ -404,7 +404,7 @@ TYPED_TEST(MatMulTest, NonContiguousNonSquareSlice) {
 }
 
 TYPED_TEST(MatMulTest, NonContiguousVector) {
-    auto X = Tensor<TypeParam>::range({8}, 1);
+    auto X = Tensor<TypeParam>({8}).range(1);
     auto Y = Tensor<TypeParam>::scalar(100);
     EXPECT_EQ(matmul(X["::2"], X["1::2"]), Y);
 
@@ -413,7 +413,7 @@ TYPED_TEST(MatMulTest, NonContiguousVector) {
 }
 
 TYPED_TEST(MatMulTest, NonContiguousVectorWithNegativeStride) {
-    auto X = Tensor<TypeParam>::range({8}, 1);
+    auto X = Tensor<TypeParam>({8}).range(1);
     auto Y = Tensor<TypeParam>::scalar(100);
     EXPECT_EQ(matmul(X["::-2"], flip(X["::2"])), Y);
 
@@ -422,8 +422,8 @@ TYPED_TEST(MatMulTest, NonContiguousVectorWithNegativeStride) {
 }
 
 TYPED_TEST(MatMulTest, MatrixAndNonContiguousVector) {
-    auto X = Tensor<TypeParam>::range({2, 4, 4}, 1);
-    auto Y = Tensor<TypeParam>::range({8}, 1);
+    auto X = Tensor<TypeParam>({2, 4, 4}).range(1);
+    auto Y = Tensor<TypeParam>({8}).range(1);
     auto Z = Matrix<TypeParam>({{50, 114, 178, 242}, {306, 370, 434, 498}});
     auto W = Matrix<TypeParam>({{152, 168, 184, 200}, {408, 424, 440, 456}});
     EXPECT_EQ(matmul(X, Y["::2"]), Z);
@@ -440,8 +440,8 @@ TYPED_TEST(MatMulTest, MatrixAndNonContiguousVector) {
 }
 
 TYPED_TEST(MatMulTest, MatrixAndNonContiguousVectorWithNegativeStride) {
-    auto X = Tensor<TypeParam>::range({2, 4, 4}, 1);
-    auto Y = Tensor<TypeParam>::range({8}, 1);
+    auto X = Tensor<TypeParam>({2, 4, 4}).range(1);
+    auto Y = Tensor<TypeParam>({8}).range(1);
     auto Z = Matrix<TypeParam>({{40, 120, 200, 280}, {360, 440, 520, 600}});
     auto W = Matrix<TypeParam>({{100, 120, 140, 160}, {420, 440, 460, 480}});
     EXPECT_EQ(matmul(X, Y["::-2"]), Z);
@@ -458,7 +458,7 @@ TYPED_TEST(MatMulTest, MatrixAndNonContiguousVectorWithNegativeStride) {
 }
 
 TYPED_TEST(MatMulTest, OverlappedStride) {
-    auto A = Tensor<TypeParam>::range({2, 5}, 1);
+    auto A = Tensor<TypeParam>({2, 5}).range(1);
     auto B = Vector<TypeParam>({1, 2, 3});
     auto C = Matrix<TypeParam>({{14, 20, 26}, {44, 50, 56}});
     EXPECT_EQ(matmul(partition(A, 1, 3, 1, 1), B), C);
@@ -482,7 +482,7 @@ TYPED_TEST(MatMulTest, BroadcastedVectors) {
 }
 
 TYPED_TEST(MatMulTest, MatrixAndBroadcastedVector) {
-    auto X = Tensor<TypeParam>::range({4, 4}, 1);
+    auto X = Tensor<TypeParam>({4, 4}).range(1);
     auto Y = Scalar<TypeParam>(3);
     auto Z = Tensor<TypeParam>({4}, {30, 78, 126, 174});
     auto W = Tensor<TypeParam>({4}, {84, 96, 108, 120});
@@ -496,8 +496,8 @@ TYPED_TEST(MatMulTest, MatrixAndBroadcastedVector) {
 }
 
 TYPED_TEST(MatMulTest, Transpose) {
-    auto A = Tensor<TypeParam>::range({4, 3}, 1);
-    auto B = Tensor<TypeParam>::range({4, 5}, 1);
+    auto A = Tensor<TypeParam>({4, 3}).range(1);
+    auto B = Tensor<TypeParam>({4, 5}).range(1);
     auto C = Tensor<TypeParam>({3, 5}, {
         262,  284,  306,  328,  350,
         296,  322,  348,  374,  400,
@@ -509,8 +509,8 @@ TYPED_TEST(MatMulTest, Transpose) {
 }
 
 TYPED_TEST(MatMulTest, TransposeLast) {
-    auto A = Tensor<TypeParam>::range({2, 4, 3}, 1);
-    auto B = Tensor<TypeParam>::range({2, 4, 5}, 1);
+    auto A = Tensor<TypeParam>({2, 4, 3}).range(1);
+    auto B = Tensor<TypeParam>({2, 4, 5}).range(1);
     auto C = Tensor<TypeParam>({2, 3, 5}, {
         262,  284,  306,  328,  350,
         296,  322,  348,  374,  400,
@@ -526,8 +526,8 @@ TYPED_TEST(MatMulTest, TransposeLast) {
 }
 
 TYPED_TEST(MatMulTest, TransposePrefix) {
-    auto A = Tensor<TypeParam>::range({2, 3, 2, 3}, 1);
-    auto B = Tensor<TypeParam>::range({3, 1, 3, 2}, 1);
+    auto A = Tensor<TypeParam>({2, 3, 2, 3}).range(1);
+    auto B = Tensor<TypeParam>({3, 1, 3, 2}).range(1);
     auto C = Tensor<TypeParam>({3, 2, 2, 2}, {
           22,   28,   49,   64,
          184,  244,  211,  280,
@@ -542,8 +542,8 @@ TYPED_TEST(MatMulTest, TransposePrefix) {
 }
 
 TYPED_TEST(MatMulTest, TransposeAll) {
-    auto A = Tensor<TypeParam>::range({4, 3, 2}, 1);
-    auto B = Tensor<TypeParam>::range({2, 4, 5}, 1);
+    auto A = Tensor<TypeParam>({4, 3, 2}).range(1);
+    auto B = Tensor<TypeParam>({2, 4, 5}).range(1);
     auto C = Tensor<TypeParam>({2, 3, 5}, {
          490,  530,  570,  610,  650,
          558,  606,  654,  702,  750,
@@ -559,8 +559,8 @@ TYPED_TEST(MatMulTest, TransposeAll) {
 }
 
 TYPED_TEST(MatMulTest, MatrixAndVectorView) {
-    auto A = Tensor<TypeParam>::range({3, 4}, 1);
-    auto B = Tensor<TypeParam>::range({8, 2}, 1);
+    auto A = Tensor<TypeParam>({3, 4}).range(1);
+    auto B = Tensor<TypeParam>({8, 2}).range(1);
     auto C = Tensor<TypeParam>({3, 1}, {
          60, 140, 220,
     });
@@ -570,8 +570,8 @@ TYPED_TEST(MatMulTest, MatrixAndVectorView) {
 }
 
 TYPED_TEST(MatMulTest, BatchedMatrixAndVectorView) {
-    auto A = Tensor<TypeParam>::range({2, 3, 4}, 1);
-    auto B = Tensor<TypeParam>::range({8, 2}, 1);
+    auto A = Tensor<TypeParam>({2, 3, 4}).range(1);
+    auto B = Tensor<TypeParam>({8, 2}).range(1);
     auto C = Tensor<TypeParam>({2, 3, 1}, {
          60, 140, 220,
         300, 380, 460
@@ -582,8 +582,8 @@ TYPED_TEST(MatMulTest, BatchedMatrixAndVectorView) {
 }
 
 TYPED_TEST(MatMulTest, TransposedMaxtrixAndVectorView) {
-    auto A = Tensor<TypeParam>::range({4, 3}, 1);
-    auto B = Tensor<TypeParam>::range({8, 2}, 1);
+    auto A = Tensor<TypeParam>({4, 3}).range(1);
+    auto B = Tensor<TypeParam>({8, 2}).range(1);
     auto C = Tensor<TypeParam>({3, 1}, {
         140, 160, 180,
     });
@@ -593,8 +593,8 @@ TYPED_TEST(MatMulTest, TransposedMaxtrixAndVectorView) {
 }
 
 TYPED_TEST(MatMulTest, BatchedTransposedMaxtrixAndVectorView) {
-    auto A = Tensor<TypeParam>::range({2, 4, 3}, 1);
-    auto B = Tensor<TypeParam>::range({8, 2}, 1);
+    auto A = Tensor<TypeParam>({2, 4, 3}).range(1);
+    auto B = Tensor<TypeParam>({8, 2}).range(1);
     auto C = Tensor<TypeParam>({2, 3, 1}, {
         140, 160, 180,
         380, 400, 420
@@ -605,7 +605,7 @@ TYPED_TEST(MatMulTest, BatchedTransposedMaxtrixAndVectorView) {
 }
 
 TYPED_TEST(MatMulTest, ScalarBroadcast) {
-    auto A = Tensor<TypeParam>::range({2, 3, 4}, 1);
+    auto A = Tensor<TypeParam>({2, 3, 4}).range(1);
     auto B = Tensor<TypeParam>::scalar(3);
     auto C = Tensor<TypeParam>({2, 3, 5}, {
          30,  30,  30,  30,  30,
@@ -622,9 +622,9 @@ TYPED_TEST(MatMulTest, ScalarBroadcast) {
 }
 
 TYPED_TEST(MatMulTest, AsStrided) {
-    auto X = Tensor<TypeParam>::range({4, 4}, 0);
+    auto X = Tensor<TypeParam>({4, 4}).range(0);
     auto A = as_strided(X, {2,2,3,3}, {4,1,4,1});
-    auto B = Tensor<TypeParam>::range({3, 3}, 1);
+    auto B = Tensor<TypeParam>({3, 3}).range(1);
     auto C = Tensor<TypeParam>({2, 2, 3, 3}, {
          18,  21,  24,  66,  81,  96, 114, 141, 168,
          30,  36,  42,  78,  96, 114, 126, 156, 186,

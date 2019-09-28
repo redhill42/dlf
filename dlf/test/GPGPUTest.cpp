@@ -36,7 +36,7 @@ TEST_F(GPGPUTest, CompileProgram) {
         auto kernel = compile(program_source).getKernel("multiply");
 
         // Populate regular host vectors with example data
-        auto host_a = Tensor<float>::range({2048, 2048}, 0);
+        auto host_a = Tensor<float>({2048, 2048}).range(0);
 
         // Creates two new device buffers and copies the host data to these
         // device buffer
@@ -66,7 +66,7 @@ TEST_F(GPGPUTest, CompileProgram) {
 }
 
 TEST_F(GPGPUTest, DevTensorCopyConstructor) {
-    auto A = Tensor<float>::range({2, 3, 4}, 11);
+    auto A = Tensor<float>({2, 3, 4}).range(11);
     auto dev_A = DevTensor<float>(A);
     auto dev_B = dev_A;
     EXPECT_EQ(dev_B.read(), A);
@@ -74,8 +74,8 @@ TEST_F(GPGPUTest, DevTensorCopyConstructor) {
 }
 
 TEST_F(GPGPUTest, DevTensorCopyAssignment) {
-    auto A = Tensor<float>::range({1, 2, 3}, 1);
-    auto B = Tensor<float>::range({2, 3, 4}, 3);
+    auto A = Tensor<float>({1, 2, 3}).range(1);
+    auto B = Tensor<float>({2, 3, 4}).range(3);
     auto dev_A = DevTensor<float>(A);
     auto dev_B = DevTensor<float>(B);
     EXPECT_EQ(dev_B.read(), B);
@@ -86,8 +86,8 @@ TEST_F(GPGPUTest, DevTensorCopyAssignment) {
 
 template <typename T>
 static void dev_tensor_operator_test() {
-    auto A = Tensor<T>::range({2, 3, 4}, 11);
-    auto B = Tensor<T>::range({2, 3, 4}, 5);
+    auto A = Tensor<T>({2, 3, 4}).range(11);
+    auto B = Tensor<T>({2, 3, 4}).range(5);
 
     auto dev_A = DevTensor<T>(A);
     auto dev_B = DevTensor<T>(B);
@@ -138,8 +138,8 @@ inline void ExpectEQ(const Tensor<float>& a, const Tensor<float>& b) {
 
 template <typename T>
 static void dev_tensor_broadcast_test() {
-    auto A = Tensor<T>::range({2, 3, 4}, 11);
-    auto B = Tensor<T>::range({4}, 5);
+    auto A = Tensor<T>({2, 3, 4}).range(11);
+    auto B = Tensor<T>({4}).range(5);
 
     auto dev_A = dev(A);
     auto dev_B = dev(B);
@@ -308,8 +308,8 @@ template <typename T>
 void symm_test() {
     using namespace cblas;
 
-    auto A = Tensor<T>::range({6, 5}, 1);
-    auto B = Tensor<T>::range({4, 3}, 1);
+    auto A = Tensor<T>({6, 5}).range(1);
+    auto B = Tensor<T>({4, 3}).range(1);
     auto dev_A = dev(A);
     auto dev_B = dev(B);
 
@@ -361,7 +361,7 @@ TEST_F(GPGPUTest, SYMM) {
 template <typename T>
 void trmm_test() {
     using namespace cblas;
-    auto A = Tensor<T>::range({6, 5}, 1);
+    auto A = Tensor<T>({6, 5}).range(1);
     auto B = Tensor<T>::identity({4, 4});
     auto dev_A = dev(A);
     auto dev_B = dev(B);

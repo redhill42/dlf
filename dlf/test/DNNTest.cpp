@@ -16,7 +16,7 @@ void ExpectElementsEQ(const Tensor<T>& a, const Tensor<T>& b) {
 
 template <typename T, size_t N, typename Unary>
 static void transform_test(const std::string& name, Unary op) {
-    auto A = Tensor<T>::range({N}, N/2);
+    auto A = Tensor<T>({N}).range(N/2);
     auto B = Tensor<T>({N});
 
     auto dev_A = DevTensor<T>(A);
@@ -100,7 +100,7 @@ TYPED_TEST(TransformTest, Abs) {
     using T = TypeParam;
     constexpr size_t N = 200;
 
-    auto A = Tensor<T>::range({N}, N/2);
+    auto A = Tensor<T>({N}).range(N/2);
     auto B = Tensor<T>({N});
 
     auto dev_A = DevTensor<T>(A);
@@ -121,7 +121,7 @@ TYPED_TEST(TransformTest, Neg) {
     using T = TypeParam;
     constexpr size_t N = 200;
 
-    auto A = Tensor<T>::range({N}, N/2);
+    auto A = Tensor<T>({N}).range(N/2);
     auto B = Tensor<T>({N});
 
     auto dev_A = DevTensor<T>(A);
@@ -137,7 +137,7 @@ TYPED_TEST(TransformTest, Sign) {
     using T = TypeParam;
     constexpr size_t N = 200;
 
-    auto A = Tensor<T>::range({N}, N/2);
+    auto A = Tensor<T>({N}).range(N/2);
     auto B = Tensor<T>({N});
 
     auto dev_A = DevTensor<T>(A);
@@ -260,8 +260,8 @@ TEST(BinaryTest, ShapeBroadcastArthimetic) {
     }
 
     {
-        auto A = Tensor<int>::range({3, 1, 2, 1}, 1);
-        auto B = Tensor<int>::range(   {4, 1, 5}, 1);
+        auto A = Tensor<int>({3, 1, 2, 1}).range(1);
+        auto B = Tensor<int>(   {4, 1, 5}).range(1);
 
         // Computed by numpy
         auto C = Tensor<int>({3, 4, 2, 5}, {
@@ -297,8 +297,8 @@ TEST(BinaryTest, ShapeBroadcastArthimetic) {
 
 
 TEST(DNNTest, TransformChannel_CPU) {
-    auto A = Tensor<int>::range({2, 64, 32, 32}, 1);
-    auto B = Tensor<int>::range({64, 1, 1}, 1);
+    auto A = Tensor<int>({2, 64, 32, 32}).range(1);
+    auto B = Tensor<int>({64, 1, 1}).range(1);
     auto C = Tensor<int>(A.shape());
     auto D = Tensor<int>(A.shape());
 
@@ -308,8 +308,8 @@ TEST(DNNTest, TransformChannel_CPU) {
 }
 
 TEST(DNNTest, TransformChannel_GPU) {
-    auto A = dev(Tensor<int>::range({2, 64, 32, 32}, 1));
-    auto B = dev(Tensor<int>::range({64, 1, 1}, 1));
+    auto A = DevTensor<int>({2, 64, 32, 32}).range(1);
+    auto B = DevTensor<int>({64, 1, 1}).range(1);
     auto C = DevTensor<int>(A.shape());
     auto D = DevTensor<int>(A.shape());
 
@@ -474,7 +474,7 @@ PERFORMANCE_TEST(DNNTest, BatchNormalizationPerformanceGPU) {
 }
 
 TEST(DNNTest, LRN) {
-    auto X = Tensor<float>::range({1, 5, 5, 5}, 1);
+    auto X = Tensor<float>({1, 5, 5, 5}).range(1);
     auto Y = Tensor<float>({1, 5, 5, 5});
     auto R = Tensor<float>({1, 5, 5, 5}, {
          0.98340248,  1.96411627,  2.94186795,  3.91638736,  4.88740840,
@@ -518,7 +518,7 @@ TEST(DNNTest, LRN) {
 }
 
 TEST(Conv2D, basic_conv_with_padding) {
-    auto X = Tensor<float>::range({1, 1, 5, 5}, 0);
+    auto X = Tensor<float>({1, 1, 5, 5}).range(0);
     auto W = Tensor<float>({1, 1, 3, 3}, 1);
     auto Y = Tensor<float>({1, 1, 5, 5});
     auto filter = dnn::Filter2D(X.shape(), W.shape()).pads(1, 1);
@@ -539,7 +539,7 @@ TEST(Conv2D, basic_conv_with_padding) {
 }
 
 TEST(Conv2D, basic_conv_without_padding) {
-    auto X = Tensor<float>::range({1, 1, 5, 5}, 0);
+    auto X = Tensor<float>({1, 1, 5, 5}).range(0);
     auto W = Tensor<float>({1, 1, 3, 3}, 1);
     auto Y = Tensor<float>({1, 1, 3, 3});
     auto filter = dnn::Filter2D(X.shape(), W.shape());
@@ -558,7 +558,7 @@ TEST(Conv2D, basic_conv_without_padding) {
 }
 
 TEST(Conv2D, conv_with_strides_padding) {
-    auto X = Tensor<float>::range({1, 1, 7, 5}, 0);
+    auto X = Tensor<float>({1, 1, 7, 5}).range(0);
     auto W = Tensor<float>({1, 1, 3, 3}, 1);
     auto Y = Tensor<float>({1, 1, 4, 3});
     auto filter = dnn::Filter2D(X.shape(), W.shape()).pads(1, 1).strides(2, 2);
@@ -578,7 +578,7 @@ TEST(Conv2D, conv_with_strides_padding) {
 }
 
 TEST(Conv2D, conv_with_strides_no_padding) {
-    auto X = Tensor<float>::range({1, 1, 7, 5}, 0);
+    auto X = Tensor<float>({1, 1, 7, 5}).range(0);
     auto W = Tensor<float>({1, 1, 3, 3}, 1);
     auto Y = Tensor<float>({1, 1, 3, 2});
     auto filter = dnn::Filter2D(X.shape(), W.shape()).strides(2, 2);
@@ -597,7 +597,7 @@ TEST(Conv2D, conv_with_strides_no_padding) {
 }
 
 TEST(Conv2D, conv_with_strides_and_asymmetric_padding) {
-    auto X = Tensor<float>::range({1, 1, 7, 5}, 0);
+    auto X = Tensor<float>({1, 1, 7, 5}).range(0);
     auto W = Tensor<float>({1, 1, 3, 3}, 1);
     auto Y = Tensor<float>({1, 1, 4, 2});
     auto filter = dnn::Filter2D(X.shape(), W.shape()).pads(1, 0).strides(2, 2);
@@ -617,7 +617,7 @@ TEST(Conv2D, conv_with_strides_and_asymmetric_padding) {
 }
 
 TEST(Conv2D, conv_with_multiple_channels) {
-    auto X = Tensor<float>::range({2, 3, 5, 5}, 0);
+    auto X = Tensor<float>({2, 3, 5, 5}).range(0);
     auto W = Tensor<float>({8, 3, 3, 3}, 1);
     auto Y = Tensor<float>({2, 8, 5, 5});
     auto filter = dnn::Filter2D(X.shape(), W.shape()).pads(1, 1);
@@ -629,7 +629,7 @@ TEST(Conv2D, conv_with_multiple_channels) {
 }
 
 TEST(Conv2D, conv_with_strange_padding) {
-    auto X = Tensor<float>::range({2, 3, 10, 10}, 0);
+    auto X = Tensor<float>({2, 3, 10, 10}).range(0);
     auto W = Tensor<float>({8, 3, 3, 3}, 1);
     auto filter = dnn::Filter2D(X.shape(), W.shape()).pads(1, 2, 2, 1);
     auto Y = Tensor<float>(filter.output_shape());
@@ -641,8 +641,8 @@ TEST(Conv2D, conv_with_strange_padding) {
 }
 
 TEST(Conv2D, conv_with_1x1_kernel) {
-    auto X = Tensor<float>::range({2, 3, 5, 5}, 0);
-    auto W = Tensor<float>::range({3, 3, 1, 1}, 0);
+    auto X = Tensor<float>({2, 3, 5, 5}).range(0);
+    auto W = Tensor<float>({3, 3, 1, 1}).range(0);
     auto Y = Tensor<float>();
     auto dev_Y = DevTensor<float>();
     auto filter = dnn::Filter2D(X.shape(), W.shape());
@@ -653,8 +653,8 @@ TEST(Conv2D, conv_with_1x1_kernel) {
 }
 
 TEST(Conv2D, conv_with_group) {
-    auto X = Tensor<float>::range({2, 3, 5, 5}, 0);
-    auto W = Tensor<float>::range({6, 1, 3, 3}, 1);
+    auto X = Tensor<float>({2, 3, 5, 5}).range(0);
+    auto W = Tensor<float>({6, 1, 3, 3}).range(1);
     auto Y = Tensor<float>();
     auto dev_Y = DevTensor<float>();
     auto filter = dnn::Filter2D(X.shape(), W.shape(), 3).pads(1, 1);
@@ -665,8 +665,8 @@ TEST(Conv2D, conv_with_group) {
 }
 
 PERFORMANCE_TEST(Conv2D, performance_test) {
-    auto X = Tensor<float>::range({1, 3, 1000, 1000}, 0);
-    auto W = Tensor<float>::range({8, 3, 3, 3}, 0);
+    auto X = Tensor<float>({1, 3, 1000, 1000}).range(0);
+    auto W = Tensor<float>({8, 3, 3, 3}).range(0);
     auto Y = Tensor<float>({1, 8, 1000, 1000});
     auto filter = dnn::Filter2D(X.shape(), W.shape()).pads(1, 1);
 
@@ -687,7 +687,7 @@ PERFORMANCE_TEST(Conv2D, performance_test) {
 }
 
 TEST(MaxPool, basic_2d_with_padding) {
-    auto X = Tensor<float>::range({1, 1, 5, 5}, 1);
+    auto X = Tensor<float>({1, 1, 5, 5}).range(1);
     auto Y = Tensor<float>({1, 1, 5, 5});
     auto R = Tensor<float>({1, 1, 5, 5}, {
          7,  8,  9, 10, 10,
@@ -708,7 +708,7 @@ TEST(MaxPool, basic_2d_with_padding) {
 }
 
 TEST(MaxPool, basic_2d_without_padding) {
-    auto X = Tensor<float>::range({1, 1, 5, 5}, 1);
+    auto X = Tensor<float>({1, 1, 5, 5}).range(1);
     auto Y = Tensor<float>({1, 1, 3, 3});
     auto R = Tensor<float>({1, 1, 3, 3}, {
         13, 14, 15,
@@ -727,7 +727,7 @@ TEST(MaxPool, basic_2d_without_padding) {
 }
 
 TEST(MaxPool, basic_2d_with_dilations) {
-    auto X = Tensor<float>::range({1, 1, 4, 4}, 1);
+    auto X = Tensor<float>({1, 1, 4, 4}).range(1);
     auto Y = Tensor<float>({1, 1, 2, 2});
     auto R = Tensor<float>({1, 1, 2, 2}, {11, 12, 15, 16});
     auto filter = dnn::Filter2D(X.shape(), 2, 2).dilations(2, 2);
@@ -742,7 +742,7 @@ TEST(MaxPool, basic_2d_with_dilations) {
 }
 
 TEST(MaxPool, basic_2d_precomputed_pads) {
-    auto X = Tensor<float>::range({1, 1, 5, 5}, 1);
+    auto X = Tensor<float>({1, 1, 5, 5}).range(1);
     auto Y = Tensor<float>({1, 1, 5, 5});
     auto R = Tensor<float>({1, 1, 5, 5}, {
         13, 14, 15, 15, 15,
@@ -763,7 +763,7 @@ TEST(MaxPool, basic_2d_precomputed_pads) {
 }
 
 TEST(MaxPool, basic_2d_precomputed_same_upper) {
-    auto X = Tensor<float>::range({1, 1, 5, 5}, 1);
+    auto X = Tensor<float>({1, 1, 5, 5}).range(1);
     auto Y = Tensor<float>({1, 1, 3, 3});
     auto R = Tensor<float>({1, 1, 3, 3}, {
         7, 9, 10, 17, 19, 20, 22, 24, 25
@@ -780,7 +780,7 @@ TEST(MaxPool, basic_2d_precomputed_same_upper) {
 }
 
 TEST(MaxPool, basic_2d_precomputed_strides) {
-    auto X = Tensor<float>::range({1, 1, 5, 5}, 1);
+    auto X = Tensor<float>({1, 1, 5, 5}).range(1);
     auto Y = Tensor<float>({1, 1, 2, 2});
     auto R = Tensor<float>({1, 1, 2, 2}, {7, 9, 17, 19});
     auto filter = dnn::Filter2D(X.shape(), 2, 2).strides(2, 2);
@@ -795,7 +795,7 @@ TEST(MaxPool, basic_2d_precomputed_strides) {
 }
 
 TEST(MaxPool, basic_2d_with_multiple_channels) {
-    auto X = Tensor<float>::range({2, 3, 100, 100}, 0);
+    auto X = Tensor<float>({2, 3, 100, 100}).range(0);
     auto Y = Tensor<float>({2, 3, 100, 100});
     auto dev_X = dev(X);
     auto dev_Y = DevTensor<float>({2, 3, 100, 100});
@@ -807,7 +807,7 @@ TEST(MaxPool, basic_2d_with_multiple_channels) {
 }
 
 TEST(AveragePool, basic_2d_with_multiple_channels) {
-    auto X = Tensor<float>::range({2, 3, 100, 100}, 0);
+    auto X = Tensor<float>({2, 3, 100, 100}).range(0);
     auto Y = Tensor<float>({2, 3, 100, 100});
     auto dev_X = dev(X);
     auto dev_Y = DevTensor<float>({2, 3, 100, 100});
@@ -819,7 +819,7 @@ TEST(AveragePool, basic_2d_with_multiple_channels) {
 }
 
 TEST(LpPool, basic_2d_with_multiple_channels) {
-    auto X = Tensor<float>::range({2, 3, 100, 100}, 0);
+    auto X = Tensor<float>({2, 3, 100, 100}).range(0);
     auto Y = Tensor<float>({2, 3, 100, 100});
     auto dev_X = dev(X);
     auto dev_Y = DevTensor<float>({2, 3, 100, 100});
@@ -831,7 +831,7 @@ TEST(LpPool, basic_2d_with_multiple_channels) {
 }
 
 TEST(DNNTest, GlobalPooling) {
-    auto X = Tensor<float>::range({2, 3, 2, 2}, 1);
+    auto X = Tensor<float>({2, 3, 2, 2}).range(1);
     auto Y = Tensor<float>({2, 3, 1, 1});
 
     auto max_R = Tensor<float>({2, 3, 1, 1}, {4, 8, 12, 16, 20, 24});
@@ -1090,7 +1090,7 @@ TEST(DNNTest, SpaceToDepth) {
         15, 21, 16, 22, 17, 23
     });
     auto Y = dnn::space_to_depth(X, 2);
-    EXPECT_EQ(Y, Tensor<float>::range({1, 4, 2, 3}, 0));
+    EXPECT_EQ(Y, Tensor<float>({1, 4, 2, 3}).range(0));
 
     auto dev_Y = dnn::space_to_depth(dev(X), 2);
     EXPECT_EQ(dev_Y.read(), Y);
