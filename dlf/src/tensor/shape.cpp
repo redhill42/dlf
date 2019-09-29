@@ -477,10 +477,12 @@ Shape Shape::diagonal(int offset, int axis1, int axis2) const {
         throw shape_error("diagonal: requires at least rank-2");
     detail::norm_axes(rank(), axis1, axis2);
 
-    int k = std::min(extent(axis1), extent(axis2));
-    if ((k -= std::abs(offset)) <= 0) {
-        throw shape_error("diagonal: invalid offset value");
-    }
+    int rows = extent(axis1);
+    int cols = extent(axis2);
+
+    int k = offset == 0 ? std::min(rows, cols) :
+            offset >  0 ? cols - offset : rows + offset;
+    if (k <= 0) throw shape_error("diagonal: invalid offset value");
 
     auto s = stride(axis1) + stride(axis2);
     size_t shape_offset;

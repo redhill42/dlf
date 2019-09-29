@@ -227,6 +227,21 @@ private:
         throw std::runtime_error(cxx::string_concat("Unsupported operator ", n->kind().str()));
     }
 
+    struct EyeLikeOp : Operator {
+        TensorT<> output;
+        int k;
+        EyeLikeOp(OperatorFactory* of, model::EyeLike* n)
+            : output(of->alloc(n->output())), k(n->get_i("k", 0)) {}
+        void evaluate() override {
+            output.fill(0);
+            output.diagonal(k).fill(1);
+        }
+    };
+
+    void visit(model::EyeLike* n) override {
+        result = std::make_unique<EyeLikeOp>(this, n);
+    }
+
     struct RandomNormalOp : Operator {
         TensorT<> output;
         T mean, scale;

@@ -130,14 +130,14 @@ TEST(ViewTest, DiagonalOfNonSquareMatrix) {
 
 TEST(ViewTest, DiagonalOfNonSquareMatrixWithPositiveOffset) {
     auto X = Tensor<int>({4, 5}).range();
-    auto Y = Tensor<int>({3}, {1, 7, 13});
+    auto Y = Vector<int>({1, 7, 13, 19});
     EXPECT_EQ(X.diagonal(1), Y);
     EXPECT_EQ(dev(X).diagonal(1).read(), Y);
 }
 
 TEST(ViewTest, DiagonalOfNonSquareMatrixWithNegativeOffset) {
     auto X = Tensor<int>({4, 5}).range();
-    auto Y = Tensor<int>({3}, {5, 11, 17});
+    auto Y = Vector<int>({5, 11, 17});
     EXPECT_EQ(X.diagonal(-1), Y);
     EXPECT_EQ(dev(X).diagonal(-1).read(), Y);
 }
