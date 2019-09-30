@@ -812,9 +812,6 @@ std::enable_if_t<
 gather_elements(const TensorX& X, TensorY&& Y, const TensorI& indices, int axis = 0) {
     if (X.rank() != indices.rank())
         throw shape_error("gather_elements: shape mismatch");
-    for (int i = 0; i < X.rank(); i++)
-        if (indices.extent(i) > X.extent(i))
-            throw shape_error("gather_elements: shape mismatch");
 
     detail::norm_axis(X.rank(), axis);
     Y.resize(indices.shape());

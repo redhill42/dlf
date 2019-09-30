@@ -138,11 +138,7 @@ reshape(const TensorT& X, Shape&& new_shape) {
 inline int normalize_index(int index, const int max_item) {
     if (index < 0)
         index += max_item;
-    if (index < 0)
-        index = 0;
-    if (index >= max_item)
-        index = max_item-1;
-    return index;
+    return cxx::clamp(index, 0, max_item-1);
 }
 
 template <typename TensorX, typename TensorY, typename TensorI>

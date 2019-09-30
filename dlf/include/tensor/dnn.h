@@ -353,9 +353,9 @@ void conv2d(const DevTensor<T>& X, const DevTensor<T>& W, DevTensor<T>& Y, const
 
 template <typename TensorT>
 enable_if_non_view_tensor<TensorT>
-conv2d(const TensorT& X, const TensorT& W, const Filter2D& filter, TensorT* work = nullptr) {
+conv2d(const TensorT& X, const TensorT& W, const Filter2D& filter) {
     TensorT Y{};
-    conv2d(X, W, Y, filter, work);
+    conv2d(X, W, Y, filter);
     return Y;
 }
 

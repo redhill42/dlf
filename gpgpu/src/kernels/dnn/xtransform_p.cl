@@ -3,10 +3,6 @@
 R"(
 #line 4
 
-#ifdef CUDA
-#define clamp(x,minval,maxval) (x<minval ? minval : x>maxval ? maxval : x)
-#endif
-
 __kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
 void Xclip(const int n, const real_arg low_arg, const real_arg high_arg,
     const __global real* restrict xgm, const int x_offset,

@@ -167,6 +167,15 @@ R"(
   #define LOCAL_PTR __local
 #endif
 
+// Force inlining functions or not: some compilers don't support the inline keyword
+#ifdef USE_INLINE_KEYWORD
+  #define INLINE_FUNC inline
+#elif defined(CUDA)
+  #define INLINE_FUNC __inline__ __device__
+#else
+  #define INLINE_FUNC static
+#endif
+
 // =================================================================================================
 
 // Don't use the non-IEEE754 compliant OpenCL built-in mad() instruction per default. For specific
@@ -217,12 +226,6 @@ R"(
   #define IsZero(a) (a == ZERO)
 #endif
 
-#if defined(CUDA) && (PRECISION == 32 || PRECISION == 3232)
-#  define fabs  fabsf
-#  define fmax  fmaxf
-#  define fmin  fminf
-#endif
-
 // The absolute value (component-wise)
 #if PRECISION == 3232 || PRECISION == 6464
   #define AbsoluteValue(a) hypot(a.x, a.y)
@@ -243,6 +246,12 @@ R"(
 #else
 #  define maxval(a,b)   fmax((a),(b))
 #  define minval(a,b)   fmin((a),(b))
+#endif
+
+#if defined(CUDA)
+INLINE_FUNC real clamp(real x, real a, real b) {
+    return maxval(a, minval(b, x));
+}
 #endif
 
 // Update to maximum/minimum value
@@ -327,17 +336,6 @@ R"(
   #define COMPLEX_CONJUGATE(value) value.x = value.x; value.y = -value.y
 #else
   #define COMPLEX_CONJUGATE(value) 
-#endif
-
-// =================================================================================================
-
-// Force inlining functions or not: some compilers don't support the inline keyword
-#ifdef USE_INLINE_KEYWORD
-  #define INLINE_FUNC inline
-#elif defined(CUDA)
-  #define INLINE_FUNC __inline__ __device__
-#else
-  #define INLINE_FUNC static
 #endif
 
 // =================================================================================================

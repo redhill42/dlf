@@ -5,11 +5,7 @@ R"(
 INLINE_FUNC int norm_index(int id, int max_item) {
   if (id < 0)
     id += max_item;
-  if (id < 0)
-    id = 0;
-  else if (id >= max_item)
-    id = max_item-1;
-  return id;
+  return clamp(id, 0, max_item-1);
 }
 
 __kernel __attribute__((reqd_work_group_size(COPY_DIMX, COPY_DIMY, 1)))

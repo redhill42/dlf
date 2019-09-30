@@ -102,6 +102,7 @@ typedef struct { long s0; long s1; long s2; long s3;
 // =================================================================================================
 
 #if PRECISION == 32 || PRECISION == 3232
+#define fabs        fabsf
 #define acos        acosf
 #define acosh       acoshf
 #define asin        asinf
@@ -117,6 +118,8 @@ typedef struct { long s0; long s1; long s2; long s3;
 #define erf         erff
 #define exp         expf
 #define floor       floorf
+#define fmax        fmaxf
+#define fmin        fminf
 #define fmod        fmodf
 #define hypot       hypotf
 #define log         logf
@@ -135,4 +138,3 @@ typedef struct { long s0; long s1; long s2; long s3;
 )"
 
 // =================================================================================================
-
