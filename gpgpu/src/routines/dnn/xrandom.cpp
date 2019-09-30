@@ -71,5 +71,7 @@ template class Xrandom<int32_t>;
 template class Xrandom<int64_t>;
 template class Xrandom<float>;
 template class Xrandom<double>;
+template class Xrandom<float2>;
+template class Xrandom<double2>;
 
 }} // namespace gpgpu::dnn

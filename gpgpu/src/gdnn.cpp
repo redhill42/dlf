@@ -249,6 +249,16 @@ template void PUBLIC_API random<double>(
     Buffer<double>&, const size_t,
     const uint64_t, const double, const double,
     const Queue&, Event*);
+template void PUBLIC_API random<float2>(
+    const size_t, const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<float2>&, const size_t,
+    const uint64_t, const float2, const float2,
+    const Queue&, Event*);
+template void PUBLIC_API random<double2>(
+    const size_t, const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<double2>&, const size_t,
+    const uint64_t, const double2, const double2,
+    const Queue&, Event*);
 
 template <typename T>
 void random_normal(
@@ -270,6 +280,16 @@ template void PUBLIC_API random_normal<double>(
     const size_t, const std::vector<size_t>&, const std::vector<size_t>&,
     Buffer<double>&, const size_t,
     const uint64_t, const double, const double,
+    const Queue&, Event*);
+template void PUBLIC_API random_normal<float2>(
+    const size_t, const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<float2>&, const size_t,
+    const uint64_t, const float2, const float2,
+    const Queue&, Event*);
+template void PUBLIC_API random_normal<double2>(
+    const size_t, const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<double2>&, const size_t,
+    const uint64_t, const double2, const double2,
     const Queue&, Event*);
 
 template <typename T>

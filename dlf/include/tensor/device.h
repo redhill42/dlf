@@ -414,24 +414,26 @@ struct is_uniform_distribution<std::uniform_int_distribution<T>> : std::true_typ
 template <typename T>
 struct is_uniform_distribution<std::uniform_real_distribution<T>> : std::true_type {};
 
-template <typename TensorT, typename D>
+template <typename T, typename TensorT, typename D>
 std::enable_if_t<is_uniform_distribution<D>::value, TensorT&>
 gpu_randomize(TensorT& t, D&& d) {
     std::random_device rd;
     std::uniform_int_distribution<uint64_t> rng;
     gpgpu::dnn::random(
         t.size(), t.shape().extents(), t.shape().strides(),
-        t.data(), t.shape().offset(), rng(rd), d.a(), d.b());
+        t.data(), t.shape().offset(), rng(rd),
+        static_cast<T>(d.a()), static_cast<T>(d.b()));
     return t;
 }
 
-template <typename T, typename TensorT>
-TensorT& gpu_randomize(TensorT& t, const std::normal_distribution<T>& d) {
+template <typename T, typename TensorT, typename U>
+TensorT& gpu_randomize(TensorT& t, const std::normal_distribution<U>& d) {
     std::random_device rd;
     std::uniform_int_distribution<uint64_t> rng;
     gpgpu::dnn::random_normal(
         t.size(), t.shape().extents(), t.shape().strides(),
-        t.data(), t.shape().offset(), rng(rd), d.mean(), d.stddev());
+        t.data(), t.shape().offset(), rng(rd),
+        static_cast<T>(d.mean()), static_cast<T>(d.stddev()));
     return t;
 }
 

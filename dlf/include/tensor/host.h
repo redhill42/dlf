@@ -10,7 +10,9 @@ template <typename T> class TensorView;
 
 template <typename T, typename D>
 using is_random_distribution_type = cxx::conjunction<
-    std::is_same<T, typename D::result_type>,
+    cxx::disjunction<
+        std::is_same<T, typename D::result_type>,
+        std::is_same<T, std::complex<typename D::result_type>>>,
     std::is_same<D, typename D::param_type::distribution_type>>;
 
 /**
@@ -792,11 +794,23 @@ TensorView<T>& TensorView<T>::range(T start, T delta) {
 //==-------------------------------------------------------------------------
 
 namespace detail {
+template <typename T> struct is_complex : std::false_type {};
+template <typename T> struct is_complex<std::complex<T>> : std::true_type {};
+
 template <typename T, typename TensorT, typename D>
-inline TensorT& randomize(TensorT& t, D&& d) {
+std::enable_if_t<!is_complex<T>::value, TensorT&>
+inline randomize(TensorT& t, D&& d) {
     std::random_device rd;
     std::mt19937 eng(rd());
     return t.generate(std::bind(std::forward<D>(d), eng));
+}
+
+template <typename T, typename TensorT, typename D>
+std::enable_if_t<is_complex<T>::value, TensorT&>
+inline randomize(TensorT& t, D&& d) {
+    std::random_device rd;
+    std::mt19937 eng(rd());
+    return t.generate([&](){ return T(d(eng), d(eng)); });
 }
 
 template <typename TensorT, typename T>
@@ -844,7 +858,7 @@ template <typename T>
 template <typename D>
 std::enable_if_t<is_random_distribution_type<T, D>::value, TensorView<T>&>
 inline TensorView<T>::random(D&& d) {
-    return detail::randomize(*this, std::forward<D>(d));
+    return detail::randomize<T>(*this, std::forward<D>(d));
 }
 
 template <typename T>
