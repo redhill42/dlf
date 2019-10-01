@@ -17,19 +17,20 @@ void IntersectDiagonals(
     __local int x_start, y_start, x_end, y_end, found;
     __local int lm[32];
 
-    // Figure out the coordinates of our diagonal
-    int k   = wgid * (x_len + y_len) / num_groups;
-    x_start = min(k, x_len);
-    x_end   = max(0, k - y_len);
-    y_start = max(0, k - x_len);
-    y_end   = min(k, y_len);;
-    found   = 0;
-
-    barrier(CLK_LOCAL_MEM_FENCE);
-
     xgm  += x_offset + unravel(batch * x_len, x_rank, x_shape);
     ygm  += y_offset + unravel(batch * y_len, y_rank, y_shape);
     diag += diag_offset + batch*(WGS+1)*2;
+
+    // Figure out the coordinates of our diagonal
+    if (lid == 0) {
+        int k   = wgid * (x_len + y_len) / num_groups;
+        x_start = min(k, x_len);
+        x_end   = max(0, k - y_len);
+        y_start = max(0, k - x_len);
+        y_end   = min(k, y_len);;
+        found   = 0;
+    }
+    barrier(CLK_LOCAL_MEM_FENCE);
 
     // Search the diagonal
     while (!found) {

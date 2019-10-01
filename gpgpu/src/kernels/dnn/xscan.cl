@@ -2,8 +2,6 @@
 // literal). Comment-out this line for syntax-highlighting when developing.
 R"(
 
-#define WGS WGS1
-
 #if defined(ROUTINE_cumsum)
 #  define IDENTITY SetToZero
 #  define OP Add
@@ -20,12 +18,50 @@ R"(
 #  error "Unsupported scan operation"
 #endif
 
-#if defined(CUDA)
-__device__ void LocalScan(const int lid, real* lm, real* sums)
-#else
-INLINE_FUNC void LocalScan(const int lid, __local real* lm, __global real* sums)
-#endif
+//---------------------------------------------------------------------------
+
+__kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
+void DirectInclusiveScan(
+    const int m, const int n, const int rank, __constant int* shape,
+    const __global real* restrict xgm, const int x_offset, const int x_inc,
+    __global real* ygm, const int y_offset, const int y_inc)
 {
+    const int batch = get_global_id(0);
+    if (batch >= m) return;
+
+    int x_id = x_offset, y_id = y_offset;
+    unravel2(batch*n, &x_id, &y_id, rank, shape);
+
+    real acc; IDENTITY(acc);
+    for (int i = 0; i < n; i++, x_id += x_inc, y_id += y_inc) {
+        OP(acc, acc, xgm[x_id]);
+        ygm[y_id] = acc;
+    }
+}
+
+__kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
+void DirectExclusiveScan(
+    const int m, const int n, const int rank, __constant int* shape,
+    const __global real* restrict xgm, const int x_offset, const int x_inc,
+    __global real* ygm, const int y_offset, const int y_inc)
+{
+    const int batch = get_global_id(0);
+    if (batch >= m) return;
+
+    int x_id = x_offset, y_id = y_offset;
+    unravel2(batch*n, &x_id, &y_id, rank, shape);
+
+    real acc; IDENTITY(acc);
+    for (int i = 0; i < n; i++, x_id += x_inc, y_id += y_inc) {
+        ygm[y_id] = acc;
+        OP(acc, acc, xgm[x_id]);
+    }
+}
+
+//---------------------------------------------------------------------------
+
+// Note: lid = get_local_id(0) * 2
+STATIC void LocalScan(const int lid, LOCAL_PTR real* lm, __global real* sums) {
     int offset = 1;
 
     // Build sum in place up the tree
@@ -41,7 +77,7 @@ INLINE_FUNC void LocalScan(const int lid, __local real* lm, __global real* sums)
 
     // Clear the last element and store total sum
     if (lid == 0) {
-        sums[get_group_id(0)] = lm[WGS*2] = lm[WGS*2-1];
+        *sums = lm[WGS*2] = lm[WGS*2-1];
         IDENTITY(lm[WGS*2-1]);
     }
 
@@ -68,22 +104,22 @@ void PreScan(const int n, const int inclusive, const int rank, __constant int* s
              __global real* sums, const int sums_offset)
 {
     const int batch = get_global_id(1);
-    unravel2(batch*n, &x_offset, &y_offset, rank, shape);
+    const int gid = get_global_id(0) * 2;
+    const int lid = get_local_id(0) * 2;
+
+    unravel2(batch*n + gid, &x_offset, &y_offset, rank, shape);
     xgm  += x_offset;
     ygm  += y_offset;
-    sums += sums_offset + batch * get_num_groups(0);
-
-    const int lid = get_local_id(0) * 2;
-    const int gid = get_group_id(0) * WGS * 2 + lid;
+    sums += sums_offset + batch*get_num_groups(0) + get_group_id(0);
 
     // Load input data into shared memory
     __local real lm[WGS*2 + 1];
     IDENTITY(lm[lid]);
     if (gid < n)
-        lm[lid] = xgm[gid*x_inc];
+        lm[lid] = xgm[0];
     IDENTITY(lm[lid+1]);
     if (gid+1 < n)
-        lm[lid+1] = xgm[(gid+1)*x_inc];
+        lm[lid+1] = xgm[x_inc];
     barrier(CLK_LOCAL_MEM_FENCE);
 
     // Perform local scan on shared memory
@@ -91,9 +127,9 @@ void PreScan(const int n, const int inclusive, const int rank, __constant int* s
 
     // Write results to device memory
     if (gid < n)
-        ygm[gid*y_inc] = lm[lid + inclusive];
+        ygm[0] = lm[lid + inclusive];
     if (gid+1 < n)
-        ygm[(gid+1)*y_inc] = lm[lid+1 + inclusive];
+        ygm[y_inc] = lm[lid+1 + inclusive];
 }
 
 __kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
@@ -102,20 +138,20 @@ void ScanPartialSums(const int n,
                      __global real* sums, const int sums_offset)
 {
     const int batch = get_global_id(1);
-    xgm  += x_offset + batch * n;
-    sums += sums_offset + batch * get_num_groups(0);
-
+    const int gid = get_global_id(0) * 2;
     const int lid = get_local_id(0) * 2;
-    const int gid = get_group_id(0) * WGS * 2 + lid;
+
+    xgm  += x_offset + batch*n + gid;
+    sums += sums_offset + batch*get_num_groups(0) + get_group_id(0);
 
     // Load input data into shared memory
     __local real lm[WGS*2 + 1];
     IDENTITY(lm[lid]);
     if (gid < n)
-        lm[lid] = xgm[gid];
+        lm[lid] = xgm[0];
     IDENTITY(lm[lid+1]);
     if (gid+1 < n)
-        lm[lid+1] = xgm[gid+1];
+        lm[lid+1] = xgm[1];
     barrier(CLK_LOCAL_MEM_FENCE);
 
     // Perform local scan on shared memory
@@ -123,9 +159,9 @@ void ScanPartialSums(const int n,
 
     // Write results to device memory
     if (gid < n)
-        xgm[gid] = lm[lid];
+        xgm[0] = lm[lid];
     if (gid+1 < n)
-        xgm[gid+1] = lm[lid+1];
+        xgm[1] = lm[lid+1];
 }
 
 __kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
@@ -134,19 +170,15 @@ void AddPartialSums(const int n,
                     __global real* sums, const int sums_offset)
 {
     const int batch = get_global_id(1);
-    const int wgid = get_group_id(0);
-    const int gid = wgid * WGS * 2 + get_local_id(0) * 2;
+    const int gid = get_global_id(0) * 2;
 
     xgm  += x_offset + batch*n + gid;
-    sums += sums_offset + batch*get_num_groups(0);
+    sums += sums_offset + batch*get_num_groups(0) + get_group_id(0);
 
-    if (wgid > 0) {
-        real seed = sums[wgid];
-        if (gid < n)
-            OP(xgm[0], xgm[0], seed);
-        if (gid+1 < n)
-            OP(xgm[1], xgm[1], seed);
-    }
+    if (gid < n)
+        OP(xgm[0], xgm[0], *sums);
+    if (gid+1 < n)
+        OP(xgm[1], xgm[1], *sums);
 }
 
 __kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
@@ -155,21 +187,17 @@ void FinalScan(const int n, const int rank, __constant int* shape,
                const __global real* sums, const int sums_offset)
 {
     const int batch = get_global_id(1);
-    const int wgid = get_group_id(0);
-    const int gid = wgid * WGS * 2 + get_local_id(0) * 2;
+    const int gid = get_global_id(0) * 2;
 
     int x_offset = 0;
-    unravel2(batch*n, &x_offset, &y_offset, rank, shape);
-    ygm += y_offset + gid*y_inc;
-    sums += sums_offset + batch*get_num_groups(0);
+    unravel2(batch*n + gid, &x_offset, &y_offset, rank, shape);
+    ygm  += y_offset;
+    sums += sums_offset + batch*get_num_groups(0) + get_group_id(0);
 
-    if (wgid > 0) {
-        real seed = sums[wgid];
-        if (gid < n)
-            OP(ygm[0], ygm[0], seed);
-        if (gid+1 < n)
-            OP(ygm[y_inc], ygm[y_inc], seed);
-    }
+    if (gid < n)
+        OP(ygm[0], ygm[0], *sums);
+    if (gid+1 < n)
+        OP(ygm[y_inc], ygm[y_inc], *sums);
 }
 
 )"

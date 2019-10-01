@@ -149,9 +149,10 @@ void XreduceDirectStrided(
 
 #define BATCH_WGS 32
 
-INLINE_FUNC void Reduce(const int n, LOCAL_PTR real* lm,
-                        const __global real* restrict xgm,
-                        __global real* ygm)
+STATIC void Reduce(
+    const int n, LOCAL_PTR real* lm,
+    const __global real* restrict xgm,
+    __global real* ygm)
 {
     const int lid = get_local_id(0);
     const int wgid = get_group_id(0);
@@ -205,7 +206,7 @@ void XreduceBatched(const int n,
 
 //---------------------------------------------------------------------------
 
-INLINE_FUNC void StridedReduce(
+STATIC void StridedReduce(
     const int n, LOCAL_PTR real* lm, const int rank, __constant int* shape,
     const __global real* restrict xgm, __global real* ygm)
 {

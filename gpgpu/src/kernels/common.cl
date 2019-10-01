@@ -167,13 +167,17 @@ R"(
   #define LOCAL_PTR __local
 #endif
 
-// Force inlining functions or not: some compilers don't support the inline keyword
-#ifdef USE_INLINE_KEYWORD
-  #define INLINE_FUNC inline
-#elif defined(CUDA)
-  #define INLINE_FUNC __inline__ __device__
+#if defined(CUDA)
+  #define STATIC __device__
 #else
-  #define INLINE_FUNC static
+  #define STATIC static
+#endif
+
+// Force inlining functions or not: some compilers don't support the inline keyword
+#if defined(USE_INLINE_KEYWORD) || defined(CUDA)
+  #define INLINE_FUNC inline
+#else
+  #define INLINE_FUNC STATIC
 #endif
 
 // =================================================================================================

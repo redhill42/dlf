@@ -6,7 +6,7 @@ using namespace gpgpu::blas;
 
 template <typename T>
 Xscan<T>::Xscan(const Queue& queue, Event* event, const std::string& name) :
-    Routine(queue, event, name, {"Xdot"}, PrecisionValue<T>(), {}, {
+    Routine(queue, event, name, {"Xaxpy"}, PrecisionValue<T>(), {}, {
     #include "../../kernels/dnn/xscan.cl"
     }) {}
 
@@ -16,11 +16,51 @@ void Xscan<T>::DoScan(
     const Buffer<T>& x_buffer, const size_t x_offset, const std::vector<size_t>& x_strides,
     Buffer<T>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_strides)
 {
+    if (n < 2*db_["WGS"]) {
+        DoScanDirect(
+            m, n, exclusive, dims,
+            x_buffer, x_offset, x_strides,
+            y_buffer, y_offset, y_strides);
+    } else {
+        DoScanIndirect(
+            m, n, exclusive, dims,
+            x_buffer, x_offset, x_strides,
+            y_buffer, y_offset, y_strides);
+    }
+}
+
+template <typename T>
+void Xscan<T>::DoScanDirect(
+    const size_t m, const size_t n, const bool exclusive, const std::vector<size_t>& dims,
+    const Buffer<T>& x_buffer, const size_t x_offset, const std::vector<size_t>& x_strides,
+    Buffer<T>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_strides)
+{
+    auto shape = PackShape(dims, x_strides, y_strides, context_, queue_);
+    auto x_inc = x_strides.back();
+    auto y_inc = y_strides.back();
+
+    auto kernel = program_.getKernel(exclusive ? "DirectExclusiveScan" : "DirectInclusiveScan");
+    kernel.setArguments(
+        static_cast<int>(m), static_cast<int>(n), static_cast<int>(dims.size()), shape,
+        x_buffer, static_cast<int>(x_offset), static_cast<int>(x_inc),
+        y_buffer, static_cast<int>(y_offset), static_cast<int>(y_inc));
+
+    auto global = std::vector<size_t>{Ceil(m, db_["WGS"])};
+    auto local = std::vector<size_t>{db_["WGS"]};
+    RunKernel(kernel, queue_, device_, global, local, event_);
+}
+
+template <typename T>
+void Xscan<T>::DoScanIndirect(
+    const size_t m, const size_t n, const bool exclusive, const std::vector<size_t>& dims,
+    const Buffer<T>& x_buffer, const size_t x_offset, const std::vector<size_t>& x_strides,
+    Buffer<T>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_strides)
+{
     auto shape_buffer = PackShape(dims, x_strides, y_strides, context_, queue_);
     auto x_inc = x_strides.back();
     auto y_inc = y_strides.back();
 
-    auto block_size = db_["WGS1"];
+    auto block_size = db_["WGS"];
     auto block_counts = std::vector<size_t>();
     auto block_offsets = std::vector<size_t>();
     auto temp_size = size_t(0);
