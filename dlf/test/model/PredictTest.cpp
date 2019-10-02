@@ -276,6 +276,50 @@ TYPED_TEST(PredictTest, If) {
     EXPECT_EQ(predictor.get(0), Vector<float>({2, 4, 6, 8, 10}));
 }
 
+TYPED_TEST(PredictTest, Loop) {
+    using Context = TypeParam;
+    Graph g;
+
+    auto body = std::make_shared<Graph>();
+    body->addInput("%i");
+    body->addInput("%cond");
+    body->addInput("%sum");
+    body->addInput("%prod");
+
+    auto add1 = body->append<Add>();
+    add1->addInput(body->input("%i"));
+    add1->addInput(g.addInitializer(TensorData("one", Scalar<int64_t>(1))));
+    add1->addOutput("%n");
+
+    auto add = body->append<Add>();
+    add->addInput(body->input("%sum"));
+    add->addInput(add1->output());
+    add->addOutput("%sum_out");
+
+    auto mul = body->append<Mul>();
+    mul->addInput(body->input("%prod"));
+    mul->addInput(add1->output());
+    mul->addOutput("%prod_out");
+
+    body->addOutput(body->input("%cond"));
+    body->addOutput(add->output());
+    body->addOutput(mul->output());
+
+    auto loop = g.append<Loop>();
+    loop->body(body);
+    loop->addInput(g.addInitializer(TensorData("%trip_count", Scalar<int64_t>(10))));
+    loop->addInput(g.undefinedValue());
+    loop->addInput(g.addInitializer(TensorData("%sum", Scalar<int64_t>(0))));
+    loop->addInput(g.addInitializer(TensorData("%prod", Scalar<int64_t>(1))));
+    g.addOutput(loop->addOutput("%sum_out"));
+    g.addOutput(loop->addOutput("%prod_out"));
+
+    Predictor<Context, float> predictor(g);
+    predictor.predict();
+    EXPECT_EQ(predictor.get(0), Scalar<float>(55));
+    EXPECT_EQ(predictor.get(1), Scalar<float>(3628800));
+}
+
 TYPED_PERFORMANCE_TEST(PredictTest, Performance) {
     std::fstream fs("data/resnet18v1.onnx", std::ios::in | std::ios::binary);
     auto g = import_model(fs);

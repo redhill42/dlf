@@ -155,13 +155,13 @@ public:
     /**
      * Construct an array_ref from a pointer and length.
      */
-    array_ref(const T* data, size_t length)
+    explicit array_ref(const T* data, size_t length)
         : m_data(data), m_length(length) {}
 
     /**
      * Construct an array_ref from a range.
      */
-    array_ref(const T* begin, const T* end)
+    explicit array_ref(const T* begin, const T* end)
         : m_data(begin), m_length(end - begin) {}
 
     /**

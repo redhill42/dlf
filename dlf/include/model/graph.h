@@ -1407,7 +1407,7 @@ public:
     cxx::array_ref<const Value*> inputs() const noexcept {
         // Vectors are not convertible in const-ness of elements, but
         // raw pointers are.
-        return {m_inputs.data(), m_inputs.size()};
+        return cxx::array_ref<const Value*>(m_inputs.data(), m_inputs.size());
     }
 
     cxx::array_ref<Value*> outputs() noexcept {
@@ -1415,7 +1415,7 @@ public:
     }
 
     cxx::array_ref<const Value*> outputs() const noexcept {
-        return {m_outputs.data(), m_outputs.size()};
+        return cxx::array_ref<const Value*>(m_outputs.data(), m_outputs.size());
     }
 
     bool hasUses() const noexcept {

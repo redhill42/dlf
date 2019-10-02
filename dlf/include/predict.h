@@ -57,15 +57,6 @@ private:
 
     Datum(model::DataType dtype, Shape&& shape, std::shared_ptr<char> data)
         : dtype(dtype), shape(std::move(shape)), data(std::move(data)) {}
-
-    template <typename T>
-    Tensor<T> get(size_t size, size_t max_size) {
-        if (size == 0)
-            return Tensor<T>();
-        if (data == nullptr)
-            data.reset(new char[max_size], std::default_delete<char[]>());
-        return Tensor<T>::wrap({size}, reinterpret_cast<T*>(data.get()));
-    }
 };
 
 template <> struct Datum<GPU> {
@@ -107,15 +98,6 @@ private:
 
     Datum(model::DataType dtype, Shape&& shape, std::shared_ptr<gpgpu::rawBuffer> handle)
         : dtype(dtype), shape(std::move(shape)), handle(std::move(handle)) {}
-
-    template <typename T>
-    DevTensor<T> get(size_t size, size_t max_size) {
-        if (size == 0)
-            return DevTensor<T>();
-        if (handle == nullptr)
-            handle = gpgpu::current::context().createBuffer<uint8_t>(max_size).handle();
-        return DevTensor<T>({size}, gpgpu::Buffer<T>(handle, size));
-    }
 };
 
 class Operator {
@@ -175,6 +157,9 @@ public:
 
     template <typename U = T>
     DatumPtr allocDatum(const model::Value* value) {
+        if (value == nullptr)
+            return nullptr;
+
         auto it = m_datamap.find(value);
         if (it != m_datamap.end()) {
             return it->second;
@@ -207,16 +192,22 @@ public:
     }
 
     template <typename U = T>
-    TensorT<U> allocInplace(const model::Value* input, const model::Value* output) {
+    DatumPtr allocDatumInplace(const model::Value* input, const model::Value* output) {
         if (input->uses().size() > 1 || input->has_initializer())
-            return alloc(output);
+            return allocDatum<U>(output);
 
         assert(m_datamap.find(output) == m_datamap.end());
         auto input_datum = allocDatum<U>(input);
         auto output_datum = input_datum->makeShared(output->dims().shape());
         m_dataset.push_back(output_datum);
         m_datamap.emplace(output, output_datum);
-        return output_datum->template get<U>();
+        return output_datum;
+    }
+
+    template <typename U = T>
+    TensorT<U> allocInplace(const model::Value* input, const model::Value* output) {
+        auto datum = allocDatumInplace(input, output);
+        return datum->template get<U>();
     }
 
     std::unique_ptr<Operator> createOperator(model::Node* node) {
@@ -270,6 +261,95 @@ private:
 
     void visit(model::If* n) override {
         result = std::make_unique<IfOp>(this, n);
+    }
+
+    struct LoopOp : Operator {
+        std::vector<std::shared_ptr<Datum<Context>>> inputs;
+        std::vector<std::shared_ptr<Datum<Context>>> outputs;
+
+        std::vector<std::unique_ptr<Operator>> body;
+        std::vector<std::shared_ptr<Datum<Context>>> body_inputs;
+        std::vector<std::shared_ptr<Datum<Context>>> body_outputs;
+
+        LoopOp(OperatorFactory* of, model::Loop* n) {
+            assert(n->inputs().size() == n->body()->inputs().size());
+            assert(n->outputs().size() == n->body()->outputs().size() - 1);
+
+            for (auto x : n->body()->nodes())
+                body.push_back(of->createOperator(x));
+
+            body_inputs.push_back(of->allocDatum(n->body()->input(0)));         // iteration
+            body_inputs.push_back(of->allocDatum<bool>(n->body()->input(1)));   // cond
+            for (int i = 2; i < n->body()->inputs().size(); ++i)                // state vars
+                body_inputs.push_back(of->allocDatum(n->body()->input(i)));
+
+            body_outputs.push_back(of->allocDatum<bool>(n->body()->output(0))); // output cond
+            for (int i = 1; i < n->body()->outputs().size(); ++i)               // final outputs
+                body_outputs.push_back(of->allocDatum(n->body()->output(i)));
+
+            inputs.push_back(of->allocDatum<int64_t>(n->M()));  // max trip count
+            inputs.push_back(of->allocDatum<bool>(n->cond()));  // initial condition
+            for (int i = 2; i < n->inputs().size(); ++i)
+                inputs.push_back(of->allocDatum(n->input(i)));
+            for (size_t i = 0; i < n->outputs().size(); ++i)
+                outputs.push_back(of->allocDatumInplace(n->body()->output(i+1), n->output(i)));
+        }
+
+        void evaluate() override {
+            bool cond = (inputs[1] == nullptr) ? true : *(inputs[1]->template read<bool>());
+            if (inputs[0] == nullptr) {
+                cond = run_body(0, true, cond);
+                for (int64_t i = 1; cond; ++i) {
+                    cond = run_body(i, false, cond);
+                }
+            } else if (inputs[1] == nullptr) {
+                auto trip_count = *(inputs[0]->template read<int64_t>());
+                for (int64_t i = 0; i < trip_count; ++i) {
+                    run_body(i, i==0, true);
+                }
+            } else {
+                auto trip_count = *(inputs[0]->template read<int64_t>());
+                for (int64_t i = 0; i < trip_count && cond; ++i) {
+                    cond = run_body(i, i==0, cond);
+                }
+            }
+
+            for (int i = 0; i < outputs.size(); ++i) {
+                copy_data(body_outputs[i+1], outputs[i]);
+            }
+        }
+
+    private:
+        bool run_body(int64_t iteration, bool first, bool cond) {
+            body_inputs[0]->set(Scalar<T>(iteration));
+            body_inputs[1]->set(Scalar<bool>(cond));
+
+            if (first) {
+                for (int i = 2; i < inputs.size(); ++i) {
+                    copy_data(inputs[i], body_inputs[i]);
+                }
+            } else {
+                for (int i = 2; i < inputs.size(); ++i) {
+                    copy_data(body_outputs[i-1], body_inputs[i]);
+                }
+            }
+
+            for (auto& op : body) {
+                op->evaluate();
+            }
+
+            return *(body_outputs[0]->template read<bool>());
+        }
+
+        void copy_data(DatumPtr src, DatumPtr dst) {
+            auto src_data = src->template get<T>();
+            auto dst_data = dst->template get<T>();
+            flat_copy(src_data, dst_data);
+        }
+    };
+
+    void visit(model::Loop* n) override {
+        result = std::make_unique<LoopOp>(this, n);
     }
 
     struct EyeLikeOp : Operator {

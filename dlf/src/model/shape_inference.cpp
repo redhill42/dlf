@@ -154,7 +154,41 @@ public:
     }
 
     void visit(Loop* n) override {
-        fail_shape_inference("Loop: Unsupported operator"); // FIXME
+        auto num_inputs = n->inputs().size();
+        auto num_outputs = n->outputs().size();
+        auto body = n->body();
+
+        if (num_inputs < 2 || body->inputs().size() != num_inputs)
+            fail_shape_inference("Loop: The body has incorrect number of inputs.");
+
+        // Set iteration number and condition types for first two body inputs
+        body->input(0)->set_type(DataType::INT64);
+        body->input(0)->set_dims({}); // scalar
+        body->input(1)->set_type(DataType::BOOL);
+        body->input(1)->set_dims({});
+
+        // Set state variable types
+        for (size_t i = 2; i < num_inputs; ++i) {
+            body->input(i)->set_type(n->input(i)->type());
+            body->input(i)->set_dims(n->input(i)->dims());
+        }
+
+        // Inference loop body
+        infer(*body);
+
+        // subgraph outputs the condition value first but that is only used
+        // internally and not returned by Loop.
+        if (body->outputs().size() != num_outputs + 1) {
+            fail_shape_inference("Loop: The body has incorrect number of outputs.");
+        }
+
+        // Propagate body output to loop output
+        for (size_t i = 0; i < num_outputs; ++i) {
+            auto body_output = body->output(i + 1); // skip 'cond'
+            auto loop_output = n->output(i);
+            loop_output->set_type(body_output->type());
+            loop_output->set_dims(body_output->dims());
+        }
     }
 
     void visit(Scan* n) override {
