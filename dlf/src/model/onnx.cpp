@@ -11,7 +11,8 @@ using namespace onnx;
 
 // Part 1: convert ONNX Protobuf to IR
 
-std::unique_ptr<Graph> decodeGraph(const GraphProto& gp, bool nested);
+std::unique_ptr<Graph> decodeGraph(const GraphProto& gp,
+    std::unordered_map<std::string, Value*> value_by_name);
 
 TensorData decodeTensor(const TensorProto& tp) {
     TensorData ret;
@@ -65,7 +66,9 @@ TensorData decodeTensor(const TensorProto& tp) {
     return ret;
 }
 
-void decodeAttribute(const AttributeProto& ap, Node* n) {
+void decodeAttribute(const AttributeProto& ap, Node* n,
+    const std::unordered_map<std::string, Value*>& value_by_name)
+{
     auto name = Symbol(ap.name());
 
     switch (ap.type()) {
@@ -86,7 +89,7 @@ void decodeAttribute(const AttributeProto& ap, Node* n) {
         break;
 
     case AttributeProto::GRAPH:
-        n->set_g(name, decodeGraph(ap.g(), true));
+        n->set_g(name, decodeGraph(ap.g(), value_by_name));
         break;
 
     case AttributeProto::FLOATS:
@@ -114,7 +117,7 @@ void decodeAttribute(const AttributeProto& ap, Node* n) {
         std::vector<std::shared_ptr<Graph>> gs;
         gs.reserve(ap.graphs_size());
         for (auto& gp : ap.graphs())
-            gs.push_back(decodeGraph(gp, true));
+            gs.push_back(decodeGraph(gp, value_by_name));
         n->set_gs(name, std::move(gs));
         break;
     }
@@ -144,7 +147,7 @@ void setValueType(Value* v, const TypeProto_Tensor& tp) {
     }
 }
 
-std::unique_ptr<Graph> decodeGraph(const GraphProto& gp, bool nested) {
+std::unique_ptr<Graph> decodeGraph(const GraphProto& gp, std::unordered_map<std::string, Value*> value_by_name) {
     auto g = std::make_unique<Graph>();
 
     if (gp.has_name())
@@ -163,15 +166,9 @@ std::unique_ptr<Graph> decodeGraph(const GraphProto& gp, bool nested) {
     // 5) fill in type info for graph outputs, and register them as outputs
     // 6) fill in type info for Values from the value_info list in the graph
 
-    // In ONNX proto land, Values are just strings. We are going to make
-    // objects out of them, and equal strings must be mapped to the same
-    // Value object.
-    std::unordered_map<std::string, Value*> value_by_name;
-
-    // We initialize Node inputs in a separate pass from the Nodes
-    // themselves. To do so, we need to have access to the names of the
-    // inputs.
-    std::unordered_map<Node*, std::vector<std::string>> inputs_by_node;
+    // We initialize Node inputs in a separate pass from the Nodes themselves.
+    // To do so, we need to have access to original ONNX node.
+    std::unordered_map<Node*, const onnx::NodeProto*> node_map;
 
     // ONNX represents optional arguments in two ways
     //  - they are simply not provided
@@ -211,13 +208,9 @@ std::unique_ptr<Graph> decodeGraph(const GraphProto& gp, bool nested) {
             value_by_name[output] = n->addOutput(output);
         }
 
-        for (auto& ap : np.attribute()) {
-            decodeAttribute(ap, n);
-        }
-
         // we will connect inputs to other nodes' output later, we just
         // record input names now.
-        inputs_by_node[n] = {np.input().begin(), np.input().end()};
+        node_map[n] = &np;
 
         if (np.has_name())
             n->set_name(np.name());
@@ -229,38 +222,37 @@ std::unique_ptr<Graph> decodeGraph(const GraphProto& gp, bool nested) {
 
     // Connect node's inputs to other nodes' output.
     for (auto n : g->nodes()) {
-        auto search = inputs_by_node.find(n);
-        if (search != inputs_by_node.end()) {
-            for (auto& input : search->second) {
-                if (!value_by_name.count(input) && nested) {
-                    // Undefined reference to an input in a nested block. This may be
-                    // a captured value. Create a dummy node that we ignore later.
-                    auto* undef = g->appendNode(g->createNode(kCaptured));
-                    value_by_name[input] = undef->addOutput(input);
-                }
+        assert(node_map.count(n) != 0);
+        for (auto& input : node_map[n]->input()) {
+            if (value_by_name.count(input)) {
                 n->addInput(value_by_name[input]);
+            } else {
+                std::cerr << "Input not found: " + input << "\n";
             }
         }
     }
 
     // Fill in value type from output definition
     for (auto& vp : gp.output()) {
-        if (!value_by_name.count(vp.name()) && nested) {
-            // Same captured value logic as above. We can consider outputs of
-            // a graph to be "inputs" of a dummy "output" node. The same lexical
-            // scoping rule are valid here, thus we need to add a dummy node
-            // in the case of the undefined reference
-            auto* undef = g->appendNode(g->createNode(kCaptured));
-            value_by_name[vp.name()] = undef->addOutput(vp.name());
+        if (value_by_name.count(vp.name())) {
+            setValueType(value_by_name[vp.name()], vp.type().tensor_type());
+            g->addOutput(value_by_name[vp.name()]);
+        } else {
+            std::cerr << "Output not found: " + vp.name() << "\n";
         }
-
-        setValueType(value_by_name[vp.name()], vp.type().tensor_type());
-        g->addOutput(value_by_name[vp.name()]);
     }
 
     // Fill in value type from value_info definition
     for (auto& vp : gp.value_info()) {
         setValueType(value_by_name[vp.name()], vp.type().tensor_type());
+    }
+
+    // Process sub graphs in node attributes
+    for (auto n : g->nodes()) {
+        assert(node_map.count(n) != 0);
+        for (auto& ap : node_map[n]->attribute()) {
+            decodeAttribute(ap, n, value_by_name);
+        }
     }
 
     return g;
@@ -279,7 +271,7 @@ std::unique_ptr<Graph> import_model<ONNX>(std::istream& input) {
         fail_convert("Failed to parse model protocol");
     }
 
-    return decodeGraph(mp.graph(), false);
+    return decodeGraph(mp.graph(), {});
 }
 
 // Part 2: convert IR to ONNX Protobuf

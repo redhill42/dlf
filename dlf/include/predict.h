@@ -140,12 +140,14 @@ public:
         }
     }
 
-    void set(size_t i, const Tensor<T>& data) {
-        m_inputs.at(i)->template set<T>(data);
+    template <typename U>
+    void set(size_t i, const Tensor<U>& data) {
+        m_inputs.at(i)->template set<U>(data);
     }
 
-    Tensor<T> get(size_t i) {
-        return m_outputs.at(i)->template read<T>();
+    template <typename U = T>
+    Tensor<U> get(size_t i) {
+        return m_outputs.at(i)->template read<U>();
     }
 
 private:
@@ -225,6 +227,49 @@ public:
 private:
     void visitNode(model::Node* n) override {
         throw std::runtime_error(cxx::string_concat("Unsupported operator ", n->kind().str()));
+    }
+
+    struct IfOp : Operator {
+        DatumPtr cond;
+        std::list<TensorT<>> outputs;
+        std::vector<std::unique_ptr<Operator>> then_branch;
+        std::vector<std::unique_ptr<Operator>> else_branch;
+        std::vector<std::shared_ptr<Datum<Context>>> then_outputs;
+        std::vector<std::shared_ptr<Datum<Context>>> else_outputs;
+
+        IfOp(OperatorFactory* of, model::If* n)
+            : cond(of->allocDatum<bool>(n->input())),
+              outputs(of->allocAll(n->outputs()))
+        {
+            for (auto x : n->then_branch()->nodes())
+                then_branch.push_back(of->createOperator(x));
+            for (auto v : n->then_branch()->outputs())
+                then_outputs.push_back(of->allocDatum(v));
+
+            for (auto x : n->else_branch()->nodes())
+                else_branch.push_back(of->createOperator(x));
+            for (auto v : n->else_branch()->outputs())
+                else_outputs.push_back(of->allocDatum(v));
+        }
+
+        void evaluate() override {
+            auto b = cond->template read<bool>();
+            assert(b.rank() == 0);
+            auto& branch = *b ? then_branch : else_branch;
+            auto& results = *b ? then_outputs : else_outputs;
+
+            for (auto& op : branch)
+                op->evaluate();
+            auto it = outputs.begin();
+            for (auto& v : results) {
+                flat_copy(v->template get<T>(), *it);
+                ++it;
+            }
+        }
+    };
+
+    void visit(model::If* n) override {
+        result = std::make_unique<IfOp>(this, n);
     }
 
     struct EyeLikeOp : Operator {
@@ -1296,12 +1341,12 @@ Predictor<Context, T>::Predictor(model::Graph& graph,
     model::ShapeInference::newInstance(env)->infer(graph);
     model::Optimizer::newInstance()->optimize(graph);
 
+    for (auto n : graph.nodes()) {
+        m_operators.push_back(factory.createOperator(n));
+    }
     for (auto v : graph.inputs()) {
         if (!v->has_initializer())
             m_inputs.push_back(factory.allocDatum(v));
-    }
-    for (auto n : graph.nodes()) {
-        m_operators.push_back(factory.createOperator(n));
     }
     for (auto v : graph.outputs()) {
         m_outputs.push_back(factory.allocDatum(v));

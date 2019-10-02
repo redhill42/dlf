@@ -238,6 +238,44 @@ TYPED_TEST(PredictTest, Pad) {
     }));
 }
 
+TYPED_TEST(PredictTest, If) {
+    using Context = TypeParam;
+    Graph g;
+
+    auto x = g.addInput("X", DataType::FLOAT, {5});
+
+    auto then_branch = std::make_shared<Graph>();
+    then_branch->set_name("then");
+    auto a = then_branch->append<Add>();
+    a->addInput(x);
+    a->addInput(then_branch->addInitializer(TensorData("cXp2", Scalar<float>(2))));
+    then_branch->addOutput(a->addOutput("Xp2"));
+
+    auto else_branch = std::make_shared<Graph>();
+    else_branch->set_name("else");
+    auto b = else_branch->append<Mul>();
+    b->addInput(x);
+    b->addInput(else_branch->addInitializer(TensorData("cXx2", Scalar<float>(2))));
+    else_branch->addOutput(b->addOutput("Xx2"));
+
+    auto c = g.append<If>();
+    c->addInput(g.addInput("cond", DataType::BOOL, {}));
+    c->then_branch(then_branch);
+    c->else_branch(else_branch);
+    g.addOutput(c->addOutput("Y"));
+
+    Predictor<Context, float> predictor(g);
+    predictor.set(0, Vector<float>({1, 2, 3, 4, 5}));
+
+    predictor.set(1, Scalar<bool>(true));
+    predictor.predict();
+    EXPECT_EQ(predictor.get(0), Vector<float>({3, 4, 5, 6, 7}));
+
+    predictor.set(1, Scalar<bool>(false));
+    predictor.predict();
+    EXPECT_EQ(predictor.get(0), Vector<float>({2, 4, 6, 8, 10}));
+}
+
 TYPED_PERFORMANCE_TEST(PredictTest, Performance) {
     std::fstream fs("data/resnet18v1.onnx", std::ios::in | std::ios::binary);
     auto g = import_model(fs);

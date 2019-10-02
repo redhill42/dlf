@@ -902,15 +902,12 @@ public:
 
     #define AT(k) AttributeType<AttributeKind::k>
     #define CREATE_ACCESSOR(kind, method) \
-    Derived& set_##method(Symbol name, AT(kind) v) noexcept { \
-        return set<AT(kind)>(name, std::move(v)); \
-    } \
-    const AT(kind)& get_##method(Symbol name) const { \
-        return get<AT(kind)>(name); \
-    } \
-    AT(kind) get_##method(Symbol name, AT(kind) default_value) const { \
-        return get_or_default<AT(kind)>(name, std::move(default_value)); \
-    }
+    Derived& set_##method(Symbol name, AT(kind) v) noexcept \
+        { return set<AT(kind)>(name, std::move(v)); } \
+    const AT(kind)& get_##method(Symbol name) const \
+        { return get<AT(kind)>(name); } \
+    AT(kind) get_##method(Symbol name, AT(kind) default_value) const \
+        { return get_or_default<AT(kind)>(name, std::move(default_value)); }
 
     CREATE_ACCESSOR(FLOAT, f)
     CREATE_ACCESSOR(FLOATS, fs)
@@ -1281,10 +1278,13 @@ public:
 
 class NodeFactory {
 public:
-    virtual Node* createNode(Graph* graph, NodeKind kind) const = 0;
+    virtual Node* createNode(Graph* graph, NodeKind kind) = 0;
+    virtual Value* createValue(Node* node, size_t offset, std::string&& name) = 0;
+    virtual void freeNode(Node* node) = 0;
+    virtual void freeValue(Value* value) = 0;
     virtual ~NodeFactory() = default;
 
-    static const NodeFactory& Instance();
+    static std::unique_ptr<NodeFactory> newInstance();
 };
 
 class ShapeInference {
@@ -1498,7 +1498,6 @@ public:
      * Result:  %3 = f(%1, %2, %4)
      */
     Value* addInput(Value* node) noexcept {
-        assert(node->owningGraph() == m_graph);
         node->uses().emplace_back(this, m_inputs.size());
         m_inputs.push_back(node);
         return node;
@@ -1513,7 +1512,6 @@ public:
      * Result:  %3 = f(%1, %4)
      */
     Value* replaceInput(size_t i, Value* newValue) noexcept {
-        assert(newValue->owningGraph() == m_graph);
         Value* old = dropInput(i);
         m_inputs[i] = newValue;
         newValue->uses().emplace_back(this, i);
@@ -1529,8 +1527,6 @@ public:
      * Result:  %3 = f(%4, %2, %4)
      */
     void replaceInputWith(Value* from, Value* to) noexcept {
-        assert(from->owningGraph() == m_graph);
-        assert(to->owningGraph() == m_graph);
         size_t i = 0;
         for (auto input : inputs()) {
             if (input == from)
@@ -1573,11 +1569,7 @@ public:
         m_inputs.clear();
     }
 
-    Value* addOutput(std::string name) noexcept {
-        auto v = new Value(this, m_outputs.size(), std::move(name));
-        m_outputs.push_back(v);
-        return v;
-    }
+    Value* addOutput(std::string name) noexcept;
 
     Value* addOutput(std::string name, DataType type, Dims dims) noexcept {
         return addOutput(std::move(name))->set_type(type)->set_dims(std::move(dims));
@@ -1760,12 +1752,7 @@ class Graph {
     friend class Node;
     friend class Value;
 
-    const NodeFactory& m_factory;
-
-    // Only used to keep track of allocated nodes. Actual representation
-    // of Graph is done with inputs, outputs, nodes.
-    std::unordered_set<const Node*> all_nodes;
-    std::unordered_set<const Value*> all_values;
+    std::unique_ptr<NodeFactory> m_factory;
 
     // Holds outputs in a way that can be reflected as a Use object.
     // Also used as the beginning/end of the circular node list to avoid
@@ -1778,8 +1765,8 @@ class Graph {
     std::string m_doc_string;
 
 public:
-    Graph(const NodeFactory& factory = NodeFactory::Instance()) :
-        m_factory(factory),
+    Graph(std::unique_ptr<NodeFactory> factory = NodeFactory::newInstance()) :
+        m_factory(std::move(factory)),
         m_output(initOutput(createNode(kReturn))),
         m_input(createNode(kParam)),
         m_undefined(createNode(kUndefined))
@@ -1943,9 +1930,8 @@ public:
         m_output->eraseInput(i);
     }
 
-    Node* createNode(NodeKind kind) noexcept {
-        // Note: Node constructor adds node to all_nodes
-        return m_factory.createNode(this, kind);
+    Node* createNode(NodeKind kind) {
+        return m_factory->createNode(this, kind);
     }
 
     Node* appendNode(Node* n) noexcept {
@@ -1962,7 +1948,7 @@ public:
 
     template <typename T>
     std::enable_if_t<std::is_base_of<Node, T>::value, T*> create() noexcept {
-        return static_cast<T*>(m_factory.createNode(this, T::Kind));
+        return static_cast<T*>(createNode(T::Kind));
     }
 
     template <typename T>
@@ -1975,31 +1961,10 @@ public:
         return static_cast<T*>(prependNode(create<T>()));
     }
 
-    ~Graph() {
-        for (auto n : all_nodes)
-            delete n;
-        for (auto v : all_values)
-            delete v;
-    }
-
 private:
     // should only be called in the constructor
     static Node* initOutput(Node* p) {
         return p->next() = p->prev() =  p;
-    }
-
-    void freeNode(Node* n) {
-        auto it = all_nodes.find(n);
-        assert(it != all_nodes.end());
-        all_nodes.erase(it);
-        delete n;
-    }
-
-    void freeValue(Value* v) {
-        auto it = all_values.find(v);
-        assert(it != all_values.end());
-        all_values.erase(it);
-        delete v;
     }
 };
 
@@ -2010,9 +1975,7 @@ private:
 inline Value::Value(Node* node, size_t offset, std::string name)
     : m_node(node), m_offset(offset), m_name(std::move(name)),
       m_type(DataType::UNDEFINED)
-{
-    node->m_graph->all_values.emplace(this);
-}
+{}
 
 inline Graph* Value::owningGraph() noexcept {
     return node()->owningGraph();
@@ -2055,8 +2018,12 @@ inline void Value::replaceAllUsesWith(Value* newValue) {
 
 inline Node::Node(Graph* graph, NodeKind kind) :
     m_graph(graph), m_kind(kind)
-{
-    graph->all_nodes.emplace(this);
+{}
+
+inline Value* Node::addOutput(std::string name) noexcept {
+    auto v = owningGraph()->m_factory->createValue(this, m_outputs.size(), std::move(name));
+    m_outputs.push_back(v);
+    return v;
 }
 
 inline void Node::eraseOutput(size_t i) noexcept {
@@ -2064,7 +2031,7 @@ inline void Node::eraseOutput(size_t i) noexcept {
     assert(m_outputs[i]->uses().empty());
     Value* n = m_outputs[i];
     m_outputs.erase(m_outputs.begin() + i);
-    owningGraph()->freeValue(n);
+    owningGraph()->m_factory->freeValue(n);
     for (size_t j = i; j < m_outputs.size(); ++j) {
         m_outputs[j]->m_offset--;
     }
@@ -2097,7 +2064,7 @@ inline void Node::destroy() noexcept {
         eraseOutput(outputs().size() - 1);
     eraseAllInputs();
     removeFromList();
-    m_graph->freeNode(this);
+    m_graph->m_factory->freeNode(this);
 }
 
 }} // namespace dlf::model
