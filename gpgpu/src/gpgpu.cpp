@@ -223,6 +223,7 @@ std::shared_ptr<rawBuffer> rawContext::getSharedBuffer(
 
     auto buffer = createBuffer(content.size(), BufferAccess::ReadWrite);
     buffer->write(queue, content.data(), content.size(), 0, nullptr);
+    queue.finish();
     m_shared_buffers.emplace(std::move(content), buffer);
     return buffer;
 }
