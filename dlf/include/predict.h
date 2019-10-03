@@ -1421,16 +1421,12 @@ Predictor<Context, T>::Predictor(model::Graph& graph,
     model::ShapeInference::newInstance(env)->infer(graph);
     model::Optimizer::newInstance()->optimize(graph);
 
-    for (auto n : graph.nodes()) {
+    for (auto n : graph.nodes())
         m_operators.push_back(factory.createOperator(n));
-    }
-    for (auto v : graph.inputs()) {
-        if (!v->has_initializer())
-            m_inputs.push_back(factory.allocDatum(v));
-    }
-    for (auto v : graph.outputs()) {
+    for (auto v : graph.inputs())
+        m_inputs.push_back(factory.allocDatum(v));
+    for (auto v : graph.outputs())
         m_outputs.push_back(factory.allocDatum(v));
-    }
 }
 
 }} // namespace dlf::predict

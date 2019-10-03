@@ -177,26 +177,24 @@ std::unique_ptr<Graph> decodeGraph(const GraphProto& gp, std::unordered_map<std:
     // be representable in the graph IR.
     value_by_name[""] = g->undefinedValue();
 
-    // Adding all inputs with type definition.
-    for (auto& vp : gp.input()) {
-        auto v = g->addInput(vp.name());
-        setValueType(v, vp.type().tensor_type());
-        value_by_name[vp.name()] = v;
-    }
-
     // Adding all initializers with type and data.
     for (auto& init : gp.initializer()) {
         if (!init.has_name()) {
             std::cerr << "The initializer must have a name\n";
-            continue;
+        } else {
+            auto v = g->addInitializer(decodeTensor(init));
+            value_by_name[init.name()] = v;
         }
-        auto t = decodeTensor(init);
-        auto it = value_by_name.find(t.name());
-        if (it == value_by_name.end()) {
-            auto v = g->addInput(t.name(), t.type(), t.dims());
-            it = value_by_name.emplace(t.name(), v).first;
+    }
+
+    // Adding all inputs with type definition.
+    for (auto& vp : gp.input()) {
+        auto it = value_by_name.find(vp.name());
+        if (it == value_by_name.end() || it->second->owningGraph() != g.get()) {
+            auto v = g->addInput(vp.name());
+            setValueType(v, vp.type().tensor_type());
+            value_by_name[vp.name()] = v;
         }
-        it->second->set_initializer(std::move(t));
     }
 
     // Adding all nodes, defer determine value types of inputs and outputs.
@@ -421,9 +419,11 @@ void encodeGraph(GraphProto* gp, const Graph* g) {
 
     for (auto input : g->inputs()) {
         encodeValueInfo(gp->add_input(), input);
-        if (input->has_initializer()) {
-            encodeTensor(gp->add_initializer(), input->initializer());
-        }
+    }
+
+    for (auto init : g->initializers()) {
+        encodeValueInfo(gp->add_input(), init);
+        encodeTensor(gp->add_initializer(), init->initializer());
     }
 
     for (auto output : g->outputs()) {

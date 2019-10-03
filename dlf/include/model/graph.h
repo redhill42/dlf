@@ -1759,6 +1759,7 @@ class Graph {
     // having corner cases where the list is empty.
     Node* const m_output;
     Node* const m_input;
+    Node* const m_initializers;
     Node* const m_undefined;
 
     std::string m_name;
@@ -1769,6 +1770,7 @@ public:
         m_factory(std::move(factory)),
         m_output(initOutput(createNode(kReturn))),
         m_input(createNode(kParam)),
+        m_initializers(createNode(kParam)),
         m_undefined(createNode(kUndefined))
     {
         m_undefined->addOutput("");
@@ -1810,17 +1812,11 @@ public:
     }
 
     Value* input(size_t id) noexcept {
-        for (auto v : inputs())
-            if (!v->has_initializer() && id-- == 0)
-                return v;
-        return nullptr;
+        return m_input->output(id);
     }
 
     const Value* input(size_t id) const noexcept {
-        for (auto v : inputs())
-            if (!v->has_initializer() && id-- == 0)
-                return v;
-        return nullptr;
+        return m_input->output(id);
     }
 
     Value* input(const std::string& name) noexcept {
@@ -1832,6 +1828,28 @@ public:
 
     const Value* input(const std::string& name) const noexcept {
         for (auto v : inputs())
+            if (v->name() == name)
+                return v;
+        return nullptr;
+    }
+
+    cxx::array_ref<Value*> initializers() noexcept {
+        return m_initializers->outputs();
+    }
+
+    cxx::array_ref<const Value*> initializers() const noexcept {
+        return static_cast<const Node*>(m_initializers)->outputs();
+    }
+
+    Value* initializer(const std::string& name) noexcept {
+        for (auto v : initializers())
+            if (v->name() == name)
+                return v;
+        return nullptr;
+    }
+
+    const Value* initializer(const std::string& name) const noexcept {
+        for (auto v : initializers())
             if (v->name() == name)
                 return v;
         return nullptr;
@@ -1909,7 +1927,7 @@ public:
     }
 
     Value* addInitializer(TensorData data) noexcept {
-        Value* v = addInput(data.name(), data.type(), data.dims());
+        Value* v = m_initializers->addOutput(data.name(), data.type(), data.dims());
         v->set_initializer(std::move(data));
         return v;
     }
@@ -1919,7 +1937,10 @@ public:
     }
 
     void eraseInput(Value* v) {
-        eraseInput(v->offset());
+        if (v->has_initializer())
+            m_initializers->eraseOutput(v->offset());
+        else
+            m_input->eraseOutput(v->offset());
     }
 
     Value* addOutput(Value* n) noexcept {

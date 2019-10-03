@@ -288,7 +288,7 @@ TYPED_TEST(PredictTest, Loop) {
 
     auto add1 = body->append<Add>();
     add1->addInput(body->input("%i"));
-    add1->addInput(g.addInitializer(TensorData("one", Scalar<int64_t>(1))));
+    add1->addInput(body->addInitializer(TensorData("one", Scalar<int64_t>(1))));
     add1->addOutput("%n");
 
     auto add = body->append<Add>();
