@@ -63,15 +63,7 @@ public:
     explicit DevTensor(const DevTensorView<T>& src);
     DevTensor& operator=(const DevTensorView<T>& src);
 
-    DevTensor& resize(const Shape& shape) {
-        if (this->empty()) {
-            Spatial<DevTensor>::set_shape(shape);
-            init();
-        } else if (this->shape() != shape) {
-            throw shape_error("incompatible shape");
-        }
-        return *this;
-    }
+    DevTensor& resize(const Shape& shape);
 
     template <typename... Args>
     std::enable_if_t<cxx::conjunction<std::is_integral<Args>...>::value, DevTensor&>
@@ -341,7 +333,23 @@ DevTensor<T>& DevTensor<T>::operator=(const DevTensorView<T>& src) {
 }
 
 template <typename T>
+DevTensor<T>& DevTensor<T>::resize(const Shape& shape) {
+    if (this->empty() || this->shape() != shape) {
+        Spatial<DevTensor>::set_shape(shape);
+        if (m_data.handle() == nullptr || m_data.size() < size())
+            init();
+    }
+    return *this;
+}
+
+template <typename T>
 inline void flat_copy(const DevTensor<T>& src, DevTensor<T>& dst) {
+    assert(src.size() == dst.size());
+    src.copyToAsync(dst);
+}
+
+template <typename T>
+inline void flat_copy(const DevTensor<T>& src, DevTensor<T>&& dst) {
     assert(src.size() == dst.size());
     src.copyToAsync(dst);
 }

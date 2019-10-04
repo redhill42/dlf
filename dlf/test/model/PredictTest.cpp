@@ -7,6 +7,14 @@ using namespace dlf;
 using namespace dlf::model;
 using namespace dlf::predict;
 
+template <typename T>
+void ExpectElementsEQ(const Tensor<T>& a, const Tensor<T>& b) {
+    ASSERT_EQ(a.shape(), b.shape());
+    for (size_t i = 0; i < a.size(); i++) {
+        ExpectEQ(a.data()[i], b.data()[i]);
+    }
+}
+
 template <typename Context> struct PredictTest : public testing::Test {};
 using PredictTestTypes = testing::Types<CPU, GPU>;
 TYPED_TEST_CASE(PredictTest, PredictTestTypes);
@@ -107,12 +115,62 @@ TYPED_TEST(PredictTest, Conv) {
     predictor.set(1, W);
     predictor.predict();
 
-    EXPECT_EQ(predictor.get(0), Tensor<float>({1, 1, 5, 5}, {
+    ExpectElementsEQ(predictor.get(0), Tensor<float>({1, 1, 5, 5}, {
         13, 22, 28, 34, 25,
         34, 55, 64, 73, 52,
         64, 100, 109, 118, 82,
         94, 145, 154, 163, 112,
         73, 112, 118, 124, 85
+    }));
+}
+
+TYPED_TEST(PredictTest, Reshape) {
+    using Context = TypeParam;
+    Graph g;
+
+    auto x = g.append<Reshape>();
+    x->addInput(g.addInput("X", DataType::FLOAT, {24}));
+    x->addInput(g.addInput("shape", DataType::INT64, {1}));
+    g.addOutput(x->addOutput("Y"));
+
+    Predictor<Context, float> predictor(g);
+    predictor.set(0, Tensor<float>({24}).range(0));
+
+    predictor.set(1, Vector<int64_t>({2,3,4}));
+    predictor.predict();
+    EXPECT_EQ(predictor.get(0), Tensor<float>({2,3,4}).range(0));
+
+    predictor.set(1, Vector<int64_t>({4,6}));
+    predictor.predict();
+    EXPECT_EQ(predictor.get(0), Tensor<float>({4,6}).range(0));
+
+    predictor.set(1, Vector<int64_t>({3, -1}));
+    predictor.predict();
+    EXPECT_EQ(predictor.get(0), Tensor<float>({3,8}).range(0));
+}
+
+TYPED_TEST(PredictTest, Expand) {
+    using Context = TypeParam;
+    Graph g;
+
+    auto x = g.append<Expand>();
+    x->addInput(g.addInput("X", DataType::FLOAT, {3, 1}));
+    x->addInput(g.addInput("shape", DataType::INT64, {3}));
+    g.addOutput(x->addOutput("Y"));
+
+    Predictor<Context, float> predictor(g);
+    predictor.set(0, Tensor<float>({3, 1}, {1, 2, 3}));
+    predictor.set(1, Vector<int64_t>({2, 1, 6}));
+    predictor.predict();
+
+    EXPECT_EQ(predictor.get(0), Tensor<float>({2, 3, 6}, {
+        1, 1, 1, 1, 1, 1,
+        2, 2, 2, 2, 2, 2,
+        3, 3, 3, 3, 3, 3,
+
+        1, 1, 1, 1, 1, 1,
+        2, 2, 2, 2, 2, 2,
+        3, 3, 3, 3, 3, 3
     }));
 }
 
@@ -304,6 +362,8 @@ TYPED_TEST(PredictTest, Loop) {
     body->addOutput(body->input("%cond"));
     body->addOutput(add->output());
     body->addOutput(mul->output());
+    body->addOutput(add->output());
+    body->addOutput(mul->output());
 
     auto loop = g.append<Loop>();
     loop->body(body);
@@ -313,11 +373,15 @@ TYPED_TEST(PredictTest, Loop) {
     loop->addInput(g.addInitializer(TensorData("%prod", Scalar<int64_t>(1))));
     g.addOutput(loop->addOutput("%sum_out"));
     g.addOutput(loop->addOutput("%prod_out"));
+    g.addOutput(loop->addOutput("%cumsum"));
+    g.addOutput(loop->addOutput("%cumprod"));
 
     Predictor<Context, float> predictor(g);
     predictor.predict();
     EXPECT_EQ(predictor.get(0), Scalar<float>(55));
     EXPECT_EQ(predictor.get(1), Scalar<float>(3628800));
+    EXPECT_EQ(predictor.get(2), Vector<float>({1, 3, 6, 10, 15, 21, 28, 36, 45, 55}));
+    EXPECT_EQ(predictor.get(3), Vector<float>({1, 2, 6, 24, 120, 720, 5040, 40320, 362880, 3628800}));
 }
 
 TYPED_PERFORMANCE_TEST(PredictTest, Performance) {

@@ -210,60 +210,6 @@ PERFORMANCE_TEST(Shape, GPUBroadcastPerformance) {
     }
 }
 
-PERFORMANCE_TEST(Shape, CPUTransposePerformance) {
-    auto A1 = Tensor<float>({1024, 1024}).range(1);
-    auto B1 = Tensor<float>({1024, 1024});
-    auto A2 = Tensor<float>({1024, 256, 4}).range(1);
-    auto B2 = Tensor<float>({4, 256, 1024});
-    auto B3 = Tensor<float>({1024, 256, 4});
-
-    for (int i = 0; i < 3; i++) {
-        timing("CPU 2D transpose", 100, [&]() {
-            transpose(A1, B1, {1, 0});
-        });
-
-        timing("CPU 3D transpose", 100, [&]() {
-            transpose(A2, B2, {2, 1, 0});
-        });
-
-        timing("CPU no transpose", 100, [&]() {
-            transpose(A2, B3, {0, 1, 2});
-        });
-
-        std::cout << std::endl;
-    }
-}
-
-PERFORMANCE_TEST(Shape, GPUTransposePerformance) {
-    auto A1 = DevTensor<float>({1024, 1024}).range(1);
-    auto A2 = DevTensor<float>({1024, 256, 4}).range(1);
-
-    for (int i = 0; i < 3; i++) {
-        timing("GPU 2D transpose", 1, [&]() {
-            auto B1 = DevTensor<float>({1024, 1024});
-            for (int i = 0; i < 100; i++)
-                transpose(A1, B1, {1, 0});
-            B1.read();
-        });
-
-        timing("GPU 3D transpose", 1, [&]() {
-            auto B2 = DevTensor<float>({4, 256, 1024});
-            for (int i = 0; i < 100; i++)
-                transpose(A2, B2, {2, 1, 0});
-            B2.read();
-        });
-
-        timing("GPU no transpose", 1, [&]() {
-            auto B2 = DevTensor<float>({1024, 256, 4});
-            for (int i = 0; i < 100; i++)
-                transpose(A2, B2, {0, 1, 2});
-            B2.read();
-        });
-
-        std::cout << std::endl;
-    }
-}
-
 TEST(Filter2D, AutoPad) {
     for (size_t n = 3; n < 20; n++)
     for (size_t k = 1; k <= std::min<size_t>(7, n); k++)

@@ -17,6 +17,9 @@ public:
     Filter2D(const Shape& input_shape, const Shape& kernel_shape, size_t group = 1);
     Filter2D(const Shape& input_shape, size_t kernel_h, size_t kernel_w);
 
+    void set_shape(const Shape& input_shape, const Shape& kernel_shape, size_t group) noexcept;
+    void set_shape(const Shape& input_shape) noexcept;
+
     Filter2D& pads(size_t top, size_t left, size_t bottom, size_t right) noexcept {
         m_pad_top = top;
         m_pad_left = left;
@@ -725,9 +728,11 @@ inline void softmax(const size_t m, const size_t n, DevTensor<T>& X) {
 }
 } // namespace detail
 
-template <typename TensorT>
-enable_if_tensor<TensorT, void>
-softmax(const TensorT& X, tensor_type<TensorT>& Y, int axis = 1) {
+template <typename TensorT, typename TensorR>
+std::enable_if_t<
+    is_exactly_same_tensor<TensorT, TensorR>::value &&
+    !std::is_const<std::remove_reference_t<TensorR>>::value>
+softmax(const TensorT& X, TensorR&& Y, int axis = 1) {
     dlf::detail::norm_axis(X.rank(), axis);
     auto m = X.shape().partial_size(0, axis);
     auto n = X.size() / m;
@@ -788,9 +793,11 @@ inline void logsoftmax(const size_t m, const size_t n, DevTensor<T>& X) {
 }
 } // namespace detail
 
-template <typename TensorT>
-enable_if_tensor<TensorT, void>
-logsoftmax(const TensorT& X, tensor_type<TensorT>& Y, int axis = 1) {
+template <typename TensorT, typename TensorR>
+std::enable_if_t<
+    is_exactly_same_tensor<TensorT, TensorR>::value &&
+    !std::is_const<std::remove_reference_t<TensorR>>::value>
+logsoftmax(const TensorT& X, TensorR&& Y, int axis = 1) {
     dlf::detail::norm_axis(X.rank(), axis);
     auto m = X.shape().partial_size(0, axis);
     auto n = X.size() / m;
@@ -847,9 +854,11 @@ inline void hardmax(const size_t m, const size_t n, DevTensor<T>& X) {
 }
 } // namespace detail
 
-template <typename TensorT>
-enable_if_tensor<TensorT, void>
-hardmax(const TensorT& X, tensor_type<TensorT>& Y, int axis = 1) {
+template <typename TensorT, typename TensorR>
+std::enable_if_t<
+    is_exactly_same_tensor<TensorT, TensorR>::value &&
+    !std::is_const<std::remove_reference_t<TensorR>>::value>
+hardmax(const TensorT& X, TensorR&& Y, int axis = 1) {
     dlf::detail::norm_axis(X.rank(), axis);
     auto m = X.shape().partial_size(0, axis);
     auto n = X.size() / m;

@@ -535,7 +535,7 @@ TEST(Conv2D, basic_conv_with_padding) {
 
     auto dev_Y = DevTensor<float>({1, 1, 5, 5});
     dnn::conv2d(dev(X), dev(W), dev_Y, filter);
-    EXPECT_EQ(dev_Y.read(), R);
+    ExpectElementsEQ(dev_Y.read(), R);
 }
 
 TEST(Conv2D, basic_conv_without_padding) {
@@ -554,7 +554,7 @@ TEST(Conv2D, basic_conv_without_padding) {
 
     auto dev_Y = DevTensor<float>({1, 1, 3, 3});
     dnn::conv2d(dev(X), dev(W), dev_Y, filter);
-    EXPECT_EQ(dev_Y.read(), R);
+    ExpectElementsEQ(dev_Y.read(), R);
 }
 
 TEST(Conv2D, conv_with_strides_padding) {
@@ -574,7 +574,7 @@ TEST(Conv2D, conv_with_strides_padding) {
 
     auto dev_Y = DevTensor<float>({1, 1, 4, 3});
     dnn::conv2d(dev(X), dev(W), dev_Y, filter);
-    EXPECT_EQ(dev_Y.read(), R);
+    ExpectElementsEQ(dev_Y.read(), R);
 }
 
 TEST(Conv2D, conv_with_strides_no_padding) {
@@ -593,7 +593,7 @@ TEST(Conv2D, conv_with_strides_no_padding) {
 
     auto dev_Y = DevTensor<float>({1, 1, 3, 2});
     dnn::conv2d(dev(X), dev(W), dev_Y, filter);
-    EXPECT_EQ(dev_Y.read(), R);
+    ExpectElementsEQ(dev_Y.read(), R);
 }
 
 TEST(Conv2D, conv_with_strides_and_asymmetric_padding) {
@@ -613,7 +613,7 @@ TEST(Conv2D, conv_with_strides_and_asymmetric_padding) {
 
     auto dev_Y = DevTensor<float>({1, 1, 4, 2});
     dnn::conv2d(dev(X), dev(W), dev_Y, filter);
-    EXPECT_EQ(dev_Y.read(), R);
+    ExpectElementsEQ(dev_Y.read(), R);
 }
 
 TEST(Conv2D, conv_with_multiple_channels) {
@@ -625,7 +625,7 @@ TEST(Conv2D, conv_with_multiple_channels) {
 
     dnn::conv2d(X, W, Y, filter);
     dnn::conv2d(dev(X), dev(W), dev_Y, filter);
-    EXPECT_EQ(Y, dev_Y.read());
+    ExpectElementsEQ(Y, dev_Y.read());
 }
 
 TEST(Conv2D, conv_with_strange_padding) {
@@ -637,7 +637,7 @@ TEST(Conv2D, conv_with_strange_padding) {
 
     dnn::conv2d(X, W, Y, filter);
     dnn::conv2d(dev(X), dev(W), dev_Y, filter);
-    EXPECT_EQ(Y, dev_Y.read());
+    ExpectElementsEQ(Y, dev_Y.read());
 }
 
 TEST(Conv2D, conv_with_1x1_kernel) {

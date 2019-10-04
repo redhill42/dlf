@@ -232,10 +232,7 @@ public: // Constructors
     Tensor& operator=(const TensorView<T>& v);
 
     /**
-     * Allocate tensor data if necessary.
-     *
-     * This tensor must be an uninitialized tensor or initialized with the given
-     * shape. In all other cases, the shape_error exception is thrown.
+     * Resize the tensor if necessary.
      */
     Tensor& resize(const Shape& shape);
 
@@ -586,11 +583,11 @@ Tensor<T>& Tensor<T>::operator=(Tensor&& t) noexcept {
 
 template <typename T>
 Tensor<T>& Tensor<T>::resize(const Shape& shape) {
-    if (this->empty()) {
+    if (this->empty() || this->shape() != shape) {
+        auto old_size = size();
         Spatial<Tensor>::set_shape(shape);
-        init();
-    } else if (this->shape() != shape) {
-        throw shape_error("incompatible shape");
+        if (size() != old_size || m_alloc_data == nullptr)
+            init();
     }
     return *this;
 }
@@ -979,6 +976,11 @@ inline void flat_copy(const Tensor<T>& src, Tensor<T>& dst) {
     if (src.data() != dst.data()) {
         par::copy(src.begin(), src.end(), dst.begin());
     }
+}
+
+template <typename T>
+inline void flat_copy(const Tensor<T>& src, Tensor<T>&& dst) {
+    flat_copy(src, dst);
 }
 
 } // namespace dlf

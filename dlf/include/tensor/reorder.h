@@ -21,23 +21,21 @@ inline reorder(const TensorT& src, const Shape& src_shape, TensorT& dst) {
     detail::reorder(src, src_shape, dst, dst.shape());
 }
 
-template <typename TensorT>
-enable_if_tensor<TensorT, void>
-inline reorder(const TensorT& src, tensor_type<TensorT>& dst) {
+template <typename TensorT, typename TensorR>
+std::enable_if_t<
+    is_exactly_same_tensor<TensorT, TensorR>::value &&
+    !std::is_const<std::remove_reference_t<TensorR>>::value>
+inline reorder(const TensorT& src, TensorR&& dst) {
     dst.resize(src.shape());
     detail::reorder(src, src.shape(), dst, dst.shape());
 }
 
-template <typename TensorT>
-enable_if_tensor<TensorT, void>
-inline reorder(const TensorT& src, tensor_view_type<TensorT>& dst) {
-    detail::reorder(src, src.shape(), dst, dst.shape());
-}
-
-template <typename TensorT>
-enable_if_tensor<TensorT, void>
-inline reorder(const TensorT& src, tensor_view_type<TensorT>&& dst) {
-    detail::reorder(src, src.shape(), dst, dst.shape());
+template <typename TensorT, typename TensorR>
+std::enable_if_t<
+    is_exactly_same_tensor<TensorT, TensorR>::value &&
+    !std::is_const<std::remove_reference_t<TensorR>>::value>
+inline broadcast(const TensorT& src, TensorR&& dst) {
+    reorder(src.broadcast(dst.shape()), std::forward<TensorR>(dst));
 }
 
 //==-------------------------------------------------------------------------
@@ -94,45 +92,6 @@ unsqueeze_right(TensorT&& X, size_t rank) {
         return unsqueeze(std::forward<TensorT>(X), axes);
     }
     return X.view();
-}
-
-//==-------------------------------------------------------------------------
-// Reorder operations used by DNN
-//==-------------------------------------------------------------------------
-
-template <typename TensorT>
-enable_if_non_view_tensor<TensorT, void>
-inline reshape(const TensorT& src, TensorT& dst) {
-    if (src.size() != dst.size())
-        throw shape_error("cannot reshape to destination tensor");
-    flat_copy(src, dst);
-}
-
-template <typename TensorT>
-enable_if_non_view_tensor<TensorT, void>
-inline broadcast(const TensorT& src, TensorT& dst) {
-    reorder(src.broadcast(dst.shape()), dst);
-}
-
-template <typename TensorT>
-enable_if_non_view_tensor<TensorT, void>
-inline transpose(const TensorT& src, TensorT& dst, const std::vector<size_t>& perm) {
-    reorder(src.transpose(perm), dst);
-}
-
-template <typename TensorT>
-enable_if_non_view_tensor<TensorT, void>
-inline slice(const TensorT& src, TensorT& dst,
-             const std::vector<int>& starts, const std::vector<int>& ends,
-             const std::vector<int>& axes, const std::vector<int>& steps)
-{
-    reorder(src.slice(starts, ends, axes, steps), dst);
-}
-
-template <typename TensorT>
-enable_if_non_view_tensor<TensorT, void>
-inline slice(const TensorT& src, TensorT& dst, const std::vector<Range>& range) {
-    reorder(src.slice(range), dst);
 }
 
 //==-------------------------------------------------------------------------

@@ -17,20 +17,45 @@ struct GPU {
 template <class Context> struct Datum {};
 
 template <> struct Datum<CPU> {
-    const model::DataType dtype;
-    const Shape shape;
+private:
+    model::DataType         m_dtype;
+    Shape                   m_shape;
+    std::vector<uint8_t>    m_data;
 
-    Datum(model::DataType dtype, Shape shape)
-        : dtype(dtype), shape(std::move(shape)) {}
+public:
+    Datum(model::DataType dtype, Shape shape) :
+        m_dtype(dtype), m_shape(std::move(shape)) {}
+
+    model::DataType dtype() const noexcept {
+        return m_dtype;
+    }
+
+    const Shape& shape() const noexcept {
+        return m_shape;
+    }
+
+    template <typename T>
+    void resize(Shape new_shape) {
+        if (m_shape != new_shape) {
+            m_data.resize(new_shape.size() * sizeof(T));
+            m_shape = std::move(new_shape);
+        }
+    }
 
     template <typename T>
     Tensor<T> get() {
-        assert(dtype == model::DataTypeTrait<T>);
-        if (data == nullptr) {
-            data.reset(new char[shape.size() * sizeof(T)],
-                       std::default_delete<char[]>());
+        assert(m_dtype == model::DataTypeTrait<T>); // FIXME
+        if (m_data.empty())
+            m_data.resize(m_shape.size() * sizeof(T));
+        return Tensor<T>::wrap(m_shape, reinterpret_cast<T*>(m_data.data()));
+    }
+
+    template <typename T>
+    void unget(const Tensor<T>& val) {
+        resize<T>(val.shape());
+        if (reinterpret_cast<const void*>(val.data()) != m_data.data()) {
+            flat_copy(val, get<T>());
         }
-        return Tensor<T>::wrap(shape, reinterpret_cast<T*>(data.get()));
     }
 
     template <typename T>
@@ -40,38 +65,54 @@ template <> struct Datum<CPU> {
 
     template <typename T>
     void set(const Tensor<T>& val) {
-        auto dst = get<T>();
-        if (val.shape() != dst.shape())
-            throw shape_error("incompatible shape");
-        flat_copy(val, dst);
+        resize<T>(val.shape());
+        flat_copy(val, get<T>());
     }
-
-    std::shared_ptr<Datum<CPU>> makeShared(Shape dims) {
-        assert(dims.size() == this->shape.size());
-        return std::shared_ptr<Datum<CPU>>(
-            new Datum<CPU>(this->dtype, std::move(dims), this->data));
-    }
-
-private:
-    std::shared_ptr<char> data;
-
-    Datum(model::DataType dtype, Shape&& shape, std::shared_ptr<char> data)
-        : dtype(dtype), shape(std::move(shape)), data(std::move(data)) {}
 };
 
 template <> struct Datum<GPU> {
-    const model::DataType dtype;
-    const Shape shape;
+private:
+    model::DataType         m_dtype;
+    Shape                   m_shape;
+    gpgpu::Buffer<uint8_t>  m_data;
 
+public:
     Datum(model::DataType dtype, Shape shape)
-        : dtype(dtype), shape(std::move(shape)) {}
+        : m_dtype(dtype), m_shape(std::move(shape)) {}
+
+    model::DataType dtype() const noexcept {
+        return m_dtype;
+    }
+
+    const Shape& shape() const noexcept {
+        return m_shape;
+    }
+
+    template <typename T>
+    void resize(Shape new_shape) {
+        auto new_size = new_shape.size() * sizeof(T);
+        if (m_data.handle() != nullptr && m_data.data_size() < new_size) {
+            auto new_data = gpgpu::current::context().createBuffer<uint8_t>(new_size);
+            m_data.copyToAsync(gpgpu::current::queue(), new_data, m_shape.size() * sizeof(T));
+            m_data = std::move(new_data);
+        }
+        m_shape = std::move(new_shape);
+    }
 
     template <typename T>
     DevTensor<T> get() {
-        assert(dtype == model::DataTypeTrait<T>);
-        if (handle == nullptr)
-            handle = gpgpu::current::context().createBuffer<T>(shape.size()).handle();
-        return DevTensor<T>(shape, gpgpu::Buffer<T>(handle, shape.size()));
+        assert(m_dtype == model::DataTypeTrait<T>);
+        if (m_data.handle() == nullptr)
+            m_data = gpgpu::current::context().createBuffer<uint8_t>(m_shape.size() * sizeof(T));
+        return DevTensor<T>(m_shape, gpgpu::Buffer<T>(m_data.handle(), m_data.size() / sizeof(T)));
+    }
+
+    template <typename T>
+    void unget(const DevTensor<T>& val) {
+        auto buf = val.data();
+        if (m_data.handle() != buf.handle())
+            m_data = gpgpu::Buffer<uint8_t>(buf.handle(), buf.data_size());
+        m_shape = val.shape();
     }
 
     template <typename T>
@@ -81,23 +122,9 @@ template <> struct Datum<GPU> {
 
     template <typename T>
     void set(const Tensor<T>& val) {
-        auto dst = get<T>();
-        if (val.shape() != dst.shape())
-            throw shape_error("incompatible shape");
-        dst.write(val);
+        resize<T>(val.shape());
+        get<T>().write(val);
     }
-
-    std::shared_ptr<Datum<GPU>> makeShared(Shape dims) {
-        assert(dims.size() == this->shape.size());
-        return std::shared_ptr<Datum<GPU>>(
-            new Datum(this->dtype, std::move(dims), this->handle));
-    }
-
-private:
-    std::shared_ptr<gpgpu::rawBuffer> handle;
-
-    Datum(model::DataType dtype, Shape&& shape, std::shared_ptr<gpgpu::rawBuffer> handle)
-        : dtype(dtype), shape(std::move(shape)), handle(std::move(handle)) {}
 };
 
 class Operator {
@@ -116,11 +143,7 @@ public:
         const std::unordered_map<std::string, size_t>& env = {})
         : Predictor(*graph, env) {}
 
-    void predict() {
-        for (auto& op : m_operators) {
-            op->evaluate();
-        }
-    }
+    void predict();
 
     template <typename U>
     void set(size_t i, const Tensor<U>& data) {
@@ -142,21 +165,28 @@ private:
 template <typename Context, typename T>
 class OperatorFactory : model::DefaultVisitor {
 private:
-    using DatumPtr = std::shared_ptr<Datum<Context>>;
+    using datum_ptr = std::shared_ptr<Datum<Context>>;
+    using datum_list = std::vector<datum_ptr>;
+    using op_list = std::vector<std::unique_ptr<Operator>>;
 
-    std::vector<DatumPtr>& m_dataset;
-    std::unordered_map<const model::Value*, DatumPtr> m_datamap;
+    std::vector<datum_ptr>& m_dataset;
+    std::unordered_map<const model::Value*, datum_ptr> m_datamap;
     std::unique_ptr<Operator> result;
 
     template <typename U = T>
     using TensorT = typename Context::template TensorT<U>;
 
 public:
-    OperatorFactory(std::vector<DatumPtr>& dataset)
+    OperatorFactory(std::vector<datum_ptr>& dataset)
         : m_dataset(dataset) {}
 
+    std::unique_ptr<Operator> createOperator(model::Node* node) {
+        node->accept(*this);
+        return std::move(result);
+    }
+
     template <typename U = T>
-    DatumPtr allocDatum(const model::Value* value) {
+    datum_ptr alloc(const model::Value* value) {
         if (value == nullptr)
             return nullptr;
 
@@ -179,40 +209,42 @@ public:
     }
 
     template <typename U = T>
-    TensorT<U> alloc(const model::Value* value) {
-        return allocDatum<U>(value)->template get<U>();
-    }
-
-    template <typename U = T>
-    std::list<TensorT<U>> allocAll(cxx::array_ref<model::Value*> values) {
-        std::list<TensorT<U>> inputs;
+    datum_list allocAll(cxx::array_ref<model::Value*> values) {
+        std::vector<datum_ptr> inputs;
         for (auto v : values)
             inputs.push_back(alloc<U>(v));
         return inputs;
     }
 
     template <typename U = T>
-    DatumPtr allocDatumInplace(const model::Value* input, const model::Value* output) {
+    datum_ptr allocInplace(const model::Value* input, const model::Value* output) {
         if (input->uses().size() > 1 || input->has_initializer())
-            return allocDatum<U>(output);
+            return alloc<U>(output);
 
         assert(m_datamap.find(output) == m_datamap.end());
-        auto input_datum = allocDatum<U>(input);
-        auto output_datum = input_datum->makeShared(output->dims().shape());
-        m_dataset.push_back(output_datum);
-        m_datamap.emplace(output, output_datum);
-        return output_datum;
+        auto datum = alloc<U>(input);
+        m_datamap.emplace(output, datum);
+        return datum;
     }
 
     template <typename U = T>
-    TensorT<U> allocInplace(const model::Value* input, const model::Value* output) {
-        auto datum = allocDatumInplace(input, output);
+    static TensorT<U> deref(datum_ptr datum) {
         return datum->template get<U>();
     }
 
-    std::unique_ptr<Operator> createOperator(model::Node* node) {
-        node->accept(*this);
-        return std::move(result);
+    template <typename U = T>
+    static TensorT<U> deref(datum_ptr datum, datum_ptr src) {
+        if (datum != src)
+            datum->template resize<U>(src->shape());
+        return datum->template get<U>();
+    }
+
+    template <typename U = T>
+    static std::list<TensorT<U>> derefAll(datum_list list) {
+        std::list<TensorT<U>> res;
+        for (auto p : list)
+            res.push_back(deref<U>(p));
+        return res;
     }
 
 private:
@@ -221,26 +253,25 @@ private:
     }
 
     struct IfOp : Operator {
-        DatumPtr cond;
-        std::list<TensorT<>> outputs;
-        std::vector<std::unique_ptr<Operator>> then_branch;
-        std::vector<std::unique_ptr<Operator>> else_branch;
-        std::vector<std::shared_ptr<Datum<Context>>> then_outputs;
-        std::vector<std::shared_ptr<Datum<Context>>> else_outputs;
+        datum_ptr cond;
+        datum_list outputs;
+
+        op_list then_branch, else_branch;
+        datum_list then_outputs, else_outputs;
 
         IfOp(OperatorFactory* of, model::If* n)
-            : cond(of->allocDatum<bool>(n->input())),
+            : cond(of->alloc<bool>(n->input())),
               outputs(of->allocAll(n->outputs()))
         {
             for (auto x : n->then_branch()->nodes())
                 then_branch.push_back(of->createOperator(x));
             for (auto v : n->then_branch()->outputs())
-                then_outputs.push_back(of->allocDatum(v));
+                then_outputs.push_back(of->alloc(v));
 
             for (auto x : n->else_branch()->nodes())
                 else_branch.push_back(of->createOperator(x));
             for (auto v : n->else_branch()->outputs())
-                else_outputs.push_back(of->allocDatum(v));
+                else_outputs.push_back(of->alloc(v));
         }
 
         void evaluate() override {
@@ -249,11 +280,13 @@ private:
             auto& branch = *b ? then_branch : else_branch;
             auto& results = *b ? then_outputs : else_outputs;
 
-            for (auto& op : branch)
+            for (auto& op : branch) {
                 op->evaluate();
+            }
+
             auto it = outputs.begin();
-            for (auto& v : results) {
-                flat_copy(v->template get<T>(), *it);
+            for (auto v : results) {
+                flat_copy(deref(v), deref(*it, v));
                 ++it;
             }
         }
@@ -264,87 +297,109 @@ private:
     }
 
     struct LoopOp : Operator {
-        std::vector<std::shared_ptr<Datum<Context>>> inputs;
-        std::vector<std::shared_ptr<Datum<Context>>> outputs;
+        datum_ptr  max_trip_var, initial_cond_var;
+        datum_list initial_state_vars;
+        datum_list final_state_vars, final_scan_vars;
 
-        std::vector<std::unique_ptr<Operator>> body;
-        std::vector<std::shared_ptr<Datum<Context>>> body_inputs;
-        std::vector<std::shared_ptr<Datum<Context>>> body_outputs;
+        op_list    body;
+        datum_ptr  iteration_var, body_cond_var;
+        datum_list body_state_vars;
+        datum_ptr  body_output_cond_var;
+        datum_list body_output_state_vars;
+        datum_list body_output_scan_vars;
 
         LoopOp(OperatorFactory* of, model::Loop* n) {
+            assert(n->inputs().size() >= 2);
             assert(n->inputs().size() == n->body()->inputs().size());
             assert(n->outputs().size() == n->body()->outputs().size() - 1);
+            auto num_state_vars = n->inputs().size() - 2;
 
-            for (auto x : n->body()->nodes())
+            for (auto x : n->body()->nodes()) {
                 body.push_back(of->createOperator(x));
+            }
 
-            body_inputs.push_back(of->allocDatum(n->body()->input(0)));         // iteration
-            body_inputs.push_back(of->allocDatum<bool>(n->body()->input(1)));   // cond
-            for (int i = 2; i < n->body()->inputs().size(); ++i)                // state vars
-                body_inputs.push_back(of->allocDatum(n->body()->input(i)));
+            iteration_var = of->alloc(n->body()->input(0));
+            body_cond_var = of->alloc<bool>(n->body()->input(1));
+            for (size_t i = 2; i < n->body()->inputs().size(); ++i)
+                body_state_vars.push_back(of->alloc(n->body()->input(i)));
 
-            body_outputs.push_back(of->allocDatum<bool>(n->body()->output(0))); // output cond
-            for (int i = 1; i < n->body()->outputs().size(); ++i)               // final outputs
-                body_outputs.push_back(of->allocDatum(n->body()->output(i)));
+            body_output_cond_var = of->alloc<bool>(n->body()->output(0));
+            for (size_t i = 1; i < num_state_vars+1; ++i)
+                body_output_state_vars.push_back(of->alloc(n->body()->output(i)));
+            for (size_t i = num_state_vars+1; i < n->body()->outputs().size(); ++i)
+                body_output_scan_vars.push_back(of->alloc(n->body()->output(i)));
 
-            inputs.push_back(of->allocDatum<int64_t>(n->M()));  // max trip count
-            inputs.push_back(of->allocDatum<bool>(n->cond()));  // initial condition
-            for (int i = 2; i < n->inputs().size(); ++i)
-                inputs.push_back(of->allocDatum(n->input(i)));
-            for (size_t i = 0; i < n->outputs().size(); ++i)
-                outputs.push_back(of->allocDatumInplace(n->body()->output(i+1), n->output(i)));
+            max_trip_var = of->alloc<int64_t>(n->input(0));
+            initial_cond_var = of->alloc<bool>(n->input(1));
+            for (size_t i = 2; i < n->inputs().size(); ++i)
+                initial_state_vars.push_back(of->alloc(n->input(i)));
+            for (size_t i = 0; i < num_state_vars; ++i)
+                final_state_vars.push_back(of->allocInplace(n->body()->output(i+1), n->output(i)));
+            for (size_t i = num_state_vars; i < n->outputs().size(); ++i)
+                final_scan_vars.push_back(of->alloc(n->output(i)));
         }
 
         void evaluate() override {
-            bool cond = (inputs[1] == nullptr) ? true : *(inputs[1]->template read<bool>());
-            if (inputs[0] == nullptr) {
+            bool cond = (initial_cond_var == nullptr) ? true : *(initial_cond_var->template read<bool>());
+            if (max_trip_var == nullptr) {
                 cond = run_body(0, true, cond);
                 for (int64_t i = 1; cond; ++i) {
                     cond = run_body(i, false, cond);
                 }
-            } else if (inputs[1] == nullptr) {
-                auto trip_count = *(inputs[0]->template read<int64_t>());
+            } else if (initial_cond_var == nullptr) {
+                auto trip_count = *(max_trip_var->template read<int64_t>());
                 for (int64_t i = 0; i < trip_count; ++i) {
                     run_body(i, i==0, true);
                 }
             } else {
-                auto trip_count = *(inputs[0]->template read<int64_t>());
+                auto trip_count = *(max_trip_var->template read<int64_t>());
                 for (int64_t i = 0; i < trip_count && cond; ++i) {
                     cond = run_body(i, i==0, cond);
                 }
             }
 
-            for (int i = 0; i < outputs.size(); ++i) {
-                copy_data(body_outputs[i+1], outputs[i]);
+            // Copying loop-carried dependencies to enclosing scope
+            for (size_t i = 0; i < final_state_vars.size(); ++i) {
+                copy_data(body_output_state_vars[i], final_state_vars[i]);
             }
         }
 
     private:
         bool run_body(int64_t iteration, bool first, bool cond) {
-            body_inputs[0]->set(Scalar<T>(iteration));
-            body_inputs[1]->set(Scalar<bool>(cond));
+            iteration_var->set(Scalar<T>(iteration));
+            body_cond_var->set(Scalar<bool>(cond));
 
-            if (first) {
-                for (int i = 2; i < inputs.size(); ++i) {
-                    copy_data(inputs[i], body_inputs[i]);
-                }
-            } else {
-                for (int i = 2; i < inputs.size(); ++i) {
-                    copy_data(body_outputs[i-1], body_inputs[i]);
-                }
+            // Copying loop-carried dependencies to loop body
+            auto& state_vars = first ? initial_state_vars : body_output_state_vars;
+            for (size_t i = 0; i < state_vars.size(); ++i) {
+                copy_data(state_vars[i], body_state_vars[i]);
             }
 
+            // Execute the loop body
             for (auto& op : body) {
                 op->evaluate();
             }
 
-            return *(body_outputs[0]->template read<bool>());
+            // Concatenating the value of the specified output value at the end
+            // of each iteration of the loop. It is an error if the dimensions
+            // or data type of these scan_outputs change across loop iterations.
+            for (size_t i = 0; i < body_output_scan_vars.size(); ++i) {
+                auto dims = body_output_scan_vars[i]->shape().extents();
+                dims.insert(dims.begin(), iteration+1);
+                final_scan_vars[i]->template resize<T>(Shape(dims));
+
+                auto body_out = deref(body_output_scan_vars[i]);
+                auto scan_out = deref(final_scan_vars[i]);
+                reorder(body_out, scan_out[iteration]);
+            }
+
+            return *(body_output_cond_var->template read<bool>());
         }
 
-        void copy_data(DatumPtr src, DatumPtr dst) {
-            auto src_data = src->template get<T>();
-            auto dst_data = dst->template get<T>();
-            flat_copy(src_data, dst_data);
+        void copy_data(datum_ptr src, datum_ptr dst) {
+            if (src != dst) {
+                flat_copy(deref(src), deref(dst, src));
+            }
         }
     };
 
@@ -353,13 +408,18 @@ private:
     }
 
     struct EyeLikeOp : Operator {
-        TensorT<> output;
+        datum_ptr X, Y;
         int k;
+
         EyeLikeOp(OperatorFactory* of, model::EyeLike* n)
-            : output(of->alloc(n->output())), k(n->get_i("k", 0)) {}
+            : X(of->alloc(n->input())),
+              Y(of->alloc(n->output())),
+              k(n->get_i("k", 0)) {}
+
         void evaluate() override {
-            output.fill(0);
-            output.diagonal(k).fill(1);
+            auto out = deref(Y, X);
+            out.fill(0);
+            out.diagonal(k).fill(1);
         }
     };
 
@@ -368,48 +428,72 @@ private:
     }
 
     struct RandomNormalOp : Operator {
-        TensorT<> output;
+        datum_ptr Y;
         T mean, scale;
-        RandomNormalOp(OperatorFactory* of, model::Node* n, T mean, T scale)
-            : output(of->alloc(n->output())), mean(mean), scale(scale) {}
+        RandomNormalOp(OperatorFactory* of, model::RandomNormal* n)
+            : Y(of->alloc(n->output())), mean(n->mean()), scale(n->scale()) {}
         void evaluate() override {
-            output.random(std::normal_distribution<T>(mean, scale));
+            deref(Y).random(std::normal_distribution<T>(mean, scale));
         }
     };
 
     void visit(model::RandomNormal* n) override {
-        result = std::make_unique<RandomNormalOp>(this, n, n->mean(), n->scale());
+        result = std::make_unique<RandomNormalOp>(this, n);
     }
 
+    struct RandomNormalLikeOp : Operator {
+        datum_ptr X, Y;
+        T mean, scale;
+        RandomNormalLikeOp(OperatorFactory* of, model::RandomNormalLike* n)
+            : X(of->alloc(n->input())), Y(of->alloc(n->output())),
+              mean(n->mean()), scale(n->scale()) {}
+        void evaluate() override {
+            deref(Y, X).random(std::normal_distribution<T>(mean, scale));
+        }
+    };
+
     void visit(model::RandomNormalLike* n) override {
-        result = std::make_unique<RandomNormalOp>(this, n, n->mean(), n->scale());
+        result = std::make_unique<RandomNormalLikeOp>(this, n);
     }
 
     struct RandomUniformOp : Operator {
-        TensorT<> output;
+        datum_ptr Y;
         T low, high;
-        RandomUniformOp(OperatorFactory* of, model::Node* n, T low, T high)
-            : output(of->alloc(n->output())), low(low), high(high) {}
+        RandomUniformOp(OperatorFactory* of, model::RandomUniform* n)
+            : Y(of->alloc(n->output())), low(n->low()), high(n->high()) {}
         void evaluate() override {
-            output.random(low, high);
+            deref(Y).random(low, high);
         }
     };
 
     void visit(model::RandomUniform* n) override {
-        result = std::make_unique<RandomUniformOp>(this, n, n->low(), n->high());
+        result = std::make_unique<RandomUniformOp>(this, n);
     }
 
+    struct RandomUniformLikeOp : Operator {
+        datum_ptr X, Y;
+        T low, high;
+        RandomUniformLikeOp(OperatorFactory* of, model::RandomUniformLike* n)
+            : X(of->alloc(n->input())), Y(of->alloc(n->output())),
+              low(n->low()), high(n->high()) {}
+        void evaluate() override {
+            deref(Y, X).random(low, high);
+        }
+    };
+
     void visit(model::RandomUniformLike* n) override {
-        result = std::make_unique<RandomUniformOp>(this, n, n->low(), n->high());
+        result = std::make_unique<RandomUniformLikeOp>(this, n);
     }
 
     template <typename Fn>
     struct UnaryOp : Operator {
-        TensorT<> X, Y;
+        datum_ptr X, Y;
         UnaryOp(OperatorFactory* of, model::Node* n)
             : X(of->alloc(n->input())),
               Y(of->allocInplace(n->input(), n->output())) {}
-        void evaluate() override { transformTo(X, Y, Fn{}); }
+        void evaluate() override {
+            transformTo(deref(X), deref(Y, X), Fn{});
+        }
     };
 
     #define DEFINE_UNARY_OPERATOR(Name, fn) \
@@ -441,16 +525,18 @@ private:
     DEFINE_UNARY_OPERATOR(Atanh, atanh)
     DEFINE_UNARY_OPERATOR(Erf, erf)
     DEFINE_UNARY_OPERATOR(Sigmoid, sigmoid)
+    DEFINE_UNARY_OPERATOR(Softsign, softsign);
+    DEFINE_UNARY_OPERATOR(Softplus, softplus);
     #undef DEFINE_UNARY_OPERATOR
 
     struct ClipOp : Operator {
-        xfn::clip<T> op; TensorT<> X, Y;
+        xfn::clip<T> op; datum_ptr X, Y;
         ClipOp(OperatorFactory* of, model::Clip* n)
             : op(n->min(), n->max()),
               X(of->alloc(n->input())),
               Y(of->allocInplace(n->input(), n->output())) {}
         void evaluate() override {
-            dlf::transformTo(X, Y, op);
+            dlf::transformTo(deref(X), deref(Y, X), op);
         }
     };
 
@@ -459,13 +545,13 @@ private:
     }
 
     struct ShrinkOp : Operator {
-        xfn::shrink<T> op; TensorT<> X, Y;
+        xfn::shrink<T> op; datum_ptr X, Y;
         ShrinkOp(OperatorFactory* of, model::Shrink* n)
             : op(n->lambd(), n->bias()),
               X(of->alloc(n->input())),
               Y(of->allocInplace(n->input(), n->output())) {}
         void evaluate() override {
-            dlf::transformTo(X, Y, op);
+            dlf::transformTo(deref(X), deref(Y, X), op);
         }
     };
 
@@ -474,12 +560,12 @@ private:
     }
 
     struct ReluOp : Operator {
-        TensorT<> X, Y;
+        datum_ptr X, Y;
         ReluOp(OperatorFactory* of, model::Relu* n)
             : X(of->alloc(n->input())),
               Y(of->allocInplace(n->input(), n->output())) {}
         void evaluate() override {
-            dlf::transformTo(X, Y, xfn::relu<T>());
+            dlf::transformTo(deref(X), deref(Y, X), xfn::relu<T>());
         }
     };
 
@@ -488,13 +574,15 @@ private:
     }
 
     struct PReluOp : Operator {
-        TensorT<> X, slope, Y;
+        datum_ptr X, slope, Y;
         PReluOp(OperatorFactory* of, model::PRelu* n)
             : X(of->alloc(n->input())),
               slope(of->alloc(n->slope())),
               Y(of->allocInplace(n->input(), n->output())) {}
         void evaluate() override {
-            dlf::transformTo(X, slope, Y, xfn::prelu<T>());
+            auto out = deref(Y);
+            dlf::transformTo(deref(X), deref(slope), out, xfn::prelu<T>());
+            Y->unget(out);
         }
     };
 
@@ -503,12 +591,14 @@ private:
     }
 
     struct LeakyReluOp : Operator {
-        xfn::leaky_relu<T> op; TensorT<> X, Y;
+        xfn::leaky_relu<T> op; datum_ptr X, Y;
         LeakyReluOp(OperatorFactory* of, model::LeakyRelu* n)
             : op(n->alpha()),
               X(of->alloc(n->input())),
               Y(of->allocInplace(n->input(), n->output())) {}
-        void evaluate() override { dlf::transformTo(X, Y, op); }
+        void evaluate() override {
+            dlf::transformTo(deref(X), deref(Y, X), op);
+        }
     };
 
     void visit(model::LeakyRelu* n) override {
@@ -516,12 +606,14 @@ private:
     }
 
     struct ThresholdedReluOp : Operator {
-        xfn::thresholded_relu<T> op; TensorT<> X, Y;
+        xfn::thresholded_relu<T> op; datum_ptr X, Y;
         ThresholdedReluOp(OperatorFactory* of, model::ThresholdedRelu* n)
             : op(n->alpha()),
               X(of->alloc(n->input())),
               Y(of->allocInplace(n->input(), n->output())) {}
-        void evaluate() override { dlf::transformTo(X, Y, op); }
+        void evaluate() override {
+            dlf::transformTo(deref(X), deref(Y, X), op);
+        }
     };
 
     void visit(model::ThresholdedRelu* n) override {
@@ -529,12 +621,14 @@ private:
     }
 
     struct SeluOp : Operator {
-        xfn::selu<T> op; TensorT<> X, Y;
+        xfn::selu<T> op; datum_ptr X, Y;
         SeluOp(OperatorFactory* of, model::Selu* n)
             : op(n->alpha(), n->gamma()),
               X(of->alloc(n->input())),
               Y(of->allocInplace(n->input(), n->output())) {}
-        void evaluate() override { dlf::transformTo(X, Y, op); }
+        void evaluate() override {
+            dlf::transformTo(deref(X), deref(Y, X), op);
+        }
     };
 
     void visit(model::Selu* n) override {
@@ -542,12 +636,14 @@ private:
     }
 
     struct EluOp : Operator {
-        xfn::elu<T> op; TensorT<> X, Y;
+        xfn::elu<T> op; datum_ptr X, Y;
         EluOp(OperatorFactory* of, model::Elu* n)
             : op(n->alpha()),
               X(of->alloc(n->input())),
               Y(of->allocInplace(n->input(), n->output())) {}
-        void evaluate() override { dlf::transformTo(X, Y, op); }
+        void evaluate() override {
+            dlf::transformTo(deref(X), deref(Y, X), op);
+        }
     };
 
     void visit(model::Elu* n) override {
@@ -555,12 +651,14 @@ private:
     }
 
     struct HardSigmoidOp : Operator {
-        xfn::hard_sigmoid<T> op; TensorT<> X, Y;
+        xfn::hard_sigmoid<T> op; datum_ptr X, Y;
         HardSigmoidOp(OperatorFactory* of, model::HardSigmoid* n)
             : op(n->alpha(), n->beta()),
               X(of->alloc(n->input())),
               Y(of->allocInplace(n->input(), n->output())) {}
-        void evaluate() override { dlf::transformTo(X, Y, op); }
+        void evaluate() override {
+            dlf::transformTo(deref(X), deref(Y, X), op);
+        }
     };
 
     void visit(model::HardSigmoid* n) override {
@@ -568,12 +666,14 @@ private:
     }
 
     struct SoftmaxOp : Operator {
-        TensorT<> X, Y; int axis;
+        datum_ptr X, Y; int axis;
         SoftmaxOp(OperatorFactory* of, model::Softmax* n)
             : X(of->alloc(n->input())),
               Y(of->allocInplace(n->input(), n->output())),
               axis(n->axis()) {}
-        void evaluate() override { dnn::softmax(X, Y, axis); }
+        void evaluate() override {
+            dnn::softmax(deref(X), deref(Y, X), axis);
+        }
     };
 
     void visit(model::Softmax* n) override {
@@ -581,12 +681,14 @@ private:
     }
 
     struct LogSoftmaxOp : Operator {
-        TensorT<> X, Y; int axis;
+        datum_ptr X, Y; int axis;
         LogSoftmaxOp(OperatorFactory* of, model::LogSoftmax* n)
             : X(of->alloc(n->input())),
               Y(of->allocInplace(n->input(), n->output())),
               axis(n->axis()) {}
-        void evaluate() override { dnn::logsoftmax(X, Y, axis); }
+        void evaluate() override {
+            dnn::logsoftmax(deref(X), deref(Y, X), axis);
+        }
     };
 
     void visit(model::LogSoftmax* n) override {
@@ -594,55 +696,33 @@ private:
     }
 
     struct HardmaxOp : Operator {
-        TensorT<> X, Y; int axis;
+        datum_ptr X, Y; int axis;
         HardmaxOp(OperatorFactory* of, model::Hardmax* n)
             : X(of->alloc(n->input())),
               Y(of->allocInplace(n->input(), n->output())),
               axis(n->axis()) {}
-        void evaluate() override { dnn::hardmax(X, Y, axis); }
+        void evaluate() override {
+            dnn::hardmax(deref(X), deref(Y, X), axis);
+        }
     };
 
     void visit(model::Hardmax* n) override {
         result = std::make_unique<HardmaxOp>(this, n);
     }
 
-    struct SoftsignOp : Operator {
-        TensorT<> X, Y;
-        SoftsignOp(OperatorFactory* of, model::Softsign* n)
-            : X(of->alloc(n->input())),
-              Y(of->allocInplace(n->input(), n->output())) {}
-        void evaluate() override { dlf::transformTo(X, Y, xfn::softsign<T>()); }
-    };
-
-    void visit(model::Softsign* n) override {
-        result = std::make_unique<SoftsignOp>(this, n);
-    }
-
-    struct SoftplusOp : Operator {
-        TensorT<> X, Y;
-        SoftplusOp(OperatorFactory* of, model::Softplus* n)
-            : X(of->alloc(n->input())),
-              Y(of->allocInplace(n->input(), n->output())) {}
-        void evaluate() override { dlf::transformTo(X, Y, xfn::softplus<T>()); }
-    };
-
-    void visit(model::Softplus* n) override {
-        result = std::make_unique<SoftplusOp>(this, n);
-    }
-
     template <typename Fn>
     struct BinaryOp : Operator {
-        TensorT<> A, B, C;
+        datum_ptr A, B, C;
 
         BinaryOp(OperatorFactory* of, model::Node* n)
             : A(of->alloc(n->input(0))), B(of->alloc(n->input(1)))
         {
             auto shape = n->output()->dims().shape();
-            if (A.shape() == shape &&
+            if (A->shape() == shape &&
                     n->input(0)->uses().size() == 1 &&
                    !n->input(0)->has_initializer()) {
                 C = of->allocInplace(n->input(0), n->output());
-            } else if (B.shape() == shape &&
+            } else if (B->shape() == shape &&
                     n->input(1)->uses().size() == 1 &&
                    !n->input(1)->has_initializer()) {
                 C = of->allocInplace(n->input(1), n->output());
@@ -651,7 +731,11 @@ private:
             }
         }
 
-        void evaluate() override { transformTo(A, B, C, Fn{}); }
+        void evaluate() override {
+            auto out = deref(C);
+            transformTo(deref(A), deref(B), out, Fn{});
+            C->unget(out);
+        }
     };
 
     void visit(model::Add* n) override {
@@ -680,12 +764,15 @@ private:
 
     template <typename Fn>
     struct RelationOp : Operator {
-        TensorT<> A, B;
-        TensorT<bool> C;
+        datum_ptr A, B, C;
         RelationOp(OperatorFactory* of, model::Node* n)
             : A(of->alloc(n->input(0))), B(of->alloc(n->input(1))),
               C(of->alloc<bool>(n->output())) {}
-        void evaluate() override { transformTo(A, B, C, Fn{}); }
+        void evaluate() override {
+            auto out = deref<bool>(C);
+            transformTo(deref(A), deref(B), out, Fn{});
+            C->unget(out);
+        }
     };
 
     void visit(model::Greater* n) override {
@@ -702,8 +789,8 @@ private:
 
     template <typename Fn>
     struct AggregateOp : Operator {
-        std::list<TensorT<>> inputs;
-        TensorT<> output;
+        datum_list inputs;
+        datum_ptr output;
 
         AggregateOp(OperatorFactory* of, model::Node* n)
             : inputs(of->allocAll(n->inputs())),
@@ -711,22 +798,29 @@ private:
 
         void evaluate() override {
             if (inputs.size() == 0) {
-                output.fill(T{}); // fill with zero
-                return;
-            }
-            if (inputs.size() == 1) {
-                assert(inputs.front().shape() == output.shape());
-                flat_copy(inputs.front(), output);
+                deref(output).fill(T{}); // fill with zero
                 return;
             }
 
-            auto iterator = inputs.begin();
-            auto& a = *iterator++;
-            auto& b = *iterator++;
-            transformTo(a, b, output, Fn{});
-            while (iterator != inputs.end()) {
-                transformTo(output, *iterator, output, Fn{});
-                ++iterator;
+            if (inputs.size() == 1) {
+                flat_copy(deref(inputs.front()), deref(output, inputs.front()));
+                return;
+            }
+
+            std::vector<Shape> shapes;
+            shapes.reserve(inputs.size());
+            for (auto in : inputs)
+                shapes.push_back(in->shape());
+            output->template resize<T>(Shape::broadcast(shapes));
+
+            auto out = deref(output);
+            auto it = inputs.begin();
+            auto a = *it++;
+            auto b = *it++;
+            transformTo(deref(a), deref(b), out, Fn{});
+            while (it != inputs.end()) {
+                transformTo(out, deref(*it), out, Fn{});
+                ++it;
             }
         }
     };
@@ -754,7 +848,8 @@ private:
 
         void evaluate() override {
             AggregateOp<xfn::plus<T>>::evaluate();
-            transformTo(this->output, count, this->output, xfn::divides<T>());
+            auto out = deref(this->output);
+            transformTo(out, count, out, xfn::divides<T>());
         }
     };
 
@@ -764,7 +859,7 @@ private:
 
     template <typename Reducer>
     struct ReductionOp : Operator {
-        TensorT<> X, Y;
+        datum_ptr X, Y;
         std::vector<int> axes;
         bool keepdims;
 
@@ -777,7 +872,9 @@ private:
         }
 
         void evaluate() override {
-            dlf::reduce<Reducer>(X, Y, axes, keepdims);
+            auto out = deref(Y);
+            dlf::reduce<Reducer>(deref(X), out, axes, keepdims);
+            Y->unget(out);
         }
     };
 
@@ -822,8 +919,7 @@ private:
     }
 
     struct ArgMaxOp : Operator {
-        TensorT<> X;
-        TensorT<int> Y;
+        datum_ptr X, Y;
         int axis;
         bool keepdims;
 
@@ -833,7 +929,9 @@ private:
               axis(n->axis()), keepdims(n->keepdims()) {}
 
         void evaluate() override {
-            argmax(X, Y, axis, keepdims);
+            auto out = deref<int>(Y);
+            argmax(deref(X), out, axis, keepdims);
+            Y->unget(out);
         }
     };
 
@@ -842,8 +940,7 @@ private:
     }
 
     struct ArgMinOp : Operator {
-        TensorT<> X;
-        TensorT<int> Y;
+        datum_ptr X, Y;
         int axis;
         bool keepdims;
 
@@ -853,7 +950,9 @@ private:
               axis(n->axis()), keepdims(n->keepdims()) {}
 
         void evaluate() override {
-            argmin(X, Y, axis, keepdims);
+            auto out = deref<int>(Y);
+            argmin(deref(X), out, axis, keepdims);
+            Y->unget(out);
         }
     };
 
@@ -862,21 +961,20 @@ private:
     }
 
     struct CumSumOp : Operator {
-        TensorT<> input, output;
+        datum_ptr X, Y, axis;
         bool exclusive, reverse;
-        DatumPtr axis;
 
         CumSumOp(OperatorFactory* of, model::CumSum* n)
-            : input(of->alloc(n->input())),
-              output(of->allocInplace(n->input(), n->output())),
+            : X(of->alloc(n->input())),
+              Y(of->allocInplace(n->input(), n->output())),
+              axis(of->alloc<int>(n->axis())),
               exclusive(n->exclusive()),
-              reverse(n->reverse()),
-              axis(of->allocDatum<int>(n->axis())) {}
+              reverse(n->reverse()) {}
 
         void evaluate() override {
             auto a = axis->template read<int>();
             assert(a.rank() == 0);
-            cumsum(input, output, *a, exclusive, reverse);
+            cumsum(deref(X), deref(Y, X), *a, exclusive, reverse);
         }
     };
 
@@ -887,7 +985,7 @@ private:
     struct GemmOp : Operator {
         T alpha, beta;
         cblas::Transpose transA, transB;
-        TensorT<> A, B, C, Y;
+        datum_ptr A, B, C, Y;
 
         GemmOp(OperatorFactory* of, model::Gemm* n)
             : alpha(n->alpha()), beta(n->beta()),
@@ -899,7 +997,9 @@ private:
               Y(of->alloc(n->Y())) {}
 
         void evaluate() override {
-            gemm(transA, transB, alpha, A, B, beta, C, Y);
+            auto out = deref(Y);
+            gemm(transA, transB, alpha, deref(A), deref(B), beta, deref(C), out);
+            Y->unget(out);
         }
     };
 
@@ -908,11 +1008,13 @@ private:
     }
 
     struct MatMulOp : Operator {
-        TensorT<> A, B, C;
+        datum_ptr A, B, C;
         MatMulOp(OperatorFactory* of, model::MatMul* n)
             : A(of->alloc(n->A())), B(of->alloc(n->B())), C(of->alloc(n->C())) {}
         void evaluate() override {
-            matmul(A, B, C);
+            auto out = deref(C);
+            matmul(deref(A), deref(B), out);
+            C->unget(out);
         }
     };
 
@@ -921,23 +1023,27 @@ private:
     }
 
     struct ConvOp : Operator {
-        TensorT<> X, W, B, Y;
+        datum_ptr X, W, B, Y;
         dnn::Filter2D filter;
 
         ConvOp(OperatorFactory* of, model::Conv* n)
             : X(of->alloc(n->X())),
               W(of->alloc(n->W())),
-              B(n->B() ? of->alloc(n->B()) : TensorT<>()),
+              B(of->alloc(n->B())),
               Y(of->alloc(n->Y())),
-              filter(dnn::Filter2D(X.shape(), W.shape(), n->group())
+              filter(dnn::Filter2D(X->shape(), W->shape(), n->group())
                 .pads(n->pads())
                 .strides(n->strides())
                 .dilations(n->dilations())) {}
 
         void evaluate() override {
-            dnn::conv2d(X, W, Y, filter);
-            if (!B.empty()) {
-                transformChannel(Y, B, Y, 1, xfn::plus<T>());
+            filter.set_shape(X->shape(), W->shape(), filter.group());
+            Y->template resize<T>(filter.output_shape());
+
+            auto out = deref(Y);
+            dnn::conv2d(deref(X), deref(W), out, filter);
+            if (B != nullptr) {
+                transformChannel(out, deref(B), out, 1, xfn::plus<T>());
             }
         }
     };
@@ -947,15 +1053,24 @@ private:
     }
 
     struct MaxPoolOp : Operator {
-        TensorT<> X, Y; dnn::Filter2D filter;
+        datum_ptr X, Y;
+        dnn::Filter2D filter;
+
         MaxPoolOp(OperatorFactory* of, model::MaxPool* n)
             : X(of->alloc(n->input())),
               Y(of->alloc(n->output())),
-              filter(dnn::Filter2D(X.shape(), n->kernel_shape()[0], n->kernel_shape()[1])
+              filter(dnn::Filter2D(X->shape(), n->kernel_shape()[0], n->kernel_shape()[1])
                 .pads(n->pads())
                 .strides(n->strides())
                 .dilations(n->dilations())) {}
-        void evaluate() override { dnn::max_pooling(X, Y, filter); }
+
+        void evaluate() override {
+            filter.set_shape(X->shape());
+            Y->template resize<T>(filter.output_shape());
+
+            auto out = deref(Y);
+            dnn::max_pooling(deref(X), out, filter);
+        }
     };
 
     void visit(model::MaxPool* n) override {
@@ -963,16 +1078,25 @@ private:
     }
 
     struct AveragePoolOp : Operator {
-        TensorT<> X, Y; dnn::Filter2D filter;
+        datum_ptr X, Y;
+        dnn::Filter2D filter;
         const bool count_include_pad;
+
         AveragePoolOp(OperatorFactory* of, model::AveragePool* n)
             : X(of->alloc(n->input())),
               Y(of->alloc(n->output())),
-              filter(dnn::Filter2D(X.shape(), n->kernel_shape()[0], n->kernel_shape()[1])
+              filter(dnn::Filter2D(X->shape(), n->kernel_shape()[0], n->kernel_shape()[1])
                 .pads(n->pads())
                 .strides(n->strides())),
               count_include_pad(n->count_include_pad()) {}
-        void evaluate() override { dnn::average_pooling(X, Y, filter, count_include_pad); }
+
+        void evaluate() override {
+            filter.set_shape(X->shape());
+            Y->template resize<T>(filter.output_shape());
+
+            auto out = deref(Y);
+            dnn::average_pooling(deref(X), out, filter, count_include_pad);
+        }
     };
 
     void visit(model::AveragePool* n) override {
@@ -980,15 +1104,25 @@ private:
     }
 
     struct LpPoolOp : Operator {
-        TensorT<> X, Y; dnn::Filter2D filter; int p;
+        datum_ptr X, Y;
+        dnn::Filter2D filter;
+        int p;
+
         LpPoolOp(OperatorFactory* of, model::LpPool* n)
             : X(of->alloc(n->input())),
               Y(of->alloc(n->output())),
-              filter(dnn::Filter2D(X.shape(), n->kernel_shape()[0], n->kernel_shape()[1])
+              filter(dnn::Filter2D(X->shape(), n->kernel_shape()[0], n->kernel_shape()[1])
                 .pads(n->pads())
                 .strides(n->strides())),
               p(n->get_i("p", 2)) {}
-        void evaluate() override { dnn::lp_pooling(X, Y, filter, p); }
+
+        void evaluate() override {
+            filter.set_shape(X->shape());
+            Y->template resize<T>(filter.output_shape());
+
+            auto out = deref(Y);
+            dnn::lp_pooling(deref(X), out, filter, p);
+        }
     };
 
     void visit(model::LpPool* n) override {
@@ -996,10 +1130,14 @@ private:
     }
 
     struct GlobalMaxPoolOp : Operator {
-        TensorT<> X, Y;
+        datum_ptr X, Y;
         GlobalMaxPoolOp(OperatorFactory* of, model::GlobalMaxPool* n)
             : X(of->alloc(n->input())), Y(of->alloc(n->output())) {}
-        void evaluate() override { dnn::global_max_pooling(X, Y); }
+        void evaluate() override {
+            auto out = deref(Y);
+            dnn::global_max_pooling(deref(X), out);
+            Y->unget(out);
+        }
     };
 
     void visit(model::GlobalMaxPool* n) override {
@@ -1007,10 +1145,14 @@ private:
     }
 
     struct GlobalAveragePoolOp : Operator {
-        TensorT<> X, Y;
+        datum_ptr X, Y;
         GlobalAveragePoolOp(OperatorFactory* of, model::GlobalAveragePool* n)
             : X(of->alloc(n->input())), Y(of->alloc(n->output())) {}
-        void evaluate() override { dnn::global_average_pooling(X, Y); }
+        void evaluate() override {
+            auto out = deref(Y);
+            dnn::global_average_pooling(deref(X), out);
+            Y->unget(out);
+        }
     };
 
     void visit(model::GlobalAveragePool* n) override {
@@ -1018,12 +1160,16 @@ private:
     }
 
     struct GlobalLpPoolOp : Operator {
-        TensorT<> X, Y; int p;
+        datum_ptr X, Y; int p;
         GlobalLpPoolOp(OperatorFactory* of, model::GlobalLpPool* n)
             : X(of->alloc(n->input())),
               Y(of->alloc(n->output())),
               p(n->get_i("p", 2)) {}
-        void evaluate() override { dnn::global_lp_pooling(X, Y, p); }
+        void evaluate() override {
+            auto out = deref(Y);
+            dnn::global_lp_pooling(deref(X), out, p);
+            Y->unget(out);
+        }
     };
 
     void visit(model::GlobalLpPool* n) override {
@@ -1031,8 +1177,9 @@ private:
     }
 
     struct BatchNormalizationOp : Operator {
-        TensorT<> X, Y, S, B, M, V;
+        datum_ptr X, Y, S, B, M, V;
         T epsilon;
+
         BatchNormalizationOp(OperatorFactory* of, model::BatchNormalization* n)
             : X(of->alloc(n->X())),
               Y(of->allocInplace(n->X(), n->Y())),
@@ -1041,8 +1188,10 @@ private:
               M(of->alloc(n->mean())),
               V(of->alloc(n->var())),
               epsilon(n->epsilon()) {}
+
         void evaluate() override {
-            dnn::batch_norm(X, Y, S, B, M, V, epsilon);
+            auto out = deref(Y, X);
+            dnn::batch_norm(deref(X), out, deref(S), deref(B), deref(M), deref(V), epsilon);
         }
     };
 
@@ -1051,14 +1200,17 @@ private:
     }
 
     struct LRNOp : Operator {
-        TensorT<> X, Y; int n; T alpha, beta, bias;
+        datum_ptr X, Y; int n; T alpha, beta, bias;
+
         LRNOp(OperatorFactory* of, model::LRN* n)
             : X(of->alloc(n->input())),
               Y(of->allocInplace(n->input(), n->output())),
               n(n->size()),
               alpha(n->alpha()), beta(n->beta()), bias(n->bias()) {}
+
         void evaluate() override {
-            dnn::lrn(X, Y, n, alpha, beta, bias);
+            auto out = deref(Y, X);
+            dnn::lrn(deref(X), out, n, alpha, beta, bias);
         }
     };
 
@@ -1067,32 +1219,156 @@ private:
     }
 
     struct ReshapeOp : Operator {
-        TensorT<> X, Y;
-        ReshapeOp(OperatorFactory* of, model::Node* n)
+        datum_ptr X, Y;
+        datum_ptr shape_datum;
+        std::vector<int> shape_init;
+
+        ReshapeOp(OperatorFactory* of, model::Reshape* n)
             : X(of->alloc(n->input())),
-              Y(of->allocInplace(n->input(), n->output())) {}
-        void evaluate() override { reshape(X, Y); }
+              Y(of->allocInplace(n->input(), n->output()))
+        {
+            if (n->shape()->has_initializer()) {
+                shape_init = decodeShape(n->shape()->initializer().decode<int64_t>());
+            } else {
+                shape_datum = of->alloc<int64_t>(n->shape());
+            }
+        }
+
+        void evaluate() override {
+            auto new_shape = X->shape().reshape(decodeShape());
+            if (X == Y) {
+                X->template resize<T>(std::move(new_shape));
+            } else {
+                Y->template resize<T>(std::move(new_shape));
+                flat_copy(deref(X), deref(Y));
+            }
+        }
+
+    private:
+        std::vector<int> decodeShape() {
+            if (shape_datum == nullptr)
+                return shape_init;
+            return decodeShape(shape_datum->template read<int64_t>());
+        }
+
+        static std::vector<int> decodeShape(Tensor<int64_t>&& datum) {
+            assert(datum.rank() == 1);
+            return std::vector<int>(datum.begin(), datum.end());
+        }
     };
 
     void visit(model::Reshape* n) override {
         result = std::make_unique<ReshapeOp>(this, n);
     }
 
-    void visit(model::Flatten* n) override {
-        result = std::make_unique<ReshapeOp>(this, n);
+    struct ShapeOp : Operator {
+        datum_ptr X, Y;
+        ShapeOp(OperatorFactory* of, model::Shape* n)
+            : X(of->alloc(n->input())), Y(of->alloc<int64_t>(n->output())) {}
+        void evaluate() override {
+            auto dims = X->shape().extents();
+            Y->set(Tensor<int64_t>({dims.size()}, dims.begin(), dims.end()));
+        }
+    };
+
+    void visit(model::Shape* n) override {
+        result = std::make_unique<ShapeOp>(this, n);
     }
+
+    struct SizeOp : Operator {
+        datum_ptr X, Y;
+        SizeOp(OperatorFactory* of, model::Size* n)
+            : X(of->alloc(n->input())), Y(of->alloc<int64_t>(n->output())) {}
+        void evaluate() override {
+            Y->set(Scalar<int64_t>(X->shape().size()));
+        }
+    };
+
+    void visit(model::Size* n) override {
+        result = std::make_unique<SizeOp>(this, n);
+    }
+
+    struct FlattenOp : Operator {
+        datum_ptr X, Y;
+        int axis;
+
+        FlattenOp(OperatorFactory* of, model::Flatten* n)
+            : X(of->alloc(n->input())),
+              Y(of->allocInplace(n->input(), n->output())),
+              axis(n->axis()) {}
+
+        void evaluate() override {
+            auto shape = X->shape().flatten(axis);
+            if (X == Y) {
+                X->template resize<T>(std::move(shape));
+            } else {
+                Y->template resize<T>(std::move(shape));
+                flat_copy(deref(X), deref(Y));
+            }
+        }
+    };
+
+    void visit(model::Flatten* n) override {
+        result = std::make_unique<FlattenOp>(this, n);
+    }
+
+    struct SqueezeOp : Operator {
+        datum_ptr X, Y;
+        std::vector<int> axes;
+
+        SqueezeOp(OperatorFactory* of, model::Squeeze* n)
+            : X(of->alloc(n->input())),
+              Y(of->allocInplace(n->input(), n->output()))
+        {
+            auto temp = n->axes();
+            axes.assign(temp.begin(), temp.end());
+        }
+
+        void evaluate() override {
+            auto shape = X->shape().squeeze(axes);
+            if (X == Y) {
+                X->template resize<T>(std::move(shape));
+            } else {
+                Y->template resize<T>(std::move(shape));
+                flat_copy(deref(X), deref(Y));
+            }
+        }
+    };
 
     void visit(model::Squeeze* n) override {
-        result = std::make_unique<ReshapeOp>(this, n);
+        result = std::make_unique<SqueezeOp>(this, n);
     }
 
+    struct UnsqueezeOp : Operator {
+        datum_ptr X, Y;
+        std::vector<int> axes;
+
+        UnsqueezeOp(OperatorFactory* of, model::Unsqueeze* n)
+            : X(of->alloc(n->input())),
+              Y(of->allocInplace(n->input(), n->output()))
+        {
+            auto temp = n->axes();
+            axes.assign(temp.begin(), temp.end());
+        }
+
+        void evaluate() override {
+            auto shape = X->shape().unsqueeze(axes);
+            if (X == Y) {
+                X->template resize<T>(std::move(shape));
+            } else {
+                Y->template resize<T>(std::move(shape));
+                flat_copy(deref(X), deref(Y));
+            }
+        }
+    };
+
     void visit(model::Unsqueeze* n) override {
-        result = std::make_unique<ReshapeOp>(this, n);
+        result = std::make_unique<UnsqueezeOp>(this, n);
     }
 
     struct ConcatOp : Operator {
-        std::list<TensorT<>> inputs;
-        TensorT<> output;
+        datum_list inputs;
+        datum_ptr output;
         int axis;
 
         ConcatOp(OperatorFactory* of, model::Concat* n)
@@ -1101,7 +1377,10 @@ private:
               axis(n->axis()) {}
 
         void evaluate() override {
-            concat(axis, inputs.begin(), inputs.end(), output);
+            auto temp = derefAll(inputs);
+            auto out = deref(output);
+            concat(axis, temp.begin(), temp.end(), out);
+            output->unget(out);
         }
     };
 
@@ -1110,8 +1389,8 @@ private:
     }
 
     struct SplitOp : Operator {
-        TensorT<> input;
-        std::list<TensorT<>> outputs;
+        datum_ptr input;
+        datum_list outputs;
         int axis;
 
         SplitOp(OperatorFactory* of, model::Split* n)
@@ -1120,7 +1399,13 @@ private:
               axis(n->axis()) {}
 
         void evaluate() override {
-            split(input, axis, outputs.begin(), outputs.end());
+            auto temp = derefAll(outputs);
+            split(deref(input), axis, temp.begin(), temp.end());
+
+            auto it = temp.begin();
+            for (int i = 0; i < outputs.size(); ++i, ++it) {
+                outputs[i]->unget(*it);
+            }
         }
     };
 
@@ -1129,18 +1414,17 @@ private:
     }
 
     struct GatherOp : Operator {
-        TensorT<> input, output;
-        TensorT<int> indices;
+        datum_ptr X, Y, indices;
         int axis;
-
         GatherOp(OperatorFactory* of, model::Gather* n)
-            : input(of->alloc(n->input())),
-              output(of->alloc(n->output())),
+            : X(of->alloc(n->input())),
+              Y(of->alloc(n->output())),
               indices(of->alloc<int>(n->indices())),
               axis(n->axis()) {}
-
         void evaluate() override {
-            gather(input, output, indices, axis);
+            auto out = deref(Y);
+            gather(deref(X), out, deref<int>(indices), axis);
+            Y->unget(out);
         }
     };
 
@@ -1150,21 +1434,18 @@ private:
 
     // deprecated, same as ScatterElements
     struct ScatterOp : Operator {
-        TensorT<> input, output;
-        TensorT<int> indices;
-        TensorT<> updates;
+        datum_ptr X, Y, indices, updates;
         int axis;
-
         ScatterOp(OperatorFactory* of, model::Scatter* n)
-            : input(of->alloc(n->input())),
-              output(of->allocInplace(n->input(), n->output())),
+            : X(of->alloc(n->input())),
+              Y(of->allocInplace(n->input(), n->output())),
               indices(of->alloc<int>(n->indices())),
               updates(of->alloc(n->updates())),
               axis(n->axis()) {}
-
         void evaluate() override {
-            flat_copy(input, output);
-            scatter_elements(output, indices, updates, axis);
+            auto out = deref(Y, X);
+            flat_copy(deref(X), out);
+            scatter_elements(out, deref<int>(indices), deref(updates), axis);
         }
     };
 
@@ -1173,18 +1454,17 @@ private:
     }
 
     struct GatherElementsOp : Operator {
-        TensorT<> input, output;
-        TensorT<int> indices;
+        datum_ptr X, Y, indices;
         int axis;
-
         GatherElementsOp(OperatorFactory* of, model::GatherElements* n)
-            : input(of->alloc(n->input())),
-              output(of->alloc(n->output())),
+            : X(of->alloc(n->input())),
+              Y(of->alloc(n->output())),
               indices(of->alloc<int>(n->indices())),
               axis(n->axis()) {}
-
         void evaluate() override {
-            gather_elements(input, output, indices, axis);
+            auto out = deref(Y);
+            gather_elements(deref(X), out, deref<int>(indices), axis);
+            Y->unget(out);
         }
     };
 
@@ -1193,21 +1473,18 @@ private:
     }
 
     struct ScatterElementsOp : Operator {
-        TensorT<> input, output;
-        TensorT<int> indices;
-        TensorT<> updates;
+        datum_ptr X, Y, indices, updates;
         int axis;
-
         ScatterElementsOp(OperatorFactory* of, model::ScatterElements* n)
-            : input(of->alloc(n->input())),
-              output(of->allocInplace(n->input(), n->output())),
+            : X(of->alloc(n->input())),
+              Y(of->allocInplace(n->input(), n->output())),
               indices(of->alloc<int>(n->indices())),
               updates(of->alloc(n->updates())),
               axis(n->axis()) {}
-
         void evaluate() override {
-            flat_copy(input, output);
-            scatter_elements(output, indices, updates, axis);
+            auto out = deref(Y, X);
+            flat_copy(deref(X), out);
+            scatter_elements(out, deref<int>(indices), deref(updates), axis);
         }
     };
 
@@ -1216,16 +1493,15 @@ private:
     }
 
     struct GatherNDOp : Operator {
-        TensorT<> input, output;
-        TensorT<int> indices;
-
+        datum_ptr X, Y, indices;
         GatherNDOp(OperatorFactory* of, model::GatherND* n)
-            : input(of->alloc(n->input())),
-              output(of->alloc(n->output())),
+            : X(of->alloc(n->input())),
+              Y(of->alloc(n->output())),
               indices(of->alloc<int>(n->indices())) {}
-
         void evaluate() override {
-            gather_nd(input, output, indices);
+            auto out = deref(Y);
+            gather_nd(deref(X), out, deref<int>(indices));
+            Y->unget(out);
         }
     };
 
@@ -1234,19 +1510,16 @@ private:
     }
 
     struct ScatterNDOp : Operator {
-        TensorT<> input, output;
-        TensorT<int> indices;
-        TensorT<> updates;
-
+        datum_ptr X, Y, indices, updates;
         ScatterNDOp(OperatorFactory* of, model::ScatterND* n)
-            : input(of->alloc(n->input())),
-              output(of->allocInplace(n->input(), n->output())),
+            : X(of->alloc(n->input())),
+              Y(of->allocInplace(n->input(), n->output())),
               indices(of->alloc<int>(n->indices())),
               updates(of->alloc(n->updates())) {}
-
         void evaluate() override {
-            flat_copy(input, output);
-            scatter_nd(output, indices, updates);
+            auto out = deref(Y, X);
+            flat_copy(deref(X), out);
+            scatter_nd(out, deref<int>(indices), deref(updates));
         }
     };
 
@@ -1254,26 +1527,55 @@ private:
         result = std::make_unique<ScatterNDOp>(this, n);
     }
 
-    struct SliceOp : Operator {
-        TensorT<> X, Y;
-        DatumPtr starts, ends, axes, steps;
+    struct FixedSliceOp : Operator {
+        datum_ptr X, Y;
+        std::vector<int> starts, ends, axes, steps;
 
-        SliceOp(OperatorFactory* of, model::Slice* n)
-            : X(of->alloc(n->input())),
-              Y(of->alloc(n->output())),
-              starts(of->allocDatum<int>(n->starts())),
-              ends(of->allocDatum<int>(n->ends())),
-              axes(n->axes()==nullptr ? nullptr : of->allocDatum<int>(n->axes())),
-              steps(n->steps()==nullptr ? nullptr : of->allocDatum<int>(n->steps())) {}
+        FixedSliceOp(OperatorFactory* of, model::Slice* n)
+            : X(of->alloc(n->input())), Y(of->alloc(n->output())),
+              starts(decode(n->starts())),
+              ends(decode(n->ends())),
+              axes(decode(n->axes())),
+              steps(decode(n->steps())) {}
 
         void evaluate() override {
-            slice(X, Y, read(starts), read(ends), read(axes), read(steps));
+            auto x = deref(X), y = deref(Y);
+            reorder(x.slice(starts, ends, axes, steps), y);
+            Y->unget(y);
         }
 
-        std::vector<int> read(DatumPtr datum) {
-            if (datum == nullptr) {
+        static std::vector<int> decode(model::Value* n) {
+            if (n == nullptr)
                 return {};
-            } else {
+            else {
+                auto v = n->initializer().decode<int>();
+                assert(v.rank() == 1);
+                return {v.begin(), v.end()};
+            }
+        }
+    };
+
+    struct DynamicSliceOp : Operator {
+        datum_ptr X, Y;
+        datum_ptr starts, ends, axes, steps;
+
+        DynamicSliceOp(OperatorFactory* of, model::Slice* n)
+            : X(of->alloc(n->input())), Y(of->alloc(n->output())),
+              starts(of->alloc<int>(n->starts())),
+              ends(of->alloc<int>(n->ends())),
+              axes(of->alloc<int>(n->axes())),
+              steps(of->alloc<int>(n->steps())) {}
+
+        void evaluate() override {
+            auto x = deref(X), y = deref(Y);
+            reorder(x.slice(decode(starts), decode(ends), decode(axes), decode(steps)), y);
+            Y->unget(y);
+        }
+
+        static std::vector<int> decode(datum_ptr datum) {
+            if (datum == nullptr)
+                return {};
+            else {
                 auto v = datum->template read<int>();
                 assert(v.rank() == 1);
                 return {v.begin(), v.end()};
@@ -1282,11 +1584,17 @@ private:
     };
 
     void visit(model::Slice* n) override {
-        result = std::make_unique<SliceOp>(this, n);
+        if (n->starts()->has_initializer() &&
+            n->ends  ()->has_initializer() &&
+            (n->axes () == nullptr || n->axes ()->has_initializer()) &&
+            (n->steps() == nullptr || n->steps()->has_initializer()))
+            result = std::make_unique<FixedSliceOp>(this, n);
+        else
+            result = std::make_unique<DynamicSliceOp>(this, n);
     }
 
     struct TransposeOp : Operator {
-        TensorT<> X, Y;
+        datum_ptr X, Y;
         std::vector<size_t> perm;
 
         TransposeOp(OperatorFactory* of, model::Transpose* n)
@@ -1296,21 +1604,63 @@ private:
                 auto& x_perm = n->perm();
                 perm.assign(x_perm.begin(), x_perm.end());
             } else {
-                perm.resize(X.rank());
+                perm.resize(X->shape().rank());
                 std::iota(perm.begin(), perm.end(), 0);
                 std::reverse(perm.begin(), perm.end());
             }
         }
 
-        void evaluate() override { transpose(X, Y, perm); }
+        void evaluate() override {
+            auto out = deref(Y);
+            reorder(deref(X).transpose(perm), out);
+            Y->unget(out);
+        }
     };
 
     void visit(model::Transpose* n) override {
         result = std::make_unique<TransposeOp>(this, n);
     }
 
+    struct ExpandOp : Operator {
+        datum_ptr X, Y;
+        datum_ptr shape_datum;
+        Shape shape_init;
+
+        ExpandOp(OperatorFactory* of, model::Expand* n)
+            : X(of->alloc(n->input())), Y(of->alloc(n->output()))
+        {
+            if (n->shape()->has_initializer()) {
+                shape_init = decodeShape(n->shape()->initializer().decode<int64_t>());
+            } else {
+                shape_datum = of->alloc<int64_t>(n->shape());
+            }
+        }
+
+        void evaluate() override {
+            auto shape = Shape::broadcast(X->shape(), decodeShape());
+            Y->template resize<T>(shape);
+            reorder(deref(X).broadcast(shape), deref(Y));
+        }
+
+    private:
+        Shape decodeShape() {
+            if (shape_datum == nullptr)
+                return shape_init;
+            return decodeShape(shape_datum->template read<int64_t>());
+        }
+
+        static Shape decodeShape(Tensor<int64_t>&& datum) {
+            assert(datum.rank() == 1);
+            return Shape(std::vector<size_t>(datum.begin(), datum.end()));
+        }
+    };
+
+    void visit(model::Expand* n) override {
+        result = std::make_unique<ExpandOp>(this, n);
+    }
+
     struct PadOp : Operator {
-        TensorT<> X, Y;
+        datum_ptr X, Y;
         std::vector<int> pads;
         PadMode mode = PadMode::Constant;
         T value{};
@@ -1336,7 +1686,9 @@ private:
         }
 
         void evaluate() override {
-            pad(X, Y, pads, mode, value);
+            auto out = deref(Y);
+            pad(deref(X), out, pads, mode, value);
+            Y->unget(out);
         }
     };
 
@@ -1345,18 +1697,19 @@ private:
     }
 
     struct TileOp : Operator {
-        TensorT<> X, Y;
-        DatumPtr reps;
+        datum_ptr X, Y, reps;
 
         TileOp(OperatorFactory* of, model::Tile* n)
             : X(of->alloc(n->input())),
               Y(of->alloc(n->output())),
-              reps(of->allocDatum<int>(n->repeats())) {}
+              reps(of->alloc<int>(n->repeats())) {}
 
         void evaluate() override {
+            auto out = deref(Y);
             auto v = reps->template read<int>();
             assert(v.rank() == 1);
-            tile(X, Y, std::vector<size_t>(v.begin(), v.end()));
+            tile(deref(X), out, std::vector<size_t>(v.begin(), v.end()));
+            Y->unget(out);
         }
     };
 
@@ -1365,13 +1718,17 @@ private:
     }
 
     struct SpaceToDepthOp : Operator {
-        TensorT<> X, Y;
+        datum_ptr X, Y;
         int blocksize;
+
         SpaceToDepthOp(OperatorFactory* of, model::SpaceToDepth* n)
             : X(of->alloc(n->input())), Y(of->alloc(n->output())),
               blocksize(n->blocksize()) {}
+
         void evaluate() override {
-            dnn::space_to_depth(X, Y, blocksize);
+            auto out = deref(Y);
+            dnn::space_to_depth(deref(X), out, blocksize);
+            Y->unget(out);
         }
     };
 
@@ -1380,15 +1737,19 @@ private:
     }
 
     struct DepthToSpaceOp : Operator {
-        TensorT<> X, Y;
+        datum_ptr X, Y;
         int blocksize;
         std::string mode;
+
         DepthToSpaceOp(OperatorFactory* of, model::DepthToSpace* n)
             : X(of->alloc(n->input())), Y(of->alloc(n->output())),
               blocksize(n->blocksize()),
               mode(n->mode()) {}
+
         void evaluate() override {
-            dnn::depth_to_space(X, Y, blocksize, mode);
+            auto out = deref(Y);
+            dnn::depth_to_space(deref(X), out, blocksize, mode);
+            Y->unget(out);
         }
     };
 
@@ -1397,14 +1758,19 @@ private:
     }
 
     struct WhereOp : Operator {
-        TensorT<bool> C;
-        TensorT<> X, Y, Z;
+        datum_ptr C, X, Y, Z;
+
         WhereOp(OperatorFactory* of, model::Where* n)
             : C(of->alloc<bool>(n->condition())),
               X(of->alloc(n->X())),
               Y(of->alloc(n->Y())),
               Z(of->alloc(n->Z())) {}
-        void evaluate() override { where(C, X, Y, Z); }
+
+        void evaluate() override {
+            auto out = deref(Z);
+            where(deref<bool>(C), deref(X), deref(Y), out);
+            Z->unget(out);
+        }
     };
 
     void visit(model::Where* n) override {
@@ -1416,17 +1782,23 @@ template <typename Context, typename T>
 Predictor<Context, T>::Predictor(model::Graph& graph,
     const std::unordered_map<std::string, size_t>& env)
 {
-    OperatorFactory<Context, T> factory(m_dataset);
-
     model::ShapeInference::newInstance(env)->infer(graph);
     model::Optimizer::newInstance()->optimize(graph);
 
+    OperatorFactory<Context, T> factory(m_dataset);
     for (auto n : graph.nodes())
         m_operators.push_back(factory.createOperator(n));
     for (auto v : graph.inputs())
-        m_inputs.push_back(factory.allocDatum(v));
+        m_inputs.push_back(factory.alloc(v));
     for (auto v : graph.outputs())
-        m_outputs.push_back(factory.allocDatum(v));
+        m_outputs.push_back(factory.alloc(v));
+}
+
+template <typename Context, typename T>
+void Predictor<Context, T>::predict() {
+    for (auto& op : m_operators) {
+        op->evaluate();
+    }
 }
 
 }} // namespace dlf::predict

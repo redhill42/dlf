@@ -187,7 +187,17 @@ public:
             auto body_output = body->output(i + 1); // skip 'cond'
             auto loop_output = n->output(i);
             loop_output->set_type(body_output->type());
-            loop_output->set_dims(body_output->dims());
+
+            if (i < num_inputs - 2) {
+                // loop state var
+                loop_output->set_dims(body_output->dims());
+            } else {
+                // per iteration output. first dimension will be number of iterations
+                // but we don't know that value yet.
+                auto dims = body_output->dims();
+                dims.insert(0, Dimension(1));
+                loop_output->set_dims(std::move(dims));
+            }
         }
     }
 
@@ -196,17 +206,23 @@ public:
     }
 
     void visit(Where* n) override {
-        if (!hasInput(n->condition(), n->X(), n->Y()))
-            return;
+        if (hasInput(n->X()) && hasInput(n->Y())) {
+            if (n->X()->type() != n->Y()->type())
+                fail_shape_inference("Where: Type mismatch for input tensors.");
+            n->output()->set_type(n->X()->type());
+        }
+        if (hasInput(n->condition()) && n->condition()->type() != DataType::BOOL) {
+            fail_shape_inference("Where: The condition tensor must have type `bool'.");
+        }
 
-        std::vector<Dims> shapes = {
-            n->condition()->dims(),
-            n->X()->dims(),
-            n->Y()->dims()
-        };
-
-        n->output()->set_type(n->X()->type());
-        n->output()->set_dims(broadcastShape(shapes));
+        if (hasInput(n->condition(), n->X(), n->Y())) {
+            std::vector<Dims> shapes = {
+                n->condition()->dims(),
+                n->X()->dims(),
+                n->Y()->dims()
+            };
+            n->output()->set_dims(broadcastShape(shapes));
+        }
     }
 
     //-----------------------------------------------------------------------
@@ -219,11 +235,10 @@ public:
     }
 
     void visit(ConstantOfShape* n) override {
-        if (!hasInput(n->input()) || !n->input()->has_initializer())
-            return;
-
-        auto shape = decodeShape(n, n->input()->initializer());
-        n->output()->set_dims({shape.begin(), shape.end()});
+        if (hasInput(n->input()) && n->input()->has_initializer()) {
+            auto shape = decodeShape(n, n->input()->initializer());
+            n->output()->set_dims({shape.begin(), shape.end()});
+        }
 
         if (n->has_value()) {
             n->output()->set_type(n->value().type());
@@ -495,9 +510,12 @@ public:
     }
 
     void visit(TopK* n) override {
-        if (!hasInput(n->input()) || !hasInput(n->K()))
+        if (!hasInput(n->input()))
             return;
-        if (!n->K()->has_initializer())
+        n->output()->set_type(n->input()->type());
+        n->indices()->set_type(DataType::INT64);
+
+        if (!hasInput(n->K()) || !n->K()->has_initializer())
             return;
         if (n->K()->type() != DataType::INT64 || n->K()->dims().rank() != 1 || n->K()->dim(0) != 1)
             fail_shape_inference("TopK: K input must be a one-dimensional tensor of size 1");
@@ -516,8 +534,6 @@ public:
         auto output_shape = input_shape;
         output_shape[axis] = k;
 
-        n->output()->set_type(n->input()->type());
-        n->indices()->set_type(DataType::INT64);
         n->output()->set_dims(output_shape);
         n->indices()->set_dims(output_shape);
     }
@@ -1089,9 +1105,11 @@ public:
     }
 
     void visit(Reshape* n) override {
-        if (!hasInput(n->data(), n->shape()))
+        if (!hasInput(n->data()))
             return;
-        if (!n->shape()->has_initializer())
+        n->reshaped()->set_type(n->data()->type());
+
+        if (!hasInput(n->shape()) || !n->shape()->has_initializer())
             return;
         if (n->shape()->type() != DataType::INT64)
             fail_shape_inference("Reshape: Invalid shape");
@@ -1126,11 +1144,8 @@ public:
             fail_shape_inference("Reshape: Incompatible shape");
 
         Dims new_shape;
-        for (auto d : shape) {
+        for (auto d : shape)
             new_shape.append(static_cast<size_t>(d));
-        }
-
-        n->reshaped()->set_type(n->data()->type());
         n->reshaped()->set_dims(new_shape);
     }
 
@@ -1225,6 +1240,7 @@ public:
 
         if (!hasInput(n->data()))
             return;
+        n->output()->set_type(n->input()->type());
 
         // Shape inference if starts and ends are available and axes/steps are
         // either not set or set and has initializer.
@@ -1302,7 +1318,6 @@ public:
             output_shape[axis] = temp;
         }
 
-        n->output()->set_type(n->input()->type());
         n->output()->set_dims(output_shape);
     }
 
@@ -1568,9 +1583,11 @@ public:
     }
 
     void visit(Tile* n) override {
-        if (!hasInput(n->input(), n->repeats()))
+        if (!hasInput(n->input()))
             return;
-        if (!n->repeats()->has_initializer())
+        n->output()->set_type(n->input()->type());
+
+        if (!hasInput(n->repeats()) || !n->repeats()->has_initializer())
             return;
         if (n->repeats()->type() != DataType::INT64 || n->repeats()->dims().rank() != 1)
             fail_shape_inference("Tile: The repeats tensor has incorrect value");
@@ -1582,18 +1599,17 @@ public:
             fail_shape_inference("Tile: 'Repeats' input has incorrect number of values");
 
         Dims output_shape;
-        for (size_t i = 0; i < input_rank; i++) {
+        for (size_t i = 0; i < input_rank; i++)
             output_shape.append(static_cast<size_t>(input_shape[i] * repeats(i)));
-        }
-
-        n->output()->set_type(n->input()->type());
         n->output()->set_dims(output_shape);
     }
 
     void visit(Resize* n) override {
-        if (!hasInput(n->input(), n->scales()))
+        if (!hasInput(n->input()))
             return;
-        if (!n->scales()->has_initializer())
+        n->output()->set_type(n->input()->type());
+
+        if (!hasInput(n->scales()) || !n->scales()->has_initializer())
             return;
 
         const auto& input_shape = n->input()->dims();
@@ -1611,15 +1627,15 @@ public:
             auto dim = static_cast<size_t>(std::floor(input_shape[i] * scales(i)));
             output_shape.append(dim);
         }
-
-        n->output()->set_type(n->input()->type());
         n->output()->set_dims(output_shape);
     }
 
     void visit(Expand* n) override {
-        if (!hasInput(n->input()) || !hasInput(n->shape()))
+        if (!hasInput(n->input()))
             return;
-        if (!n->shape()->has_initializer())
+        n->output()->set_type(n->input()->type());
+
+        if (!hasInput(n->shape()) || !n->shape()->has_initializer())
             return;
         if (n->shape()->dims().rank() != 1 || n->shape()->type() != DataType::INT64)
             fail_shape_inference("Expand: 'shape' input must be 1D tensor of type INT64");
@@ -1627,16 +1643,15 @@ public:
         auto& input_shape = n->input()->dims();
         auto shape_data = decodeShape(n, n->shape()->initializer());
         Dims shape(shape_data.begin(), shape_data.end());
-        auto output_shape = broadcastShape(input_shape, shape);
-
-        n->output()->set_type(n->input()->type());
-        n->output()->set_dims(output_shape);
+        n->output()->set_dims(broadcastShape(input_shape, shape));
     }
 
     void visit(Compress* n) override {
-        if (!hasInput(n->input(), n->condition()))
+        if (!hasInput(n->input()))
             return;
-        if (!n->condition()->has_initializer())
+        n->output()->set_type(n->input()->type());
+
+        if (!hasInput(n->condition()) || !n->condition()->has_initializer())
             return;
         if (n->condition()->dims().rank() != 1 || n->condition()->type() != DataType::BOOL)
             fail_shape_inference("Compress: 'condition' input must be 1D tensor of type BOOL");
@@ -1660,8 +1675,6 @@ public:
                 num_selected = total_size;
             output_shape.append(num_selected);
         }
-
-        n->output()->set_type(n->input()->type());
         n->output()->set_dims(output_shape);
     }
 

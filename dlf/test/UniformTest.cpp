@@ -479,13 +479,7 @@ TEST(UniformTest, ReshapeCPU) {
     auto B = reshape(A, {6});
     EXPECT_EQ(B, R);
 
-    auto C = Tensor<int>({6});
-    reshape(A, C);
-    EXPECT_EQ(C, R);
-
-    auto D = Tensor<int>({7});
     EXPECT_ANY_THROW(reshape(A, {7}));
-    EXPECT_ANY_THROW(reshape(A, D));
 }
 
 TEST(UniformTest, ReshapeGPU) {
@@ -495,13 +489,7 @@ TEST(UniformTest, ReshapeGPU) {
     auto B = reshape(A, {6});
     EXPECT_EQ(B.read(), R);
 
-    auto C = DevTensor<int>({6});
-    reshape(A, C);
-    EXPECT_EQ(C.read(), R);
-
-    auto D = DevTensor<int>({7});
     EXPECT_ANY_THROW(reshape(A, {7}));
-    EXPECT_ANY_THROW(reshape(A, D));
 }
 
 TEST(UniformTest, FlattenCPU) {
