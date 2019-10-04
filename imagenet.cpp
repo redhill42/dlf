@@ -1,8 +1,11 @@
 #include <cstdio>
 #include <algorithm>
+#include <chrono>
+
+#include <ctype.h>
+#include <unistd.h>
 #include <dirent.h>
 #include <sys/stat.h>
-#include <chrono>
 
 #include <opencv2/opencv.hpp>
 #include <opencv2/highgui/highgui.hpp>
@@ -14,9 +17,7 @@
 #include "synset.txt"
 
 using namespace dlf;
-using Context = predict::GPU;
 using Real = float;
-using Predictor = predict::Predictor<Context, Real>;
 
 static std::string ImageLabel(size_t i) {
     std::string label = synset[i];
@@ -58,7 +59,10 @@ struct ImageClass {
     }
 };
 
-Predictor create_predictor(const char* path, const std::vector<size_t>& input_shape) {
+template <typename Context>
+predict::Predictor<Context, Real> create_predictor(
+    const char* path, const std::vector<size_t>& input_shape)
+{
     auto g = model::import_model(path);
     g->input(0)->set_dims(input_shape);
     return predict::Predictor<Context, Real>(std::move(g));
@@ -145,7 +149,8 @@ std::vector<ImageClass> load_images(std::string dir, RandomGenerator& g, size_t 
     return images;
 }
 
-void predict_images(Predictor& predictor, std::vector<ImageClass>& images) {
+template <typename Context>
+void predict_images(predict::Predictor<Context, Real>& predictor, std::vector<ImageClass>& images) {
     Tensor<Real> batch({images.size(), 3, size_t(images[0].image.rows), size_t(images[0].image.cols)});
     for (int i = 0; i < images.size(); i++) {
         reorder(preprocess(images[i].image), unsqueeze(batch[i], 0));
@@ -219,70 +224,122 @@ static bool is_dir(const char* path) {
     return S_ISDIR(s.st_mode);
 }
 
+template <typename Context>
+void run_interactive(const char* model_path, const char* data_path) {
+    std::string title = model_path;
+    auto pos = title.rfind('/');
+    if (pos != std::string::npos)
+        title = title.substr(pos+1);
+    title = "Image Classification - " + title;
+
+    auto predictor = create_predictor<Context>(model_path, {15, 3, 224, 224});
+    std::mt19937 rng(std::random_device{}());
+    cv::namedWindow(title);
+
+    do {
+        auto images = load_images(data_path, rng, 15);
+        predict_images(predictor, images);
+        auto canvas = create_image_grid(images, 224, 5, 3);
+        cv::imshow(title, canvas);
+    } while (cv::waitKey(0) != 'q');
+}
+
+template <typename Context>
+void run_benchmark(const char* model_path, const char* data_path, size_t batch_size, size_t round) {
+    // prepare batch
+    auto predictor = create_predictor<Context>(model_path, {batch_size, 3, 224, 224});
+    auto image = prepare(data_path);
+    auto input = Tensor<Real>({batch_size, 3, 224, 224});
+    for (size_t i = 0; i < batch_size; i++) {
+        reorder(preprocess(image), unsqueeze(input[i], 0));
+    }
+
+    // show prediction result
+    predictor.set(0, input);
+    predictor.predict();
+    auto result = postprocess(predictor.get(0)[0]);
+    for (int i = 0; i < 5; i++) {
+        auto x = result[i];
+        std::cout << ImageLabel(x.index) << ": "
+                  << x.score*100 << "%\n";
+    }
+
+    // warm up
+    for (int i = 0; i < 10; i++) {
+        predictor.set(0, input);
+        predictor.predict();
+        predictor.get(0);
+    }
+
+    // cooking
+    auto start = std::chrono::high_resolution_clock().now();
+    for (size_t i = 0; i < round; i++) {
+        predictor.set(0, input);
+        predictor.predict();
+        predictor.get(0);
+    }
+    auto end = std::chrono::high_resolution_clock().now();
+
+    auto elapsed = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
+    std::cout << elapsed.count() << " seconds\n";
+    std::cout << int(round * batch_size / elapsed.count()) << " images/second\n";
+}
+
+template <typename Context>
+void run_program(const char* model_path, const char* data_path, size_t batch_size, size_t round) {
+    if (is_dir(data_path)) {
+        run_interactive<Context>(model_path, data_path);
+    } else {
+        run_benchmark<Context>(model_path, data_path, batch_size, round);
+    }
+}
+
 int main(int argc, char** argv) {
-    if (argc != 3) {
+    bool    gpu = true;
+    int     batch_size = 1;
+    int     round = 1000;
+    char*   endptr = nullptr;
+    int     c;
+
+    while ((c = getopt(argc, argv, "Cb:r:")) != -1) {
+        switch (c) {
+        case 'C':
+            gpu = false;
+            break;
+        case 'b':
+            batch_size = std::strtol(optarg, &endptr, 10);
+            if (*endptr != '\0' || batch_size <= 0) {
+                std::cerr << "Invalid batch size `" << optarg << "'.\n";
+                return 1;
+            }
+            break;
+        case 'r':
+            round = std::strtol(optarg, &endptr, 10);
+            if (*endptr != '\0' || round <= 0) {
+                std::cerr << "Invalid iteration count `" << optarg << "'.\n";
+                return 1;
+            }
+            break;
+        case '?':
+            std::cerr << "Unknown option `-" << optopt << "'.\n";
+            return 1;
+        default:
+            abort();
+        }
+    }
+
+    if (argc - optind != 2) {
         printf("Usage: %s model file\n", argv[0]);
         return 1;
     }
 
-    if (is_dir(argv[2])) {
-        std::string title = argv[1];
-        auto pos = title.rfind('/');
-        if (pos != std::string::npos)
-            title = title.substr(pos+1);
-        title = "Image Classification - " + title;
+    const char* model_path = argv[optind];
+    const char* data_path = argv[optind+1];
 
-        auto predictor = create_predictor(argv[1], {15, 3, 224, 224});
-        std::mt19937 rng(std::random_device{}());
-        cv::namedWindow(title);
-
-        do {
-            auto images = load_images(argv[2], rng, 15);
-            predict_images(predictor, images);
-            auto canvas = create_image_grid(images, 224, 5, 3);
-            cv::imshow(title, canvas);
-        } while (cv::waitKey(0) != 'q');
+    if (gpu) {
+        run_program<predict::GPU>(model_path, data_path, batch_size, round);
     } else {
-        constexpr int BATCH_SIZE = 1;
-        constexpr int ITERATION = 1000;
-
-        // prepare batch
-        auto predictor = create_predictor(argv[1], {BATCH_SIZE, 3, 224, 224});
-        auto image = prepare(argv[2]);
-        auto input = Tensor<Real>({BATCH_SIZE, 3, 224, 224});
-        for (int i = 0; i < BATCH_SIZE; i++) {
-            reorder(preprocess(image), unsqueeze(input[i], 0));
-        }
-
-        // show prediction result
-        predictor.set(0, input);
-        predictor.predict();
-        auto result = postprocess(predictor.get(0)[0]);
-        for (int i = 0; i < 5; i++) {
-            auto x = result[i];
-            std::cout << ImageLabel(x.index) << ": "
-                      << x.score*100 << "%\n";
-        }
-
-        // warm up
-        for (int i = 0; i < 10; i++) {
-            predictor.set(0, input);
-            predictor.predict();
-            predictor.get(0);
-        }
-
-        // cooking
-        auto start = std::chrono::high_resolution_clock().now();
-        for (int i = 0; i < ITERATION; i++) {
-            predictor.set(0, input);
-            predictor.predict();
-            predictor.get(0);
-        }
-        auto end = std::chrono::high_resolution_clock().now();
-
-        auto elapsed = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
-        std::cout << elapsed.count() << std::endl;
-        std::cout << int(ITERATION*BATCH_SIZE / elapsed.count()) << " images/second\n";
+        run_program<predict::CPU>(model_path, data_path, batch_size, round);
     }
 
     return 0;
