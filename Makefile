@@ -10,7 +10,8 @@ DOCKER_BUILD_ARGS += --build-arg CUDA_VERSION="$(CUDA_VERSION)"
 # env vars passed through directly to Docker's build scripts
 DOCKER_ENVS := \
     -e SKIP_TESTS \
-    -e CUDA_VERSION="$(CUDA_VERSION)"
+    -e CUDA_VERSION="$(CUDA_VERSION)" \
+    -e CMAKE_OPTS="$(CMAKE_OPTS)"
 
 # to allow `make BIND_DIR=. shell` or `make BIND_DIR= test`
 # (default to no bind mount if DOCKER_HOST is set)

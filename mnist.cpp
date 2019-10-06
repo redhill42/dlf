@@ -21,6 +21,7 @@ cv::Mat load_image(FILE* file, int num) {
     fseek(file, offset, SEEK_SET);
     auto n = fread(image.data, 1, IMAGE_SIZE, file);
     assert(n == IMAGE_SIZE);
+    (void)n;
     return image;
 }
 

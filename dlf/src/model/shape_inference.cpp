@@ -642,8 +642,6 @@ public:
     }
 
     static void convPoolShapeInference(Node* n, Value* X, Value* W, bool use_dilation, bool require_kernel_shape) {
-        auto sym = n->kind().str();
-
         std::vector<int64_t> kernel_shape, strides, pads;
         if (!getConvPoolShapeInfo(n, X, W, use_dilation, require_kernel_shape, true, kernel_shape, strides, pads))
             return;

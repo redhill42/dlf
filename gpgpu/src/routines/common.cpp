@@ -64,8 +64,8 @@ void RunKernel(const Kernel& kernel, const Queue& queue, const Device& device,
 
   // Prints the name of the kernel to launch in case of debugging in verbose mode
   #ifdef VERBOSE
-    queue.Finish();
-    printf("[DEBUG] Running kernel '%s'\n", kernel.GetFunctionName().c_str());
+    queue.finish();
+    printf("[DEBUG] Running kernel\n");
     const auto start_time = std::chrono::steady_clock::now();
   #endif
 
@@ -74,7 +74,7 @@ void RunKernel(const Kernel& kernel, const Queue& queue, const Device& device,
 
   // Prints the elapsed execution time in case of debugging in verbose mode
   #ifdef VERBOSE
-    queue.Finish();
+    queue.finish();
     const auto elapsed_time = std::chrono::steady_clock::now() - start_time;
     const auto timing = std::chrono::duration<double,std::milli>(elapsed_time).count();
     printf("[DEBUG] Completed kernel in %.2lf ms\n", timing);

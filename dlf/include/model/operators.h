@@ -22,7 +22,7 @@ END_OPERATOR()
 #define DEFINE_FLOAT_ATTRIBUTE(name, def) \
     bool has_##name() const noexcept \
         { return hasAttribute(k##name); } \
-    const float name() const \
+    float name() const \
         { return get_f(k##name, def); } \
     auto name(float value) \
         { set_f(k##name, value); return this; }
@@ -30,7 +30,7 @@ END_OPERATOR()
 #define DEFINE_INT_ATTRIBUTE(name, def) \
     bool has_##name() const noexcept \
         { return hasAttribute(k##name); } \
-    const int64_t name() const \
+    int64_t name() const \
         { return get_i(k##name, def); } \
     auto name(int64_t value) \
         { set_i(k##name, value); return this; }

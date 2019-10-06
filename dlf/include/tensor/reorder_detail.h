@@ -351,7 +351,7 @@ void select(const T* X, int Lx, int dx, const T* Y, int Ly, int dy,
     int start = 0, end = ix_start - ix_end;
 
     // Binary search diagonal intersection
-    while (start <= end) {
+    do {
         int m = (start + end) / 2;
         ix = ix_start - m;
         iy = iy_start + m;
@@ -360,7 +360,7 @@ void select(const T* X, int Lx, int dx, const T* Y, int Ly, int dy,
         } else {
             end = m - 1;
         }
-    }
+    } while (start <= end);
 
     // Adjust boundary
     if (ix > 0 && iy < Ly && (ix == Lx || comp(Y[iy * dy], X[ix * dx])))

@@ -45,5 +45,5 @@ else
 fi
 
 cd bundles
-cmake -DCMAKE_BUILD_TYPE=Release ..
+cmake -DCMAKE_BUILD_TYPE=Release $CMAKE_OPTS ..
 cmake --build .

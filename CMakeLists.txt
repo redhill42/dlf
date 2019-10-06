@@ -7,6 +7,9 @@ else()
   set(CMAKE_CXX_STANDARD 17)
 endif()
 
+# Options and their default values
+option(BUILD_SHARED_LIBS "Build a shared (ON) or static library (OFF)" ON)
+
 # place binaries and libraries according to GNU standards
 include(GNUInstallDirs)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR})
@@ -19,6 +22,17 @@ set(CMAKE_MODULE_PATH
   ${CMAKE_CURRENT_LIST_DIR}/cmake
   ${CMAKE_MODULE_PATH}
 )
+
+# C++ compiler settings
+if(CMAKE_CXX_COMPILER_ID STREQUAL GNU)
+  set(FLAGS "${FLAGS} -Wall")
+  set(FLAGS "${FLAGS} -Wno-unknown-pragmas")
+  set(FLAGS "${FLAGS} -Wno-unused-parameter -Wno-sign-compare")
+elseif(CMAKE_CXX_COMPILER_ID MATCHES Clang)
+  set(FLAGS "${FLAGS} -Wextra -Wno-c++98-compat -Wno-c++98-compat-pedantic")
+  set(FLAGS "${FLAGS} -Wno-unused-parameter -Wno-sign-compare")
+endif()
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${FLAGS}")
 
 include(cmake/tbb.cmake)
 fetch_tbb(${PROJECT_SOURCE_DIR}/cmake ${PROJECT_BINARY_DIR}/tbb)

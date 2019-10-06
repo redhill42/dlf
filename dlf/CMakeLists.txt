@@ -1,5 +1,9 @@
 add_library(dlf "")
 
+if(NOT BUILD_SHARED_LIBS)
+  set(Protobuf_USE_STATIC_LIBS ON)
+endif()
+
 find_package(Protobuf REQUIRED)
 protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS "src/model/onnx.proto")
 
