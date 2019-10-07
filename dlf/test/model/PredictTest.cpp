@@ -124,6 +124,25 @@ TYPED_TEST(PredictTest, Conv) {
     }));
 }
 
+TYPED_TEST(PredictTest, ConstantOfShape) {
+    using Context = TypeParam;
+    Graph g;
+
+    auto x = g.append<ConstantOfShape>()->value(TensorData("value", DataType::FLOAT, {1}, {1}));
+    x->addInput(g.addInitializer(TensorData("X1", DataType::INT64, {3}, {4, 3, 2})));
+    g.addOutput(x->addOutput("Y1"));
+
+    auto y = g.append<ConstantOfShape>();
+    y->addInput(g.addInput("X2", DataType::INT64, {3}));
+    g.addOutput(y->addOutput("Y2"));
+
+    Predictor<Context, float> predictor(g);
+    predictor.set(0, Vector<int64_t>({10, 6}));
+    predictor.predict();
+    EXPECT_EQ(predictor.get(0), Tensor<float>({4, 3, 2}, 1.f));
+    EXPECT_EQ(predictor.get(1), Tensor<float>({10, 6}, 0.f));
+}
+
 TYPED_TEST(PredictTest, Reshape) {
     using Context = TypeParam;
     Graph g;

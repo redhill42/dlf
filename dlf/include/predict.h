@@ -407,6 +407,54 @@ private:
         result = std::make_unique<LoopOp>(this, n);
     }
 
+    struct OpWithShape : Operator {
+        datum_ptr shape_datum;
+        Shape shape_init;
+
+        OpWithShape(OperatorFactory* of, model::Value* shape_value) {
+            if (shape_value->has_initializer()) {
+                shape_init = decodeShape(shape_value->initializer().decode<int64_t>());
+            } else {
+                shape_datum = of->alloc<int64_t>(shape_value);
+            }
+        }
+
+        Shape decodeShape() {
+            if (shape_datum == nullptr)
+                return shape_init;
+            return decodeShape(shape_datum->template read<int64_t>());
+        }
+
+        static Shape decodeShape(Tensor<int64_t>&& datum) {
+            assert(datum.rank() == 1);
+            return Shape(std::vector<size_t>(datum.begin(), datum.end()));
+        }
+    };
+
+    struct ConstantOfShapeOp : OpWithShape {
+        datum_ptr output;
+        T value{};
+
+        ConstantOfShapeOp(OperatorFactory* of, model::ConstantOfShape* n)
+            : OpWithShape(of, n->input()), output(of->alloc(n->output()))
+        {
+            if (n->has_value()) {
+                auto t = n->value().decode<int64_t>();
+                assert(t.size() == 1);
+                value = *t;
+            }
+        }
+
+        void evaluate() override {
+            output->template resize<T>(this->decodeShape());
+            deref(output).fill(value);
+        }
+    };
+
+    void visit(model::ConstantOfShape* n) override {
+        result = std::make_unique<ConstantOfShapeOp>(this, n);
+    }
+
     struct EyeLikeOp : Operator {
         datum_ptr X, Y;
         int k;
@@ -1621,37 +1669,17 @@ private:
         result = std::make_unique<TransposeOp>(this, n);
     }
 
-    struct ExpandOp : Operator {
+    struct ExpandOp : OpWithShape {
         datum_ptr X, Y;
-        datum_ptr shape_datum;
-        Shape shape_init;
 
         ExpandOp(OperatorFactory* of, model::Expand* n)
-            : X(of->alloc(n->input())), Y(of->alloc(n->output()))
-        {
-            if (n->shape()->has_initializer()) {
-                shape_init = decodeShape(n->shape()->initializer().decode<int64_t>());
-            } else {
-                shape_datum = of->alloc<int64_t>(n->shape());
-            }
-        }
+            : OpWithShape(of, n->shape()),
+              X(of->alloc(n->input())), Y(of->alloc(n->output())) {}
 
         void evaluate() override {
-            auto shape = Shape::broadcast(X->shape(), decodeShape());
+            auto shape = Shape::broadcast(X->shape(), this->decodeShape());
             Y->template resize<T>(shape);
             reorder(deref(X).broadcast(shape), deref(Y));
-        }
-
-    private:
-        Shape decodeShape() {
-            if (shape_datum == nullptr)
-                return shape_init;
-            return decodeShape(shape_datum->template read<int64_t>());
-        }
-
-        static Shape decodeShape(Tensor<int64_t>&& datum) {
-            assert(datum.rank() == 1);
-            return Shape(std::vector<size_t>(datum.begin(), datum.end()));
         }
     };
 
