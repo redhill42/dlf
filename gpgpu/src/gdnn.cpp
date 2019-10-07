@@ -822,6 +822,63 @@ template void PUBLIC_API reduce<int64_t>(const std::string&, const size_t, const
                                          const Queue&, Event*);
 
 template <typename T>
+void count(const size_t m, const size_t n, const T value,
+           const std::vector<size_t>& x_dims, const std::vector<size_t>& x_strides,
+           const Buffer<T>& x_buffer, const size_t x_offset,
+           const std::vector<size_t>& y_dims, const std::vector<size_t>& y_strides,
+           Buffer<int>& y_buffer, const size_t y_offset,
+           const Queue& queue, Event* event)
+{
+    auto routine = Xreduce<T,int>(queue, event, "reduce_count");
+    routine.DoReduce(m, n, value,
+        x_dims, x_strides, x_buffer, x_offset,
+        y_dims, y_strides, y_buffer, y_offset);
+}
+
+template void PUBLIC_API count<half>   (const size_t, const size_t, const half,
+                                        const std::vector<size_t>&, const std::vector<size_t>&,
+                                        const Buffer<half>&, const size_t,
+                                        const std::vector<size_t>&, const std::vector<size_t>&,
+                                        Buffer<int>&, const size_t,
+                                        const Queue&, Event*);
+template void PUBLIC_API count<float>  (const size_t, const size_t, const float,
+                                        const std::vector<size_t>&, const std::vector<size_t>&,
+                                        const Buffer<float>&, const size_t,
+                                        const std::vector<size_t>&, const std::vector<size_t>&,
+                                        Buffer<int>&, const size_t,
+                                        const Queue&, Event*);
+template void PUBLIC_API count<double> (const size_t, const size_t, const double,
+                                        const std::vector<size_t>&, const std::vector<size_t>&,
+                                        const Buffer<double>&, const size_t,
+                                        const std::vector<size_t>&, const std::vector<size_t>&,
+                                        Buffer<int>&, const size_t,
+                                        const Queue&, Event*);
+template void PUBLIC_API count<float2> (const size_t, const size_t, const float2,
+                                        const std::vector<size_t>&, const std::vector<size_t>&,
+                                        const Buffer<float2>&, const size_t,
+                                        const std::vector<size_t>&, const std::vector<size_t>&,
+                                        Buffer<int>&, const size_t,
+                                        const Queue&, Event*);
+template void PUBLIC_API count<double2>(const size_t, const size_t, const double2,
+                                        const std::vector<size_t>&, const std::vector<size_t>&,
+                                        const Buffer<double2>&, const size_t,
+                                        const std::vector<size_t>&, const std::vector<size_t>&,
+                                        Buffer<int>&, const size_t,
+                                        const Queue&, Event*);
+template void PUBLIC_API count<int32_t>(const size_t, const size_t, const int32_t,
+                                        const std::vector<size_t>&, const std::vector<size_t>&,
+                                        const Buffer<int32_t>&, const size_t,
+                                        const std::vector<size_t>&, const std::vector<size_t>&,
+                                        Buffer<int>&, const size_t,
+                                        const Queue&, Event*);
+template void PUBLIC_API count<int64_t>(const size_t, const size_t, const int64_t,
+                                        const std::vector<size_t>&, const std::vector<size_t>&,
+                                        const Buffer<int64_t>&, const size_t,
+                                        const std::vector<size_t>&, const std::vector<size_t>&,
+                                        Buffer<int>&, const size_t,
+                                        const Queue&, Event*);
+
+template <typename T>
 void scan(const std::string& name, const size_t m, const size_t n,
           const bool exclusive, const std::vector<size_t>& dims,
           const Buffer<T>& x_buffer, const size_t x_offset, const std::vector<size_t>& x_strides,

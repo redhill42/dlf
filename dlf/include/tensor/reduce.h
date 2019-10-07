@@ -12,8 +12,8 @@ template <typename TensorT, typename TensorR, typename U,
           typename Map, typename Reduce, typename Final>
 std::enable_if_t<
     is_cpu_tensor<TensorT>::value &&
-    is_exactly_same_tensor<TensorT, TensorR>::value &&
-    std::is_convertible<U, tensor_value_type<TensorT>>::value &&
+    is_same_tensor<TensorT, TensorR>::value &&
+    std::is_convertible<U, tensor_value_type<TensorR>>::value &&
     !std::is_const<std::remove_reference_t<TensorR>>::value>
 inline reduce(const TensorT& X, TensorR&& Y,
               std::vector<int> axes, bool keepdims,
@@ -25,39 +25,40 @@ inline reduce(const TensorT& X, TensorR&& Y,
 template <typename TensorT, typename TensorR, typename U, typename Map, typename Reduce>
 std::enable_if_t<
     is_cpu_tensor<TensorT>::value &&
-    is_exactly_same_tensor<TensorT, TensorR>::value &&
-    std::is_convertible<U, tensor_value_type<TensorT>>::value &&
+    is_same_tensor<TensorT, TensorR>::value &&
+    std::is_convertible<U, tensor_value_type<TensorR>>::value &&
     !std::is_const<std::remove_reference_t<TensorR>>::value>
-inline reduce(const TensorT& X, TensorR&& Y, std::vector<int> axes, bool keepdims,
+inline reduce(const TensorT& X, TensorR&& Y,
+              std::vector<int> axes, bool keepdims,
               const U& identity, Map f, Reduce g)
 {
-    using T = tensor_value_type<TensorT>;
-    reduce(X, Y, std::move(axes), keepdims, identity, f, g, xfn::post_reduce_identity<T>());
+    using R = tensor_value_type<TensorR>;
+    reduce(X, Y, std::move(axes), keepdims, identity, f, g, xfn::post_reduce_identity<R>());
 }
 
 template <typename TensorT, typename U, typename Map, typename Reduce, typename Final>
 std::enable_if_t<
     is_cpu_tensor<TensorT>::value &&
-    std::is_convertible<U, tensor_value_type<TensorT>>::value,
-    tensor_type<TensorT>>
+    std::is_convertible<U, cxx::invoke_result_t<Map, tensor_value_type<TensorT>>>::value,
+    tensor_type<TensorT, cxx::invoke_result_t<Map, tensor_value_type<TensorT>>>>
 inline reduce(const TensorT& X, std::vector<int> axes, bool keepdims,
               const U& identity, Map f, Reduce g, Final h)
 {
-    tensor_type<TensorT> Y{};
+    tensor_type<TensorT, cxx::invoke_result_t<Map, tensor_value_type<TensorT>>> Y{};
     reduce(X, Y, std::move(axes), keepdims, identity, f, g, h);
     return Y;
 }
 
-template <typename TensorT, typename U, typename Map, typename Reduce, typename Final>
+template <typename TensorT, typename U, typename Map, typename Reduce>
 std::enable_if_t<
     is_cpu_tensor<TensorT>::value &&
-    std::is_convertible<U, tensor_value_type<TensorT>>::value,
-    tensor_type<TensorT>>
+    std::is_convertible<U, cxx::invoke_result_t<Map, tensor_value_type<TensorT>>>::value,
+    tensor_type<TensorT, cxx::invoke_result_t<Map, tensor_value_type<TensorT>>>>
 inline reduce(const TensorT& X, std::vector<int> axes, bool keepdims,
               const U& identity, Map f, Reduce g)
 {
-    using T = tensor_value_type<TensorT>;
-    return reduce(X, std::move(axes), keepdims, identity, f, g, xfn::post_reduce_identity<T>());
+    using R = cxx::invoke_result_t<Map, tensor_value_type<TensorT>>;
+    return reduce(X, std::move(axes), keepdims, identity, f, g, xfn::post_reduce_identity<R>());
 }
 
 //==-------------------------------------------------------------------------
@@ -143,6 +144,62 @@ template <typename TensorT>
 inline enable_if_tensor<TensorT>
 reduce_std(const TensorT& X, std::vector<int> axes = {}, bool keepdims = false) {
     return sqrt(reduce_var(X, axes, keepdims));
+}
+
+//==-------------------------------------------------------------------------
+
+template <typename TensorT, typename TensorR>
+std::enable_if_t<
+    is_cpu_tensor<TensorT>::value &&
+    is_same_tensor<TensorT, TensorR>::value &&
+    !std::is_const<std::remove_reference_t<TensorR>>::value>
+inline count(const TensorT& X, TensorR&& Y, const tensor_value_type<TensorT>& value,
+            std::vector<int> axes = {}, bool keepdims = false)
+{
+    using R = tensor_value_type<TensorR>;
+    detail::reduce(X, Y, std::move(axes), keepdims, nullptr, xfn::zero<R>(),
+                   [value](auto x){ return x==value ? xfn::one<R>() : xfn::zero<R>(); },
+                   xfn::plus<R>(), xfn::post_reduce_identity<R>());
+}
+
+template <typename TensorT, typename TensorR>
+std::enable_if_t<
+    is_gpu_tensor<TensorT>::value &&
+    is_same_tensor<TensorR, tensor_type<TensorT, int>>::value &&
+    !std::is_const<std::remove_reference_t<TensorR>>::value>
+inline count(const TensorT& X, TensorR&& Y, const tensor_value_type<TensorT>& value,
+             std::vector<int> axes = {}, bool keepdims = false)
+{
+    int m, n;
+    auto x_shape = detail::prepare_reduce(X, Y, std::move(axes), keepdims, &m, &n);
+    gpgpu::dnn::count(m, n, value,
+                      x_shape.extents(), x_shape.strides(),
+                      X.data(), x_shape.offset(),
+                      Y.shape().extents(), Y.shape().strides(),
+                      Y.data(), Y.shape().offset());
+}
+
+template <typename R = int, typename TensorT>
+enable_if_tensor<TensorT, tensor_type<TensorT, R>>
+inline count(const TensorT& X, const tensor_value_type<TensorT>& value,
+             std::vector<int> axes = {}, bool keepdims = false) {
+    tensor_type<TensorT, R> Y{};
+    count(X, Y, value, std::move(axes), keepdims);
+    return Y;
+}
+
+template <typename R = int, typename TensorT>
+enable_if_tensor<TensorT, tensor_type<TensorT, R>>
+inline count(const TensorT& X, const tensor_value_type<TensorT>& value,
+             std::initializer_list<int> axes, bool keepdims = false) {
+    return count(X, value, std::vector<int>(axes), keepdims);
+}
+
+template <typename R = int, typename TensorT>
+enable_if_tensor<TensorT, tensor_type<TensorT, R>>
+inline count(const TensorT& X, const tensor_value_type<TensorT>& value,
+             int axis, bool keepdims = false) {
+    return count(X, value, std::vector<int>{axis}, keepdims);
 }
 
 //==-------------------------------------------------------------------------

@@ -1,8 +1,6 @@
 // Enables loading of this file using the C++ pre-processor's #include (C++11 standard raw string
 // literal). Comment-out this line for syntax-highlighting when developing.
-R"(
-
-#line 5
+PROGRAM_STRING_DEBUG_INFO R"(
 
 #if CUDA || PRECISION == 3232 || PRECISION == 6464
   #if VW == 1

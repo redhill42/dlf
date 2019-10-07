@@ -208,6 +208,7 @@ bool IsPostNVIDIAVolta(const Device& device);
 void EuclidGCD(int a, int b, int &p, int &q, int &r);
 
 // =================================================================================================
+
 bool IsContiguous(const std::vector<size_t>& dim, const std::vector<size_t>& stride);
 
 Buffer<int> PackShape(const std::vector<size_t>& dim,
@@ -224,5 +225,35 @@ Buffer<int> PackShape(const std::vector<size_t>& dim,
                       const Context& context, const Queue& queue);
 
 }} // namespace gpgpu::blas
+
+// =================================================================================================
+
+/* Macro to facilitate debugging
+ * Usage:
+ *   Place CL_PROGRAM_STRING_DEBUG_INFO on the line before the first line of your source.
+ *   The first line ends with:   CL_PROGRAM_STRING_DEBUG_INFO \"
+ *   Each line thereafter of OpenCL C source must end with: \n\
+ *   The last line ends in ";
+ *
+ *   Example:
+ *
+ *   const char *my_program = CL_PROGRAM_STRING_DEBUG_INFO "\
+ *   kernel void foo( int a, float * b )             \n\
+ *   {                                               \n\
+ *      // my comment                                \n\
+ *      *b[ get_global_id(0)] = a;                   \n\
+ *   }                                               \n\
+ *   ";
+ *
+ * This should correctly set up the line, (column) and file information for your source
+ * string so you can do source level debugging.
+ */
+#ifndef NDEBUG
+#define  __STRINGIFY( _x )               # _x
+#define  _STRINGIFY( _x )                __STRINGIFY( _x )
+#define  PROGRAM_STRING_DEBUG_INFO       "#line "  _STRINGIFY(__LINE__) " \"" __FILE__ "\" \n\n"
+#else
+#define  PROGRAM_STRING_DEBUG_INFO
+#endif
 
 #endif // GPGPU_BLAS_UTILITIES_H_

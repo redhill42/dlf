@@ -1914,6 +1914,23 @@ TEST(UniformTest, ReduceL2_Complex) {
     EXPECT_EQ(reduce_nrm2(X, {0}), Scalar<std::complex<float>>(std::sqrt(194.f)));
 }
 
+TEST(UniformTest, Count) {
+    auto A = Matrix<float>({
+        {1, 0, 3},
+        {0, 2, 4},
+        {0, 0, 3}
+    });
+
+    EXPECT_EQ(count(A, 0, 0), Vector<int>({2, 2, 0}));
+    EXPECT_EQ(count(A, 0, 1), Vector<int>({1, 1, 2}));
+    EXPECT_EQ(count(A, 0), Scalar<int>(4));
+
+    auto dev_A = dev(A);
+    EXPECT_EQ(count(dev_A, 0, 0).read(), Vector<int>({2, 2, 0}));
+    EXPECT_EQ(count(dev_A, 0, 1).read(), Vector<int>({1, 1, 2}));
+    EXPECT_EQ(count(dev_A, 0).read(), Scalar<int>(4));
+}
+
 TEST(UniformTest, Norm) {
     auto a = Tensor<float>({9}).range() - 4;
     auto b = reshape(a, {3, 3});

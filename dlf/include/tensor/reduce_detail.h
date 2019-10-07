@@ -6,11 +6,11 @@ namespace dlf { namespace detail {
 // Tensor reduction implementation
 //==-------------------------------------------------------------------------
 
-template <typename T, typename IteratorX, typename IteratorY,
+template <typename R, typename IteratorX, typename IteratorY,
           typename Map, typename Reduce, typename Final>
 void reduce(const int m, const int n,
             IteratorX x_begin, IteratorY y_begin,
-            const T& identity, Map f, Reduce g, Final h)
+            const R& identity, Map f, Reduce g, Final h)
 {
     if (m*n < GRAINSIZE) {
         auto px = x_begin;
@@ -41,24 +41,24 @@ void reduce(const int m, const int n,
     }
 }
 
-template <typename T, typename IteratorX, typename Map, typename Reduce, typename Final>
+template <typename R, typename IteratorX, typename Map, typename Reduce, typename Final>
 inline void reduce(const int m, const int n,
-                   IteratorX x_begin, const Shape& y_shape, T* y_data,
-                   const T& identity, Map f, Reduce g, Final h)
+                   IteratorX x_begin, const Shape& y_shape, R* y_data,
+                   const R& identity, Map f, Reduce g, Final h)
 {
     if (y_shape.is_contiguous()) {
         reduce(m, n, x_begin, y_data + y_shape.offset(), identity, f, g, h);
     } else {
-        auto y_begin = shaped_iterator<T>(y_shape, y_data, 0);
+        auto y_begin = shaped_iterator<R>(y_shape, y_data, 0);
         reduce(m, n, x_begin, y_begin, identity, f, g, h);
     }
 }
 
-template <typename T, typename Map, typename Reduce, typename Final>
+template <typename T, typename R, typename Map, typename Reduce, typename Final>
 inline void reduce(const int m, const int n,
                    const Shape& x_shape, const T* x_data,
-                   const Shape& y_shape, T* y_data,
-                   const char*, const T& identity,
+                   const Shape& y_shape, R* y_data,
+                   const char*, const R& identity,
                    Map f, Reduce g, Final h)
 {
     if (x_shape.is_contiguous()) {
@@ -82,17 +82,14 @@ inline void reduce(const int m, const int n,
                        y_data, y_shape.offset());
 }
 
-template <typename TensorT, typename TensorR, typename Map, typename Reduce, typename Final>
-void reduce(const TensorT& X, TensorR& Y, std::vector<int>&& axes, bool keepdims,
-            const char* name, const tensor_value_type<TensorT>& identity,
-            Map f, Reduce g, Final h)
-{
+template <typename TensorT, typename TensorR>
+Shape prepare_reduce(const TensorT& X, TensorR& Y, std::vector<int>&& axes, bool keepdims, int* m, int* n) {
     auto rank = X.rank();
     detail::norm_axes(rank, axes, true);
 
     std::vector<size_t> output_dims;
     std::vector<size_t> transpose_perm;
-    int m = 1, n = 1;
+    *m = *n = 1;
 
     for (int i = 0; i < rank; i++) {
         // axes empty means reduce all dim
@@ -106,14 +103,23 @@ void reduce(const TensorT& X, TensorR& Y, std::vector<int>&& axes, bool keepdims
     for (int i = 0; i < rank; i++) {
         if (axes.empty() || std::find(axes.begin(), axes.end(), i) != axes.end()) {
             transpose_perm.push_back(i);
-            n *= X.extent(i);
+            *n *= X.extent(i);
         } else {
-            m *= X.extent(i);
+            *m *= X.extent(i);
         }
     }
 
-    auto x_shape = X.shape().transpose(transpose_perm);
     Y.resize(Shape(output_dims));
+    return X.shape().transpose(transpose_perm);
+}
+
+template <typename TensorT, typename TensorR, typename Map, typename Reduce, typename Final>
+void reduce(const TensorT& X, TensorR& Y, std::vector<int>&& axes, bool keepdims,
+            const char* name, const tensor_value_type<TensorR>& identity,
+            Map f, Reduce g, Final h)
+{
+    int m, n;
+    auto x_shape = prepare_reduce(X, Y, std::move(axes), keepdims, &m, &n);
     reduce(m, n, x_shape, X.data(), Y.shape(), Y.data(), name, identity, f, g, h);
 }
 

@@ -1,10 +1,20 @@
 // Enables loading of this file using the C++ pre-processor's #include (C++11 standard raw string
 // literal). Comment-out this line for syntax-highlighting when developing.
-R"(
+PROGRAM_STRING_DEBUG_INFO R"(
 
 //---------------------------------------------------------------------------
 
-#if defined(ROUTINE_reduce_max)
+#if defined(ROUTINE_reduce_count)
+typedef int realR;
+#else
+typedef real realR;
+#endif
+
+#if defined(ROUTINE_reduce_count)
+#  define INIT(x)           x = 0
+#  define MAP_REDUCE(c,x)   c += (x==value)
+#  define REDUCE(c,x,y)     c = x + y
+#elif defined(ROUTINE_reduce_max)
 #  define INIT(x)           SetReal(x, SMALLEST)
 #  define MAP_REDUCE(c,x)   Max(c,c,x)
 #  define REDUCE(c,x,y)     Max(c,x,y)
@@ -106,9 +116,9 @@ R"(
 
 __kernel __attribute__((reqd_work_group_size(WGS1, 1, 1)))
 void XreduceDirect(
-    const int m, const int n,
+    const int m, const int n, const real_arg value_arg,
     const __global real* restrict xgm, const int x_offset,
-    __global real* ygm, const int y_offset)
+    __global realR* ygm, const int y_offset)
 {
     const int batch = get_global_id(0);
     if (batch >= m) return;
@@ -116,7 +126,8 @@ void XreduceDirect(
     xgm += x_offset + batch*n;
     ygm += y_offset + batch;
 
-    real acc; INIT(acc);
+    real value = GetRealArg(value_arg);
+    realR acc; INIT(acc);
     for (int i = 0; i < n; i++) {
         real x = xgm[i];
         MAP_REDUCE(acc, x);
@@ -126,16 +137,17 @@ void XreduceDirect(
 
 __kernel __attribute__((reqd_work_group_size(WGS1, 1, 1)))
 void XreduceDirectStrided(
-    const int m, const int n,
+    const int m, const int n, const real_arg value_arg,
     const int x_rank, __constant int* x_shape,
     const __global real* restrict xgm, const int x_offset,
     const int y_rank, __constant int* y_shape,
-    __global real* ygm, const int y_offset)
+    __global realR* ygm, const int y_offset)
 {
     const int batch = get_global_id(0);
     if (batch >= m) return;
 
-    real acc; INIT(acc);
+    real value = GetRealArg(value_arg);
+    realR acc; INIT(acc);
     for (int i = 0; i < n; i++) {
         real x = xgm[x_offset + unravel(batch*n + i, x_rank, x_shape)];
         MAP_REDUCE(acc, x);
@@ -150,9 +162,9 @@ void XreduceDirectStrided(
 #define BATCH_WGS 32
 
 STATIC void Reduce(
-    const int n, LOCAL_PTR real* lm,
+    const int n, LOCAL_PTR realR* lm, const real value,
     const __global real* restrict xgm,
-    __global real* ygm)
+    __global realR* ygm)
 {
     const int lid = get_local_id(0);
     const int wgid = get_group_id(0);
@@ -160,7 +172,7 @@ STATIC void Reduce(
     const int num_groups = get_num_groups(0);
 
     /* Perform loading and the first steps of the reduction */
-    real acc; INIT(acc);
+    realR acc; INIT(acc);
     int id = wgid * wgs + lid;
     while (id < n) {
         real x = xgm[id];
@@ -184,31 +196,32 @@ STATIC void Reduce(
 }
 
 __kernel __attribute__((reqd_work_group_size(WGS1, 1, 1)))
-void Xreduce(const int n,
+void Xreduce(const int n, const real_arg value_arg,
              const __global real* restrict xgm, const int x_offset,
-             __global real* ygm, const int y_offset)
+             __global realR* ygm, const int y_offset)
 {
-    __local real lm[WGS1];
-    Reduce(n, lm, xgm + x_offset, ygm + y_offset);
+    __local realR lm[WGS1];
+    Reduce(n, lm, GetRealArg(value_arg), xgm + x_offset, ygm + y_offset);
 }
 
 __kernel __attribute__((reqd_work_group_size(BATCH_WGS, 1, 1)))
-void XreduceBatched(const int n,
+void XreduceBatched(const int n, const real_arg value_arg,
                     const __global real* restrict xgm, const int x_offset,
-                    __global real* ygm, const int y_offset)
+                    __global realR* ygm, const int y_offset)
 {
-    __local real lm[BATCH_WGS];
+    __local realR lm[BATCH_WGS];
     const int batch = get_global_id(1);
     xgm += x_offset + batch*n;
     ygm += y_offset + batch*get_num_groups(0);
-    Reduce(n, lm, xgm, ygm);
+    Reduce(n, lm, GetRealArg(value_arg), xgm, ygm);
 }
 
 //---------------------------------------------------------------------------
 
 STATIC void StridedReduce(
-    const int n, LOCAL_PTR real* lm, const int rank, __constant int* shape,
-    const __global real* restrict xgm, __global real* ygm)
+    const int n, LOCAL_PTR realR* lm, const real value,
+    const int rank, __constant int* shape,
+    const __global real* restrict xgm, __global realR* ygm)
 {
     const int batch = get_global_id(1);
     const int lid = get_local_id(0);
@@ -217,7 +230,7 @@ STATIC void StridedReduce(
     const int num_groups = get_num_groups(0);
 
     /* Perform loading and the first steps of the reduction */
-    real acc; INIT(acc);
+    realR acc; INIT(acc);
     int id = wgid * wgs + lid;
     while (id < n) {
         real x = xgm[unravel(batch*n + id, rank, shape)];
@@ -242,36 +255,38 @@ STATIC void StridedReduce(
 
 __kernel __attribute__((reqd_work_group_size(WGS1, 1, 1)))
 void XreduceStrided(
-    const int n, const int rank, __constant int* shape,
+    const int n, const real_arg value_arg,
+    const int rank, __constant int* shape,
     const __global real* restrict xgm, const int x_offset,
-    __global real* ygm, const int y_offset)
+    __global realR* ygm, const int y_offset)
 {
-    __local real lm[WGS1];
-    StridedReduce(n, lm, rank, shape, xgm + x_offset, ygm + y_offset);
+    __local realR lm[WGS1];
+    StridedReduce(n, lm, GetRealArg(value_arg), rank, shape, xgm + x_offset, ygm + y_offset);
 }
 
 __kernel __attribute__((reqd_work_group_size(BATCH_WGS, 1, 1)))
 void XreduceStridedBatched(
-    const int n, const int rank, __constant int* shape,
+    const int n, const real_arg value_arg,
+    const int rank, __constant int* shape,
     const __global real* restrict xgm, const int x_offset,
-    __global real* ygm, const int y_offset)
+    __global realR* ygm, const int y_offset)
 {
-    __local real lm[BATCH_WGS];
+    __local realR lm[BATCH_WGS];
     xgm += x_offset;
     ygm += y_offset + get_global_id(1) * get_num_groups(0);
-    StridedReduce(n, lm, rank, shape, xgm, ygm);
+    StridedReduce(n, lm, GetRealArg(value_arg), rank, shape, xgm, ygm);
 }
 
 //---------------------------------------------------------------------------
 
 __kernel __attribute__((reqd_work_group_size(WGS2, 1, 1)))
 void XreduceEpilogue(const int n,
-    const __global real* restrict xgm, const int x_offset,
-    __global real* ygm, const int y_offset)
+    const __global realR* restrict xgm, const int x_offset,
+    __global realR* ygm, const int y_offset)
 {
     const int batch = get_global_id(1);
     const int lid = get_local_id(0);
-    __local real lm[WGS2];
+    __local realR lm[WGS2];
 
     xgm += x_offset + batch * WGS2*2;
     ygm += y_offset;
@@ -296,12 +311,12 @@ void XreduceEpilogue(const int n,
 __kernel __attribute__((reqd_work_group_size(WGS2, 1, 1)))
 void XreduceEpilogueStrided(
     const int n, const int rank, __constant int* shape,
-    const __global real* restrict xgm, const int x_offset,
-    __global real* ygm, const int y_offset)
+    const __global realR* restrict xgm, const int x_offset,
+    __global realR* ygm, const int y_offset)
 {
     const int batch = get_global_id(1);
     const int lid = get_local_id(0);
-    __local real lm[WGS2];
+    __local realR lm[WGS2];
 
     xgm += x_offset + batch * WGS2*2;
     ygm += y_offset;
