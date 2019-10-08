@@ -15,8 +15,7 @@ Xtransform<T>::Xtransform(const Queue& queue, Event* event, const std::string& n
 }
 
 template <typename T>
-void Xtransform<T>::DoTransform(
-    const std::string& name, const size_t n,
+void Xtransform<T>::DoTransform(const size_t n,
     const Buffer<T>& x_buffer, const size_t x_offset,
     Buffer<T>& y_buffer, const size_t y_offset)
 {
@@ -28,7 +27,7 @@ void Xtransform<T>::DoTransform(
     TestVectorY(n, y_buffer, y_offset, 1);
 
     // Retrieves the transform kernel from the compiled binary
-    auto kernel = program_.getKernel("X" + name);
+    auto kernel = program_.getKernel("Xtransform");
 
     // Sets the kernel arguments
     kernel.setArguments(
@@ -45,7 +44,7 @@ void Xtransform<T>::DoTransform(
 
 template <typename T>
 void Xtransform<T>::DoTransform(
-    const std::string& name, const size_t n, const std::vector<size_t>& dims,
+    const size_t n, const std::vector<size_t>& dims,
     const Buffer<T>& x_buffer, const size_t x_offset, const std::vector<size_t>& x_stride,
     Buffer<T>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_stride)
 {
@@ -53,7 +52,7 @@ void Xtransform<T>::DoTransform(
     auto shape_buffer = PackShape(dims, x_stride, y_stride, context_, queue_);
 
     // Retrieve the transform kernel from the compiled binary
-    auto kernel = program_.getKernel("X" + name + "Strided");
+    auto kernel = program_.getKernel("XtransformStrided");
 
     // Sets the kernel arguments
     kernel.setArguments(

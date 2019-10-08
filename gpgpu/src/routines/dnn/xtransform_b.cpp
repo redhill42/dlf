@@ -19,7 +19,6 @@ static inline bool ends_with(const std::string& str, const std::string& suffix) 
 
 template <typename T, typename R>
 void Xtransform_b<T, R>::DoTransform(
-    const std::string& name,
     const size_t x_size, const Buffer<T>& x_buffer, const size_t x_offset,
     const size_t y_size, const Buffer<T>& y_buffer, const size_t y_offset,
     Buffer<R>& z_buffer, const size_t z_offset)
@@ -36,15 +35,17 @@ void Xtransform_b<T, R>::DoTransform(
     TestVectorY(n, z_buffer, z_offset, 1); // TODO: Make a TestVectorZ function with error codes
 
     // Determines whether or not the fast-version can be used
-    const auto use_faster_kernel = (ends_with(name, "_v")) &&
-                                   (x_size == y_size) &&
-                                   (x_offset == 0 && y_offset == 0 && z_offset == 0) &&
-                                   IsMultiple(n, db_["WPT"]*db_["VW"]);
-    const auto use_fastest_kernel = use_faster_kernel &&
-                                    IsMultiple(n, db_["WGS"]*db_["WPT"]*db_["VW"]);
+    const auto use_faster_kernel =
+        (routine_name_ == "add" || routine_name_ == "sub" ||
+         routine_name_ == "mul" || routine_name_ == "div") &&
+        (x_size == y_size) &&
+        (x_offset == 0 && y_offset == 0 && z_offset == 0) &&
+        IsMultiple(n, db_["WPT"]*db_["VW"]);
+    const auto use_fastest_kernel =
+        use_faster_kernel && IsMultiple(n, db_["WGS"]*db_["WPT"]*db_["VW"]);
 
     // If possible, run the fast-version of the kernel
-    auto kernel_name = "X" + name;
+    std::string kernel_name = "Xtransform";
     kernel_name = use_fastest_kernel ? kernel_name + "Fastest" :
                   use_faster_kernel  ? kernel_name + "Faster"  :
                   x_size == 1        ? kernel_name + "ExpandL" :
@@ -84,7 +85,7 @@ void Xtransform_b<T, R>::DoTransform(
 
 template <typename T, typename R>
 void Xtransform_b<T, R>::DoTransformStrided(
-    const std::string& name, const size_t n, const std::vector<size_t>& dims,
+    const size_t n, const std::vector<size_t>& dims,
     const Buffer<T>& x_buffer, const size_t x_offset, const std::vector<size_t>& x_stride,
     const Buffer<T>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_stride,
     Buffer<R>& z_buffer, const size_t z_offset, const std::vector<size_t>& z_stride)
@@ -97,7 +98,7 @@ void Xtransform_b<T, R>::DoTransformStrided(
     auto shape_buffer = PackShape(dims, x_stride, y_stride, z_stride, context_, queue_);
 
     // Retrieves the kernel from the compiled binary
-    auto kernel = program_.getKernel("X" + name + "Strided");
+    auto kernel = program_.getKernel("XtransformStrided");
 
     // Sets the kernel arguments
     kernel.setArguments(static_cast<int>(n),
@@ -116,7 +117,6 @@ void Xtransform_b<T, R>::DoTransformStrided(
 
 template <typename T, typename R>
 void Xtransform_b<T, R>::DoTransformChannel(
-    const std::string& name,
     const size_t m, const size_t n, const size_t channels,
     const Buffer<T>& x_buffer, const size_t x_offset,
     const Buffer<T>& y_buffer, const size_t y_offset,
@@ -127,7 +127,7 @@ void Xtransform_b<T, R>::DoTransformChannel(
         throw BLASError(StatusCode::kInvalidDimension);
 
     // Retrieves the kernel from the compiled binary
-    auto kernel = program_.getKernel("X" + name + "Channel");
+    auto kernel = program_.getKernel("XtransformChannel");
 
     // Sets the kernel arguments
     kernel.setArguments(static_cast<int>(m),

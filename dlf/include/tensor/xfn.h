@@ -162,6 +162,8 @@ DEFINE_UNARY_FUNCTION(acosh, std::acosh(x))
 DEFINE_UNARY_FUNCTION(atanh, std::atanh(x))
 DEFINE_UNARY_FUNCTION(erf, std::erf(x))
 DEFINE_UNARY_FUNCTION(sigmoid, one<T>()/(one<T>()+std::exp(-x)))
+DEFINE_UNARY_FUNCTION(softsign, x/(one<T>()+std::abs(x)))
+DEFINE_UNARY_FUNCTION(softplus, std::log(std::exp(x)+one<T>()))
 
 #undef DEFINE_UNARY_FUNCTION
 
@@ -169,24 +171,24 @@ DEFINE_UNARY_FUNCTION(sigmoid, one<T>()/(one<T>()+std::exp(-x)))
 
 template <typename T = void>
 struct plus : std::plus<T> {
-    static constexpr auto name = "add_v";
+    static constexpr auto name = "add";
     static constexpr auto cumulative = "cumsum";
 };
 
 template <typename T = void>
 struct minus : std::minus<T> {
-    static constexpr auto name = "sub_v";
+    static constexpr auto name = "sub";
 };
 
 template <typename T = void>
 struct multiplies : std::multiplies<T> {
-    static constexpr auto name = "mul_v";
+    static constexpr auto name = "mul";
     static constexpr auto cumulative = "cumprod";
 };
 
 template <typename T = void>
 struct divides : std::divides<T> {
-    static constexpr auto name = "div_v";
+    static constexpr auto name = "div";
 };
 
 template <typename T = void>
@@ -413,21 +415,7 @@ struct hard_sigmoid : std::unary_function<T,T>, parameterized_function<T> {
     constexpr hard_sigmoid(const T& alpha, const T& beta)
         : parameterized_function<T>(alpha, beta) {}
     constexpr T operator()(const T& x) const
-        { return std::max(zero<T>(), std::min(one<T>(), this->alpha*x + this->beta)); }
-};
-
-template <typename T>
-struct softsign : std::unary_function<T,T>, parameterized_function<T> {
-    static constexpr auto name = "softsign";
-    constexpr T operator()(const T& x) const
-        { return x / (one<T>() + std::abs(x)); }
-};
-
-template <typename T>
-struct softplus : std::unary_function<T,T>, parameterized_function<T> {
-    static constexpr auto name = "softplus";
-    constexpr T operator()(const T& x) const
-        { return std::log(std::exp(x) + one<T>()); }
+        { return cxx::clamp(this->alpha*x + this->beta, zero<T>(), one<T>()); }
 };
 
 //==-------------------------------------------------------------------------

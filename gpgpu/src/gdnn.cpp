@@ -298,8 +298,8 @@ void transform(const std::string& name, const size_t n,
                Buffer<T>& y_buffer, const size_t y_offset,
                const Queue& queue, Event* event)
 {
-    auto routine = Xtransform<T>(queue, event);
-    routine.DoTransform(name, n, x_buffer, x_offset, y_buffer, y_offset);
+    auto routine = Xtransform<T>(queue, event, name);
+    routine.DoTransform(n, x_buffer, x_offset, y_buffer, y_offset);
 }
 
 template void PUBLIC_API transform<int16_t>(const std::string&, const size_t,
@@ -341,8 +341,8 @@ void transform(const std::string& name, size_t n, const std::vector<size_t>& dim
                Buffer<T>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_strides,
                const Queue& queue, Event* event)
 {
-    auto routine = Xtransform<T>(queue, event);
-    routine.DoTransform(name, n, dims, x_buffer, x_offset, x_strides, y_buffer, y_offset, y_strides);
+    auto routine = Xtransform<T>(queue, event, name);
+    routine.DoTransform(n, dims, x_buffer, x_offset, x_strides, y_buffer, y_offset, y_strides);
 }
 
 template void PUBLIC_API transform<int16_t>(
@@ -443,8 +443,8 @@ void transform(const std::string& name,
                Buffer<R>& z_buffer, const size_t z_offset,
                const Queue& queue, Event* event)
 {
-    auto routine = Xtransform_b<T,R>(queue, event);
-    routine.DoTransform(name, x_size, x_buffer, x_offset, y_size, y_buffer, y_offset, z_buffer, z_offset);
+    auto routine = Xtransform_b<T,R>(queue, event, name);
+    routine.DoTransform(x_size, x_buffer, x_offset, y_size, y_buffer, y_offset, z_buffer, z_offset);
 }
 
 template void PUBLIC_API transform<int16_t, int16_t>(
@@ -540,8 +540,8 @@ void transform(const std::string& name, const size_t n, const std::vector<size_t
                Buffer<R>& z_buffer, const size_t z_offset, const std::vector<size_t>& z_stride,
                const Queue& queue, Event* event)
 {
-    auto routine = Xtransform_b<T,R>(queue, event);
-    routine.DoTransformStrided(name, n, dims,
+    auto routine = Xtransform_b<T,R>(queue, event, name);
+    routine.DoTransformStrided(n, dims,
         x_buffer, x_offset, x_stride,
         y_buffer, y_offset, y_stride,
         z_buffer, z_offset, z_stride);
@@ -642,7 +642,7 @@ void transform(const std::string& name,
                const Queue& queue, Event* event)
 {
 #if HAS_CUDA
-    if (name == "add_v" && IsCUDA(queue.context().device()) &&
+    if (name == "add" && IsCUDA(queue.context().device()) &&
         x_buffer.handle() == z_buffer.handle() &&
         x_offset == 0 && y_offset == 0 && z_offset == 0) {
         auto y_desc = TensorDescriptor<T>(1, channels, 1, 1);
@@ -656,9 +656,9 @@ void transform(const std::string& name,
     }
 #endif
 
-    auto routine = Xtransform_b<T,R>(queue, event);
+    auto routine = Xtransform_b<T,R>(queue, event, name);
     routine.DoTransformChannel(
-        name, m, n, channels,
+        m, n, channels,
         x_buffer, x_offset,
         y_buffer, y_offset,
         z_buffer, z_offset);

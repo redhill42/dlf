@@ -229,7 +229,7 @@ void Xhard_sigmoid(const int n, const real_arg alpha_arg, const real_arg beta_ar
   const real beta = GetRealArg(beta_arg);
   for (int id = get_global_id(0); id < n; id += get_global_size(0)) {
     real x = xgm[id + x_offset];
-    ygm[id + y_offset] = maxval(ZERO, minval(ONE, alpha * x + beta));
+    ygm[id + y_offset] = clamp(alpha * x + beta, ZERO, ONE);
   }
 }
 
@@ -246,59 +246,7 @@ void Xhard_sigmoidStrided(
     int x_id = x_offset, y_id = y_offset;
     unravel2(id, &x_id, &y_id, rank, shape);
     real x = xgm[x_id];
-    ygm[y_id] = maxval(ZERO, minval(ONE, alpha * x + beta));
-  }
-}
-
-__kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
-void Xsoftsign(const int n, const real_arg alpha_arg, const real_arg beta_arg,
-    const __global real* restrict xgm, const int x_offset,
-    __global real* ygm, const int y_offset)
-{
-  for (int id = get_global_id(0); id < n; id += get_global_size(0)) {
-    real x = xgm[id + x_offset];
-    ygm[id + y_offset] = x / (ONE + fabs(x));
-  }
-}
-
-__kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
-void XsoftsignStrided(
-    const real_arg alpha_arg, const real_arg beta_arg,
-    const int n, const int rank, __constant int* shape,
-    const __global real* restrict xgm, const int x_offset,
-    __global real* ygm, const int y_offset)
-{
-  for (int id = get_global_id(0); id < n; id += get_global_size(0)) {
-    int x_id = x_offset, y_id = y_offset;
-    unravel2(id, &x_id, &y_id, rank, shape);
-    real x = xgm[x_id];
-    ygm[y_id] = x / (ONE + fabs(x));
-  }
-}
-
-__kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
-void Xsoftplus(const int n, const real_arg alpha_arg, const real_arg beta_arg,
-    const __global real* restrict xgm, const int x_offset,
-    __global real* ygm, const int y_offset)
-{
-  for (int id = get_global_id(0); id < n; id += get_global_size(0)) {
-    real x = xgm[id + x_offset];
-    ygm[id + y_offset] = log(exp(x) + ONE);
-  }
-}
-
-__kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
-void XsoftplusStrided(
-    const real_arg alpha_arg, const real_arg beta_arg,
-    const int n, const int rank, __constant int* shape,
-    const __global real* restrict xgm, const int x_offset,
-    __global real* ygm, const int y_offset)
-{
-  for (int id = get_global_id(0); id < n; id += get_global_size(0)) {
-    int x_id = x_offset, y_id = y_offset;
-    unravel2(id, &x_id, &y_id, rank, shape);
-    real x = xgm[x_id];
-    ygm[y_id] = log(exp(x) + ONE);
+    ygm[y_id] = clamp(alpha * x + beta, ZERO, ONE);
   }
 }
 

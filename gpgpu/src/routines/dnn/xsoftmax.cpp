@@ -49,15 +49,16 @@ void Xsoftmax<T>::DoSoftmax(
     auto local2 = std::vector<size_t>{WGS2, 1};
     RunKernel(kernel2, queue_, device_, global2, local2, event_);
 
-    auto xform_name = routine_name_ == "softmax" ? "div_v" : "sub_v";
-    auto xform = Xtransform_b<T,T>(queue_, event_);
+    auto xform_name = routine_name_ == "softmax" ? "div" : "sub";
+    auto xform = Xtransform_b<T,T>(queue_, event_, xform_name);
     if (m == 1) {
-        xform.DoTransform(xform_name,
+        xform.DoTransform(
             m * n, x_buffer, x_offset,
             m, bias_buffer, bias_buffer.offset(),
             x_buffer, x_offset);
     } else {
-        xform.DoTransformChannel(xform_name, m, n, m,
+        xform.DoTransformChannel(
+            m, n, m,
             x_buffer, x_offset,
             bias_buffer, bias_buffer.offset(),
             x_buffer, x_offset);

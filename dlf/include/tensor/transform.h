@@ -148,6 +148,8 @@ DEFINE_UNARY_OPERATOR(acosh, acosh)
 DEFINE_UNARY_OPERATOR(atanh, atanh)
 DEFINE_UNARY_OPERATOR(erf, erf)
 DEFINE_UNARY_OPERATOR(sigmoid, sigmoid)
+DEFINE_UNARY_OPERATOR(softsign, softsign)
+DEFINE_UNARY_OPERATOR(softplus, softplus)
 #undef DEFINE_UNARY_OPERATOR
 
 template <typename TensorT>

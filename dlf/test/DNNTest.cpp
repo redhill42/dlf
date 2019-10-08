@@ -316,7 +316,7 @@ TEST(DNNTest, TransformChannel_GPU) {
     transformChannel(A, B, C, 1, xfn::plus<>());
 
     B = B.broadcast(A.shape());
-    transformTo(A, B.broadcast(A.shape()), D, xfn::plus<>());
+    transformTo(A, B, D, xfn::plus<>());
     EXPECT_EQ(C.read(), D.read());
 }
 
