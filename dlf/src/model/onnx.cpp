@@ -402,12 +402,15 @@ void encodeValueInfo(ValueInfoProto* vp, const Value* v) {
     auto tp = vp->mutable_type()->mutable_tensor_type();
     vp->set_name(v->name());
     tp->set_elem_type(static_cast<int32_t>(v->type()));
-    TensorShapeProto* shape = tp->mutable_shape();
-    for (auto& d : v->dims()) {
-        if (d.has_value())
-            shape->add_dim()->set_dim_value(d.value());
-        else
-            shape->add_dim()->set_dim_param(d.symbol());
+
+    if (v->has_dims()) {
+        TensorShapeProto* shape = tp->mutable_shape();
+        for (auto& d : v->dims()) {
+            if (d.has_value())
+                shape->add_dim()->set_dim_value(d.value());
+            else
+                shape->add_dim()->set_dim_param(d.symbol());
+        }
     }
 }
 

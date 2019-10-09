@@ -98,7 +98,8 @@ public:
              || node->kind() == kUnsqueeze
              || node->kind() == kFlatten)
              && node->input()->has_initializer()
-             && node->input()->uses().size() == 1;
+             && node->input()->uses().size() == 1
+             && node->output()->has_dims();
     }
 
     bool runTransform(Node* node, Graph& graph, NodeDestroyType& destroyCurrent) override {
@@ -252,7 +253,7 @@ public:
         auto conv = static_cast<Conv*>(n->input(0)->node());
         auto val = n->input(1);
 
-        if (conv->Y()->uses().size() != 1)
+        if (conv->Y()->uses().size() != 1 && conv->Y()->has_dims())
             return false;
         if (!val->has_initializer())
             return false;
@@ -312,7 +313,9 @@ public:
         auto conv = static_cast<Conv*>(n->input(0)->node());
         auto val = n->input(1);
 
-        if (conv->Y()->uses().size() != 1)
+        if (conv->Y()->uses().size() != 1 && conv->Y()->has_dims())
+            return false;
+        if (!conv->W()->has_dims())
             return false;
         if (!val->has_initializer())
             return false;

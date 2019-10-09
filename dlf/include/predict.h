@@ -45,7 +45,7 @@ public:
     template <typename T>
     Tensor<T> get() {
         assert(m_dtype == model::DataTypeTrait<T>); // FIXME
-        if (m_data.empty())
+        if (m_data.empty() && m_shape.size() != 0)
             m_data.resize(m_shape.size() * sizeof(T));
         return Tensor<T>::wrap(m_shape, reinterpret_cast<T*>(m_data.data()));
     }
@@ -102,7 +102,7 @@ public:
     template <typename T>
     DevTensor<T> get() {
         assert(m_dtype == model::DataTypeTrait<T>);
-        if (m_data.handle() == nullptr)
+        if (m_data.handle() == nullptr && m_shape.size() != 0)
             m_data = gpgpu::current::context().createBuffer<uint8_t>(m_shape.size() * sizeof(T));
         return DevTensor<T>(m_shape, gpgpu::Buffer<T>(m_data.handle(), m_data.size() / sizeof(T)));
     }
@@ -199,8 +199,7 @@ public:
             throw std::runtime_error(cxx::string_concat("undefined value '",
                 value->name(), "' in node ", value->node()->kind().str()));
 
-        auto datum = std::make_shared<Datum<Context>>(
-            model::DataTypeTrait<U>, value->dims().shape());
+        auto datum = std::make_shared<Datum<Context>>(model::DataTypeTrait<U>, value->shape());
         m_dataset.push_back(datum);
         m_datamap.emplace(value, datum);
         if (value->has_initializer())
@@ -765,15 +764,19 @@ private:
         BinaryOp(OperatorFactory* of, model::Node* n)
             : A(of->alloc(n->input(0))), B(of->alloc(n->input(1)))
         {
-            auto shape = n->output()->dims().shape();
-            if (A->shape() == shape &&
-                    n->input(0)->uses().size() == 1 &&
-                   !n->input(0)->has_initializer()) {
-                C = of->allocInplace(n->input(0), n->output());
-            } else if (B->shape() == shape &&
-                    n->input(1)->uses().size() == 1 &&
-                   !n->input(1)->has_initializer()) {
-                C = of->allocInplace(n->input(1), n->output());
+            if (!A->shape().empty() && !B->shape().empty()) {
+                auto shape = Shape::broadcast(A->shape(), B->shape());
+                if (A->shape() == shape &&
+                        n->input(0)->uses().size() == 1 &&
+                       !n->input(0)->has_initializer()) {
+                    C = of->allocInplace(n->input(0), n->output());
+                } else if (B->shape() == shape &&
+                        n->input(1)->uses().size() == 1 &&
+                       !n->input(1)->has_initializer()) {
+                    C = of->allocInplace(n->input(1), n->output());
+                } else {
+                    C = of->alloc(n->output());
+                }
             } else {
                 C = of->alloc(n->output());
             }

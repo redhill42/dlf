@@ -13,13 +13,27 @@ inline bool hasInput(Value* input, Args... args) {
     return hasInput(input) && hasInput(args...);
 }
 
-void propagateShape(Node* n, size_t index = 0) {
-    Value* X = n->input(index);
-    if (hasInput(X)) {
-        Value* Y = n->output(0);
-        Y->set_type(X->type());
+static void propagateShape(Value* X, Value* Y) {
+    if (!hasInput(X))
+        return;
+    Y->set_type(X->type());
+    if (X->has_dims())
         Y->set_dims(X->dims());
-    }
+}
+
+static inline void propagateShape(Node* n, size_t index = 0) {
+    propagateShape(n->input(index), n->output(0));
+}
+
+static bool propagateTypeAndCheckShape(Value* X, Value* Y) {
+    if (!hasInput(X))
+        return false;
+    Y->set_type(X->type());
+    return X->has_dims();
+}
+
+static inline bool propagateTypeAndCheckShape(Node* n, size_t index = 0) {
+    return propagateTypeAndCheckShape(n->input(index), n->output(0));
 }
 
 static Dims broadcastShape(const std::vector<Dims>& shapes) {
@@ -80,7 +94,6 @@ static std::vector<int64_t> decodeShape(Node* n, const TensorData& data, bool po
     return shape;
 }
 
-
 class ShapeInferenceImpl final : public ShapeInference, DefaultVisitor {
     const std::unordered_map<std::string, size_t>& env;
 
@@ -100,22 +113,21 @@ public:
     }
 
     void solveSymbolicDimensions(Graph& g) {
-        for (auto v : g.inputs()) {
+        for (auto v : g.inputs())
             solveSymbolicDimension(v);
-        }
-        for (auto n : g.nodes()) {
+        for (auto n : g.nodes())
             for (auto v : n->outputs())
                 solveSymbolicDimension(v);
-        }
     }
 
     void solveSymbolicDimension(Value* value) {
-        for (auto& d : value->dims()) {
-            if (!d.has_value()) {
-                auto it = env.find(d.symbol());
-                if (it == env.end())
-                    throw shape_error(cxx::string_concat(d.symbol(), ": missing dimension value"));
-                d.set_value(it->second);
+        if (value->has_dims()) {
+            for (auto& d : value->dims()) {
+                if (!d.has_value()) {
+                    auto it = env.find(d.symbol());
+                    if (it != env.end())
+                        d.set_value(it->second);
+                }
             }
         }
     }
@@ -146,10 +158,13 @@ public:
                 continue;
             if (then_outputs[i]->type() != else_outputs[i]->type())
                 fail_shape_inference("If: Mismatched type for output", i);
-            if (then_outputs[i]->dims() != else_outputs[i]->dims())
-                fail_shape_inference("If: Mismatched shape for output", i);
             n->output(i)->set_type(then_outputs[i]->type());
-            n->output(i)->set_dims(then_outputs[i]->dims());
+
+            if (then_outputs[i]->has_dims() && else_outputs[i]->has_dims()) {
+                if (then_outputs[i]->dims() != else_outputs[i]->dims())
+                    fail_shape_inference("If: Mismatched shape for output", i);
+                n->output(i)->set_dims(then_outputs[i]->dims());
+            }
         }
     }
 
@@ -169,8 +184,7 @@ public:
 
         // Set state variable types
         for (size_t i = 2; i < num_inputs; ++i) {
-            body->input(i)->set_type(n->input(i)->type());
-            body->input(i)->set_dims(n->input(i)->dims());
+            propagateShape(n->input(i), body->input(i));
         }
 
         // Inference loop body
@@ -188,15 +202,17 @@ public:
             auto loop_output = n->output(i);
             loop_output->set_type(body_output->type());
 
-            if (i < num_inputs - 2) {
-                // loop state var
-                loop_output->set_dims(body_output->dims());
-            } else {
-                // per iteration output. first dimension will be number of iterations
-                // but we don't know that value yet.
-                auto dims = body_output->dims();
-                dims.insert(0, Dimension(1));
-                loop_output->set_dims(std::move(dims));
+            if (body_output->has_dims()) {
+                if (i < num_inputs - 2) {
+                    // loop state var
+                    loop_output->set_dims(body_output->dims());
+                } else {
+                    // per iteration output. first dimension will be number of iterations
+                    // but we don't know that value yet.
+                    auto dims = body_output->dims();
+                    dims.insert(0, Dimension(1));
+                    loop_output->set_dims(std::move(dims));
+                }
             }
         }
     }
@@ -215,7 +231,7 @@ public:
             fail_shape_inference("Where: The condition tensor must have type `bool'.");
         }
 
-        if (hasInput(n->condition(), n->X(), n->Y())) {
+        if (n->condition()->has_dims() && n->X()->has_dims() && n->Y()->has_dims()) {
             std::vector<Dims> shapes = {
                 n->condition()->dims(),
                 n->X()->dims(),
@@ -248,12 +264,10 @@ public:
     }
 
     void visit(EyeLike* n) override {
-        if (!hasInput(n->input()))
+        if (!propagateTypeAndCheckShape(n))
             return;
         if (n->input()->dims().rank() != 2)
             fail_shape_inference("EyeLike: Input tensor must be 2-dimensional");
-
-        n->output()->set_type(n->has_dtype() ? n->dtype() : n->input()->type());
         n->output()->set_dims(n->input()->dims());
     }
 
@@ -265,7 +279,8 @@ public:
     void visit(RandomNormalLike* n) override {
         if (hasInput(n->input())) {
             n->output()->set_type(n->has_dtype() ? n->dtype() : n->input()->type());
-            n->output()->set_dims(n->input()->dims());
+            if (n->input()->has_dims())
+                n->output()->set_dims(n->input()->dims());
         }
     }
 
@@ -277,7 +292,8 @@ public:
     void visit(RandomUniformLike* n) override {
         if (hasInput(n->input())) {
             n->output()->set_type(n->has_dtype() ? n->dtype() : n->input()->type());
-            n->output()->set_dims(n->input()->dims());
+            if (n->input()->has_dims())
+                n->output()->set_dims(n->input()->dims());
         }
     }
 
@@ -285,26 +301,24 @@ public:
         if (!hasInput(n->input()))
             return;
 
-        DataType dtype;
+        DataType dtype = DataType::INT32;
         if (n->has_dtype()) {
             dtype = n->dtype();
-            if (dtype != DataType::INT32 && dtype != DataType::INT64) {
+            if (dtype != DataType::INT32 && dtype != DataType::INT64)
                 fail_shape_inference("Multinomial: Output type must be int32 or int64");
-            }
-        } else {
-            dtype = DataType::INT32;
         }
-
-        auto& input_shape = n->input()->dims();
-        if (input_shape.rank() != 2) {
-            fail_shape_inference("Multinomial: Input tensor must have rank 2");
-        }
-
-        size_t batch_size = input_shape[0];
-        size_t sample_size = static_cast<size_t>(n->get_i(ksample_size, 1));
-
         n->output()->set_type(dtype);
-        n->output()->set_dims({batch_size, sample_size});
+
+        if (n->input()->has_dims()) {
+            auto& input_shape = n->input()->dims();
+            if (input_shape.rank() != 2) {
+                fail_shape_inference("Multinomial: Input tensor must have rank 2");
+            }
+
+            size_t batch_size = input_shape[0];
+            size_t sample_size = static_cast<size_t>(n->get_i(ksample_size, 1));
+            n->output()->set_dims({batch_size, sample_size});
+        }
     }
 
     //-----------------------------------------------------------------------
@@ -312,14 +326,16 @@ public:
     static void unaryLogicalShapeInference(Node* n) {
         if (hasInput(n->input())) {
             n->output()->set_type(DataType::BOOL);
-            n->output()->set_dims(n->input()->dims());
+            if (n->input()->has_dims())
+                n->output()->set_dims(n->input()->dims());
         }
     }
 
     static void binaryLogicalShapeInference(Node* n) {
         if (hasInput(n->input(0), n->input(1))) {
             n->output()->set_type(DataType::BOOL);
-            n->output()->set_dims(broadcastShape(n->input(0)->dims(), n->input(1)->dims()));
+            if (n->input(0)->has_dims() && n->input(1)->has_dims())
+                n->output()->set_dims(broadcastShape(n->input(0)->dims(), n->input(1)->dims()));
         }
     }
 
@@ -354,7 +370,8 @@ public:
     void visit(BitShift* n) override {
         if (hasInput(n->input(0), n->input(1))) {
             n->output()->set_type(n->input(0)->type());
-            n->output()->set_dims(broadcastShape(n->input(0)->dims(), n->input(1)->dims()));
+            if (n->input(0)->has_dims() && n->input(1)->has_dims())
+                n->output()->set_dims(broadcastShape(n->input(0)->dims(), n->input(1)->dims()));
         }
     }
 
@@ -363,7 +380,8 @@ public:
     static void binaryMathShapeInference(Node* n) {
         if (hasInput(n->input(0), n->input(1))) {
             n->output()->set_type(n->input(0)->type());
-            n->output()->set_dims(broadcastShape(n->input(0)->dims(), n->input(1)->dims()));
+            if (n->input(0)->has_dims() && n->input(1)->has_dims())
+                n->output()->set_dims(broadcastShape(n->input(0)->dims(), n->input(1)->dims()));
         }
     }
 
@@ -394,21 +412,23 @@ public:
     void visit(IsNaN* n) override {
         if (hasInput(n->input())) {
             n->output()->set_type(DataType::BOOL);
-            n->output()->set_dims(n->input()->dims());
+            if (n->input()->has_dims())
+                n->output()->set_dims(n->input()->dims());
         }
     }
 
     void visit(IsInf* n) override {
         if (hasInput(n->input())) {
             n->output()->set_type(DataType::BOOL);
-            n->output()->set_dims(n->input()->dims());
+            if (n->input()->has_dims())
+                n->output()->set_dims(n->input()->dims());
         }
     }
 
     static void multiOpShapeInference(Node* n) {
         std::vector<Dims> shapes;
         for (size_t i = 0; i < n->inputs().size(); i++) {
-            if (!hasInput(n->input(i)))
+            if (!hasInput(n->input(i)) || !n->input(i)->has_dims())
                 return;
             shapes.push_back(n->input(i)->dims());
         }
@@ -436,7 +456,10 @@ public:
     void visit(Gemm* n) override {
         if (!hasInput(n->A(), n->B()))
             return;
+        n->Y()->set_type(n->A()->type());
 
+        if (!n->A()->has_dims() || !n->B()->has_dims())
+            return;
         if (n->A()->dims().rank() != 2 || n->B()->dims().rank() != 2)
             fail_shape_inference("GEMM: Invalid input shape");
 
@@ -451,49 +474,48 @@ public:
             std::swap(P, N);
         if (K != P)
             fail_shape_inference("GEMM: Invalid input shape");
-
-        n->Y()->set_type(n->A()->type());
         n->Y()->set_dims({M, N});
     }
 
-    static void matmulShapeInference(Node* n, Value* lhs, Value* rhs) {
-        if (!hasInput(lhs) || !hasInput(rhs))
+    static void matmulShapeInference(Node* n, Value* A, Value* B) {
+        if (!hasInput(A, B))
+            return;
+        n->output()->set_type(A->type());
+        if (!A->has_dims() || !B->has_dims())
             return;
 
-        auto shapeL = lhs->dims();
-        auto shapeR = rhs->dims();
+        auto shapeA = A->dims();
+        auto shapeB = B->dims();
 
-        if (shapeL.rank() == 0 || shapeR.rank() == 0)
+        if (shapeA.rank() == 0 || shapeB.rank() == 0)
             fail_shape_inference(n->kind().str(), ": Input tensors of wrong rank (0).");
 
         // First promote each shape to at least rank-2. This logic is
         // specific to matmul, not generic broadcasting.
-        if (shapeL.rank() == 1)
-            shapeL.insert(0, 1);
-        if (shapeR.rank() == 1)
-            shapeR.append(1);
+        if (shapeA.rank() == 1)
+            shapeA.insert(0, 1);
+        if (shapeB.rank() == 1)
+            shapeB.append(1);
 
         // Check for compatible matrix multiply dimensions
-        if (shapeL[shapeL.rank() - 1] != shapeR[shapeR.rank() - 2]) {
+        if (shapeA[shapeA.rank() - 1] != shapeB[shapeB.rank() - 2]) {
             fail_shape_inference(n->kind().str(), ": Incompatible dimensions for matrix multiplication");
         }
 
         // Now call out to generic multidimensional broadcasting for
         // the broadcastable prefixes.
-        Dims prefixShapeL, prefixShapeR;
-        for (int i = 0; i < shapeL.rank() - 2; i++)
-            prefixShapeL.append(shapeL[i]);
-        for (int i = 0; i < shapeR.rank() - 2; i++)
-            prefixShapeR.append(shapeR[i]);
-        Dims output_shape = broadcastShape(prefixShapeL, prefixShapeR);
+        Dims prefixShapeA, prefixShapeB;
+        for (int i = 0; i < shapeA.rank() - 2; i++)
+            prefixShapeA.append(shapeA[i]);
+        for (int i = 0; i < shapeB.rank() - 2; i++)
+            prefixShapeB.append(shapeB[i]);
+        Dims output_shape = broadcastShape(prefixShapeA, prefixShapeB);
 
         // Back to matmul-specific. Add the trailing dimensions back in.
-        if (lhs->dims().rank() != 1)
-            output_shape.append(shapeL[shapeL.rank() - 2]);
-        if (rhs->dims().rank() != 1)
-            output_shape.append(shapeR[shapeR.rank() - 1]);
-
-        n->output()->set_type(lhs->type());
+        if (A->dims().rank() != 1)
+            output_shape.append(shapeA[shapeA.rank() - 2]);
+        if (B->dims().rank() != 1)
+            output_shape.append(shapeB[shapeB.rank() - 1]);
         n->output()->set_dims(output_shape);
     }
 
@@ -510,9 +532,8 @@ public:
     }
 
     void visit(TopK* n) override {
-        if (!hasInput(n->input()))
+        if (!propagateTypeAndCheckShape(n))
             return;
-        n->output()->set_type(n->input()->type());
         n->indices()->set_type(DataType::INT64);
 
         if (!hasInput(n->K()) || !n->K()->has_initializer())
@@ -533,7 +554,6 @@ public:
 
         auto output_shape = input_shape;
         output_shape[axis] = k;
-
         n->output()->set_dims(output_shape);
         n->indices()->set_dims(output_shape);
     }
@@ -547,12 +567,12 @@ public:
         auto sym = n->kind().str();
 
         // we need the first input shape for this inference.
-        if (!hasInput(X))
+        if (!(hasInput(X) && X->has_dims()))
             return false;
 
         // if kernel shape is an input (and not attribute)
         // we need the shape of the second input.
-        if (!require_kernel_shape && !hasInput(W))
+        if (!require_kernel_shape && !(hasInput(W) && W->has_dims()))
             return false;
 
         const auto& input_shape = X->dims();
@@ -594,7 +614,7 @@ public:
         } else if (require_kernel_shape) {
             fail_shape_inference(sym, ": Attribute kernel_shape must be specified");
         } else {
-            assert(W != nullptr);
+            assert(W != nullptr && W->has_dims());
             auto& weight_shape = W->dims();
             if (weight_shape.rank() != input_shape.rank())
                 fail_shape_inference(sym, ": Input tensors must have same shape");
@@ -688,7 +708,9 @@ public:
     }
 
     static void roiPoolShapeInference(Node* n) {
-        if (!hasInput(n->input(0), n->input(1)))
+        if (!propagateTypeAndCheckShape(n))
+            return;
+        if (!hasInput(n->input(1)) || !n->input(1)->has_dims())
             return;
 
         auto& input_shape = n->input(0)->dims();
@@ -717,14 +739,12 @@ public:
             static_cast<size_t>(pooled_shape[0]),
             static_cast<size_t>(pooled_shape[1])
         };
-
-        n->output()->set_type(n->input(0)->type());
         n->output()->set_dims(std::move(output_shape));
 
     }
 
     static void globalPoolShapeInference(Node* n) {
-        if (!hasInput(n->input()))
+        if (!propagateTypeAndCheckShape(n))
             return;
 
         auto dims = n->input()->dims();
@@ -732,8 +752,6 @@ public:
             return;
         for (int i = 2; i < dims.rank(); i++)
             dims[i] = 1;
-
-        n->output()->set_type(n->input()->type());
         n->output()->set_dims(dims);
     }
 
@@ -746,7 +764,9 @@ public:
     }
 
     void visit(MaxUnpool* n) override {
-        if (!hasInput(n->X(), n->I()))
+        if (!propagateTypeAndCheckShape(n))
+            return;
+        if (!hasInput(n->I()) || !n->I()->has_dims())
             return;
 
         std::vector<int64_t> kernel_shape, strides, pads;
@@ -779,8 +799,6 @@ public:
                 output_shape.append(static_cast<size_t>(new_dim));
             }
         }
-
-        n->output()->set_type(n->X()->type());
         n->output()->set_dims(output_shape);
     }
 
@@ -867,11 +885,8 @@ public:
     }
 
     void visit(Dropout* n) override {
-        if (!hasInput(n->input()))
+        if (!propagateTypeAndCheckShape(n))
             return;
-
-        n->output()->set_type(n->input()->type());
-        n->output()->set_dims(n->input()->dims());
         if (n->mask() != nullptr) {
             n->mask()->set_type(DataType::BOOL);
             n->mask()->set_dims(n->input()->dims());
@@ -879,7 +894,7 @@ public:
     }
 
     void visit(Flatten* n) override {
-        if (!hasInput(n->input()))
+        if (!propagateTypeAndCheckShape(n))
             return;
 
         auto dims = n->input()->dims();
@@ -890,13 +905,11 @@ public:
             fail_shape_inference("Flatten: Invalid value (", axis, ") for attribute 'axis'");
         auto a = dims.partial_size(0, axis);
         auto b = dims.partial_size(axis, dims.rank());
-
-        n->output()->set_type(n->input()->type());
         n->output()->set_dims({a, b});
     }
 
     void visit(TfIdfVectorizer* n) override {
-        if (!hasInput(n->input()))
+        if (!propagateTypeAndCheckShape(n))
             return;
 
         if (!n->has_ngram_indexes())
@@ -911,8 +924,6 @@ public:
             shape.back() = greatest_hit;
         else
             fail_shape_inference("TfIdfVectorizer: Input tensor must have rank 1 or 2");
-
-        n->output()->set_type(n->input()->type());
         n->output()->set_dims(shape);
     }
 
@@ -924,6 +935,14 @@ public:
 
     static void RNNShapeInference(Node* n) {
         if (!hasInput(n->input(0), n->input(1), n->input(2)))
+            return;
+        if (n->outputs().size() > 0) // Y
+            n->output(0)->set_type(n->input()->type());
+        if (n->outputs().size() > 1) // Y_h
+            n->output(1)->set_type(n->input()->type());
+        if (n->outputs().size() > 2) // Y_c
+            n->output(2)->set_type(n->input()->type());
+        if (!n->input(0)->has_dims() || !n->input(1)->has_dims() || !n->input(2)->has_dims())
             return;
 
         size_t seq_length, batch_size, input_size, num_directions, hidden_size;
@@ -963,18 +982,12 @@ public:
             recur_shape[2].value() != hidden_size)
             fail_shape_inference("RNN: The recurrence weight tensor has incorrect shape");
 
-        if (n->outputs().size() > 0) { // Y
-            n->output(0)->set_type(n->input()->type());
+        if (n->outputs().size() > 0) // Y
             n->output(0)->set_dims({seq_length, num_directions, batch_size, hidden_size});
-        }
-        if (n->outputs().size() > 1) { // Y_h
-            n->output(1)->set_type(n->input()->type());
+        if (n->outputs().size() > 1) // Y_h
             n->output(1)->set_dims({num_directions, batch_size, hidden_size});
-        }
-        if (n->outputs().size() > 2) { // Y_c
-            n->output(2)->set_type(n->input()->type());
+        if (n->outputs().size() > 2) // Y_c
             n->output(2)->set_dims({num_directions, batch_size, hidden_size});
-        }
     }
 
     void visit(RNN* n) override {
@@ -992,7 +1005,7 @@ public:
     //-----------------------------------------------------------------------
 
     static void reduceShapeInference(Node* n) {
-        if (!hasInput(n->input()))
+        if (!propagateTypeAndCheckShape(n))
             return;
 
         auto keep_dims = n->get_i(kkeepdims, 1);
@@ -1015,13 +1028,11 @@ public:
                 output_shape.append(1);
             }
         }
-
-        n->output()->set_type(n->input()->type());
         n->output()->set_dims(output_shape);
     }
 
     static void argReduceShapeInference(Node* n) {
-        if (!hasInput(n->input()))
+        if (!propagateTypeAndCheckShape(n))
             return;
 
         const auto& input_shape = n->input()->dims();
@@ -1040,8 +1051,6 @@ public:
                 output_shape.append(1);
             }
         }
-
-        n->output()->set_type(n->input()->type());
         n->output()->set_dims(output_shape);
     }
 
@@ -1098,15 +1107,14 @@ public:
     void visit(Cast* n) override {
         if (hasInput(n->input())) {
             n->output()->set_type(n->to());
-            n->output()->set_dims(n->input()->dims());
+            if (n->input()->has_dims())
+                n->output()->set_dims(n->input()->dims());
         }
     }
 
     void visit(Reshape* n) override {
-        if (!hasInput(n->data()))
+        if (!propagateTypeAndCheckShape(n))
             return;
-        n->reshaped()->set_type(n->data()->type());
-
         if (!hasInput(n->shape()) || !n->shape()->has_initializer())
             return;
         if (n->shape()->type() != DataType::INT64)
@@ -1150,7 +1158,8 @@ public:
     void visit(Shape* n) override {
         if (hasInput(n->input())) {
             n->output()->set_type(DataType::INT64);
-            n->output()->set_dims({n->input()->dims().rank()});
+            if (n->input()->has_dims())
+                n->output()->set_dims({n->input()->dims().rank()});
         }
     }
 
@@ -1162,8 +1171,10 @@ public:
     void visit(Concat* n) override {
         if (n->inputs().size() == 0)
             return;
+        if (hasInput(n->input(0)))
+            n->output()->set_type(n->input(0)->type());
         for (auto v : n->inputs())
-            if (!hasInput(v)) return;
+            if (!hasInput(v) || !v->has_dims()) return;
         if (!n->has_axis())
             fail_shape_inference("Concat: Missing required attribute 'axis'");
 
@@ -1190,13 +1201,15 @@ public:
                 }
             }
         }
-
-        n->output()->set_type(n->input(0)->type());
         n->output()->set_dims(std::move(output_shape));
     }
 
     void visit(Split* n) override {
         if (!hasInput(n->input()))
+            return;
+        for (auto v : n->outputs())
+            v->set_type(n->input()->type());
+        if (!n->input()->has_dims())
             return;
 
         const auto& input_shape = n->input()->dims();
@@ -1227,7 +1240,6 @@ public:
         for (int i = 0; i < n_split; i++) {
             auto shape = input_shape;
             shape[axis] = split[i];
-            n->output(i)->set_type(n->input()->type());
             n->output(i)->set_dims(shape);
         }
     }
@@ -1235,10 +1247,8 @@ public:
     void visit(Slice* n) override {
         if (n->inputs().size() < 3 || n->inputs().size() > 5)
             fail_shape_inference("Slice: Invalid number of input tensors");
-
-        if (!hasInput(n->data()))
+        if (!propagateTypeAndCheckShape(n))
             return;
-        n->output()->set_type(n->input()->type());
 
         // Shape inference if starts and ends are available and axes/steps are
         // either not set or set and has initializer.
@@ -1335,7 +1345,7 @@ public:
     }
 
     void visit(Transpose* n) override {
-        if (!hasInput(n->input()))
+        if (!propagateTypeAndCheckShape(n))
             return;
 
         const auto& input_shape = n->input()->dims();
@@ -1354,16 +1364,15 @@ public:
         }
 
         Dims output_shape(rank);
-        for (size_t i = 0; i < rank; i++) {
+        for (size_t i = 0; i < rank; i++)
             output_shape[i] = input_shape[perm[i]];
-        }
-
-        n->output()->set_type(n->input()->type());
         n->output()->set_dims(output_shape);
     }
 
     void visit(Gather* n) override {
-        if (!hasInput(n->data(), n->indices()))
+        if (!propagateTypeAndCheckShape(n))
+            return;
+        if (!hasInput(n->indices()) || !n->indices()->has_dims())
             return;
 
         const auto& data_shape = n->data()->dims();
@@ -1391,26 +1400,26 @@ public:
                 dim = data_shape[i - q + 1];
             output_shape.append(dim);
         }
-
-        n->output()->set_type(n->input()->type());
         n->output()->set_dims(output_shape);
     }
 
     void visit(GatherElements* n) override {
-        if (!hasInput(n->data(), n->indices()))
+        if (!propagateTypeAndCheckShape(n))
+            return;
+        if (!hasInput(n->indices()) || !n->indices()->has_dims())
             return;
 
         const auto& data_shape = n->data()->dims();
         const auto& indices_shape = n->indices()->dims();
         if (data_shape.rank() != indices_shape.rank())
             fail_shape_inference("GatherElements: data tensor and indices tensor must have same rank");
-
-        n->output()->set_type(n->input()->type());
         n->output()->set_dims(indices_shape);
     }
 
     void visit(GatherND* n) override {
-        if (!hasInput(n->data(), n->indices()))
+        if (!propagateTypeAndCheckShape(n))
+            return;
+        if (!hasInput(n->indices()) || !n->indices()->has_dims())
             return;
 
         const auto& data_shape = n->data()->dims();
@@ -1432,13 +1441,11 @@ public:
             output_shape.append(indices_shape[i]);
         for (int i = s; i < r; i++)
             output_shape.append(data_shape[i]);
-
-        n->output()->set_type(n->input()->type());
         n->output()->set_dims(output_shape);
     }
 
     void visit(Squeeze* n) override {
-        if (!hasInput(n->input()))
+        if (!propagateTypeAndCheckShape(n))
             return;
 
         const auto& input_shape = n->input()->dims();
@@ -1466,13 +1473,11 @@ public:
                 output_shape.append(input_shape[i]);
             }
         }
-
-        n->output()->set_type(n->input()->type());
         n->output()->set_dims(output_shape);
     }
 
     void visit(Unsqueeze* n) override {
-        if (!hasInput(n->input()))
+        if (!propagateTypeAndCheckShape(n))
             return;
         if (!n->has_axes())
             fail_shape_inference("Unsqueeze: Missing required attribute 'axes'");
@@ -1498,13 +1503,11 @@ public:
                 output_shape.append(input_shape[j++]);
             }
         }
-
-        n->output()->set_type(n->input()->type());
         n->output()->set_dims(output_shape);
     }
 
     void visit(Pad* n) override {
-        if (!hasInput(n->input()))
+        if (!propagateTypeAndCheckShape(n))
             return;
         if (!n->has_pads())
             fail_shape_inference("Pad: Missing required attribute 'pads'");
@@ -1525,13 +1528,11 @@ public:
                 fail_shape_inference("Pad: the 'pads' attribute has incorrect value");
             output_shape.append(static_cast<size_t>(new_dim));
         }
-
-        n->output()->set_type(n->input()->type());
         n->output()->set_dims(output_shape);
     }
 
     void visit(SpaceToDepth* n) override {
-        if (!hasInput(n->input()))
+        if (!propagateTypeAndCheckShape(n))
             return;
         if (!n->has_blocksize())
             fail_shape_inference("SpaceToDepth: Missing 'blocksize' attribute");
@@ -1550,13 +1551,11 @@ public:
             input_shape[2] / blocksize,
             input_shape[3] / blocksize
         };
-
-        n->output()->set_type(n->input()->type());
-        n->output()->set_dims(output_shape);
+        n->output()->set_dims(std::move(output_shape));
     }
 
     void visit(DepthToSpace* n) override {
-        if (!hasInput(n->input()))
+        if (!propagateTypeAndCheckShape(n))
             return;
         if (!n->has_blocksize())
             fail_shape_inference("DepthToSpace: Missing 'blocksize' attribute");
@@ -1575,16 +1574,12 @@ public:
             input_shape[2] * blocksize,
             input_shape[3] * blocksize
         };
-
-        n->output()->set_type(n->input()->type());
-        n->output()->set_dims(output_shape);
+        n->output()->set_dims(std::move(output_shape));
     }
 
     void visit(Tile* n) override {
-        if (!hasInput(n->input()))
+        if (!propagateTypeAndCheckShape(n))
             return;
-        n->output()->set_type(n->input()->type());
-
         if (!hasInput(n->repeats()) || !n->repeats()->has_initializer())
             return;
         if (n->repeats()->type() != DataType::INT64 || n->repeats()->dims().rank() != 1)
@@ -1603,10 +1598,8 @@ public:
     }
 
     void visit(Resize* n) override {
-        if (!hasInput(n->input()))
+        if (!propagateTypeAndCheckShape(n))
             return;
-        n->output()->set_type(n->input()->type());
-
         if (!hasInput(n->scales()) || !n->scales()->has_initializer())
             return;
 
@@ -1629,10 +1622,8 @@ public:
     }
 
     void visit(Expand* n) override {
-        if (!hasInput(n->input()))
+        if (!propagateTypeAndCheckShape(n))
             return;
-        n->output()->set_type(n->input()->type());
-
         if (!hasInput(n->shape()) || !n->shape()->has_initializer())
             return;
         if (n->shape()->dims().rank() != 1 || n->shape()->type() != DataType::INT64)
@@ -1645,10 +1636,8 @@ public:
     }
 
     void visit(Compress* n) override {
-        if (!hasInput(n->input()))
+        if (!propagateTypeAndCheckShape(n))
             return;
-        n->output()->set_type(n->input()->type());
-
         if (!hasInput(n->condition()) || !n->condition()->has_initializer())
             return;
         if (n->condition()->dims().rank() != 1 || n->condition()->type() != DataType::BOOL)

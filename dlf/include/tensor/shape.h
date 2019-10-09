@@ -147,6 +147,13 @@ public:
     }
 
     /**
+     * Returns true if this is an empty shape.
+     */
+    bool empty() const noexcept {
+        return size() == 0;
+    }
+
+    /**
      * Returns the partial size for the given axis range.
      */
     size_t partial_size(size_t start, size_t end) const noexcept;

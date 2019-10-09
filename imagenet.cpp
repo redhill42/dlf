@@ -61,11 +61,12 @@ struct ImageClass {
 
 template <typename Context>
 predict::Predictor<Context, Real> create_predictor(
-    const char* path, const std::vector<size_t>& input_shape)
+    const char* path, const std::unordered_map<std::string, size_t>& env,
+    const std::vector<size_t>& input_shape)
 {
     auto g = model::import_model(path);
     g->input(0)->set_dims(input_shape);
-    return predict::Predictor<Context, Real>(std::move(g));
+    return predict::Predictor<Context, Real>(std::move(g), env);
 }
 
 #define KEEP_RATIO 1
@@ -225,14 +226,16 @@ static bool is_dir(const char* path) {
 }
 
 template <typename Context>
-void run_interactive(const char* model_path, const char* data_path) {
+void run_interactive(const char* model_path, const char* data_path,
+                     const std::unordered_map<std::string, size_t>& env)
+{
     std::string title = model_path;
     auto pos = title.rfind('/');
     if (pos != std::string::npos)
         title = title.substr(pos+1);
     title = "Image Classification - " + title;
 
-    auto predictor = create_predictor<Context>(model_path, {15, 3, 224, 224});
+    auto predictor = create_predictor<Context>(model_path, env, {15, 3, 224, 224});
     std::mt19937 rng(std::random_device{}());
     cv::namedWindow(title);
 
@@ -245,9 +248,12 @@ void run_interactive(const char* model_path, const char* data_path) {
 }
 
 template <typename Context>
-void run_benchmark(const char* model_path, const char* data_path, size_t batch_size, size_t round) {
+void run_benchmark(const char* model_path, const char* data_path,
+                   const std::unordered_map<std::string, size_t>& env,
+                   size_t batch_size, size_t round)
+{
     // prepare batch
-    auto predictor = create_predictor<Context>(model_path, {batch_size, 3, 224, 224});
+    auto predictor = create_predictor<Context>(model_path, env, {batch_size, 3, 224, 224});
     auto image = prepare(data_path);
     auto input = Tensor<Real>({batch_size, 3, 224, 224});
     for (size_t i = 0; i < batch_size; i++) {
@@ -286,23 +292,45 @@ void run_benchmark(const char* model_path, const char* data_path, size_t batch_s
 }
 
 template <typename Context>
-void run_program(const char* model_path, const char* data_path, size_t batch_size, size_t round) {
+void run_program(const char* model_path, const char* data_path,
+                 const std::unordered_map<std::string, size_t>& env,
+                 size_t batch_size, size_t round)
+{
     if (is_dir(data_path)) {
-        run_interactive<Context>(model_path, data_path);
+        run_interactive<Context>(model_path, data_path, env);
     } else {
-        run_benchmark<Context>(model_path, data_path, batch_size, round);
+        run_benchmark<Context>(model_path, data_path, env, batch_size, round);
     }
 }
 
 int main(int argc, char** argv) {
+    std::unordered_map<std::string, size_t> env;
     bool    gpu = true;
     int     batch_size = 1;
     int     round = 1000;
     char*   endptr = nullptr;
     int     c;
 
-    while ((c = getopt(argc, argv, "Cb:r:")) != -1) {
+    while ((c = getopt(argc, argv, "CD:b:r:")) != -1) {
         switch (c) {
+        case 'D': {
+            std::string def = optarg;
+            auto sep = def.find('=');
+            if (sep == std::string::npos) {
+                std::cerr << "Invalid definition: " << def << std::endl;
+                return 1;
+            }
+
+            size_t def_val = std::strtol(def.substr(sep+1).c_str(), &endptr, 10);
+            if (*endptr != '\0') {
+                std::cerr << "Invalid definition: " << def << std::endl;
+                return 1;
+            }
+
+            env[def.substr(0, sep)] = def_val;
+            break;
+        }
+
         case 'C':
             gpu = false;
             break;
@@ -337,9 +365,9 @@ int main(int argc, char** argv) {
     const char* data_path = argv[optind+1];
 
     if (gpu) {
-        run_program<predict::GPU>(model_path, data_path, batch_size, round);
+        run_program<predict::GPU>(model_path, data_path, env, batch_size, round);
     } else {
-        run_program<predict::CPU>(model_path, data_path, batch_size, round);
+        run_program<predict::CPU>(model_path, data_path, env, batch_size, round);
     }
 
     return 0;

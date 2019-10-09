@@ -732,7 +732,7 @@ template <>
 inline Tensor<std::string> TensorData::decode() const {
     if (type() != DataType::STRING)
         throw std::logic_error("invalid tensor data type");
-    return Tensor<std::string>{m_dims.shape(), string_data().begin(), string_data().end()};
+    return Tensor<std::string>(m_dims.shape(), string_data().begin(), string_data().end());
 }
 
 template <>
@@ -749,7 +749,7 @@ inline Tensor<std::complex<float>> TensorData::decode() const {
         data = reinterpret_cast<const std::complex<float>*>(float_data().data());
         size = float_data().size() / 2;
     }
-    return Tensor<std::complex<float>>{m_dims.shape(), data, data+size};
+    return Tensor<std::complex<float>>(m_dims.shape(), data, data+size);
 }
 
 template <>
@@ -766,7 +766,7 @@ inline Tensor<std::complex<double>> TensorData::decode() const {
         data = reinterpret_cast<const std::complex<double>*>(float_data().data());
         size = float_data().size() / 2;
     }
-    return Tensor<std::complex<double>>{m_dims.shape(), data, data+size};
+    return Tensor<std::complex<double>>(m_dims.shape(), data, data+size);
 }
 
 //==-------------------------------------------------------------------------
@@ -1175,6 +1175,7 @@ class Value final {
     size_t          m_offset;
     std::string     m_name;
     DataType        m_type;
+    bool            m_has_dims = false;
     Dims            m_dims;
     UseList         m_uses;
     bool            m_has_initializer = false;
@@ -1214,11 +1215,17 @@ public:
         return this;
     }
 
+    bool has_dims() const noexcept {
+        return m_has_dims;
+    }
+
     const Dims& dims() const noexcept {
+        assert(has_dims());
         return m_dims;
     }
 
     Dims& dims() noexcept {
+        assert(has_dims());
         return m_dims;
     }
 
@@ -1228,7 +1235,12 @@ public:
 
     Value* set_dims(Dims dims) noexcept {
         m_dims = std::move(dims);
+        m_has_dims = true;
         return this;
+    }
+
+    Shape shape() const noexcept {
+        return has_dims() ? m_dims.shape() : Shape();
     }
 
     const UseList& uses() const noexcept {
