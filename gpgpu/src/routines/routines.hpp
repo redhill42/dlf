@@ -94,5 +94,6 @@
 #include "routines/dnn/xhardmax.hpp"
 #include "routines/dnn/xwhere.hpp"
 #include "routines/dnn/xgather.hpp"
+#include "routines/dnn/xresize.hpp"
 
 #endif // GPGPU_BLAS_ROUTINES_ROUTINES_H_

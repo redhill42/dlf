@@ -18,8 +18,10 @@ inline cudnnHandle_t cudnn_handle(const Queue& queue) {
     return q.getCudnnHandle();
 }
 
+constexpr cudnnDataType_t CUDNN_DATA_UNSUPPORTED = static_cast<cudnnDataType_t>(-1);
+
 template <typename T>
-constexpr cudnnDataType_t cudnnDataType = CUDNN_DATA_FLOAT;
+constexpr cudnnDataType_t cudnnDataType = CUDNN_DATA_UNSUPPORTED;
 
 template <> constexpr cudnnDataType_t cudnnDataType<half> = CUDNN_DATA_HALF;
 template <> constexpr cudnnDataType_t cudnnDataType<float> = CUDNN_DATA_FLOAT;
@@ -42,7 +44,7 @@ struct TensorDescriptor {
             desc, CUDNN_TENSOR_NCHW, cudnnDataType<T>, n, c, h, w));
     }
 
-    explicit TensorDescriptor(const std::vector<size_t> dims) {
+    explicit TensorDescriptor(const std::vector<size_t>& dims) {
         int  rank = dims.size();
         int* extents = reinterpret_cast<int*>(alloca(rank * sizeof(int)));
         int* strides = reinterpret_cast<int*>(alloca(rank * sizeof(int)));

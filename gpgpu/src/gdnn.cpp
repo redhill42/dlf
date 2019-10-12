@@ -643,8 +643,10 @@ void transform(const std::string& name,
 {
 #if HAS_CUDA
     if (name == "add" && IsCUDA(queue.context().device()) &&
+        cudnnDataType<T> != CUDNN_DATA_UNSUPPORTED &&
         x_buffer.handle() == z_buffer.handle() &&
-        x_offset == 0 && y_offset == 0 && z_offset == 0) {
+        x_offset == 0 && y_offset == 0 && z_offset == 0)
+    {
         auto y_desc = TensorDescriptor<T>(1, channels, 1, 1);
         auto z_desc = TensorDescriptor<T>(m/channels, channels, 1, n);
         T alpha{1}, beta{1};
@@ -2061,6 +2063,60 @@ template void PUBLIC_API scatter_nd<int64_t>(
     const Buffer<int>&, const size_t,
     const std::vector<size_t>&, const std::vector<size_t>&,
     const Buffer<int64_t>&, const size_t,
+    const Queue&, Event*);
+
+template <typename T>
+void resize1d(const size_t batch_count,
+            const Buffer<T>& x_buffer, const size_t x_offset,
+            const std::vector<size_t>& x_dims, const std::vector<size_t>& x_strides,
+            Buffer<T>& y_buffer, const size_t y_offset,
+            const std::vector<size_t>& y_dims, const std::vector<size_t>& y_strides,
+            const Queue& queue, Event* event)
+{
+    auto routine = Xresize<T>(queue, event);
+    routine.DoResize1D(batch_count,
+        x_buffer, x_offset, x_dims, x_strides,
+        y_buffer, y_offset, y_dims, y_strides);
+}
+
+template void PUBLIC_API resize1d<half>(const size_t,
+    const Buffer<half>&, const size_t, const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<half>&, const size_t, const std::vector<size_t>&, const std::vector<size_t>&,
+    const Queue&, Event*);
+template void PUBLIC_API resize1d<float>(const size_t,
+    const Buffer<float>&, const size_t, const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<float>&, const size_t, const std::vector<size_t>&, const std::vector<size_t>&,
+    const Queue&, Event*);
+template void PUBLIC_API resize1d<double>(const size_t,
+    const Buffer<double>&, const size_t, const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<double>&, const size_t, const std::vector<size_t>&, const std::vector<size_t>&,
+    const Queue&, Event*);
+
+template <typename T>
+void resize2d(const size_t batch_count,
+            const Buffer<T>& x_buffer, const size_t x_offset,
+            const std::vector<size_t>& x_dims, const std::vector<size_t>& x_strides,
+            Buffer<T>& y_buffer, const size_t y_offset,
+            const std::vector<size_t>& y_dims, const std::vector<size_t>& y_strides,
+            const Queue& queue, Event* event)
+{
+    auto routine = Xresize<T>(queue, event);
+    routine.DoResize2D(batch_count,
+        x_buffer, x_offset, x_dims, x_strides,
+        y_buffer, y_offset, y_dims, y_strides);
+}
+
+template void PUBLIC_API resize2d<half>(const size_t,
+    const Buffer<half>&, const size_t, const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<half>&, const size_t, const std::vector<size_t>&, const std::vector<size_t>&,
+    const Queue&, Event*);
+template void PUBLIC_API resize2d<float>(const size_t,
+    const Buffer<float>&, const size_t, const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<float>&, const size_t, const std::vector<size_t>&, const std::vector<size_t>&,
+    const Queue&, Event*);
+template void PUBLIC_API resize2d<double>(const size_t,
+    const Buffer<double>&, const size_t, const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<double>&, const size_t, const std::vector<size_t>&, const std::vector<size_t>&,
     const Queue&, Event*);
 
 }} // namespace gpgpu::dnn

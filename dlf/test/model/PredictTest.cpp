@@ -403,6 +403,28 @@ TYPED_TEST(PredictTest, Loop) {
     EXPECT_EQ(predictor.get(3), Vector<float>({1, 2, 6, 24, 120, 720, 5040, 40320, 362880, 3628800}));
 }
 
+TYPED_TEST(PredictTest, Resize) {
+    using Context = TypeParam;
+    Graph g;
+
+    auto a = g.append<Resize>()->mode("linear");
+    a->addInput(g.addInput("X", DataType::FLOAT, {1, 1, 2, 2}));
+    a->addInput(g.addInput("scales", DataType::FLOAT, {4}));
+    g.addOutput(a->addOutput("Y"));
+
+    Predictor<Context, float> predictor(g);
+    predictor.set(0, Tensor<float>({1, 1, 2, 2}, {1, 2, 3, 4}));
+    predictor.set(1, Vector<float>({1, 1, 2, 2}));
+    predictor.predict();
+
+    EXPECT_EQ(predictor.get(0), Tensor<float>({1, 1, 4, 4}, {
+        1.,  1.25, 1.75, 2.,
+        1.5, 1.75, 2.25, 2.5,
+        2.5, 2.75, 3.25, 3.5,
+        3.,  3.25, 3.75, 4.
+    }));
+}
+
 TYPED_PERFORMANCE_TEST(PredictTest, Performance) {
     std::fstream fs("data/resnet18v1.onnx", std::ios::in | std::ios::binary);
     auto g = import_model(fs);

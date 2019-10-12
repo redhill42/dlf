@@ -2124,3 +2124,19 @@ TEST(UniformTest, Merge) {
         std::cout << A << B;
     }
 }
+
+TEST(UniformTest, resize_upsample_scales_linear) {
+    auto X = Tensor<float>({1, 1, 2, 2}, {1, 2, 3, 4});
+    auto Y = im::resize(X, std::vector<float>{1, 1, 2, 2});
+    EXPECT_EQ(Y, Tensor<float>({1, 1, 4, 4}, {
+        1.,  1.25, 1.75, 2.,
+        1.5, 1.75, 2.25, 2.5,
+        2.5, 2.75, 3.25, 3.5,
+        3.,  3.25, 3.75, 4.
+    }));
+    EXPECT_EQ(im::resize(X, Shape{1, 1, 4, 4}), Y);
+
+    auto dev_X = dev(X);
+    auto dev_Y = im::resize(dev_X, std::vector<float>{1, 1, 2, 2});
+    EXPECT_EQ(dev_Y.read(), Y);
+}

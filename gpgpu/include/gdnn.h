@@ -277,6 +277,22 @@ void scatter_nd(const size_t n, const size_t k, const size_t chunk,
                 const Buffer<T>& y_buffer, const size_t y_offset,
                 const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
+template <typename T>
+void resize1d(const size_t batch_count,
+              const Buffer<T>& x_buffer, const size_t x_offset,
+              const std::vector<size_t>& x_dims, const std::vector<size_t>& x_strides,
+              Buffer<T>& y_buffer, const size_t y_offset,
+              const std::vector<size_t>& y_dims, const std::vector<size_t>& y_strides,
+              const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
+
+template <typename T>
+void resize2d(const size_t batch_count,
+              const Buffer<T>& x_buffer, const size_t x_offset,
+              const std::vector<size_t>& x_dims, const std::vector<size_t>& x_strides,
+              Buffer<T>& y_buffer, const size_t y_offset,
+              const std::vector<size_t>& y_dims, const std::vector<size_t>& y_strides,
+              const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
+
 }} // namespace gpgpu::dnn
 
 #endif //GPGPU_DNN_H_

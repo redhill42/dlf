@@ -1748,6 +1748,41 @@ private:
         result = std::make_unique<TileOp>(this, n);
     }
 
+    struct ResizeOp : Operator {
+        datum_ptr X, Y;
+        datum_ptr scales_datum;
+        std::vector<float> scales_init;
+
+        ResizeOp(OperatorFactory* of, model::Resize* n)
+            : X(of->alloc(n->input())), Y(of->alloc(n->output()))
+        {
+            if (n->scales()->has_initializer()) {
+                scales_init = decode(n->scales()->initializer().decode<float>());
+            } else {
+                scales_datum = of->alloc<float>(n->scales());
+            }
+        }
+
+        void evaluate() override {
+            auto out = deref(Y);
+            if (scales_datum == nullptr)
+                im::resize(deref(X), out, scales_init);
+            else
+                im::resize(deref(X), out, decode(scales_datum->template read<float>()));
+            Y->unget(out);
+        }
+
+    private:
+        static std::vector<float> decode(const Tensor<float>& datum) {
+            assert(datum.rank() == 1);
+            return std::vector<float>(datum.begin(), datum.end());
+        }
+    };
+
+    void visit(model::Resize* n) override {
+        result = std::make_unique<ResizeOp>(this, n);
+    }
+
     struct SpaceToDepthOp : Operator {
         datum_ptr X, Y;
         int blocksize;

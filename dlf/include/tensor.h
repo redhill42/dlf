@@ -25,3 +25,4 @@
 #include "tensor/pad.h"
 #include "tensor/linalg.h"
 #include "tensor/dnn.h"
+#include "tensor/image.h"

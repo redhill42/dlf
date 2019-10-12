@@ -159,7 +159,7 @@ set(LEVEL2_ROUTINES xgemv xgbmv xhemv xhbmv xhpmv xsymv xsbmv xspmv xtrmv xtbmv 
 set(LEVEL3_ROUTINES xgemm xsymm xhemm xsyrk xherk xsyr2k xher2k xtrmm xtrsm)
 set(LEVELX_ROUTINES xhad xomatcopy xim2col xcol2im xconvgemm xaxpybatched xgemmbatched xgemmstridedbatched)
 set(DNN_ROUTINES xcopy xfill xrange xrandom xtransform xtransform_p xtransform_b xreduce xscan
-                 xmerge xargreduce xnorm xpool xsoftmax xhardmax xwhere xgather)
+                 xmerge xargreduce xnorm xpool xsoftmax xhardmax xwhere xgather xresize)
 set(ROUTINES ${LEVEL1_ROUTINES} ${LEVEL2_ROUTINES} ${LEVEL3_ROUTINES} ${LEVELX_ROUTINES})
 set(PRECISIONS 32 64 3232 6464 16)
 
