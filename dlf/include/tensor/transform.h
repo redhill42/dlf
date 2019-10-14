@@ -754,4 +754,49 @@ where(const TensorC& C, const TensorX& X, const TensorY& Y) {
     return Z;
 }
 
+template <typename TensorI, typename TensorV, typename TensorR>
+std::enable_if_t<
+    is_cpu_tensor<TensorI>::value && is_cpu_tensor<TensorV>::value &&
+    is_exactly_same_tensor<TensorV, TensorR>::value &&
+    !std::is_const<std::remove_reference_t<TensorR>>::value>
+one_hot(const TensorI& indices, const TensorV& values, TensorR&& output, size_t depth, int axis = -1) {
+    assert(values.rank() == 1 && values.extent(0) == 2);
+
+    auto rank = indices.rank() + 1;
+    detail::norm_axis(rank, axis);
+
+    std::vector<size_t> depth_dims(rank, 1);
+    depth_dims[axis] = depth;
+
+    auto target = Tensor<int>(Shape(depth_dims)).range(0);
+    transformTo(unsqueeze(indices, axis), target, output,
+                [depth, on=values(1), off=values(0)](auto x, auto b) {
+                    auto a = static_cast<int>(x);
+                    if (a < 0) a += depth;
+                    return a == b ? on : off;
+                });
+}
+
+template <typename TensorI, typename TensorV, typename TensorR>
+std::enable_if_t<
+    is_gpu_tensor<TensorI>::value && !is_tensor_view<TensorI>::value &&
+    is_gpu_tensor<TensorV>::value && !is_tensor_view<TensorV>::value &&
+    is_gpu_tensor<TensorR>::value && !is_tensor_view<TensorR>::value &&
+    is_same_tensor<TensorI, TensorV>::value &&
+    is_same_tensor<TensorV, TensorR>::value &&
+    !std::is_const<std::remove_reference_t<TensorR>>::value>
+one_hot(const TensorI& indices, const TensorV& values, TensorR&& output, size_t depth, int axis = -1) {
+    assert(values.rank() == 1 && values.extent(0) == 2);
+
+    auto rank = indices.rank() + 1;
+    detail::norm_axis(rank, axis);
+
+    auto output_dims = indices.shape().extents();
+    output_dims.insert(output_dims.begin() + axis, depth);
+    output.resize(Shape(output_dims));
+
+    auto k = indices.shape().partial_size(axis, indices.rank());
+    gpgpu::dnn::onehot(output.size(), depth, k, indices.data(), values.data(), output.data());
+}
+
 } // namespace dlf

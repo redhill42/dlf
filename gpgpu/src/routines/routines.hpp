@@ -93,6 +93,7 @@
 #include "routines/dnn/xsoftmax.hpp"
 #include "routines/dnn/xhardmax.hpp"
 #include "routines/dnn/xwhere.hpp"
+#include "routines/dnn/xonehot.hpp"
 #include "routines/dnn/xgather.hpp"
 #include "routines/dnn/xresize.hpp"
 

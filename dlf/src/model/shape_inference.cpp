@@ -241,6 +241,31 @@ public:
         }
     }
 
+    void visit(OneHot* n) override {
+        if (hasInput(n->values()))
+            n->output()->set_type(n->values()->type());
+        if (!hasInput(n->indices()) || !n->indices()->has_dims())
+            return;
+        if (!hasInput(n->depth()) || !n->depth()->has_initializer())
+            return;
+
+        auto rank = n->indices()->dims().rank() + 1;
+        int axis = static_cast<int>(n->axis());
+        if (axis < 0) axis += rank;
+        if (axis < 0 || axis >= rank)
+            fail_shape_inference("OneHot: The 'axis' attribute has incorrect value");
+
+        auto depth = n->depth()->initializer().decode<int64_t>();
+        if (!depth.is_scalar())
+            fail_shape_inference("OneHot: The 'depth' input has incorrect number of values");
+        if (*depth <= 0)
+            fail_shape_inference("OneHot: 'The 'depth' input has incorrect value");
+
+        Dims output_dims = n->indices()->dims();
+        output_dims.insert(axis, static_cast<size_t>(*depth));
+        n->output()->set_dims(output_dims);
+    }
+
     //-----------------------------------------------------------------------
 
     void visit(Constant* n) override {
@@ -1663,10 +1688,6 @@ public:
             output_shape.append(num_selected);
         }
         n->output()->set_dims(output_shape);
-    }
-
-    void visit(OneHot* n) override {
-        fail_shape_inference("OneHot: Unsupported operation"); // FIXME
     }
 
     void visit(NonZero* n) override {

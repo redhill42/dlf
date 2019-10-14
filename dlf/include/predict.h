@@ -1842,6 +1842,43 @@ private:
     void visit(model::Where* n) override {
         result = std::make_unique<WhereOp>(this, n);
     }
+
+    struct OneHotOp : Operator {
+        datum_ptr indices, values, output;
+        datum_ptr depth_datum;
+        size_t depth;
+        int axis;
+
+        OneHotOp(OperatorFactory* of, model::OneHot* n)
+            : indices(of->alloc(n->indices())),
+              values(of->alloc(n->values())),
+              output(of->alloc(n->output())),
+              axis(static_cast<int>(n->axis()))
+        {
+            if (n->depth()->has_initializer()) {
+                depth = static_cast<size_t>(*(n->depth()->initializer().decode<int64_t>()));
+                depth_datum = nullptr;
+            } else {
+                depth_datum = of->alloc<int64_t>(n->depth());
+            }
+        }
+
+        size_t get_depth() {
+            if (depth_datum == nullptr)
+                return depth;
+            return static_cast<size_t>(*(depth_datum->template read<int64_t>()));
+        }
+
+        void evaluate() override {
+            auto out = deref(output);
+            one_hot(deref(indices), deref(values), out, get_depth(), axis);
+            output->unget(out);
+        }
+    };
+
+    void visit(model::OneHot* n) override {
+        result = std::make_unique<OneHotOp>(this, n);
+    }
 };
 
 template <typename Context, typename T>

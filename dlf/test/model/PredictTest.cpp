@@ -259,6 +259,42 @@ TYPED_TEST(PredictTest, Where) {
     }));
 }
 
+TYPED_TEST(PredictTest, OneHot) {
+    using Context = TypeParam;
+    Graph g;
+
+    auto indices = g.addInput("indices", DataType::FLOAT, {2, 2});
+    auto values  = g.addInput("values", DataType::FLOAT, {2});
+    auto depth   = g.addInput("depth", DataType::INT64, {});
+
+    auto a = g.append<OneHot>()->axis(1);
+    a->addInput(indices);
+    a->addInput(g.addInitializer(TensorData("d1", DataType::INT64, {}, {10})));
+    a->addInput(values);
+    g.addOutput(a->addOutput("Y1"));
+
+    auto b = g.append<OneHot>()->axis(-2);
+    b->addInput(indices);
+    b->addInput(depth);
+    b->addInput(values);
+    g.addOutput(b->addOutput("Y2"));
+
+    Predictor<Context, float> predictor(g);
+    predictor.set(0, Matrix<float>({{1, 9}, {2, 4}}));
+    predictor.set(1, Vector<float>({1, 3}));
+    predictor.set(2, Scalar<int64_t>(10));
+    predictor.predict();
+
+    EXPECT_EQ(predictor.get(0), Tensor<float>({2, 10, 2}, {
+        1,1, 3,1, 1,1, 1,1, 1,1, 1,1, 1,1, 1,1, 1,1, 1,3,
+        1,1, 1,1, 3,1, 1,1, 1,3, 1,1, 1,1, 1,1, 1,1, 1,1
+    }));
+    EXPECT_EQ(predictor.get(1), Tensor<float>({2, 10, 2}, {
+        1,1, 3,1, 1,1, 1,1, 1,1, 1,1, 1,1, 1,1, 1,1, 1,3,
+        1,1, 1,1, 3,1, 1,1, 1,3, 1,1, 1,1, 1,1, 1,1, 1,1
+    }));
+}
+
 TYPED_TEST(PredictTest, Reduce) {
     using Context = TypeParam;
     Graph g;

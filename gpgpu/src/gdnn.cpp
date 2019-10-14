@@ -1652,6 +1652,40 @@ template void PUBLIC_API where<double>(
     const Queue&, Event*);
 
 template <typename T>
+void onehot(const size_t n, const size_t d, const size_t k,
+            const Buffer<T>& indices, const Buffer<T>& values, Buffer<T>& output,
+            const Queue& queue, Event* event)
+{
+    auto routine = Xonehot<T>(queue, event);
+    routine.DoOneHot(n, d, k, indices, values, output);
+}
+
+template void PUBLIC_API onehot<int16_t>(
+    const size_t, const size_t, const size_t,
+    const Buffer<int16_t>&, const Buffer<int16_t>&, Buffer<int16_t>&,
+    const Queue&, Event*);
+template void PUBLIC_API onehot<int32_t>(
+    const size_t, const size_t, const size_t,
+    const Buffer<int32_t>&, const Buffer<int32_t>&, Buffer<int32_t>&,
+    const Queue&, Event*);
+template void PUBLIC_API onehot<int64_t>(
+    const size_t, const size_t, const size_t,
+    const Buffer<int64_t>&, const Buffer<int64_t>&, Buffer<int64_t>&,
+    const Queue&, Event*);
+template void PUBLIC_API onehot<half>(
+    const size_t, const size_t, const size_t,
+    const Buffer<half>&, const Buffer<half>&, Buffer<half>&,
+    const Queue&, Event*);
+template void PUBLIC_API onehot<float>(
+    const size_t, const size_t, const size_t,
+    const Buffer<float>&, const Buffer<float>&, Buffer<float>&,
+    const Queue&, Event*);
+template void PUBLIC_API onehot<double>(
+    const size_t, const size_t, const size_t,
+    const Buffer<double>&, const Buffer<double>&, Buffer<double>&,
+    const Queue&, Event*);
+
+template <typename T>
 void gather(const size_t m, const size_t n, const size_t chunk, const size_t max_item,
             const std::vector<size_t>& x_dim, const std::vector<size_t>& x_stride,
             const Buffer<T>& x_buffer, const size_t x_offset,

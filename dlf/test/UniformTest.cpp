@@ -1536,6 +1536,68 @@ TEST(UniformTest, WhereView_GPU) {
     EXPECT_EQ(Z.read(), Tensor<int>({2, 2}, {1, 6, 3, 8}));
 }
 
+TEST(UniformTest, onehot_without_axis) {
+    auto indices = Vector<int>({0, 7, 8});
+    auto values  = Vector<float>({2, 5});
+    auto output  = Tensor<float>();
+    one_hot(indices, values, output, 12);
+    EXPECT_EQ(output, Tensor<float>({3, 12}, {
+        5, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+        2, 2, 2, 2, 2, 2, 2, 5, 2, 2, 2, 2,
+        2, 2, 2, 2, 2, 2, 2, 2, 5, 2, 2, 2,
+    }));
+
+    auto dev_out = DevTensor<float>();
+    one_hot(dev(indices.cast<float>()), dev(values), dev_out, 12);
+    EXPECT_EQ(dev_out.read(), output);
+}
+
+TEST(UniformTest, onehot_with_axis) {
+    auto indices = Matrix<float>({{1, 9}, {2, 4}});
+    auto values  = Vector<float>({1, 3});
+    auto output  = Tensor<float>();
+    one_hot(indices, values, output, 10, 1);
+    EXPECT_EQ(output, Tensor<float>({2, 10, 2}, {
+        1,1, 3,1, 1,1, 1,1, 1,1, 1,1, 1,1, 1,1, 1,1, 1,3,
+        1,1, 1,1, 3,1, 1,1, 1,3, 1,1, 1,1, 1,1, 1,1, 1,1
+    }));
+
+    auto dev_out = DevTensor<float>();
+    one_hot(dev(indices), dev(values), dev_out, 10, 1);
+    EXPECT_EQ(dev_out.read(), output);
+}
+
+TEST(UniformTest, onehot_with_negative_indices) {
+    auto indices = Vector<int>({0, -7, -8});
+    auto values  = Vector<float>({1, 3});
+    auto output  = Tensor<float>();
+    one_hot(indices, values, output, 10);
+    EXPECT_EQ(output, Tensor<float>({3, 10}, {
+        3, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 3, 1, 1, 1, 1, 1, 1,
+        1, 1, 3, 1, 1, 1, 1, 1, 1, 1
+    }));
+
+    auto dev_out = DevTensor<float>();
+    one_hot(dev(indices.cast<float>()), dev(values), dev_out, 10);
+    EXPECT_EQ(dev_out.read(), output);
+}
+
+TEST(UniformTest, onehot_with_negative_axis) {
+    auto indices = Matrix<float>({{1, 9}, {2, 4}});
+    auto values  = Vector<float>({1, 3});
+    auto output  = Tensor<float>();
+    one_hot(indices, values, output, 10, -2);
+    EXPECT_EQ(output, Tensor<float>({2, 10, 2}, {
+        1,1, 3,1, 1,1, 1,1, 1,1, 1,1, 1,1, 1,1, 1,1, 1,3,
+        1,1, 1,1, 3,1, 1,1, 1,3, 1,1, 1,1, 1,1, 1,1, 1,1
+    }));
+
+    auto dev_out = DevTensor<float>();
+    one_hot(dev(indices), dev(values), dev_out, 10, -2);
+    EXPECT_EQ(dev_out.read(), output);
+}
+
 TEST(UniformTest, Gather_0) {
     auto A = Matrix<float>({{1, 2}, {3, 4}, {5, 6}});
     auto indices = Matrix<int>({{0, 1}, {1, 2}});

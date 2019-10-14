@@ -228,6 +228,11 @@ void where(const size_t n, const std::vector<size_t>& dim,
            const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 template <typename T>
+void onehot(const size_t n, const size_t d, const size_t k,
+            const Buffer<T>& indices, const Buffer<T>& values, Buffer<T>& output,
+            const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
+
+template <typename T>
 void gather(const size_t m, const size_t n, const size_t chunk, const size_t max_item,
             const std::vector<size_t>& x_dim, const std::vector<size_t>& x_stride,
             const Buffer<T>& x_buffer, const size_t x_offset,
