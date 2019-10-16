@@ -1776,6 +1776,7 @@ public:
     }
 
     void visit(NonZero* n) override {
+        n->output()->set_type(DataType::INT64);
         // cannot inference output shape
     }
 

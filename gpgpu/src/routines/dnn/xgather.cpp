@@ -269,6 +269,29 @@ void Xgather<T>::DoScatterND(
     RunKernel(kernel, queue_, device_, global, local, event_);
 }
 
+template <typename T>
+void Xgather<T>::DoGatherIndices(
+    const size_t m, const size_t n, const bool row_major,
+    const std::vector<size_t>& dims,
+    const Buffer<int>& indices, const size_t indices_offset,
+    Buffer<int>& output, const size_t output_offset)
+{
+    std::vector<int> int_dims(dims.begin(), dims.end());
+    auto dims_buffer = context_.getSharedBuffer<int>(int_dims.data(), int_dims.size(), queue_);
+
+    auto kernel = program_.getKernel("Xgather_indices");
+    kernel.setArguments(
+        static_cast<int>(m), static_cast<int>(n), static_cast<int>(row_major),
+        static_cast<int>(dims.size()), dims_buffer,
+        indices, static_cast<int>(indices_offset),
+        output, static_cast<int>(output_offset));
+
+    auto m_ceiled = Ceil(m, db_["WGS"]*db_["WPT"]);
+    auto global = std::vector<size_t>{m_ceiled/db_["WPT"]};
+    auto local = std::vector<size_t>{db_["WGS"]};
+    RunKernel(kernel, queue_, device_, global, local, event_);
+}
+
 template class Xgather<half>;
 template class Xgather<float>;
 template class Xgather<double>;

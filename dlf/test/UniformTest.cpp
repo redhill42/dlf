@@ -2202,3 +2202,11 @@ TEST(UniformTest, resize_upsample_scales_linear) {
     auto dev_Y = im::resize(dev_X, std::vector<float>{1, 1, 2, 2});
     EXPECT_EQ(dev_Y.read(), Y);
 }
+
+TEST(UniformTest, NonZero) {
+    auto X = Tensor<float>({2, 2, 2}, {1, 0, 0, 2, 5, 6, 0, 0});
+    auto Y = Matrix<int>({{0, 0, 1, 1}, {0, 1, 0, 0}, {0, 1, 0, 1}});
+
+    EXPECT_EQ(nonzero(X), Y);
+    EXPECT_EQ(nonzero(dev(X)).read(), Y);
+}

@@ -384,4 +384,72 @@ inline cummin(TensorT&& X, int axis = -1, bool reverse = false) {
                 std::numeric_limits<T>::max(), xfn::min<T>());
 }
 
+//==-------------------------------------------------------------------------
+
+template <typename TensorT>
+std::enable_if_t<is_cpu_tensor<TensorT>::value>
+nonzero(const TensorT& X, Tensor<int32_t>& Y) {
+    // Calculate non-zero prefix sum
+    auto indices = Tensor<int32_t>({X.size()});
+    transformTo(X, reshape(indices, X.shape()), [](auto x){ return x != 0; });
+    cumsum(indices, indices);
+
+    // Get number of non-zero values
+    auto rank = X.rank();
+    auto n = *(indices.end()-1);
+
+    // Allocate 2D output tensor
+    Y.resize(rank, n);
+
+    // Gather non-zero value indices
+    tbb::parallel_for(
+        tbb::blocked_range<int>(0, X.size(), GRAINSIZE),
+        [rank, n, idx = indices.data(), out = Y.data(), dims = X.shape().extents()](const auto& r) {
+            for (int i = r.begin(); i < r.end(); i++) {
+                int32_t prev = (i == 0) ? 0 : idx[i - 1];
+                int32_t curr = idx[i];
+                if (curr != prev) {
+                    int temp = i;
+                    for (int j = static_cast<int>(rank); --j >= 0; ) {
+                        out[n*j + prev] = temp % dims[j];
+                        temp /= dims[j];
+                    }
+                }
+            }
+        });
+}
+
+template <typename TensorT>
+std::enable_if_t<is_gpu_tensor<TensorT>::value>
+nonzero(const TensorT& X, DevTensor<int32_t>& Y) {
+    auto indices_buffer = gpgpu::current::context().getTemporaryBuffer<int32_t>(X.size());
+    auto indices_shape  = Shape(X.shape().extents());
+
+    // Calculate non-zero prefix sum
+    gpgpu::dnn::scan_nonzero(
+        1, X.size(), false, X.shape().extents(),
+        X.data(), X.shape().offset(), X.shape().strides(),
+        indices_buffer, indices_buffer.offset(), indices_shape.strides());
+
+    // Read number of non-zero values
+    int32_t n;
+    indices_buffer.read(gpgpu::current::queue(), &n, 1, indices_buffer.offset() + X.size() - 1);
+
+    // Allocate 2D output tensor
+    Y.resize(X.rank(), n);
+
+    // Gather non-zero value indices
+    gpgpu::dnn::gather_indices(X.size(), n, true, X.shape().extents(),
+                               indices_buffer, indices_buffer.offset(),
+                               Y.data(), Y.shape().offset());
+}
+
+template <typename TensorT>
+enable_if_tensor<TensorT, tensor_type<TensorT, int32_t>>
+inline nonzero(const TensorT& X) {
+    tensor_type<TensorT, int32_t> Y{};
+    nonzero(X, Y);
+    return Y;
+}
+
 } // namespace dlf

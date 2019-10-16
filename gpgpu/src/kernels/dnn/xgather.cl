@@ -216,4 +216,50 @@ void Xscatter_ndStrided(const int k, const int chunk,
   }
 }
 
+INLINE_FUNC void Xgather_indices_row_major(
+    const int m, const int n, const int rank, __constant int* dims,
+    __global const int* restrict indices, __global int* output)
+{
+  for (int i = get_global_id(0); i < m; i += get_global_size(0)) {
+    int prev = (i == 0) ? 0 : indices[i - 1];
+    int curr = indices[i];
+    if (curr != prev) {
+      int temp = i;
+      for (int j = rank; --j >= 0; ) {
+        output[n*j + prev] = temp % dims[j];
+        temp /= dims[j];
+      }
+    }
+  }
+}
+
+INLINE_FUNC void Xgather_indices_col_major(
+    const int m, const int n, const int rank, __constant int* dims,
+    __global const int* restrict indices, __global int* output)
+{
+  for (int i = get_global_id(0); i < m; i += get_global_size(0)) {
+    int prev = (i == 0) ? 0 : indices[i - 1];
+    int curr = indices[i];
+    if (curr != prev) {
+      int temp = i;
+      for (int j = rank; --j >= 0; ) {
+        output[prev*rank + j] = temp % dims[j];
+        temp /= dims[j];
+      }
+    }
+  }
+}
+
+__kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
+void Xgather_indices(const int m, const int n, const int row_major,
+                     const int rank, __constant int* dims,
+                     __global const int* restrict indices, const int indices_offset,
+                     __global int* output, const int output_offset)
+{
+  if (row_major)
+    Xgather_indices_row_major(m, n, rank, dims, indices+indices_offset, output+output_offset);
+  else
+    Xgather_indices_col_major(m, n, rank, dims, indices+indices_offset, output+output_offset);
+}
+
 )" // End of the C++11 raw string literal

@@ -53,6 +53,12 @@ public:
         const Buffer<int>& i_buffer, const size_t i_offset,
         const std::vector<size_t>& y_dim, const std::vector<size_t>& y_stride,
         const Buffer<T>& y_buffer, const size_t y_offset);
+
+    void DoGatherIndices(
+        const size_t m, const size_t n, const bool row_major,
+        const std::vector<size_t>& dims,
+        const Buffer<int>& indices, const size_t indices_offset,
+        Buffer<int>& output, const size_t output_offset);
 };
 
 }} // namespace gpgpu::dnn

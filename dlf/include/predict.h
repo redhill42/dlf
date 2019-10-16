@@ -2009,6 +2009,21 @@ private:
     void visit(model::OneHot* n) override {
         result = std::make_unique<OneHotOp>(this, n);
     }
+
+    struct NonZeroOp : Operator {
+        datum_ptr X, Y;
+        NonZeroOp(OperatorFactory* of, model::NonZero* n)
+            : X(of->alloc(n->input())), Y(of->alloc<int32_t>(n->output())) {}
+        void evaluate() override {
+            auto out = deref<int32_t>(Y);
+            nonzero(deref(X), out);
+            Y->unget(out);
+        }
+    };
+
+    void visit(model::NonZero* n) override {
+        result = std::make_unique<NonZeroOp>(this, n);
+    }
 };
 
 template <typename Context, typename T>

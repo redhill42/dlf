@@ -1,6 +1,6 @@
 // Enables loading of this file using the C++ pre-processor's #include (C++11 standard raw string
 // literal). Comment-out this line for syntax-highlighting when developing.
-R"(
+PROGRAM_STRING_DEBUG_INFO R"(
 
 #if defined(ROUTINE_cumsum)
 #  define IDENTITY SetToZero
@@ -14,8 +14,19 @@ R"(
 #elif defined(ROUTINE_cummin)
 #  define IDENTITY(x) x = LARGEST
 #  define OP Min
+#elif defined(ROUTINE_nonzero)
+#  define IDENTITY(x) x = 0
+#  define OP(c,a,b)   c = a + b
 #else
 #  error "Unsupported scan operation"
+#endif
+
+#if defined(ROUTINE_nonzero)
+  #define MAP(x) ((x) != 0)
+  typedef int realR;
+#else
+  #define MAP(x) (x)
+  typedef real realR;
 #endif
 
 //---------------------------------------------------------------------------
@@ -24,7 +35,7 @@ __kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
 void DirectInclusiveScan(
     const int m, const int n, const int rank, __constant int* shape,
     const __global real* restrict xgm, const int x_offset, const int x_inc,
-    __global real* ygm, const int y_offset, const int y_inc)
+    __global realR* ygm, const int y_offset, const int y_inc)
 {
     const int batch = get_global_id(0);
     if (batch >= m) return;
@@ -32,9 +43,9 @@ void DirectInclusiveScan(
     int x_id = x_offset, y_id = y_offset;
     unravel2(batch*n, &x_id, &y_id, rank, shape);
 
-    real acc; IDENTITY(acc);
+    realR acc; IDENTITY(acc);
     for (int i = 0; i < n; i++, x_id += x_inc, y_id += y_inc) {
-        OP(acc, acc, xgm[x_id]);
+        OP(acc, acc, MAP(xgm[x_id]));
         ygm[y_id] = acc;
     }
 }
@@ -43,7 +54,7 @@ __kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
 void DirectExclusiveScan(
     const int m, const int n, const int rank, __constant int* shape,
     const __global real* restrict xgm, const int x_offset, const int x_inc,
-    __global real* ygm, const int y_offset, const int y_inc)
+    __global realR* ygm, const int y_offset, const int y_inc)
 {
     const int batch = get_global_id(0);
     if (batch >= m) return;
@@ -51,17 +62,17 @@ void DirectExclusiveScan(
     int x_id = x_offset, y_id = y_offset;
     unravel2(batch*n, &x_id, &y_id, rank, shape);
 
-    real acc; IDENTITY(acc);
+    realR acc; IDENTITY(acc);
     for (int i = 0; i < n; i++, x_id += x_inc, y_id += y_inc) {
         ygm[y_id] = acc;
-        OP(acc, acc, xgm[x_id]);
+        OP(acc, acc, MAP(xgm[x_id]));
     }
 }
 
 //---------------------------------------------------------------------------
 
 // Note: lid = get_local_id(0) * 2
-STATIC void LocalScan(const int lid, LOCAL_PTR real* lm, __global real* sums) {
+STATIC void LocalScan(const int lid, LOCAL_PTR realR* lm, __global realR* sums) {
     int offset = 1;
 
     // Build sum in place up the tree
@@ -88,7 +99,7 @@ STATIC void LocalScan(const int lid, LOCAL_PTR real* lm, __global real* sums) {
         if (lid < d*2) {
             int ai = (lid+1)*offset-1;
             int bi = (lid+2)*offset-1;
-            real t = lm[ai];
+            realR t = lm[ai];
             lm[ai] = lm[bi];
             OP(lm[bi], lm[bi], t);
         }
@@ -100,8 +111,8 @@ STATIC void LocalScan(const int lid, LOCAL_PTR real* lm, __global real* sums) {
 __kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
 void PreScan(const int n, const int inclusive, const int rank, __constant int* shape,
              const __global real* restrict xgm, int x_offset, const int x_inc,
-             __global real* ygm, int y_offset, const int y_inc,
-             __global real* sums, const int sums_offset)
+             __global realR* ygm, int y_offset, const int y_inc,
+             __global realR* sums, const int sums_offset)
 {
     const int batch = get_global_id(1);
     const int gid = get_global_id(0) * 2;
@@ -113,13 +124,13 @@ void PreScan(const int n, const int inclusive, const int rank, __constant int* s
     sums += sums_offset + batch*get_num_groups(0) + get_group_id(0);
 
     // Load input data into shared memory
-    __local real lm[WGS*2 + 1];
+    __local realR lm[WGS*2 + 1];
     IDENTITY(lm[lid]);
     if (gid < n)
-        lm[lid] = xgm[0];
+        lm[lid] = MAP(xgm[0]);
     IDENTITY(lm[lid+1]);
     if (gid+1 < n)
-        lm[lid+1] = xgm[x_inc];
+        lm[lid+1] = MAP(xgm[x_inc]);
     barrier(CLK_LOCAL_MEM_FENCE);
 
     // Perform local scan on shared memory
@@ -134,8 +145,8 @@ void PreScan(const int n, const int inclusive, const int rank, __constant int* s
 
 __kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
 void ScanPartialSums(const int n,
-                     __global real* xgm, const int x_offset,
-                     __global real* sums, const int sums_offset)
+                     __global realR* xgm, const int x_offset,
+                     __global realR* sums, const int sums_offset)
 {
     const int batch = get_global_id(1);
     const int gid = get_global_id(0) * 2;
@@ -145,7 +156,7 @@ void ScanPartialSums(const int n,
     sums += sums_offset + batch*get_num_groups(0) + get_group_id(0);
 
     // Load input data into shared memory
-    __local real lm[WGS*2 + 1];
+    __local realR lm[WGS*2 + 1];
     IDENTITY(lm[lid]);
     if (gid < n)
         lm[lid] = xgm[0];
@@ -166,8 +177,8 @@ void ScanPartialSums(const int n,
 
 __kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
 void AddPartialSums(const int n,
-                    __global real* xgm, const int x_offset,
-                    __global real* sums, const int sums_offset)
+                    __global realR* xgm, const int x_offset,
+                    const __global realR* sums, const int sums_offset)
 {
     const int batch = get_global_id(1);
     const int gid = get_global_id(0) * 2;
@@ -183,8 +194,8 @@ void AddPartialSums(const int n,
 
 __kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
 void FinalScan(const int n, const int rank, __constant int* shape,
-               __global real* ygm, int y_offset, const int y_inc,
-               const __global real* sums, const int sums_offset)
+               __global realR* ygm, int y_offset, const int y_inc,
+               const __global realR* sums, const int sums_offset)
 {
     const int batch = get_global_id(1);
     const int gid = get_global_id(0) * 2;

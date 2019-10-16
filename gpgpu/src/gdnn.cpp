@@ -930,6 +930,45 @@ template void PUBLIC_API scan<int64_t>(const std::string&, const size_t, const s
                                        const Queue&, Event*);
 
 template <typename T>
+void scan_nonzero(const size_t m, const size_t n,
+                  const bool exclusive, const std::vector<size_t>& dims,
+                  const Buffer<T>& x_buffer, const size_t x_offset, const std::vector<size_t>& x_strides,
+                  Buffer<int32_t>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_strides,
+                  const Queue& queue, Event* event)
+{
+    auto routine = Xscan<T, int32_t>(queue, event, "nonzero");
+    routine.DoScan(m, n, exclusive, dims,
+                   x_buffer, x_offset, x_strides,
+                   y_buffer, y_offset, y_strides);
+}
+
+template void PUBLIC_API scan_nonzero<half>(
+    const size_t, const size_t, const bool, const std::vector<size_t>&,
+    const Buffer<half>&, const size_t, const std::vector<size_t>&,
+    Buffer<int32_t>&, const size_t, const std::vector<size_t>&,
+    const Queue&, Event*);
+template void PUBLIC_API scan_nonzero<float>(
+    const size_t, const size_t, const bool, const std::vector<size_t>&,
+    const Buffer<float>&, const size_t, const std::vector<size_t>&,
+    Buffer<int32_t>&, const size_t, const std::vector<size_t>&,
+    const Queue&, Event*);
+template void PUBLIC_API scan_nonzero<double>(
+    const size_t, const size_t, const bool, const std::vector<size_t>&,
+    const Buffer<double>&, const size_t, const std::vector<size_t>&,
+    Buffer<int32_t>&, const size_t, const std::vector<size_t>&,
+    const Queue&, Event*);
+template void PUBLIC_API scan_nonzero<int32_t>(
+    const size_t, const size_t, const bool, const std::vector<size_t>&,
+    const Buffer<int32_t>&, const size_t, const std::vector<size_t>&,
+    Buffer<int32_t>&, const size_t, const std::vector<size_t>&,
+    const Queue&, Event*);
+template void PUBLIC_API scan_nonzero<int64_t>(
+    const size_t, const size_t, const bool, const std::vector<size_t>&,
+    const Buffer<int64_t>&, const size_t, const std::vector<size_t>&,
+    Buffer<int32_t>&, const size_t, const std::vector<size_t>&,
+    const Queue&, Event*);
+
+template <typename T>
 void arg_reduce(const std::string& name, const size_t n, const size_t k,
                 const std::vector<size_t>& x_dims, const std::vector<size_t>& x_strides,
                 const Buffer<T>& x_buffer, const size_t x_offset,
@@ -2098,6 +2137,16 @@ template void PUBLIC_API scatter_nd<int64_t>(
     const std::vector<size_t>&, const std::vector<size_t>&,
     const Buffer<int64_t>&, const size_t,
     const Queue&, Event*);
+
+void gather_indices(const size_t m, const size_t n, const bool row_major,
+                    const std::vector<size_t>& dims,
+                    const Buffer<int32_t>& indices, const size_t indices_offset,
+                    Buffer<int32_t>& output, const size_t output_offset,
+                    const Queue& queue, Event* event)
+{
+    auto routine = Xgather<int32_t>(queue, event);
+    routine.DoGatherIndices(m, n, row_major, dims, indices, indices_offset, output, output_offset);
+}
 
 template <typename T>
 void resize1d(const size_t batch_count,

@@ -4,17 +4,17 @@
 namespace gpgpu { namespace dnn {
 using namespace gpgpu::blas;
 
-template <typename T>
-Xscan<T>::Xscan(const Queue& queue, Event* event, const std::string& name) :
+template <typename T, typename R>
+Xscan<T,R>::Xscan(const Queue& queue, Event* event, const std::string& name) :
     Routine(queue, event, name, {"Xaxpy"}, PrecisionValue<T>(), {}, {
     #include "../../kernels/dnn/xscan.cl"
     }) {}
 
-template <typename T>
-void Xscan<T>::DoScan(
+template <typename T, typename R>
+void Xscan<T,R>::DoScan(
     const size_t m, const size_t n, const bool exclusive, const std::vector<size_t>& dims,
     const Buffer<T>& x_buffer, const size_t x_offset, const std::vector<size_t>& x_strides,
-    Buffer<T>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_strides)
+    Buffer<R>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_strides)
 {
     if (n < 2*db_["WGS"]) {
         DoScanDirect(
@@ -29,11 +29,11 @@ void Xscan<T>::DoScan(
     }
 }
 
-template <typename T>
-void Xscan<T>::DoScanDirect(
+template <typename T, typename R>
+void Xscan<T,R>::DoScanDirect(
     const size_t m, const size_t n, const bool exclusive, const std::vector<size_t>& dims,
     const Buffer<T>& x_buffer, const size_t x_offset, const std::vector<size_t>& x_strides,
-    Buffer<T>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_strides)
+    Buffer<R>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_strides)
 {
     auto shape = PackShape(dims, x_strides, y_strides, context_, queue_);
     auto x_inc = x_strides.back();
@@ -50,11 +50,11 @@ void Xscan<T>::DoScanDirect(
     RunKernel(kernel, queue_, device_, global, local, event_);
 }
 
-template <typename T>
-void Xscan<T>::DoScanIndirect(
+template <typename T, typename R>
+void Xscan<T,R>::DoScanIndirect(
     const size_t m, const size_t n, const bool exclusive, const std::vector<size_t>& dims,
     const Buffer<T>& x_buffer, const size_t x_offset, const std::vector<size_t>& x_strides,
-    Buffer<T>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_strides)
+    Buffer<R>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_strides)
 {
     auto shape_buffer = PackShape(dims, x_strides, y_strides, context_, queue_);
     auto x_inc = x_strides.back();
@@ -77,7 +77,7 @@ void Xscan<T>::DoScanIndirect(
     }
 
     // Allocate temporary buffer
-    auto temp_buffer = context_.getTemporaryBuffer<T>(temp_size);
+    auto temp_buffer = context_.getTemporaryBuffer<R>(temp_size);
 
     // Prescan the input elements
     auto kernel1 = program_.getKernel("PreScan");
@@ -140,5 +140,12 @@ template class Xscan<float2>;
 template class Xscan<double2>;
 template class Xscan<int32_t>;
 template class Xscan<int64_t>;
+
+template class Xscan<half, int32_t>;
+template class Xscan<float, int32_t>;
+template class Xscan<double, int32_t>;
+template class Xscan<float2, int32_t>;
+template class Xscan<double2, int32_t>;
+template class Xscan<int64_t, int32_t>;
 
 }} // namespace gpgpu::dnn

@@ -42,10 +42,23 @@ inline broadcast(const TensorT& src, TensorR&& dst) {
 // Reshape operations
 //==-------------------------------------------------------------------------
 
-template <typename TensorT, typename... Args>
+template <typename TensorT>
 enable_if_tensor<TensorT, tensor_view_type<TensorT>>
 inline reshape(TensorT&& X, const std::vector<int>& dims) {
     return detail::reshape(std::forward<TensorT>(X), X.shape().reshape(dims));
+}
+
+template <typename TensorT>
+enable_if_tensor<TensorT, tensor_view_type<TensorT>>
+inline reshape(TensorT&& X, std::initializer_list<int> dims) {
+    return reshape(std::forward<TensorT>(X), std::vector<int>(dims));
+}
+
+template <typename TensorT>
+enable_if_tensor<TensorT, tensor_view_type<TensorT>>
+inline reshape(TensorT&& X, const Shape& shape) {
+    auto dims = shape.extents();
+    return reshape(std::forward<TensorT>(X), std::vector<int>(dims.begin(), dims.end()));
 }
 
 template <typename TensorT>
