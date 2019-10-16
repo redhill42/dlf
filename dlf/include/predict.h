@@ -406,6 +406,136 @@ private:
         result = std::make_unique<LoopOp>(this, n);
     }
 
+    struct ScanOp : Operator {
+        int              num_state_vars;
+        std::vector<int> input_axes, output_axes;
+        std::vector<int> input_dirs, output_dirs;
+        datum_list       inputs, outputs;
+        op_list          body;
+        datum_list       body_inputs, body_outputs;
+
+        ScanOp(OperatorFactory* of, model::Scan* n) {
+            auto num_inputs       = static_cast<int>(n->inputs().size());
+            auto num_outputs      = static_cast<int>(n->outputs().size());
+            auto num_scan_inputs  = static_cast<int>(n->num_scan_inputs());
+            num_state_vars        = num_inputs - num_scan_inputs;
+            auto num_scan_outputs = num_outputs - num_state_vars;
+
+            assert(num_scan_inputs > 0 && num_state_vars >= 0 && num_scan_outputs >= 0);
+            assert(n->body()->inputs().size() == num_inputs);
+            assert(n->body()->outputs().size() == num_outputs);
+
+            if (n->has_scan_input_axes()) {
+                auto& axes = n->scan_input_axes();
+                assert(axes.size() == num_scan_inputs);
+                input_axes.assign(axes.begin(), axes.end());
+            } else {
+                input_axes.insert(input_axes.end(), num_scan_inputs, 0);
+            }
+
+            if (n->has_scan_output_axes()) {
+                auto& axes = n->scan_output_axes();
+                assert(axes.size() == num_scan_outputs);
+                output_axes.assign(axes.begin(), axes.end());
+            } else {
+                output_axes.insert(output_axes.end(), num_scan_outputs, 0);
+            }
+
+            if (n->has_scan_input_directions()) {
+                auto& dirs = n->scan_input_directions();
+                assert(dirs.size() == num_scan_inputs);
+                input_dirs.assign(dirs.begin(), dirs.end());
+            } else {
+                input_dirs.insert(input_dirs.end(), num_scan_inputs, 0);
+            }
+
+            if (n->has_scan_output_directions()) {
+                auto& dirs = n->scan_output_directions();
+                assert(dirs.size() == num_scan_outputs);
+                output_dirs.assign(dirs.begin(), dirs.end());
+            } else {
+                output_dirs.insert(output_dirs.end(), num_scan_outputs, 0);
+            }
+
+            for (auto x : n->body()->nodes())
+                body.push_back(of->createOperator(x));
+            for (int i = 0; i < num_inputs; ++i)
+                body_inputs.push_back(of->alloc(n->body()->input(i)));
+            for (int i = 0; i < num_outputs; ++i)
+                body_outputs.push_back(of->alloc(n->body()->output(i)));
+
+            for (int i = 0; i < num_inputs; ++i)
+                inputs.push_back(of->alloc(n->input(i)));
+            for (int i = 0; i < num_outputs; ++i) {
+                if (i < num_state_vars)
+                    outputs.push_back(of->allocInplace(n->body()->output(i), n->output(i)));
+                else
+                    outputs.push_back(of->alloc(n->output(i)));
+            }
+        }
+
+        void evaluate() override {
+            auto sequence_len = get_sequence_length(0);
+
+            for (int iteration = 0; iteration < sequence_len; ++iteration) {
+                // Copy loop-carried dependencies
+                for (int i = 0; i < num_state_vars; ++i) {
+                    copy_data(iteration==0 ? inputs[i] : body_outputs[i], body_inputs[i]);
+                }
+
+                // Copy scan elements to scan body inputs
+                for (int i = num_state_vars; i < inputs.size(); ++i) {
+                    auto src  = deref(inputs[i]);
+                    auto dst  = deref(body_inputs[i]);
+                    auto axis = input_axes[i - num_state_vars];
+
+                    assert(sequence_len == get_sequence_length(i - num_state_vars));
+                    auto start = iteration;
+                    if (input_dirs[i - num_state_vars] != 0)
+                        start = sequence_len - iteration - 1;
+                    reorder(src.slice({start}, {start}, {axis}, {1}), unsqueeze(dst, axis));
+                }
+
+                // Execute the scan body
+                for (auto& op : body) {
+                    op->evaluate();
+                }
+
+                // Concatenating the body scan elements to final scan outputs
+                for (int i = num_state_vars; i < outputs.size(); ++i) {
+                    auto src  = deref(body_outputs[i]);
+                    auto dst  = deref(outputs[i]);
+                    auto axis = output_axes[i - num_state_vars];
+
+                    auto start = iteration;
+                    if (output_dirs[i - num_state_vars] != 0)
+                        start = sequence_len - iteration - 1;
+                    reorder(unsqueeze(src, axis), dst.slice({start}, {start}, {axis}, {1}));
+                }
+            }
+
+            // Copy loop-carried dependencies to enclosing scope
+            for (int i = 0; i < num_state_vars; ++i) {
+                copy_data(body_outputs[i], outputs[i]);
+            }
+        }
+
+        int get_sequence_length(int i) {
+            const auto& shape = inputs[i + num_state_vars]->shape();
+            return static_cast<int>(shape.extent(input_axes[i]));
+        }
+
+        void copy_data(datum_ptr src, datum_ptr dst) {
+            if (src != dst) {
+                flat_copy(deref(src), deref(dst, src));
+            }
+        }
+    };
+
+    void visit(model::Scan* n) override {
+        result = std::make_unique<ScanOp>(this, n);
+    }
+
     struct OpWithShape : Operator {
         datum_ptr shape_datum;
         Shape shape_init;

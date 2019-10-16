@@ -218,7 +218,92 @@ public:
     }
 
     void visit(Scan* n) override {
-        fail_shape_inference("Scan: Unsupported operator"); // FIXME
+        auto body             = n->body();
+        auto num_inputs       = static_cast<int>(n->inputs().size());
+        auto num_outputs      = static_cast<int>(n->outputs().size());
+        auto num_scan_inputs  = static_cast<int>(n->num_scan_inputs());
+        auto num_state_vars   = num_inputs - num_scan_inputs;
+        auto num_scan_outputs = num_outputs - num_state_vars;
+
+        if (num_scan_inputs <= 0)
+            fail_shape_inference("Scan: The number of scan inputs has incorrect value");
+        if (num_state_vars < 0)
+            fail_shape_inference("Scan: Number of inputs is too few");
+        if (num_scan_outputs < 0)
+            fail_shape_inference("Scan: Number of outputs is too few");
+
+        if (body->inputs().size() != num_inputs)
+            fail_shape_inference("Scan: The scan body must have the same number of inputs as scan inputs");
+        if (body->outputs().size() != num_outputs)
+            fail_shape_inference("Scan: The scan body must have the same number of outputs as scan outputs");
+
+        std::vector<int64_t> input_axes;
+        if (n->has_scan_input_axes()) {
+            input_axes = n->scan_input_axes();
+            if (input_axes.size() != num_scan_inputs)
+                fail_shape_inference("Scan: Number of scan input axes specified is not equal to number of scan inputs");
+        } else {
+            input_axes.insert(input_axes.end(), num_scan_inputs, 0);
+        }
+
+        std::vector<int64_t> output_axes;
+        if (n->has_scan_output_axes()) {
+            output_axes = n->scan_output_axes();
+            if (output_axes.size() != num_scan_outputs)
+                fail_shape_inference("Scan: Number of scan output axes specified is not equal to number of scan outputs");
+        } else {
+            output_axes.insert(output_axes.end(), num_scan_outputs, 0);
+        }
+
+        // Propagate body input shapes and compute sequence length
+        int sequence_len = -1;
+        for (int i = 0; i < num_inputs; ++i) {
+            if (i < num_state_vars) {
+                propagateShape(n->input(i), body->input(i));
+            } else {
+                if (n->input(i)->type() != DataType::UNDEFINED)
+                    body->input(i)->set_type(n->input(i)->type());
+                if (n->input(i)->has_dims()) {
+                    auto dims = n->input(i)->dims();
+                    auto rank = dims.size();
+                    auto axis = static_cast<int>(input_axes[i - num_state_vars]);
+                    if (axis < 0) axis += rank;
+                    if (axis < 0 || axis >= rank)
+                        fail_shape_inference("Scan: Input axes have incorrect value");
+                    if (sequence_len == -1)
+                        sequence_len = dims[axis];
+                    else if (sequence_len != dims[axis].value())
+                        fail_shape_inference("Scan: All inputs must have same dimension along specified axes");
+                    dims.erase(axis);
+                    body->input(i)->set_dims(dims);
+                }
+            }
+        }
+
+        // Now we have the enough shape information about the body inputs, inference the body!
+        infer(*body);
+
+        // Inference the scan outputs
+        for (int i = 0; i < num_outputs; ++i) {
+            if (i < num_state_vars) {
+                propagateShape(n->input(i), n->output(i));
+            } else {
+                if (body->output(i)->type() != DataType::UNDEFINED)
+                    n->output(i)->set_type(body->output(i)->type());
+                if (body->output(i)->has_dims()) {
+                    auto dims = body->output(i)->dims();
+                    auto rank = dims.size() + 1;
+                    auto axis = static_cast<int>(output_axes[i - num_state_vars]);
+                    if (axis < 0) axis += rank;
+                    if (axis < 0 || axis >= rank)
+                        fail_shape_inference("Scan: Output axes have incorrect value");
+                    if (sequence_len != -1) {
+                        dims.insert(axis, sequence_len);
+                        n->output(i)->set_dims(dims);
+                    }
+                }
+            }
+        }
     }
 
     void visit(Where* n) override {

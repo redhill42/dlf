@@ -439,6 +439,92 @@ TYPED_TEST(PredictTest, Loop) {
     EXPECT_EQ(predictor.get(3), Vector<float>({1, 2, 6, 24, 120, 720, 5040, 40320, 362880, 3628800}));
 }
 
+static Scan* make_scan_node(Graph& g) {
+    auto body = std::make_shared<Graph>();
+
+    auto add_node = body->append<Add>();
+    add_node->addInput(body->addInput("sum_in"));
+    add_node->addInput(body->addInput("next"));
+    add_node->addOutput("sum_out");
+
+    auto id_node = body->append<Identity>();
+    id_node->addInput(add_node->output());
+    id_node->addOutput("scan_out");
+
+    body->addOutput(add_node->output());
+    body->addOutput(id_node->output());
+
+    auto scan_node = g.append<Scan>();
+    scan_node->body(body);
+    scan_node->num_scan_inputs(1);
+    scan_node->addInput(g.addInput("initial", DataType::FLOAT, {2}));
+    scan_node->addInput(g.addInput("X", DataType::FLOAT, {3, 2}));
+    g.addOutput(scan_node->addOutput("Y"));
+    g.addOutput(scan_node->addOutput("Z"));
+
+    return scan_node;
+}
+
+TYPED_TEST(PredictTest, scan_forward) {
+    using Context = TypeParam;
+    Graph g;
+
+    make_scan_node(g);
+
+    Predictor<Context, float> predictor(g);
+    predictor.set(0, Vector<float>({0, 0}));
+    predictor.set(1, Matrix<float>({{1, 2}, {3, 4}, {5, 6}}));
+    predictor.predict();
+    EXPECT_EQ(predictor.get(0), Vector<float>({9, 12}));
+    EXPECT_EQ(predictor.get(1), Matrix<float>({{1, 2}, {4, 6}, {9, 12}}));
+}
+
+TYPED_TEST(PredictTest, scan_input_backward) {
+    using Context = TypeParam;
+    Graph g;
+
+    auto scan_node = make_scan_node(g);
+    scan_node->scan_input_directions({1});
+
+    Predictor<Context, float> predictor(g);
+    predictor.set(0, Vector<float>({0, 0}));
+    predictor.set(1, Matrix<float>({{1, 2}, {3, 4}, {5, 6}}));
+    predictor.predict();
+    EXPECT_EQ(predictor.get(0), Vector<float>({9, 12}));
+    EXPECT_EQ(predictor.get(1), Matrix<float>({{5, 6}, {8, 10}, {9, 12}}));
+}
+
+TYPED_TEST(PredictTest, scan_output_backward) {
+    using Context = TypeParam;
+    Graph g;
+
+    auto scan_node = make_scan_node(g);
+    scan_node->scan_output_directions({1});
+
+    Predictor<Context, float> predictor(g);
+    predictor.set(0, Vector<float>({0, 0}));
+    predictor.set(1, Matrix<float>({{1, 2}, {3, 4}, {5, 6}}));
+    predictor.predict();
+    EXPECT_EQ(predictor.get(0), Vector<float>({9, 12}));
+    EXPECT_EQ(predictor.get(1), Matrix<float>({{9, 12}, {4, 6}, {1, 2}}));
+}
+
+TYPED_TEST(PredictTest, scan_input_output_backward) {
+    using Context = TypeParam;
+    Graph g;
+
+    auto scan_node = make_scan_node(g);
+    scan_node->scan_input_directions({1});
+    scan_node->scan_output_directions({1});
+
+    Predictor<Context, float> predictor(g);
+    predictor.set(0, Vector<float>({0, 0}));
+    predictor.set(1, Matrix<float>({{1, 2}, {3, 4}, {5, 6}}));
+    predictor.predict();
+    EXPECT_EQ(predictor.get(0), Vector<float>({9, 12}));
+    EXPECT_EQ(predictor.get(1), Matrix<float>({{9, 12}, {8, 10}, {5, 6}}));
+}
+
 TYPED_TEST(PredictTest, Resize) {
     using Context = TypeParam;
     Graph g;
