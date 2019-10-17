@@ -1949,7 +1949,9 @@ public:
     }
 
     void eraseInput(Value* v) {
-        if (v->has_initializer())
+        if (v->m_node->kind() == kConstant)
+            v->m_node->destroy();
+        else if (v->has_initializer())
             m_initializers->eraseOutput(v->offset());
         else
             m_input->eraseOutput(v->offset());

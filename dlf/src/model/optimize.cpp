@@ -77,6 +77,7 @@ public:
 };
 
 GlobalPassRegistryImpl::GlobalPassRegistryImpl() {
+    registerPass<ExtractConstantToInitializer>();
     registerPass<EliminateIdentity>();
     registerPass<EliminateDeadEnd>();
     registerPass<EliminateNopPad>();

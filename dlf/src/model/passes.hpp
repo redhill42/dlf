@@ -2,6 +2,25 @@
 
 namespace dlf { namespace model {
 
+class ExtractConstantToInitializer final : public PredicateBasedPass {
+    std::string getPassName() const override {
+        return "extract_constant_to_initializer";
+    }
+
+    bool patternMatchPredicate(Node* node) override {
+        return node->kind() == kConstant;
+    }
+
+    bool runTransform(Node* node, Graph& graph, NodeDestroyType& destroyCurrent) override {
+        auto t = node->get_t(kvalue);
+        t.set_name(node->output()->name());
+        Value* new_init = graph.addInitializer(std::move(t));
+        node->output()->replaceAllUsesWith(new_init);
+        destroyCurrent = NodeDestroyType::DestroyOne;
+        return true;
+    }
+};
+
 class EliminateDeadEnd final : public Pass {
 public:
     std::string getPassName() const override {
@@ -253,7 +272,7 @@ public:
         auto conv = static_cast<Conv*>(n->input(0)->node());
         auto val = n->input(1);
 
-        if (conv->Y()->uses().size() != 1 && conv->Y()->has_dims())
+        if (conv->Y()->uses().size() != 1 || !conv->Y()->has_dims())
             return false;
         if (!val->has_initializer())
             return false;
@@ -265,15 +284,29 @@ public:
         // try to get output channel M
         auto M = conv->W()->dim(0);
 
-        // for output shape (N,M,H,W...), the scale must have shape (M,1,1...)
-        if (val->dims().rank() != conv->Y()->dims().rank()-1 || val->dim(0) != M)
-            return false;
-        for (int i = 1; i < val->dims().rank(); i++)
-            if (val->dim(i) != 1)
+        // for output shape (N,M,H,W...), the scale must have shape (1,M,1,1...) or (M,1,1,...)
+        std::vector<int> axes(val->dims().rank());
+        std::iota(axes.begin(), axes.end(), 0);
+        if (val->dims().rank() == conv->Y()->dims().rank()) {
+            if (val->dim(0) != 1 || val->dim(1) != M)
                 return false;
+            for (int i = 2; i < val->dims().rank(); i++)
+                if (val->dim(i) != 1)
+                    return false;
+            axes.erase(axes.begin() + 1);
+        } else if (val->dims().rank() == conv->Y()->dims().rank() - 1) {
+            if (val->dim(0) != M)
+                return false;
+            for (int i = 1; i < val->dims().rank(); i++)
+                if (val->dim(i) != 1)
+                    return false;
+            axes.erase(axes.begin());
+        } else {
+            return false;
+        }
 
         auto scale = val->initializer().decode<float>();
-        scale.squeeze();
+        scale.squeeze(axes);
 
         auto W = conv->W()->initializer().decode<float>();
         transformChannel(W, scale, W, 0, xfn::multiplies<>());
@@ -313,11 +346,11 @@ public:
         auto conv = static_cast<Conv*>(n->input(0)->node());
         auto val = n->input(1);
 
-        if (conv->Y()->uses().size() != 1 && conv->Y()->has_dims())
-            return false;
-        if (!conv->W()->has_dims())
+        if (conv->Y()->uses().size() != 1 || !conv->Y()->has_dims())
             return false;
         if (!val->has_initializer())
+            return false;
+        if (!conv->W()->has_dims())
             return false;
         if (conv->B() != nullptr && !conv->B()->has_initializer())
             return false;
@@ -325,15 +358,29 @@ public:
         // try to get output channel M
         auto M = conv->W()->dim(0);
 
-        // for output shape (N,M,H,W...), the bias must have shape (M,1,1...)
-        if (val->dims().rank() != conv->Y()->dims().rank()-1 || val->dim(0) != M)
-            return false;
-        for (int i = 1; i < val->dims().rank(); i++)
-            if (val->dim(i) != 1)
+        // for output shape (N,M,H,W...), the bias must have shape (1,M,1,1...) or (M,1,1,...)
+        std::vector<int> axes(val->dims().rank());
+        std::iota(axes.begin(), axes.end(), 0);
+        if (val->dims().rank() == conv->Y()->dims().rank()) {
+            if (val->dim(0) != 1 || val->dim(1) != M)
                 return false;
+            for (int i = 2; i < val->dims().rank(); i++)
+                if (val->dim(i) != 1)
+                    return false;
+            axes.erase(axes.begin() + 1);
+        } else if (val->dims().rank() == conv->Y()->dims().rank() - 1) {
+            if (val->dim(0) != M)
+                return false;
+            for (int i = 1; i < val->dims().rank(); i++)
+                if (val->dim(i) != 1)
+                    return false;
+            axes.erase(axes.begin());
+        } else {
+            return false;
+        }
 
-        Tensor<float> bias = val->initializer().decode<float>();
-        bias.squeeze();
+        auto bias = val->initializer().decode<float>();
+        bias.squeeze(axes);
 
         if (conv->B() == nullptr) {
             conv->addInput(graph.addInitializer(TensorData(conv->Y()->name() + ":bias", bias)));
