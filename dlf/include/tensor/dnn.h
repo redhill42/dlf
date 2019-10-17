@@ -994,4 +994,178 @@ inline depth_to_space(TensorT&& X, int blocksize, std::string mode = "DCR") {
     return Y;
 }
 
+namespace detail {
+template <typename T>
+struct BoundingBox {
+    T start_y, start_x, end_y, end_x;
+
+    static BoundingBox corner(T y1, T x1, T y2, T x2) {
+        if (y1 > y2)
+            std::swap(y1, y2);
+        if (x1 > x2)
+            std::swap(x1, x2);
+        return BoundingBox{y1, x1, y2, x2};
+    }
+
+    static inline BoundingBox corner(const T* data) {
+        return corner(data[0], data[1], data[2], data[3]);
+    }
+
+    static inline BoundingBox center(T x_center, T y_center, T width, T height) {
+        return corner(y_center - height/2, x_center - width/2,
+                      y_center + height/2, x_center + width/2);
+    }
+
+    static inline BoundingBox center(const T* data) {
+        return center(data[0], data[1], data[2], data[3]);
+    }
+
+    T area() const noexcept {
+        return (end_x - start_x + 1) * (end_y - start_y + 1);
+    }
+
+    T iou(const BoundingBox& other) const noexcept {
+        auto x1 = std::max(start_x, other.start_x);
+        auto x2 = std::min(end_x,   other.end_x);
+        auto y1 = std::max(start_y, other.start_y);
+        auto y2 = std::min(end_y,   other.end_y);
+
+        auto overlap = std::max(T(0), x2 - x1 + 1) * std::max(T(0), y2 - y1 + 1);
+        return overlap == 0 ? 0 : overlap / (area() + other.area() - overlap);
+    }
+};
+
+template <typename T>
+BoundingBox<T> get_box(const T* boxes, int32_t index, bool center_point_box) {
+    return center_point_box ? BoundingBox<T>::center(boxes + index*4)
+                            : BoundingBox<T>::corner(boxes + index*4);
+}
+
+template <typename T>
+void nms(int32_t batch, int32_t klass, int32_t spatial_dim,
+         const T* boxes, const T* scores, std::vector<int32_t>& indices,
+         bool center_point_box, int32_t max_output_boxes,
+         T iou_threshold, T score_threshold)
+{
+    // Sort by confidence score of bounding boxes
+    std::vector<int32_t> order(spatial_dim);
+    std::iota(order.begin(), order.end(), 0);
+    std::sort(order.begin(), order.end(), [scores](auto x, auto y) {
+        return scores[x] <= scores[y];
+    });
+
+    // Suppress bounding boxes with score threshold
+    if (score_threshold > 0) {
+        order.erase(std::remove_if(
+            order.begin(), order.end(), [scores, score_threshold](auto i) {
+                return scores[i] < score_threshold;
+            }), order.end());
+    }
+
+    // Iterate bounding boxes
+    int32_t num_boxes = 0;
+    while (!order.empty() && num_boxes < max_output_boxes) {
+        // The index of largest confidence score
+        auto index = order.back(); order.pop_back();
+        auto pivot = get_box(boxes, index, center_point_box);
+
+        // Pick the bounding box with the largest confidence score
+        indices.push_back(batch);
+        indices.push_back(klass);
+        indices.push_back(index);
+        ++num_boxes;
+
+        // Suppress bounding boxes with iou threshold
+        order.erase(std::remove_if(
+            order.begin(), order.end(), [=, &pivot](auto i) {
+                return pivot.iou(get_box(boxes, i, center_point_box)) > iou_threshold;
+            }), order.end());
+    }
+}
+} // namespace detail
+
+/**
+ * Filter out boxes that have high intersection-over-union (IOU) overlap with
+ * previously selected boxes. Bounding boxes with score less than score_threshold
+ * are removed. Bounding box format is indicated by attribute center_point_box.
+ * Note that this algorithm is agnostic to where the origin is in the coordinate
+ * system and more generally is invariant to orthogonal transformations and
+ * translations of the coordinate system; thus translating or reflections of the
+ * coordinate system result in the same boxes being selected by algorithm. The
+ * selected_indices output is a set of integers indexing into the input collection
+ * of bounding boxes representing the selected boxes. The bounding box coordinates
+ * corresponding to the selected indices can then be obtained using the gather or
+ * gather_nd operation.
+ *
+ * @param boxes An input tensor with shape [num_batches, spatial_dimension, 4].
+ *        The single box data format is indicated by center_point box.
+ * @param scores An input tensor with shape [num_batches, num_classes, spatial_dimension].
+ * @param selected_indices Selected indices from the boxes tensor.
+ *        [num_selected_indices, 3], the select selected index format is
+ *        [batch_index, class_index, box_index].
+ * @param center_point_box Indicate the format of the box data. The default is false.
+ *        False - the box data is supplied as [y1, x1, y2, x2] where (y1,x1) and
+ *        (y2,x2) are the coordinates of any diagonal pair of box corners and the
+ *        coordinates can be provided as normalized (i.e., lying in the interval
+ *        [0, 1]) or absolute. Mostly used for TF models.
+ *        True - the box data is supplied as [x_center, y_center, width, height].
+ *        Mostly used for Pytorch models.
+ * @param max_output_boxes_per_class Integer representing the maximum number of
+ *        boxes to be selected per batch per class.
+ * @param iou_threshold Float representing the threshold for deciding whether
+ *        boxes overlap too much with respect to IOU.
+ * @param score_threshold Float representing the threshold for deciding when to
+ *        remove boxes based on score.
+ */
+template <typename T>
+void nms(const Tensor<T>& boxes, const Tensor<T>& scores,
+         Tensor<int32_t>& selected_indices,
+         bool center_point_box = false,
+         int32_t max_output_boxes_per_class = 0,
+         T iou_threshold = 0, T score_threshold = 0)
+{
+    assert(boxes.rank() == 3);
+    assert(boxes.extent(2) == 4);
+    assert(scores.rank() == 3);
+    assert(scores.extent(0) == boxes.extent(0));
+    assert(scores.extent(2) == boxes.extent(1));
+
+    auto num_batches = static_cast<int32_t>(boxes.extent(0));
+    auto spatial_dim = static_cast<int32_t>(boxes.extent(1));
+    auto num_classes = static_cast<int32_t>(scores.extent(1));
+    std::vector<int32_t> indices;
+
+    for (int32_t batch = 0; batch < num_batches; ++batch) {
+        for (int32_t klass = 0; klass < num_classes; ++klass) {
+            auto p_boxes  = boxes.data() + batch*spatial_dim*4;
+            auto p_scores = scores.data() + (batch*num_classes + klass)*spatial_dim;
+            detail::nms(batch, klass, spatial_dim,
+                        p_boxes, p_scores, indices,
+                        center_point_box, max_output_boxes_per_class,
+                        iou_threshold, score_threshold);
+        }
+    }
+
+    auto num_selected = indices.size() / 3;
+    selected_indices.resize(num_selected, 3);
+    std::copy(indices.begin(), indices.end(), selected_indices.begin());
+}
+
+template <typename T>
+void nms(const DevTensor<T>& boxes, const DevTensor<T>& scores,
+         DevTensor<int32_t>& selected_indices,
+         bool center_point_box = false,
+         int32_t max_output_boxes_per_class = 0,
+         T iou_threshold = 0, T score_threshold = 0)
+{
+    // FIXME
+    Tensor<int32_t> indices;
+    nms(boxes.read(), scores.read(), indices,
+        center_point_box, max_output_boxes_per_class,
+        iou_threshold, score_threshold);
+
+    selected_indices.resize(indices.shape());
+    selected_indices.write(indices);
+}
+
 }} // namespace dlf::dnn

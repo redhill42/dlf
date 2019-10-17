@@ -512,10 +512,6 @@ BEGIN_OPERATOR(Dropout)
     Value* mask() { return output(1); }
 END_OPERATOR()
 
-BEGIN_OPERATOR(Flatten)
-    DEFINE_INT_ATTRIBUTE(axis, 1)
-END_OPERATOR()
-
 BEGIN_OPERATOR(LRN)
     DEFINE_FLOAT_ATTRIBUTE(alpha, 0.0001f)
     DEFINE_FLOAT_ATTRIBUTE(beta, 0.75f)
@@ -624,7 +620,7 @@ BEGIN_OPERATOR(RoiAlign)
 END_OPERATOR()
 
 BEGIN_OPERATOR(NonMaxSuppression)
-    DEFINE_INT_ATTRIBUTE(center_point_box, 0)
+    DEFINE_BOOL_ATTRIBUTE(center_point_box, false)
 
     Value* boxes() { return input(0); }
     Value* scores() { return input(1); }
@@ -749,6 +745,10 @@ BEGIN_OPERATOR(ScatterND)
     Value* data()    { return input(0); }
     Value* indices() { return input(1); }
     Value* updates() { return input(2); }
+END_OPERATOR()
+
+BEGIN_OPERATOR(Flatten)
+    DEFINE_INT_ATTRIBUTE(axis, 1)
 END_OPERATOR()
 
 BEGIN_OPERATOR(Squeeze)

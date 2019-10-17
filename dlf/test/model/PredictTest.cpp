@@ -547,6 +547,35 @@ TYPED_TEST(PredictTest, Resize) {
     }));
 }
 
+TYPED_TEST(PredictTest, NonMaxSuppression) {
+    using Context = TypeParam;
+    Graph g;
+
+    auto a = g.append<NonMaxSuppression>();
+    a->addInput(g.addInput("boxes", DataType::FLOAT, {1, 6, 4}));
+    a->addInput(g.addInput("scores", DataType::FLOAT, {1, 1, 6}));
+    a->addInput(g.addInitializer(TensorData("max_output_boxes", DataType::INT64, {}, {3})));
+    a->addInput(g.addInitializer(TensorData("iou_threshold", DataType::FLOAT, {}, {0.5})));
+    g.addOutput(a->addOutput("selected_indices"));
+
+    Predictor<Context, float> predictor(g);
+    predictor.set(0, Tensor<float>({1, 6, 4}, {
+        0.0, 0.0, 1.0, 1.0,
+        0.0, 0.1, 1.0, 1.1,
+        0.0, -0.1, 1.0, 0.9,
+        0.0, 10.0, 1.0, 11.0,
+        0.0, 10.1, 1.0, 11.1,
+        0.0, 100.0, 1.0, 101.0
+    }));
+    predictor.set(1, Tensor<float>({1, 1, 6}, {
+        0.9, 0.75, 0.6, 0.95, 0.5, 0.3
+    }));
+
+    predictor.predict();
+    EXPECT_EQ(predictor.template get<int32_t>(0),
+              Matrix<int32_t>({{0, 0, 3}, {0, 0, 0}, {0, 0, 5}}));
+}
+
 TYPED_PERFORMANCE_TEST(PredictTest, Performance) {
     std::fstream fs("data/resnet18v1.onnx", std::ios::in | std::ios::binary);
     auto g = import_model(fs);

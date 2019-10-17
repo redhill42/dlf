@@ -1003,19 +1003,9 @@ public:
         }
     }
 
-    void visit(Flatten* n) override {
-        if (!propagateTypeAndCheckShape(n))
-            return;
-
-        auto dims = n->input()->dims();
-        auto rank = dims.rank();
-        auto axis = n->axis();
-        if (axis < 0) axis += rank;
-        if (axis < 0 || axis > rank)
-            fail_shape_inference("Flatten: Invalid value (", axis, ") for attribute 'axis'");
-        auto a = dims.partial_size(0, axis);
-        auto b = dims.partial_size(axis, dims.rank());
-        n->output()->set_dims({a, b});
+    void visit(NonMaxSuppression* n) override {
+        n->output()->set_type(DataType::INT64);
+        // cannot inference output shape
     }
 
     void visit(TfIdfVectorizer* n) override {
@@ -1552,6 +1542,21 @@ public:
         for (int i = s; i < r; i++)
             output_shape.append(data_shape[i]);
         n->output()->set_dims(output_shape);
+    }
+
+    void visit(Flatten* n) override {
+        if (!propagateTypeAndCheckShape(n))
+            return;
+
+        auto dims = n->input()->dims();
+        auto rank = dims.rank();
+        auto axis = n->axis();
+        if (axis < 0) axis += rank;
+        if (axis < 0 || axis > rank)
+            fail_shape_inference("Flatten: Invalid value (", axis, ") for attribute 'axis'");
+        auto a = dims.partial_size(0, axis);
+        auto b = dims.partial_size(axis, dims.rank());
+        n->output()->set_dims({a, b});
     }
 
     void visit(Squeeze* n) override {

@@ -1167,3 +1167,180 @@ TEST(DNNTest, DepthToSpace_CRD) {
     auto dev_Y = dnn::depth_to_space(dev(X), 2, "CRD");
     EXPECT_EQ(dev_Y.read(), Y);
 }
+
+TEST(DNNTest, nms_center_point_box_format) {
+    auto boxes = Tensor<float>({1, 6, 4}, {
+        0.5,   0.5, 1.0, 1.0,
+        0.5,   0.6, 1.0, 1.0,
+        0.5,   0.4, 1.0, 1.0,
+        0.5,  10.5, 1.0, 1.0,
+        0.5,  10.6, 1.0, 1.0,
+        0.5, 100.5, 1.0, 1.0
+    });
+    auto scores = Tensor<float>({1, 1, 6}, {0.9, 0.75, 0.6, 0.95, 0.5, 0.3});
+    auto indices = Tensor<int>();
+
+    dnn::nms(boxes, scores, indices, true, 3, 0.5f, 0.f);
+    EXPECT_EQ(indices, Tensor<int>({3, 3}, {0, 0, 3, 0, 0, 0, 0, 0, 5}));
+
+    auto dev_indices = DevTensor<int>();
+    dnn::nms(dev(boxes), dev(scores), dev_indices, true, 3, 0.5f, 0.0f);
+    EXPECT_EQ(dev_indices.read(), indices);
+}
+
+TEST(DNNTest, nms_flipped_coordinates) {
+    auto boxes = Tensor<float>({1, 6, 4}, {
+        1.0, 1.0, 0.0, 0.0,
+        0.0, 0.1, 1.0, 1.1,
+        0.0, 0.9, 1.0, -0.1,
+        0.0, 10.0, 1.0, 11.0,
+        1.0, 10.1, 0.0, 11.1,
+        1.0, 101.0, 0.0, 100.0
+    });
+    auto scores = Tensor<float>({1, 1, 6}, {0.9, 0.75, 0.6, 0.95, 0.5, 0.3});
+    auto indices = Tensor<int>();
+
+    dnn::nms(boxes, scores, indices, false, 3, 0.5f, 0.f);
+    EXPECT_EQ(indices, Tensor<int>({3, 3}, {0, 0, 3, 0, 0, 0, 0, 0, 5}));
+
+    auto dev_indices = DevTensor<int>();
+    dnn::nms(dev(boxes), dev(scores), dev_indices, false, 3, 0.5f, 0.0f);
+    EXPECT_EQ(dev_indices.read(), indices);
+}
+
+TEST(DNNTest, nms_identical_boxes) {
+    auto boxes = Tensor<float>({1, 10, 4}, {
+        0, 0, 1, 1,
+        0, 0, 1, 1,
+        0, 0, 1, 1,
+        0, 0, 1, 1,
+        0, 0, 1, 1,
+
+        0, 0, 1, 1,
+        0, 0, 1, 1,
+        0, 0, 1, 1,
+        0, 0, 1, 1,
+        0, 0, 1, 1,
+    });
+    auto scores = Tensor<float>({1, 1, 10}, {
+        0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9
+    });
+    auto indices = Tensor<int>();
+
+    dnn::nms(boxes, scores, indices, false, 3, 0.5f, 0.f);
+    EXPECT_EQ(indices, Tensor<int>({1, 3}, {0, 0, 0}));
+
+    auto dev_indices = DevTensor<int>();
+    dnn::nms(dev(boxes), dev(scores), dev_indices, false, 3, 0.5f, 0.0f);
+    EXPECT_EQ(dev_indices.read(), indices);
+}
+
+TEST(DNNTest, nms_limit_output_size) {
+    auto boxes = Tensor<float>({1, 6, 4}, {
+        0.0, 0.0, 1.0, 1.0,
+        0.0, 0.1, 1.0, 1.1,
+        0.0, -0.1, 1.0, 0.9,
+        0.0, 10.0, 1.0, 11.0,
+        0.0, 10.1, 1.0, 11.1,
+        0.0, 100.0, 1.0, 101.0
+    });
+    auto scores = Tensor<float>({1, 1, 6}, {0.9, 0.75, 0.6, 0.95, 0.5, 0.3});
+    auto indices = Tensor<int>();
+
+    dnn::nms(boxes, scores, indices, false, 2, 0.5f, 0.0f);
+    EXPECT_EQ(indices, Tensor<int>({2, 3}, {0, 0, 3, 0, 0, 0}));
+
+    auto dev_indices = DevTensor<int>();
+    dnn::nms(dev(boxes), dev(scores), dev_indices, false, 2, 0.5f, 0.0f);
+    EXPECT_EQ(dev_indices.read(), indices);
+}
+
+TEST(DNNTest, nms_single_box) {
+    auto boxes = Tensor<float>({1, 1, 4}, {0, 0, 1, 1});
+    auto scores = Tensor<float>({1, 1, 1}, {0.9});
+    auto indices = Tensor<int>();
+
+    dnn::nms(boxes, scores, indices, false, 3, 0.5f, 0.0f);
+    EXPECT_EQ(indices, Tensor<int>({1, 3}, {0, 0, 0}));
+
+    auto dev_indices = DevTensor<int>();
+    dnn::nms(dev(boxes), dev(scores), dev_indices, false, 3, 0.5f, 0.0f);
+    EXPECT_EQ(dev_indices.read(), indices);
+}
+
+TEST(DNNTest, nms_suppress_by_iou_and_scores) {
+    auto boxes = Tensor<float>({1, 6, 4}, {
+        0.0, 0.0, 1.0, 1.0,
+        0.0, 0.1, 1.0, 1.1,
+        0.0, -0.1, 1.0, 0.9,
+        0.0, 10.0, 1.0, 11.0,
+        0.0, 10.1, 1.0, 11.1,
+        0.0, 100.0, 1.0, 101.0
+    });
+    auto scores = Tensor<float>({1, 1, 6}, {0.9, 0.75, 0.6, 0.95, 0.5, 0.3});
+    auto indices = Tensor<int>();
+
+    dnn::nms(boxes, scores, indices, false, 3, 0.5f, 0.4f);
+    EXPECT_EQ(indices, Tensor<int>({2, 3}, {0, 0, 3, 0, 0, 0}));
+
+    auto dev_indices = DevTensor<int>();
+    dnn::nms(dev(boxes), dev(scores), dev_indices, false, 3, 0.5f, 0.4f);
+    EXPECT_EQ(dev_indices.read(), indices);
+}
+
+TEST(DNNTest, nms_two_batches) {
+    auto boxes = Tensor<float>({2, 6, 4}, {
+        0.0, 0.0, 1.0, 1.0,
+        0.0, 0.1, 1.0, 1.1,
+        0.0, -0.1, 1.0, 0.9,
+        0.0, 10.0, 1.0, 11.0,
+        0.0, 10.1, 1.0, 11.1,
+        0.0, 100.0, 1.0, 101.0,
+
+        0.0, 0.0, 1.0, 1.0,
+        0.0, 0.1, 1.0, 1.1,
+        0.0, -0.1, 1.0, 0.9,
+        0.0, 10.0, 1.0, 11.0,
+        0.0, 10.1, 1.0, 11.1,
+        0.0, 100.0, 1.0, 101.0
+    });
+    auto scores = Tensor<float>({2, 1, 6}, {
+        0.9, 0.75, 0.6, 0.95, 0.5, 0.3,
+        0.9, 0.75, 0.6, 0.95, 0.5, 0.3
+    });
+    auto indices = Tensor<int>();
+
+    dnn::nms(boxes, scores, indices, false, 2, 0.5f, 0.0f);
+    EXPECT_EQ(indices, Tensor<int>({4, 3}, {
+        0, 0, 3, 0, 0, 0, 1, 0, 3, 1, 0, 0
+    }));
+
+    auto dev_indices = DevTensor<int>();
+    dnn::nms(dev(boxes), dev(scores), dev_indices, false, 2, 0.5f, 0.0f);
+    EXPECT_EQ(dev_indices.read(), indices);
+}
+
+TEST(DNNTest, nms_two_classes) {
+    auto boxes = Tensor<float>({1, 6, 4}, {
+        0.0, 0.0, 1.0, 1.0,
+        0.0, 0.1, 1.0, 1.1,
+        0.0, -0.1, 1.0, 0.9,
+        0.0, 10.0, 1.0, 11.0,
+        0.0, 10.1, 1.0, 11.1,
+        0.0, 100.0, 1.0, 101.0
+    });
+    auto scores = Tensor<float>({1, 2, 6}, {
+        0.9, 0.75, 0.6, 0.95, 0.5, 0.3,
+        0.9, 0.75, 0.6, 0.95, 0.5, 0.3,
+    });
+    auto indices = Tensor<int>();
+
+    dnn::nms(boxes, scores, indices, false, 2, 0.5f, 0.0f);
+    EXPECT_EQ(indices, Tensor<int>({4, 3}, {
+        0, 0, 3, 0, 0, 0, 0, 1, 3, 0, 1, 0
+    }));
+
+    auto dev_indices = DevTensor<int>();
+    dnn::nms(dev(boxes), dev(scores), dev_indices, false, 2, 0.5f, 0.0f);
+    EXPECT_EQ(dev_indices.read(), indices);
+}

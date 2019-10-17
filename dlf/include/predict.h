@@ -176,6 +176,66 @@ private:
     template <typename U = T>
     using TensorT = typename Context::template TensorT<U>;
 
+    template <typename U = T>
+    struct DatumValue {
+        U value;
+        datum_ptr datum;
+
+        DatumValue(OperatorFactory* of, model::Value* v, U deflt = 0) {
+            if (v == nullptr)
+                value = deflt;
+            else if (v->has_initializer())
+                value = *(v->initializer().decode<U>());
+            else
+                datum = of->alloc<U>(v);
+        }
+
+        U operator*() {
+            if (datum == nullptr)
+                return value;
+            return *(datum->template read<U>());
+        }
+    };
+
+    template <typename U, typename V = U>
+    struct DatumValues {
+        std::vector<U> values;
+        datum_ptr datum;
+
+        DatumValues(OperatorFactory* of, model::Value* v) {
+            if (v != nullptr) {
+                if (v->has_initializer()) {
+                    auto t = v->initializer().decode<V>();
+                    assert(t.rank() == 1);
+                    values.assign(t.begin(), t.end());
+                } else {
+                    datum = of->alloc<V>(v);
+                }
+            }
+        }
+
+        std::vector<U> operator*() {
+            if (datum == nullptr) {
+                return values;
+            } else {
+                auto t = datum->template read<V>();
+                assert(t.rank() == 1);
+                return std::vector<U>(t.begin(), t.end());
+            }
+        }
+    };
+
+    struct DatumShape {
+        DatumValues<size_t, int64_t> values;
+
+        DatumShape(OperatorFactory* of, model::Value* v)
+            : values(of, v) {}
+
+        Shape operator*() {
+            return Shape(*values);
+        }
+    };
+
 public:
     OperatorFactory(std::vector<datum_ptr>& dataset)
         : m_dataset(dataset) {}
@@ -536,36 +596,13 @@ private:
         result = std::make_unique<ScanOp>(this, n);
     }
 
-    struct OpWithShape : Operator {
-        datum_ptr shape_datum;
-        Shape shape_init;
-
-        OpWithShape(OperatorFactory* of, model::Value* shape_value) {
-            if (shape_value->has_initializer()) {
-                shape_init = decodeShape(shape_value->initializer().decode<int64_t>());
-            } else {
-                shape_datum = of->alloc<int64_t>(shape_value);
-            }
-        }
-
-        Shape decodeShape() {
-            if (shape_datum == nullptr)
-                return shape_init;
-            return decodeShape(shape_datum->template read<int64_t>());
-        }
-
-        static Shape decodeShape(Tensor<int64_t>&& datum) {
-            assert(datum.rank() == 1);
-            return Shape(std::vector<size_t>(datum.begin(), datum.end()));
-        }
-    };
-
-    struct ConstantOfShapeOp : OpWithShape {
+    struct ConstantOfShapeOp : Operator {
+        DatumShape shape;
         datum_ptr output;
         T value{};
 
         ConstantOfShapeOp(OperatorFactory* of, model::ConstantOfShape* n)
-            : OpWithShape(of, n->input()), output(of->alloc(n->output()))
+            : shape(of, n->input()), output(of->alloc(n->output()))
         {
             if (n->has_value()) {
                 auto t = n->value().decode<int64_t>();
@@ -575,7 +612,7 @@ private:
         }
 
         void evaluate() override {
-            output->template resize<T>(this->decodeShape());
+            output->template resize<T>(*shape);
             deref(output).fill(value);
         }
     };
@@ -1399,42 +1436,55 @@ private:
         result = std::make_unique<LRNOp>(this, n);
     }
 
+    struct NonMaxSuppressionOp : Operator {
+        datum_ptr           boxes, scores;
+        datum_ptr           selected_indices;
+        bool                center_point_box;
+        DatumValue<int64_t> max_output_boxes;
+        DatumValue<T>       iou_threshold;
+        DatumValue<T>       score_threshold;
+
+        NonMaxSuppressionOp(OperatorFactory* of, model::NonMaxSuppression* n)
+            : boxes(of->alloc(n->boxes())), scores(of->alloc(n->scores())),
+              selected_indices(of->alloc<int32_t>(n->output())),
+              center_point_box(n->center_point_box()),
+              max_output_boxes(of, n->max_output_boxes_per_class()),
+              iou_threshold(of, n->iou_threshold()),
+              score_threshold(of, n->score_threshold())
+        {}
+
+        void evaluate() override {
+            auto out = deref<int32_t>(selected_indices);
+            dnn::nms(deref(boxes), deref(scores), out,
+                     center_point_box,
+                     *max_output_boxes,
+                     *iou_threshold,
+                     *score_threshold);
+            selected_indices->unget(out);
+        }
+    };
+
+    void visit(model::NonMaxSuppression* n) override {
+        result = std::make_unique<NonMaxSuppressionOp>(this, n);
+    }
+
     struct ReshapeOp : Operator {
         datum_ptr X, Y;
-        datum_ptr shape_datum;
-        std::vector<int> shape_init;
+        DatumValues<int, int64_t> shape;
 
         ReshapeOp(OperatorFactory* of, model::Reshape* n)
             : X(of->alloc(n->input())),
-              Y(of->allocInplace(n->input(), n->output()))
-        {
-            if (n->shape()->has_initializer()) {
-                shape_init = decodeShape(n->shape()->initializer().decode<int64_t>());
-            } else {
-                shape_datum = of->alloc<int64_t>(n->shape());
-            }
-        }
+              Y(of->allocInplace(n->input(), n->output())),
+              shape(of, n->shape()) {}
 
         void evaluate() override {
-            auto new_shape = X->shape().reshape(decodeShape());
+            auto new_shape = X->shape().reshape(*shape);
             if (X == Y) {
                 X->template resize<T>(std::move(new_shape));
             } else {
                 Y->template resize<T>(std::move(new_shape));
                 flat_copy(deref(X), deref(Y));
             }
-        }
-
-    private:
-        std::vector<int> decodeShape() {
-            if (shape_datum == nullptr)
-                return shape_init;
-            return decodeShape(shape_datum->template read<int64_t>());
-        }
-
-        static std::vector<int> decodeShape(Tensor<int64_t>&& datum) {
-            assert(datum.rank() == 1);
-            return std::vector<int>(datum.begin(), datum.end());
         }
     };
 
@@ -1708,70 +1758,26 @@ private:
         result = std::make_unique<ScatterNDOp>(this, n);
     }
 
-    struct FixedSliceOp : Operator {
+    struct SliceOp : Operator {
         datum_ptr X, Y;
-        std::vector<int> starts, ends, axes, steps;
+        DatumValues<int, int64_t> starts, ends, axes, steps;
 
-        FixedSliceOp(OperatorFactory* of, model::Slice* n)
+        SliceOp(OperatorFactory* of, model::Slice* n)
             : X(of->alloc(n->input())), Y(of->alloc(n->output())),
-              starts(decode(n->starts())),
-              ends(decode(n->ends())),
-              axes(decode(n->axes())),
-              steps(decode(n->steps())) {}
+              starts(of, n->starts()),
+              ends(of, n->ends()),
+              axes(of, n->axes()),
+              steps(of, n->steps()) {}
 
         void evaluate() override {
-            auto x = deref(X), y = deref(Y);
-            reorder(x.slice(starts, ends, axes, steps), y);
-            Y->unget(y);
-        }
-
-        static std::vector<int> decode(model::Value* n) {
-            if (n == nullptr)
-                return {};
-            else {
-                auto v = n->initializer().decode<int>();
-                assert(v.rank() == 1);
-                return {v.begin(), v.end()};
-            }
-        }
-    };
-
-    struct DynamicSliceOp : Operator {
-        datum_ptr X, Y;
-        datum_ptr starts, ends, axes, steps;
-
-        DynamicSliceOp(OperatorFactory* of, model::Slice* n)
-            : X(of->alloc(n->input())), Y(of->alloc(n->output())),
-              starts(of->alloc<int>(n->starts())),
-              ends(of->alloc<int>(n->ends())),
-              axes(of->alloc<int>(n->axes())),
-              steps(of->alloc<int>(n->steps())) {}
-
-        void evaluate() override {
-            auto x = deref(X), y = deref(Y);
-            reorder(x.slice(decode(starts), decode(ends), decode(axes), decode(steps)), y);
-            Y->unget(y);
-        }
-
-        static std::vector<int> decode(datum_ptr datum) {
-            if (datum == nullptr)
-                return {};
-            else {
-                auto v = datum->template read<int>();
-                assert(v.rank() == 1);
-                return {v.begin(), v.end()};
-            }
+            auto out = deref(Y);
+            reorder(deref(X).slice(*starts, *ends, *axes, *steps), out);
+            Y->unget(out);
         }
     };
 
     void visit(model::Slice* n) override {
-        if (n->starts()->has_initializer() &&
-            n->ends  ()->has_initializer() &&
-            (n->axes () == nullptr || n->axes ()->has_initializer()) &&
-            (n->steps() == nullptr || n->steps()->has_initializer()))
-            result = std::make_unique<FixedSliceOp>(this, n);
-        else
-            result = std::make_unique<DynamicSliceOp>(this, n);
+        result = std::make_unique<SliceOp>(this, n);
     }
 
     struct TransposeOp : Operator {
@@ -1802,17 +1808,18 @@ private:
         result = std::make_unique<TransposeOp>(this, n);
     }
 
-    struct ExpandOp : OpWithShape {
+    struct ExpandOp : Operator {
         datum_ptr X, Y;
+        DatumShape shape;
 
         ExpandOp(OperatorFactory* of, model::Expand* n)
-            : OpWithShape(of, n->shape()),
-              X(of->alloc(n->input())), Y(of->alloc(n->output())) {}
+            : X(of->alloc(n->input())), Y(of->alloc(n->output())),
+              shape(of, n->shape()) {}
 
         void evaluate() override {
-            auto shape = Shape::broadcast(X->shape(), this->decodeShape());
-            Y->template resize<T>(shape);
-            reorder(deref(X).broadcast(shape), deref(Y));
+            auto exp_shape = Shape::broadcast(X->shape(), *shape);
+            Y->template resize<T>(exp_shape);
+            reorder(deref(X).broadcast(exp_shape), deref(Y));
         }
     };
 
@@ -1880,32 +1887,16 @@ private:
 
     struct ResizeOp : Operator {
         datum_ptr X, Y;
-        datum_ptr scales_datum;
-        std::vector<float> scales_init;
+        DatumValues<float> scales;
 
         ResizeOp(OperatorFactory* of, model::Resize* n)
-            : X(of->alloc(n->input())), Y(of->alloc(n->output()))
-        {
-            if (n->scales()->has_initializer()) {
-                scales_init = decode(n->scales()->initializer().decode<float>());
-            } else {
-                scales_datum = of->alloc<float>(n->scales());
-            }
-        }
+            : X(of->alloc(n->input())), Y(of->alloc(n->output())),
+              scales(of, n->scales()) {}
 
         void evaluate() override {
             auto out = deref(Y);
-            if (scales_datum == nullptr)
-                im::resize(deref(X), out, scales_init);
-            else
-                im::resize(deref(X), out, decode(scales_datum->template read<float>()));
+            im::resize(deref(X), out, *scales);
             Y->unget(out);
-        }
-
-    private:
-        static std::vector<float> decode(const Tensor<float>& datum) {
-            assert(datum.rank() == 1);
-            return std::vector<float>(datum.begin(), datum.end());
         }
     };
 
@@ -1975,33 +1966,19 @@ private:
 
     struct OneHotOp : Operator {
         datum_ptr indices, values, output;
-        datum_ptr depth_datum;
-        size_t depth;
+        DatumValue<int64_t> depth;
         int axis;
 
         OneHotOp(OperatorFactory* of, model::OneHot* n)
             : indices(of->alloc(n->indices())),
               values(of->alloc(n->values())),
               output(of->alloc(n->output())),
-              axis(static_cast<int>(n->axis()))
-        {
-            if (n->depth()->has_initializer()) {
-                depth = static_cast<size_t>(*(n->depth()->initializer().decode<int64_t>()));
-                depth_datum = nullptr;
-            } else {
-                depth_datum = of->alloc<int64_t>(n->depth());
-            }
-        }
-
-        size_t get_depth() {
-            if (depth_datum == nullptr)
-                return depth;
-            return static_cast<size_t>(*(depth_datum->template read<int64_t>()));
-        }
+              depth(of, n->depth()),
+              axis(static_cast<int>(n->axis())) {}
 
         void evaluate() override {
             auto out = deref(output);
-            one_hot(deref(indices), deref(values), out, get_depth(), axis);
+            one_hot(deref(indices), deref(values), out, *depth, axis);
             output->unget(out);
         }
     };
