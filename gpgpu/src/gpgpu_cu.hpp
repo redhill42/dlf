@@ -260,6 +260,7 @@ class cuKernel final : public rawKernel {
     CUfunction m_kernel;
     mutable std::vector<size_t> m_arguments_indices;
     mutable std::vector<char> m_arguments_data;
+    mutable size_t m_local_memory_size = 0;
 
 public:
     explicit cuKernel(CUfunction kernel) : m_kernel(kernel) {}
@@ -268,6 +269,7 @@ public:
 
     void setArgument(size_t index, const void* value, size_t size) const override;
     void setArgument(size_t index, const rawBuffer& buffer) const override;
+    void setLocalMemorySize(size_t size) const override;
 
     void launch(const rawQueue& queue,
                 const std::vector<size_t>& global,

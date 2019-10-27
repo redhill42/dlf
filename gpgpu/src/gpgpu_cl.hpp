@@ -270,6 +270,7 @@ public:
 
     void setArgument(size_t index, const void* value, size_t size) const override;
     void setArgument(size_t index, const rawBuffer& buffer) const override;
+    void setLocalMemorySize(size_t size) const override;
 
     void launch(const rawQueue& queue,
                 const std::vector<size_t>& global,

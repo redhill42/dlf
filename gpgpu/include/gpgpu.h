@@ -324,6 +324,7 @@ public:
 
     virtual void setArgument(size_t index, const void* value, size_t size) const = 0;
     virtual void setArgument(size_t index, const rawBuffer& buffer) const = 0;
+    virtual void setLocalMemorySize(size_t size) const = 0;
 
     virtual void launch(const rawQueue& queue,
                         const std::vector<size_t>& global,
@@ -796,6 +797,10 @@ public:
     template <typename T, typename... Ts>
     void setArguments(T&& first, Ts&&... rest) const {
         setArgumentsRec(0, std::forward<T>(first), std::forward<Ts>(rest)...);
+    }
+
+    void setLocalMemorySize(size_t size) const {
+        m_raw->setLocalMemorySize(size);
     }
 
     void launch(const Queue& queue,

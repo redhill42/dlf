@@ -341,6 +341,10 @@ void cuKernel::setArgument(size_t index, const rawBuffer& buffer) const {
     setArgument(index, &ptr, sizeof(CUdeviceptr));
 }
 
+void cuKernel::setLocalMemorySize(size_t size) const {
+    m_local_memory_size = size;
+}
+
 void cuKernel::launch(const rawQueue& queue,
                       const std::vector<size_t>& global,
                       const std::vector<size_t>& local,
@@ -370,7 +374,8 @@ void cuKernel::launch(const rawQueue& queue,
         m_kernel,
         grid[0], grid[1], grid[2],
         block[0], block[1], block[2],
-        0, q, pointers.data(), nullptr));
+        m_local_memory_size, q,
+        pointers.data(), nullptr));
     if (event != nullptr)
         CheckError(cuEventRecord(cuEvent::end(*event), q));
 }

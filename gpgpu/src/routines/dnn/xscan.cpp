@@ -46,9 +46,10 @@ void Xscan<T,R>::DoScanDirect(
         x_buffer, static_cast<int>(x_offset), static_cast<int>(x_inc),
         y_buffer, static_cast<int>(y_offset), static_cast<int>(y_inc));
 
-    auto n_ceiled = NextPowerOfTwo(n) / 2;
-    auto global = std::vector<size_t>{m * n_ceiled};
-    auto local = std::vector<size_t>{n_ceiled};
+    auto local_size = NextPowerOfTwo(n) / 2;
+    kernel.setLocalMemorySize((local_size*2 + 1) * sizeof(R));
+    auto global = std::vector<size_t>{m * local_size};
+    auto local = std::vector<size_t>{local_size};
     RunKernel(kernel, queue_, device_, global, local, event_);
 }
 

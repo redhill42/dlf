@@ -71,8 +71,13 @@ STATIC void DirectLocalScan(const int lid, const int lsz, LOCAL_PTR realR* lm) {
 __kernel void DirectScan(
     const int n, const int inclusive, const int rank, __constant int* shape,
     const __global real* restrict xgm, int x_offset, const int x_inc,
-    __global realR* ygm, int y_offset, const int y_inc)
-{
+    __global realR* ygm, int y_offset, const int y_inc
+#ifndef CUDA
+    , __local realR* lm) {
+#else
+    ) { extern __shared__ realR lm[];
+#endif
+
     const int lid = get_local_id(0)*2;
     const int gid = get_group_id(0)*n + lid;
 
@@ -81,7 +86,6 @@ __kernel void DirectScan(
     ygm += y_offset;
 
     // Load input data into shared memory
-    __local realR lm[WGS*2 + 1];
     IDENTITY(lm[lid]);
     if (lid < n)
         lm[lid] = MAP(xgm[0]);

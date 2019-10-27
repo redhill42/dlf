@@ -312,6 +312,14 @@ void clKernel::setArgument(size_t index, const rawBuffer& buffer) const {
     setArgument(index, clBuffer::unwrap(buffer), sizeof(cl_mem));
 }
 
+void clKernel::setLocalMemorySize(size_t size) const {
+    cl_uint num_args;
+    CheckError(clGetKernelInfo(
+        m_kernel, CL_KERNEL_NUM_ARGS,
+        sizeof(num_args), &num_args, nullptr));
+    CheckError(clSetKernelArg(m_kernel, num_args-1, size, nullptr));
+}
+
 void clKernel::launch(const rawQueue& queue,
                       const std::vector<size_t>& global,
                       const std::vector<size_t>& local,

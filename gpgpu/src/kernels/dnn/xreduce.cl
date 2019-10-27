@@ -117,8 +117,13 @@ typedef real realR;
 __kernel void XreduceDirect(
     const int n, const real_arg value_arg,
     const __global real* restrict xgm, const int x_offset,
-    __global realR* ygm, const int y_offset)
-{
+    __global realR* ygm, const int y_offset
+#ifndef CUDA
+    , __local realR* lm) {
+#else
+    ) { extern __shared__ realR lm[];
+#endif
+
     const int gid = get_group_id(0);
     const int lid = get_local_id(0);
     const int lsz = get_local_size(0);
@@ -126,10 +131,8 @@ __kernel void XreduceDirect(
     xgm += x_offset + gid*n + lid;
     ygm += y_offset + gid;
 
-    __local realR lm[WGS1];
-    real value = GetRealArg(value_arg);
-
     /* Perform loading and the first steps of the reduction */
+    real value = GetRealArg(value_arg);
     realR acc, x;
     INIT(acc);
     if (lid < n) {
@@ -161,8 +164,13 @@ __kernel void XreduceDirectStrided(
     const int x_rank, __constant int* x_shape,
     const __global real* restrict xgm, const int x_offset,
     const int y_rank, __constant int* y_shape,
-    __global realR* ygm, const int y_offset)
-{
+    __global realR* ygm, const int y_offset
+#ifndef CUDA
+    , __local realR* lm) {
+#else
+    ) { extern __shared__ realR lm[];
+#endif
+
     const int gid = get_group_id(0);
     const int lid = get_local_id(0);
     const int lsz = get_local_size(0);
@@ -170,10 +178,8 @@ __kernel void XreduceDirectStrided(
     xgm += x_offset;
     ygm += y_offset;
 
-    __local realR lm[WGS1];
-    real value = GetRealArg(value_arg);
-
     /* Perform loading and the first steps of the reduction */
+    real value = GetRealArg(value_arg);
     realR acc, x;
     INIT(acc);
     if (lid < n) {

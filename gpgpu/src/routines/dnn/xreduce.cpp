@@ -38,34 +38,31 @@ void Xreduce<T,R>::DoReduceDirect(
     const std::vector<size_t>& y_dims, const std::vector<size_t>& y_strides,
     Buffer<R>& y_buffer, const size_t y_offset)
 {
+    Kernel kernel;
+
     if (IsContiguous(x_dims, x_strides) && IsContiguous(y_dims, y_strides)) {
-        auto kernel = program_.getKernel("XreduceDirect");
+        kernel = program_.getKernel("XreduceDirect");
         kernel.setArguments(
             static_cast<int>(n), GetRealArg(value),
             x_buffer, static_cast<int>(x_offset),
             y_buffer, static_cast<int>(y_offset));
-
-        auto n_ceiled = NextPowerOfTwo(n) / 2;
-        auto global = std::vector<size_t>{m * n_ceiled};
-        auto local = std::vector<size_t>{n_ceiled};
-        RunKernel(kernel, queue_, device_, global, local, event_);
     } else {
         auto x_shape = PackShape(x_dims, x_strides, context_, queue_);
         auto y_shape = PackShape(y_dims, y_strides, context_, queue_);
-
-        auto kernel = program_.getKernel("XreduceDirectStrided");
+        kernel = program_.getKernel("XreduceDirectStrided");
         kernel.setArguments(
             static_cast<int>(n), GetRealArg(value),
             static_cast<int>(x_dims.size()), x_shape,
             x_buffer, static_cast<int>(x_offset),
             static_cast<int>(y_dims.size()), y_shape,
             y_buffer, static_cast<int>(y_offset));
-
-        auto n_ceiled = NextPowerOfTwo(n) / 2;
-        auto global = std::vector<size_t>{m * n_ceiled};
-        auto local = std::vector<size_t>{n_ceiled};
-        RunKernel(kernel, queue_, device_, global, local, event_);
     }
+
+    auto local_size = NextPowerOfTwo(n) / 2;
+    kernel.setLocalMemorySize(local_size * sizeof(R));
+    auto global = std::vector<size_t>{m * local_size};
+    auto local = std::vector<size_t>{local_size};
+    RunKernel(kernel, queue_, device_, global, local, event_);
 }
 
 template <typename T, typename R>
