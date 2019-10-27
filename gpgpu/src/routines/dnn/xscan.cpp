@@ -16,7 +16,7 @@ void Xscan<T,R>::DoScan(
     const Buffer<T>& x_buffer, const size_t x_offset, const std::vector<size_t>& x_strides,
     Buffer<R>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_strides)
 {
-    if (n < 2*db_["WGS"]) {
+    if (n <= 2*db_["WGS"]) {
         DoScanDirect(
             m, n, exclusive, dims,
             x_buffer, x_offset, x_strides,
@@ -39,14 +39,16 @@ void Xscan<T,R>::DoScanDirect(
     auto x_inc = x_strides.back();
     auto y_inc = y_strides.back();
 
-    auto kernel = program_.getKernel(exclusive ? "DirectExclusiveScan" : "DirectInclusiveScan");
+    auto kernel = program_.getKernel("DirectScan");
     kernel.setArguments(
-        static_cast<int>(m), static_cast<int>(n), static_cast<int>(dims.size()), shape,
+        static_cast<int>(n), static_cast<int>(!exclusive),
+        static_cast<int>(dims.size()), shape,
         x_buffer, static_cast<int>(x_offset), static_cast<int>(x_inc),
         y_buffer, static_cast<int>(y_offset), static_cast<int>(y_inc));
 
-    auto global = std::vector<size_t>{Ceil(m, db_["WGS"])};
-    auto local = std::vector<size_t>{db_["WGS"]};
+    auto n_ceiled = NextPowerOfTwo(n) / 2;
+    auto global = std::vector<size_t>{m * n_ceiled};
+    auto local = std::vector<size_t>{n_ceiled};
     RunKernel(kernel, queue_, device_, global, local, event_);
 }
 

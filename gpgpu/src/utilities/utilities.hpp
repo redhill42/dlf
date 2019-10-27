@@ -173,6 +173,17 @@ inline bool IsMultiple(const size_t a, const size_t b) {
   return a % b == 0;
 }
 
+inline size_t NextPowerOfTwo(size_t x) {
+    --x;
+    x |= x >> 1;
+    x |= x >> 2;
+    x |= x >> 4;
+    x |= x >> 8;
+    x |= x >> 16;
+    x |= x >> 32;
+    return ++x;
+}
+
 // =================================================================================================
 
 // Retrieves the squared difference, used for example for computing the L2 error

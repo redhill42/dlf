@@ -31,42 +31,73 @@ PROGRAM_STRING_DEBUG_INFO R"(
 
 //---------------------------------------------------------------------------
 
-__kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
-void DirectInclusiveScan(
-    const int m, const int n, const int rank, __constant int* shape,
-    const __global real* restrict xgm, const int x_offset, const int x_inc,
-    __global realR* ygm, const int y_offset, const int y_inc)
-{
-    const int batch = get_global_id(0);
-    if (batch >= m) return;
+// Note: lid = get_local_id(0) * 2
+STATIC void DirectLocalScan(const int lid, const int lsz, LOCAL_PTR realR* lm) {
+    int offset = 1;
 
-    int x_id = x_offset, y_id = y_offset;
-    unravel2(batch*n, &x_id, &y_id, rank, shape);
-
-    realR acc; IDENTITY(acc);
-    for (int i = 0; i < n; i++, x_id += x_inc, y_id += y_inc) {
-        OP(acc, acc, MAP(xgm[x_id]));
-        ygm[y_id] = acc;
+    // Build sum in place up the tree
+    for (int d = lsz; d > 0; d >>= 1) {
+        if (lid < d*2) {
+            int ai = (lid + 1)*offset - 1;
+            int bi = (lid + 2)*offset - 1;
+            OP(lm[bi], lm[bi], lm[ai]);
+        }
+        barrier(CLK_LOCAL_MEM_FENCE);
+        offset <<= 1;
     }
+
+    // Clear the last element
+    if (lid == 0) {
+        lm[lsz*2] = lm[lsz*2-1];
+        IDENTITY(lm[lsz*2-1]);
+    }
+
+    // Traverse down tree and build scan
+    for (int d = 1; d < lsz*2; d <<= 1) {
+        offset >>= 1;
+        barrier(CLK_LOCAL_MEM_FENCE);
+        if (lid < d*2) {
+            int   ai = (lid + 1)*offset - 1;
+            int   bi = (lid + 2)*offset - 1;
+            realR t  = lm[ai];
+            lm[ai]   = lm[bi];
+            OP(lm[bi], lm[bi], t);
+        }
+    }
+
+    barrier(CLK_LOCAL_MEM_FENCE);
 }
 
-__kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
-void DirectExclusiveScan(
-    const int m, const int n, const int rank, __constant int* shape,
-    const __global real* restrict xgm, const int x_offset, const int x_inc,
-    __global realR* ygm, const int y_offset, const int y_inc)
+__kernel void DirectScan(
+    const int n, const int inclusive, const int rank, __constant int* shape,
+    const __global real* restrict xgm, int x_offset, const int x_inc,
+    __global realR* ygm, int y_offset, const int y_inc)
 {
-    const int batch = get_global_id(0);
-    if (batch >= m) return;
+    const int lid = get_local_id(0)*2;
+    const int gid = get_group_id(0)*n + lid;
 
-    int x_id = x_offset, y_id = y_offset;
-    unravel2(batch*n, &x_id, &y_id, rank, shape);
+    unravel2(gid, &x_offset, &y_offset, rank, shape);
+    xgm += x_offset;
+    ygm += y_offset;
 
-    realR acc; IDENTITY(acc);
-    for (int i = 0; i < n; i++, x_id += x_inc, y_id += y_inc) {
-        ygm[y_id] = acc;
-        OP(acc, acc, MAP(xgm[x_id]));
-    }
+    // Load input data into shared memory
+    __local realR lm[WGS*2 + 1];
+    IDENTITY(lm[lid]);
+    if (lid < n)
+        lm[lid] = MAP(xgm[0]);
+    IDENTITY(lm[lid+1]);
+    if (lid+1 < n)
+        lm[lid+1] = MAP(xgm[x_inc]);
+    barrier(CLK_LOCAL_MEM_FENCE);
+
+    // Perform local scan on shared memory
+    DirectLocalScan(lid, get_local_size(0), lm);
+
+    // Write result to device memory
+    if (lid < n)
+        ygm[0] = lm[lid + inclusive];
+    if (lid+1 < n)
+        ygm[y_inc] = lm[lid+1 + inclusive];
 }
 
 //---------------------------------------------------------------------------
@@ -78,8 +109,8 @@ STATIC void LocalScan(const int lid, LOCAL_PTR realR* lm, __global realR* sums) 
     // Build sum in place up the tree
     for (int d = WGS; d > 0; d >>= 1) {
         if (lid < d*2) {
-            int ai = (lid+1)*offset-1;
-            int bi = (lid+2)*offset-1;
+            int ai = (lid + 1)*offset - 1;
+            int bi = (lid + 2)*offset - 1;
             OP(lm[bi], lm[bi], lm[ai]);
         }
         barrier(CLK_LOCAL_MEM_FENCE);
@@ -97,10 +128,10 @@ STATIC void LocalScan(const int lid, LOCAL_PTR realR* lm, __global realR* sums) 
         offset >>= 1;
         barrier(CLK_LOCAL_MEM_FENCE);
         if (lid < d*2) {
-            int ai = (lid+1)*offset-1;
-            int bi = (lid+2)*offset-1;
-            realR t = lm[ai];
-            lm[ai] = lm[bi];
+            int   ai = (lid + 1)*offset - 1;
+            int   bi = (lid + 2)*offset - 1;
+            realR t  = lm[ai];
+            lm[ai]   = lm[bi];
             OP(lm[bi], lm[bi], t);
         }
     }
