@@ -114,47 +114,91 @@ typedef real realR;
 
 //---------------------------------------------------------------------------
 
-__kernel __attribute__((reqd_work_group_size(WGS1, 1, 1)))
-void XreduceDirect(
-    const int m, const int n, const real_arg value_arg,
+__kernel void XreduceDirect(
+    const int n, const real_arg value_arg,
     const __global real* restrict xgm, const int x_offset,
     __global realR* ygm, const int y_offset)
 {
-    const int batch = get_global_id(0);
-    if (batch >= m) return;
+    const int gid = get_group_id(0);
+    const int lid = get_local_id(0);
+    const int lsz = get_local_size(0);
 
-    xgm += x_offset + batch*n;
-    ygm += y_offset + batch;
+    xgm += x_offset + gid*n + lid;
+    ygm += y_offset + gid;
 
+    __local realR lm[WGS1];
     real value = GetRealArg(value_arg);
-    realR acc; INIT(acc);
-    for (int i = 0; i < n; i++) {
-        real x = xgm[i];
+
+    /* Perform loading and the first steps of the reduction */
+    realR acc, x;
+    INIT(acc);
+    if (lid < n) {
+        x = xgm[0];
         MAP_REDUCE(acc, x);
     }
-    FINAL(ygm[0], acc, n);
+    if (lid + lsz < n) {
+        x = xgm[lsz];
+        MAP_REDUCE(acc, x);
+    }
+    lm[lid] = acc;
+    barrier(CLK_LOCAL_MEM_FENCE);
+
+    /* Perform reduction in local memory */
+    for (int s = lsz/2; s > 0; s >>= 1) {
+        if (lid < s)
+            REDUCE(lm[lid], lm[lid], lm[lid + s]);
+        barrier(CLK_LOCAL_MEM_FENCE);
+    }
+
+    /* Stores the result */
+    if (lid == 0) {
+        FINAL(ygm[0], lm[0], n);
+    }
 }
 
-__kernel __attribute__((reqd_work_group_size(WGS1, 1, 1)))
-void XreduceDirectStrided(
-    const int m, const int n, const real_arg value_arg,
+__kernel void XreduceDirectStrided(
+    const int n, const real_arg value_arg,
     const int x_rank, __constant int* x_shape,
     const __global real* restrict xgm, const int x_offset,
     const int y_rank, __constant int* y_shape,
     __global realR* ygm, const int y_offset)
 {
-    const int batch = get_global_id(0);
-    if (batch >= m) return;
+    const int gid = get_group_id(0);
+    const int lid = get_local_id(0);
+    const int lsz = get_local_size(0);
 
+    xgm += x_offset;
+    ygm += y_offset;
+
+    __local realR lm[WGS1];
     real value = GetRealArg(value_arg);
-    realR acc; INIT(acc);
-    for (int i = 0; i < n; i++) {
-        real x = xgm[x_offset + unravel(batch*n + i, x_rank, x_shape)];
+
+    /* Perform loading and the first steps of the reduction */
+    realR acc, x;
+    INIT(acc);
+    if (lid < n) {
+        x = xgm[unravel(gid*n + lid, x_rank, x_shape)];
         MAP_REDUCE(acc, x);
     }
+    if (lid + lsz < n) {
+        x = xgm[unravel(gid*n + lid + lsz, x_rank, x_shape)];
+        MAP_REDUCE(acc, x);
+    }
+    lm[lid] = acc;
+    barrier(CLK_LOCAL_MEM_FENCE);
 
-    const int y_id = y_offset + unravel(batch, y_rank, y_shape);
-    FINAL(ygm[y_id], acc, n);
+    /* Perform reduction in local memory */
+    for (int s = lsz/2; s > 0; s >>= 1) {
+        if (lid < s)
+            REDUCE(lm[lid], lm[lid], lm[lid + s]);
+        barrier(CLK_LOCAL_MEM_FENCE);
+    }
+
+    /* Stores the result */
+    if (lid == 0) {
+        ygm += unravel(gid, y_rank, y_shape);
+        FINAL(ygm[0], lm[0], n);
+    }
 }
 
 //---------------------------------------------------------------------------

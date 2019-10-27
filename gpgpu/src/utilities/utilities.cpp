@@ -387,6 +387,7 @@ Buffer<int> PackShape(const std::vector<size_t>& dim,
     std::vector<int> shape(rank * 2);
     std::copy(dim.begin(), dim.end(), shape.begin());
     std::copy(stride.begin(), stride.end(), shape.begin() + rank);
+    if (shape.size() == 0) shape.push_back(0);
     return context.getSharedBuffer<int>(shape.data(), shape.size(), queue);
 }
 

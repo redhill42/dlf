@@ -19,7 +19,7 @@ void Xreduce<T,R>::DoReduce(
     const std::vector<size_t>& y_dims, const std::vector<size_t>& y_strides,
     Buffer<R>& y_buffer, const size_t y_offset)
 {
-    if (n < 2*db_["WGS2"]) {
+    if (n <= 2*db_["WGS1"]) {
         DoReduceDirect(m, n, value,
             x_dims, x_strides, x_buffer, x_offset,
             y_dims, y_strides, y_buffer, y_offset);
@@ -41,28 +41,29 @@ void Xreduce<T,R>::DoReduceDirect(
     if (IsContiguous(x_dims, x_strides) && IsContiguous(y_dims, y_strides)) {
         auto kernel = program_.getKernel("XreduceDirect");
         kernel.setArguments(
-            static_cast<int>(m), static_cast<int>(n),
-            GetRealArg(value),
+            static_cast<int>(n), GetRealArg(value),
             x_buffer, static_cast<int>(x_offset),
             y_buffer, static_cast<int>(y_offset));
 
-        auto global = std::vector<size_t>{Ceil(m, db_["WGS1"])};
-        auto local = std::vector<size_t>{db_["WGS1"]};
+        auto n_ceiled = NextPowerOfTwo(n) / 2;
+        auto global = std::vector<size_t>{m * n_ceiled};
+        auto local = std::vector<size_t>{n_ceiled};
         RunKernel(kernel, queue_, device_, global, local, event_);
     } else {
         auto x_shape = PackShape(x_dims, x_strides, context_, queue_);
         auto y_shape = PackShape(y_dims, y_strides, context_, queue_);
+
         auto kernel = program_.getKernel("XreduceDirectStrided");
         kernel.setArguments(
-            static_cast<int>(m), static_cast<int>(n),
-            GetRealArg(value),
+            static_cast<int>(n), GetRealArg(value),
             static_cast<int>(x_dims.size()), x_shape,
             x_buffer, static_cast<int>(x_offset),
             static_cast<int>(y_dims.size()), y_shape,
             y_buffer, static_cast<int>(y_offset));
 
-        auto global = std::vector<size_t>{Ceil(m, db_["WGS1"])};
-        auto local = std::vector<size_t>{db_["WGS1"]};
+        auto n_ceiled = NextPowerOfTwo(n) / 2;
+        auto global = std::vector<size_t>{m * n_ceiled};
+        auto local = std::vector<size_t>{n_ceiled};
         RunKernel(kernel, queue_, device_, global, local, event_);
     }
 }
