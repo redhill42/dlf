@@ -1,17 +1,20 @@
-R"(
+PROGRAM_STRING_DEBUG_INFO R"(
+
+#undef WPT
+#define WPT 4
 
 __kernel __attribute__((reqd_work_group_size(32, 1, 1)))
-void IntersectDiagonals(
+void MergePath(
     const int x_rank, __constant int* x_shape,
     const __global real* restrict xgm, const int x_len, const int x_offset, const int x_inc,
     const int y_rank, __constant int* y_shape,
     const __global real* restrict ygm, const int y_len, const int y_offset, const int y_inc,
     __global int* diag, const int diag_offset)
 {
-    const int batch = get_global_id(1);
-    const int wgid = get_group_id(0);
-    const int num_groups = get_num_groups(0);
-    const int lid = get_local_id(0);
+    const int batch        = get_global_id(1);
+    const int wgid         = get_group_id(0);
+    const int blocks       = get_num_groups(0);
+    const int lid          = get_local_id(0);
     const int local_offset = lid - 16;
 
     __local int x_start, y_start, x_end, y_end, found;
@@ -19,15 +22,15 @@ void IntersectDiagonals(
 
     xgm  += x_offset + unravel(batch * x_len, x_rank, x_shape);
     ygm  += y_offset + unravel(batch * y_len, y_rank, y_shape);
-    diag += diag_offset + batch*(WGS+1)*2;
+    diag += diag_offset + batch * 2*(blocks + 1);
 
     // Figure out the coordinates of our diagonal
     if (lid == 0) {
-        int k   = wgid * (x_len + y_len) / num_groups;
+        int k   = (long)wgid * (x_len + y_len) / blocks;
         x_start = min(k, x_len);
         x_end   = max(0, k - y_len);
         y_start = max(0, k - x_len);
-        y_end   = min(k, y_len);;
+        y_end   = min(k, y_len);
         found   = 0;
     }
     barrier(CLK_LOCAL_MEM_FENCE);
@@ -53,7 +56,7 @@ void IntersectDiagonals(
         // intersection of the path and diagonal
         if (lid > 0 && lm[lid] != lm[lid-1]) {
             found = 1;
-            diag[wgid*2    ] = current_x;
+            diag[wgid*2 + 0] = current_x;
             diag[wgid*2 + 1] = current_y;
         }
 
@@ -77,14 +80,75 @@ void IntersectDiagonals(
     if (lid == 0 && wgid == 0) {
         diag[0] = 0;
         diag[1] = 0;
-        diag[num_groups*2    ] = x_len;
-        diag[num_groups*2 + 1] = y_len;
+        diag[blocks*2 + 0] = x_len;
+        diag[blocks*2 + 1] = y_len;
     }
 }
 
-#define WPT 4
+INLINE_FUNC void LocalMerge(
+    const __global real* restrict xgm, const int x_len, const int x_inc,
+    const __global real* restrict ygm, const int y_len, const int y_inc,
+          __global real*          zgm, const int z_len, const int z_inc,
+    const int x_block_start, const int x_block_end, LOCAL_PTR real* xlm, int* pix,
+    const int y_block_start, const int y_block_end, LOCAL_PTR real* ylm, int* piy)
+{
+    const int lid = get_local_id(0);
+
+    // Load current local window
+    #pragma unroll
+    for (int _w = 0, i = lid; _w < WPT; _w++, i += get_local_size(0)) {
+        if (x_block_start + i < x_len)
+            xlm[i] = xgm[(x_block_start + i) * x_inc];
+        else
+            xlm[i] = LARGEST;
+        if (y_block_start + i < y_len)
+            ylm[i] = ygm[(y_block_start + i) * y_inc];
+        else
+            ylm[i] = LARGEST;
+    }
+    barrier(CLK_LOCAL_MEM_FENCE);
+
+    // Binary search diagonal in the local window for path
+    int start = 0, end = lid*WPT;
+    int ix = lid*WPT, iy = 0;
+    while (start <= end) {
+        int m = (start + end) >> 1;
+        ix = lid*WPT - m;
+        iy = m;
+        if (ylm[iy] < xlm[ix]) {
+            start = m + 1;
+        } else {
+            end = m - 1;
+        }
+    }
+    if (ix > 0 && ylm[iy] < xlm[ix])
+        ix--, iy++;
+    if (iy > 0 && xlm[ix] < ylm[iy-1])
+        ix++, iy--;
+
+    // Merge elements at the found path intersection
+    int iz = x_block_start + y_block_start + lid*WPT;
+    #pragma unroll
+    for (int _w = 0; _w < WPT; _w++, iz++) {
+        real z;
+        if (ylm[iy] < xlm[ix]) {
+            z = ylm[iy];
+            iy++;
+        } else {
+            z = xlm[ix];
+            ix++;
+        }
+        if (iz < z_len) {
+            zgm[iz * z_inc] = z;
+        }
+    }
+
+    *pix = ix;
+    *piy = iy;
+}
+
 __kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
-void Xmerge(const int x_rank, __constant int* x_shape,
+void Merge(const int x_rank, __constant int* x_shape,
             const __global real* restrict xgm, const int x_len, const int x_offset, const int x_inc,
             const int y_rank, __constant int* y_shape,
             const __global real* restrict ygm, const int y_len, const int y_offset, const int y_inc,
@@ -92,11 +156,11 @@ void Xmerge(const int x_rank, __constant int* x_shape,
             __global real* zgm, const int z_offset, const int z_inc,
             const __global int* diag, const int diag_offset)
 {
-    const int batch = get_global_id(1);
-    const int wgid = get_group_id(0);
-    const int num_groups = get_num_groups(0);
-    const int lid = get_local_id(0);
-    const int z_len = x_len + y_len;
+    const int batch  = get_global_id(1);
+    const int wgid   = get_group_id(0);
+    const int blocks = get_num_groups(0);
+    const int lid    = get_local_id(0);
+    const int z_len  = x_len + y_len;
 
     // Storage space for local merge window
     __local int x_block_start, y_block_start, x_block_end, y_block_end;
@@ -109,75 +173,86 @@ void Xmerge(const int x_rank, __constant int* x_shape,
 
     // Define global window and create sentinels
     if (lid == 0) {
-        diag += diag_offset + batch*2*(WGS+1) + wgid*2;
+        diag += diag_offset + batch * 2*(blocks + 1) + wgid*2;
         x_block_start = *diag++;
         y_block_start = *diag++;
         x_block_end   = *diag++;
         y_block_end   = *diag;
 
-        xlm[WGS*WPT] = ylm[WGS*WPT]= LARGEST;
+        xlm[WGS * WPT] = ylm[WGS * WPT] = LARGEST;
     }
     barrier(CLK_LOCAL_MEM_FENCE);
 
     while (x_block_start < x_block_end || y_block_start < y_block_end) {
-        int iz = x_block_start + y_block_start + lid*WPT;
-
-        // Local current local window
-        #pragma unroll
-        for (int _w = 0, i = lid; _w < WPT; _w++, i += num_groups) {
-            if (x_block_start + i < x_len)
-                xlm[i] = xgm[(x_block_start + i) * x_inc];
-            else
-                xlm[i] = LARGEST;
-            if (y_block_start + i < y_len)
-                ylm[i] = ygm[(y_block_start + i) * y_inc];
-            else
-                ylm[i] = LARGEST;
-        }
-        barrier(CLK_LOCAL_MEM_FENCE);
-
-        // Binary search diagonal in the local window for path
-        int ix = lid*WPT, iy = 0;
-        int start = 0, end = lid*WPT;
-        while (start <= end) {
-            int m = (start + end) >> 1;
-            ix = lid*WPT - m;
-            iy = m;
-            if (ylm[iy] < xlm[ix]) {
-                start = m + 1;
-            } else {
-                end = m - 1;
-            }
-        }
-        if (ix > 0 && ylm[iy] < xlm[ix])
-            ix--, iy++;
-        if (iy > 0 && xlm[ix] < ylm[iy-1])
-            ix++, iy--;
-
-        // Merge elements at the found path intersection
-        #pragma unroll
-        for (int _w = 0; _w < WPT; _w++, iz++) {
-            real z;
-            if (ylm[iy] < xlm[ix]) {
-                z = ylm[iy];
-                iy++;
-            } else {
-                z = xlm[ix];
-                ix++;
-            }
-            if (iz < z_len) {
-                zgm[iz * z_inc] = z;
-            }
-        }
+        int ix, iy;
+        LocalMerge(xgm, x_len, x_inc,
+                   ygm, y_len, y_inc,
+                   zgm, z_len, z_inc,
+                   x_block_start, x_block_end, xlm, &ix,
+                   y_block_start, y_block_end, ylm, &iy);
 
         // Update for next window
         if (lid == WGS-1) {
             x_block_start += ix;
-            y_block_start += iy;;
+            y_block_start += iy;
         }
-
         barrier(CLK_LOCAL_MEM_FENCE);
-    } // Go to next window
+    }
+}
+
+__kernel void DirectMerge(
+    const int x_rank, __constant int* x_shape,
+    const __global real* restrict xgm, const int x_len, const int x_offset, const int x_inc,
+    const int y_rank, __constant int* y_shape,
+    const __global real* restrict ygm, const int y_len, const int y_offset, const int y_inc,
+    const int z_rank, __constant int* z_shape,
+    __global real* zgm, const int z_offset, const int z_inc
+#ifndef CUDA
+    , __local real* lm) {
+#else
+    ) { extern __shared__ real lm[];
+#endif
+
+    const int batch = get_group_id(0);
+    const int lid   = get_local_id(0);
+    const int lsz   = get_local_size(0);
+    const int z_len = x_len + y_len;
+
+    // Storage space for local merge window
+    __local int x_block_start, y_block_start, x_block_end, y_block_end;
+    LOCAL_PTR real* xlm = lm;
+    LOCAL_PTR real* ylm = lm + lsz*WPT + 1;
+
+    xgm += x_offset + unravel(batch * x_len, x_rank, x_shape);
+    ygm += y_offset + unravel(batch * y_len, y_rank, y_shape);
+    zgm += z_offset + unravel(batch * z_len, z_rank, z_shape);
+
+    // Define global window and create sentinels
+    if (lid == 0) {
+        x_block_start = 0;
+        y_block_start = 0;
+        x_block_end   = x_len;
+        y_block_end   = y_len;
+
+        xlm[lsz * WPT] = ylm[lsz * WPT] = LARGEST;
+    }
+    barrier(CLK_LOCAL_MEM_FENCE);
+
+    while (x_block_start < x_block_end || y_block_start < y_block_end) {
+        int ix, iy;
+        LocalMerge(xgm, x_len, x_inc,
+                   ygm, y_len, y_inc,
+                   zgm, z_len, z_inc,
+                   x_block_start, x_block_end, xlm, &ix,
+                   y_block_start, y_block_end, ylm, &iy);
+
+        // Update for next window
+        if (lid == lsz-1) {
+            x_block_start += ix;
+            y_block_start += iy;
+        }
+        barrier(CLK_LOCAL_MEM_FENCE);
+    }
 }
 
 )"

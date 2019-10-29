@@ -2187,6 +2187,14 @@ TEST(UniformTest, Merge) {
     }
 }
 
+TEST(UniformTest, MergeBatch) {
+    auto A = Tensor<int>({10, 10}).random(0, 1000);
+    auto B = Tensor<int>({10, 10}).random(0, 1000);
+    sort(A, -1);
+    sort(B, -1);
+    EXPECT_EQ(merge(A, B), merge(dev(A), dev(B)).read());
+}
+
 TEST(UniformTest, resize_upsample_scales_linear) {
     auto X = Tensor<float>({1, 1, 2, 2}, {1, 2, 3, 4});
     auto Y = im::resize(X, std::vector<float>{1, 1, 2, 2});
