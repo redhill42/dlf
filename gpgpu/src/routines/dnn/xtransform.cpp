@@ -1,8 +1,6 @@
 #include "xtransform.hpp"
-#include <cassert>
 
 namespace gpgpu { namespace dnn {
-
 using namespace gpgpu::blas;
 
 template <typename T>
@@ -11,8 +9,7 @@ Xtransform<T>::Xtransform(const Queue& queue, Event* event, const std::string& n
     #include "../../kernels/level1/level1.cl"
     #include "../../kernels/dnn/complex.cl"
     #include "../../kernels/dnn/xtransform.cl"
-    }) {
-}
+}) {}
 
 template <typename T>
 void Xtransform<T>::DoTransform(const size_t n,

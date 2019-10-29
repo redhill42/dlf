@@ -1,5 +1,4 @@
 #include "xfill.hpp"
-#include <cassert>
 
 namespace gpgpu { namespace dnn {
 using namespace gpgpu::blas;
@@ -8,8 +7,7 @@ template <typename T>
 Xfill<T>::Xfill(const Queue& queue, Event* event, const std::string& name) :
     Routine(queue, event, name, {"Xaxpy"}, PrecisionValue<T>(), {}, {
     #include "../../kernels/dnn/xfill.cl"
-    }) {
-}
+}) {}
 
 template <typename T>
 void Xfill<T>::DoFill(const size_t n, Buffer<T>& x_buffer, const size_t x_offset,

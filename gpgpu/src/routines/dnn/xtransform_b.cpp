@@ -1,5 +1,4 @@
 #include "xtransform_b.hpp"
-#include <cassert>
 
 namespace gpgpu { namespace dnn {
 using namespace gpgpu::blas;
@@ -9,13 +8,7 @@ Xtransform_b<T, R>::Xtransform_b(const Queue& queue, Event* event, const std::st
     : Routine(queue, event, name, {"Xaxpy", "Copy"}, PrecisionValue<T>(), {}, {
     #include "../../kernels/level1/level1.cl"
     #include "../../kernels/dnn/xtransform_b.cl"
-}) {
-}
-
-static inline bool ends_with(const std::string& str, const std::string& suffix) {
-    return str.length() >= suffix.length() &&
-        0 == str.compare(str.length()-suffix.length(), suffix.length(), suffix);
-}
+}) {}
 
 template <typename T, typename R>
 void Xtransform_b<T, R>::DoTransform(
@@ -161,4 +154,4 @@ template class Xtransform_b<half,    bool>;
 template class Xtransform_b<float,   bool>;
 template class Xtransform_b<double,  bool>;
 
-}}
+}} // namespace gpgpu::dnn

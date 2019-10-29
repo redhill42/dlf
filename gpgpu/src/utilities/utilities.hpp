@@ -22,6 +22,7 @@
 #include <random>
 #include <algorithm>
 #include <iterator>
+#include <cassert>
 
 #include "gblas.h"
 #include "gblas_half.h"
@@ -241,14 +242,14 @@ Buffer<int> PackShape(const std::vector<size_t>& dim,
 
 /* Macro to facilitate debugging
  * Usage:
- *   Place CL_PROGRAM_STRING_DEBUG_INFO on the line before the first line of your source.
- *   The first line ends with:   CL_PROGRAM_STRING_DEBUG_INFO \"
+ *   Place CL_PROGRAM on the line before the first line of your source.
+ *   The first line ends with:   CL_PROGRAM \"
  *   Each line thereafter of OpenCL C source must end with: \n\
  *   The last line ends in ";
  *
  *   Example:
  *
- *   const char *my_program = CL_PROGRAM_STRING_DEBUG_INFO "\
+ *   const char *my_program = CL_PROGRAM "\
  *   kernel void foo( int a, float * b )             \n\
  *   {                                               \n\
  *      // my comment                                \n\
@@ -260,11 +261,11 @@ Buffer<int> PackShape(const std::vector<size_t>& dim,
  * string so you can do source level debugging.
  */
 #ifndef NDEBUG
-#define  __STRINGIFY( _x )               # _x
-#define  _STRINGIFY( _x )                __STRINGIFY( _x )
-#define  PROGRAM_STRING_DEBUG_INFO       "#line "  _STRINGIFY(__LINE__) " \"" __FILE__ "\" \n\n"
+#define  __STRINGIFY( _x )  # _x
+#define  _STRINGIFY( _x )   __STRINGIFY( _x )
+#define  CL_PROGRAM         "#line "  _STRINGIFY(__LINE__) " \"" __FILE__ "\" \n\n"
 #else
-#define  PROGRAM_STRING_DEBUG_INFO
+#define  CL_PROGRAM
 #endif
 
 #endif // GPGPU_BLAS_UTILITIES_H_

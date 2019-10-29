@@ -1,5 +1,4 @@
 #include "xreduce.hpp"
-#include <cassert>
 
 namespace gpgpu { namespace dnn {
 using namespace gpgpu::blas;
@@ -8,8 +7,7 @@ template <typename T, typename R>
 Xreduce<T,R>::Xreduce(const Queue& queue, Event* event, const std::string& name) :
     Routine(queue, event, name, {"Xdot"}, PrecisionValue<T>(), {}, {
     #include "../../kernels/dnn/xreduce.cl"
-    }) {
-}
+}) {}
 
 template <typename T, typename R>
 void Xreduce<T,R>::DoReduce(

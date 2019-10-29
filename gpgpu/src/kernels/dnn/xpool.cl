@@ -1,6 +1,4 @@
-// Enables loading of this file using the C++ pre-processor's #include (C++11 standard raw string
-// literal). Comment-out this line for syntax-highlighting when developing.
-R"(
+CL_PROGRAM R"(
 
 // Work-group size parameters re-used from the 'copy' kernel
 #ifndef COPY_DIMX
@@ -122,4 +120,4 @@ void Xlppool(const int channels, const int input_h, const int input_w,
   }
 }
 
-)" // End of the C++11 raw string literal
+)"

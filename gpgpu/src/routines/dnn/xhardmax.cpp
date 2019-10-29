@@ -8,8 +8,7 @@ template <typename T>
 Xhardmax<T>::Xhardmax(const Queue& queue, Event* event, const std::string& name) :
     Routine(queue, event, name, {"Xaxpy"}, PrecisionValue<T>(), {}, {
     #include "../../kernels/dnn/xhardmax.cl"
-    }) {
-}
+}) {}
 
 template <typename T>
 void Xhardmax<T>::DoHardmax(
@@ -41,4 +40,4 @@ template class Xhardmax<double>;
 template class Xhardmax<int32_t>;
 template class Xhardmax<int64_t>;
 
-}}
+}} // namespace gpgpu::dnn

@@ -1,4 +1,4 @@
-R"(
+CL_PROGRAM R"(
 
 #if defined(CUDA)
   typedef unsigned int uint;

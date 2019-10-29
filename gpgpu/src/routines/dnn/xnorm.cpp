@@ -7,9 +7,8 @@ template <typename T>
 Xnormalization<T>::Xnormalization(const Queue& queue, Event* event, const std::string& name) :
     Routine(queue, event, name, {"Xaxpy"}, PrecisionValue<T>(), {}, {
     #include "../../kernels/level1/level1.cl"
-    #include "kernels/dnn/xnorm.cl"
-    }) {
-}
+    #include "../../kernels/dnn/xnorm.cl"
+}) {}
 
 template <typename T>
 void Xnormalization<T>::DoBatchNorm(const size_t batches,

@@ -1,6 +1,4 @@
-// Enable loading of this file using the C++ pre-processor's #include (C++11 standard raw string
-// literal). Comment-out this line for syntax-highlighting when developing.
-R"(
+CL_PROGRAM R"(
 
 __kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
 void Xwhere(const int n, const int rank, __constant int* shape,
@@ -16,4 +14,4 @@ void Xwhere(const int n, const int rank, __constant int* shape,
   }
 }
 
-)" // End of the C++11 raw string literal
+)"

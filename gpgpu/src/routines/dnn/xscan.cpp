@@ -1,5 +1,4 @@
 #include "xscan.hpp"
-#include <cassert>
 
 namespace gpgpu { namespace dnn {
 using namespace gpgpu::blas;
@@ -8,7 +7,7 @@ template <typename T, typename R>
 Xscan<T,R>::Xscan(const Queue& queue, Event* event, const std::string& name) :
     Routine(queue, event, name, {"Xaxpy"}, PrecisionValue<T>(), {}, {
     #include "../../kernels/dnn/xscan.cl"
-    }) {}
+}) {}
 
 template <typename T, typename R>
 void Xscan<T,R>::DoScan(

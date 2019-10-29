@@ -1,6 +1,4 @@
-// Enables loading of this file using the C++ pre-processor's #include (C++11 standard raw string
-// literal). Comment-out this line for syntax-highlighting when developing.
-R"(
+CL_PROGRAM R"(
 
 #define BATCH_WGS 32
 
@@ -248,4 +246,4 @@ void XargreduceEpilogueStrided(
     }
 }
 
-)" // End of the C++11 raw string literal
+)"

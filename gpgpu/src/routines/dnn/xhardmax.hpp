@@ -12,4 +12,4 @@ public:
     void DoHardmax(const size_t m, const size_t n, Buffer<T>& x_buffer, const size_t x_offset);
 };
 
-}}
+}} // namespace gpgpu::dnn

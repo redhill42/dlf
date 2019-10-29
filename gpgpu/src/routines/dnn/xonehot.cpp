@@ -7,7 +7,7 @@ template <typename T>
 Xonehot<T>::Xonehot(const Queue& queue, Event* event, const std::string& name)
     : Routine(queue, event, name, {"Xaxpy"}, PrecisionValue<T>(), {}, {
     #include "../../kernels/dnn/xonehot.cl"
-    }) {}
+}) {}
 
 template <typename T>
 void Xonehot<T>::DoOneHot(const size_t n, const size_t d, const size_t k,

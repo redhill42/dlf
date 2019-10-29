@@ -1,4 +1,4 @@
-PROGRAM_STRING_DEBUG_INFO R"(
+CL_PROGRAM R"(
 
 __kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
 void Xonehot(const int n, const int d, const int k,

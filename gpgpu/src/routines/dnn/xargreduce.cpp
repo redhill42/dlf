@@ -1,5 +1,4 @@
 #include "xargreduce.hpp"
-#include <cassert>
 
 namespace gpgpu { namespace dnn {
 using namespace gpgpu::blas;
@@ -8,8 +7,7 @@ template <typename T>
 Xargreduce<T>::Xargreduce(const Queue& queue, Event* event, const std::string& name) :
     Routine(queue, event, name, {"Xdot"}, PrecisionValue<T>(), {}, {
     #include "../../kernels/dnn/xargreduce.cl"
-    }) {
-}
+}) {}
 
 template <typename T>
 void Xargreduce<T>::DoArgReduce(

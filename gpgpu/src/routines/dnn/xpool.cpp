@@ -7,8 +7,7 @@ template <typename T>
 Xpool<T>::Xpool(const Queue& queue, Event* event, const std::string& name) :
     Routine(queue, event, name, {"Copy"}, PrecisionValue<T>(), {}, {
     #include "../../kernels/dnn/xpool.cl"
-    }){
-}
+}) {}
 
 template <typename T>
 void Xpool<T>::DoMaxPool(

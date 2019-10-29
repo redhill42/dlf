@@ -27,4 +27,4 @@ public:
         Buffer<R>& z_buffer, const size_t z_offset);
 };
 
-}}
+}} // namespace gpgpu::dnn

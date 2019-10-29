@@ -1,17 +1,14 @@
 #include "xtransform_p.hpp"
-#include <cassert>
 
 namespace gpgpu { namespace dnn {
-
 using namespace gpgpu::blas;
 
 template <typename T>
 Xtransform_p<T>::Xtransform_p(const gpgpu::Queue& queue, gpgpu::Event* event, const std::string& name)
     : Routine(queue, event, name, {"Xaxpy"}, PrecisionValue<T>(), {}, {
     #include "../../kernels/level1/level1.cl"
-    #include "kernels/dnn/xtransform_p.cl"
-}) {
-}
+    #include "../../kernels/dnn/xtransform_p.cl"
+}) {}
 
 template <typename T>
 void Xtransform_p<T>::DoTransform(

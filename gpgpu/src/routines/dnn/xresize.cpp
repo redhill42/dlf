@@ -7,7 +7,7 @@ template <typename T>
 Xresize<T>::Xresize(const Queue& queue, Event* event, const std::string& name)
     : Routine(queue, event, name, {"Xaxpy"}, PrecisionValue<T>(), {}, {
     #include "../../kernels/dnn/xresize.cl"
-    }) {}
+}) {}
 
 template <typename T>
 void Xresize<T>::DoResize1D(

@@ -1,4 +1,4 @@
-PROGRAM_STRING_DEBUG_INFO R"(
+CL_PROGRAM R"(
 
 typedef real realX;
 typedef real realY;
@@ -282,4 +282,4 @@ void XtransformFastest(const int n,
 }
 #endif
 
-)" // End of the C++11 raw string literal
+)"

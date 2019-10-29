@@ -7,7 +7,7 @@ template <typename T>
 Xrange<T>::Xrange(const Queue& queue, Event* event, const std::string& name) :
     Routine(queue, event, name, {"Xaxpy"}, PrecisionValue<T>(), {}, {
     #include "../../kernels/dnn/xrange.cl"
-    }) {}
+}) {}
 
 template <typename T>
 void Xrange<T>::DoRange(const size_t n, const T start, const T delta,

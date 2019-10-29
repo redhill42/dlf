@@ -1,5 +1,4 @@
 #include "xwhere.hpp"
-#include <cassert>
 
 namespace gpgpu { namespace dnn {
 using namespace gpgpu::blas;
@@ -8,8 +7,7 @@ template <typename T>
 Xwhere<T>::Xwhere(const Queue& queue, Event* event, const std::string& name) :
     Routine(queue, event, name, {"Xaxpy"}, PrecisionValue<T>(), {}, {
     #include "../../kernels/dnn/xwhere.cl"
-    }) {
-}
+}) {}
 
 template <typename T>
 void Xwhere<T>::DoWhere(
@@ -23,8 +21,7 @@ void Xwhere<T>::DoWhere(
     auto kernel = program_.getKernel("Xwhere");
     kernel.setArguments(
         static_cast<int>(n),
-        static_cast<int>(dim.size()),
-        shape_buffer,
+        static_cast<int>(dim.size()), shape_buffer,
         c_buffer, static_cast<int>(c_offset),
         x_buffer, static_cast<int>(x_offset),
         y_buffer, static_cast<int>(y_offset),

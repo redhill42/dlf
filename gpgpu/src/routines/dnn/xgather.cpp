@@ -1,5 +1,4 @@
 #include "xgather.hpp"
-#include <cassert>
 
 namespace gpgpu { namespace dnn {
 using namespace gpgpu::blas;
@@ -8,7 +7,7 @@ template <typename T>
 Xgather<T>::Xgather(const Queue& queue, Event* event, const std::string& name) :
     Routine(queue, event, name, {"Xaxpy", "Copy"}, PrecisionValue<T>(), {}, {
     #include "../../kernels/dnn/xgather.cl"
-    }){}
+}) {}
 
 template <typename T>
 void Xgather<T>::DoGather(

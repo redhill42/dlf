@@ -1,4 +1,4 @@
-PROGRAM_STRING_DEBUG_INFO R"(
+CL_PROGRAM R"(
 
 #undef WPT
 #define WPT 4

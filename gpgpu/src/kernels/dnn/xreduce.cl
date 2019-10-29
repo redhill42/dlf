@@ -1,6 +1,4 @@
-// Enables loading of this file using the C++ pre-processor's #include (C++11 standard raw string
-// literal). Comment-out this line for syntax-highlighting when developing.
-PROGRAM_STRING_DEBUG_INFO R"(
+CL_PROGRAM R"(
 
 //---------------------------------------------------------------------------
 

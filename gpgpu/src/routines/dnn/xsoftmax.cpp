@@ -9,8 +9,7 @@ template <typename T>
 Xsoftmax<T>::Xsoftmax(const Queue& queue, Event* event, const std::string& name) :
     Routine(queue, event, name, {"Xdot"}, PrecisionValue<T>(), {}, {
     #include "../../kernels/dnn/xsoftmax.cl"
-    }) {
-}
+}) {}
 
 template <typename T>
 void Xsoftmax<T>::DoSoftmax(
@@ -69,4 +68,4 @@ template class Xsoftmax<half>;
 template class Xsoftmax<float>;
 template class Xsoftmax<double>;
 
-}}
+}} // namespace gpgpu::dnn

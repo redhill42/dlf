@@ -8,7 +8,7 @@ Xrandom<T>::Xrandom(const Queue& queue, Event* event, const std::string& name) :
     Routine(queue, event, name, {"Xaxpy"}, PrecisionValue<T>(), {}, {
     #include "../../kernels/dnn/mwc64x.cl"
     #include "../../kernels/dnn/xrandom.cl"
-    }) {}
+}) {}
 
 template <typename T>
 void Xrandom<T>::DoRandom(
