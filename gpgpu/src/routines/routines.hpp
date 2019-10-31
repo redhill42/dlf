@@ -88,6 +88,7 @@
 #include "routines/dnn/xargreduce.hpp"
 #include "routines/dnn/xscan.hpp"
 #include "routines/dnn/xmerge.hpp"
+#include "routines/dnn/xsort.hpp"
 #include "routines/dnn/xnorm.hpp"
 #include "routines/dnn/xpool.hpp"
 #include "routines/dnn/xsoftmax.hpp"

@@ -146,6 +146,18 @@ void merge(const std::vector<size_t>& x_dims, const std::vector<size_t>& x_strid
            const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 template <typename T>
+void sort(const int dir, const std::vector<size_t>& dims,
+          const Buffer<T>& x_buffer, const size_t x_offset, const std::vector<size_t>& x_strides,
+          Buffer<T>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_strides,
+          const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
+
+template <typename T>
+void argsort(const int dir, const std::vector<size_t>& dims,
+             const Buffer<T>& x_buffer, const size_t x_offset, const std::vector<size_t>& x_strides,
+             Buffer<int32_t>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_strides,
+             const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
+
+template <typename T>
 void batch_norm(const std::vector<size_t>& dims,
                 const Buffer<T>& x_buffer,
                       Buffer<T>& y_buffer,

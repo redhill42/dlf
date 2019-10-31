@@ -973,7 +973,7 @@ scatter_nd(TensorX& X, const TensorI& indices, const TensorY& updates) {
 }
 
 //==-------------------------------------------------------------------------
-// Merge and sort
+// Merge
 //==-------------------------------------------------------------------------
 
 /**
@@ -1035,17 +1035,116 @@ inline merge(const LHS& A, const RHS& B, int axis = -1) {
     return merge(A, B, axis, std::less<>());
 }
 
-template <typename TensorT, typename Compare>
-std::enable_if_t<is_cpu_tensor<TensorT>::value>
-sort(TensorT& X, int axis, Compare comp) {
+//==-------------------------------------------------------------------------
+// Sort
+//==-------------------------------------------------------------------------
+
+template <typename TensorT, typename TensorR, typename Compare>
+std::enable_if_t<
+    is_cpu_tensor<TensorT>::value &&
+    is_exactly_same_tensor<TensorT, TensorR>::value &&
+    !std::is_const<std::remove_reference_t<TensorR>>::value>
+sort(const TensorT& X, TensorR&& Y, int axis, Compare comp) {
+    reorder(X, Y);
+
+    auto y_view = moveaxis(Y, axis, -1);
+    detail::sort(y_view.shape(), y_view.data(), comp);
+}
+
+template <typename TensorT, typename TensorR, typename Compare>
+std::enable_if_t<
+    is_gpu_tensor<TensorT>::value &&
+    is_exactly_same_tensor<TensorT, TensorR>::value &&
+    !std::is_const<std::remove_reference_t<TensorR>>::value>
+sort(const TensorT& X, TensorR&& Y, int axis, Compare) {
+    Y.resize(X.shape());
+
     auto x_view = moveaxis(X, axis, -1);
-    detail::sort(x_view.shape(), x_view.data(), comp);
+    auto y_view = moveaxis(Y, axis, -1);
+    detail::sort(x_view.shape(), x_view.data(), y_view.shape(), y_view.data(), Compare::name);
+}
+
+template <typename TensorT, typename TensorR>
+std::enable_if_t<
+    is_exactly_same_tensor<TensorT, TensorR>::value &&
+    !std::is_const<std::remove_reference_t<TensorR>>::value>
+inline sort(const TensorT& X, TensorR&& Y, int axis = -1) {
+    sort(X, Y, axis, xfn::less<>());
+}
+
+template <typename TensorT, typename Compare>
+std::enable_if_t<is_tensor<TensorT>::value>
+inline sort(TensorT& X, int axis, Compare comp) {
+    sort(X, X, axis, comp);
 }
 
 template <typename TensorT>
-std::enable_if_t<is_cpu_tensor<TensorT>::value>
+std::enable_if_t<is_tensor<TensorT>::value>
 inline sort(TensorT& X, int axis = -1) {
-    sort(X, axis, std::less<>());
+    sort(X, X, axis, xfn::less<>());
+}
+
+template <typename TensorT, typename Compare>
+enable_if_tensor<TensorT>
+inline sorted(const TensorT& X, int axis, Compare comp) {
+    tensor_type<TensorT> Y{};
+    sort(X, Y, axis, comp);
+    return Y;
+}
+
+template <typename TensorT, typename Compare>
+std::enable_if_t<
+    !is_tensor_view<TensorT>::value && !std::is_lvalue_reference<TensorT>::value,
+    tensor_type<TensorT>>
+inline sorted(TensorT&& X, int axis, Compare comp) {
+    sort(X, X, axis, comp);
+    return std::move(X);
+}
+
+template <typename TensorT>
+enable_if_tensor<TensorT>
+inline sorted(TensorT&& X, int axis = -1) {
+    return sorted(std::forward<TensorT>(X), axis, xfn::less<>());
+}
+
+//==-------------------------------------------------------------------------
+// Argsort
+//==-------------------------------------------------------------------------
+
+template <typename TensorT, typename TensorR, typename Compare>
+std::enable_if_t<
+    is_tensor<TensorT>::value && is_tensor<TensorR>::value &&
+    std::is_integral<tensor_value_type<TensorR>>::value &&
+    !std::is_const<std::remove_reference_t<TensorR>>::value>
+argsort(const TensorT& X, TensorR&& Y, int axis, Compare comp) {
+    Y.resize(X.shape());
+
+    auto x_view = moveaxis(X, axis, -1);
+    auto y_view = moveaxis(Y, axis, -1);
+    detail::argsort(x_view.shape(), x_view.data(), y_view.shape(), y_view.data(), comp);
+}
+
+template <typename TensorT, typename TensorR>
+std::enable_if_t<
+    is_tensor<TensorT>::value && is_tensor<TensorR>::value &&
+    std::is_integral<tensor_value_type<TensorR>>::value &&
+    !std::is_const<std::remove_reference_t<TensorR>>::value>
+inline argsort(const TensorT& X, TensorR&& Y, int axis = -1) {
+    argsort(X, Y, axis, xfn::less<>());
+}
+
+template <typename TensorT, typename Compare>
+enable_if_tensor<TensorT, tensor_type<TensorT, int>>
+inline argsort(const TensorT& X, int axis, Compare comp) {
+    tensor_type<TensorT, int> Y;
+    argsort(X, Y, axis, comp);
+    return Y;
+}
+
+template <typename TensorT>
+enable_if_tensor<TensorT, tensor_type<TensorT, int>>
+inline argsort(const TensorT& X, int axis = -1) {
+    return argsort(X, axis, xfn::less<>());
 }
 
 } // namespace dlf

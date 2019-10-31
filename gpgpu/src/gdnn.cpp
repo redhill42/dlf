@@ -1076,6 +1076,92 @@ template void PUBLIC_API merge<double>(
     const Queue&, Event*);
 
 template <typename T>
+void sort(const int dir, const std::vector<size_t>& dims,
+          const Buffer<T>& x_buffer, const size_t x_offset, const std::vector<size_t>& x_strides,
+          Buffer<T>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_strides,
+          const Queue& queue, Event* event)
+{
+    auto routine = Xsort<T>(queue, event);
+    routine.DoSort(dir != 0, dims,
+                   x_buffer, x_offset, x_strides,
+                   y_buffer, y_offset, y_strides);
+}
+
+template void PUBLIC_API sort<int16_t>(
+    const int, const std::vector<size_t>&,
+    const Buffer<int16_t>&, const size_t, const std::vector<size_t>&,
+    Buffer<int16_t>&, const size_t, const std::vector<size_t>&,
+    const Queue&, Event* event);
+template void PUBLIC_API sort<int32_t>(
+    const int, const std::vector<size_t>&,
+    const Buffer<int32_t>&, const size_t, const std::vector<size_t>&,
+    Buffer<int32_t>&, const size_t, const std::vector<size_t>&,
+    const Queue&, Event* event);
+template void PUBLIC_API sort<int64_t>(
+    const int, const std::vector<size_t>&,
+    const Buffer<int64_t>&, const size_t, const std::vector<size_t>&,
+    Buffer<int64_t>&, const size_t, const std::vector<size_t>&,
+    const Queue&, Event* event);
+template void PUBLIC_API sort<half>(
+    const int, const std::vector<size_t>&,
+    const Buffer<half>&, const size_t, const std::vector<size_t>&,
+    Buffer<half>&, const size_t, const std::vector<size_t>&,
+    const Queue&, Event* event);
+template void PUBLIC_API sort<float>(
+    const int, const std::vector<size_t>&,
+    const Buffer<float>&, const size_t, const std::vector<size_t>&,
+    Buffer<float>&, const size_t, const std::vector<size_t>&,
+    const Queue&, Event* event);
+template void PUBLIC_API sort<double>(
+    const int, const std::vector<size_t>&,
+    const Buffer<double>&, const size_t, const std::vector<size_t>&,
+    Buffer<double>&, const size_t, const std::vector<size_t>&,
+    const Queue&, Event* event);
+
+template <typename T>
+void argsort(const int dir, const std::vector<size_t>& dims,
+             const Buffer<T>& x_buffer, const size_t x_offset, const std::vector<size_t>& x_strides,
+             Buffer<int32_t>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_strides,
+             const Queue& queue, Event* event)
+{
+    auto routine = Xsort<T>(queue, event);
+    routine.DoArgSort(dir != 0, dims,
+                   x_buffer, x_offset, x_strides,
+                   y_buffer, y_offset, y_strides);
+}
+
+template void PUBLIC_API argsort<int16_t>(
+    const int, const std::vector<size_t>&,
+    const Buffer<int16_t>&, const size_t, const std::vector<size_t>&,
+    Buffer<int32_t>&, const size_t, const std::vector<size_t>&,
+    const Queue&, Event* event);
+template void PUBLIC_API argsort<int32_t>(
+    const int, const std::vector<size_t>&,
+    const Buffer<int32_t>&, const size_t, const std::vector<size_t>&,
+    Buffer<int32_t>&, const size_t, const std::vector<size_t>&,
+    const Queue&, Event* event);
+template void PUBLIC_API argsort<int64_t>(
+    const int, const std::vector<size_t>&,
+    const Buffer<int64_t>&, const size_t, const std::vector<size_t>&,
+    Buffer<int32_t>&, const size_t, const std::vector<size_t>&,
+    const Queue&, Event* event);
+template void PUBLIC_API argsort<half>(
+    const int, const std::vector<size_t>&,
+    const Buffer<half>&, const size_t, const std::vector<size_t>&,
+    Buffer<int32_t>&, const size_t, const std::vector<size_t>&,
+    const Queue&, Event* event);
+template void PUBLIC_API argsort<float>(
+    const int, const std::vector<size_t>&,
+    const Buffer<float>&, const size_t, const std::vector<size_t>&,
+    Buffer<int32_t>&, const size_t, const std::vector<size_t>&,
+    const Queue&, Event* event);
+template void PUBLIC_API argsort<double>(
+    const int, const std::vector<size_t>&,
+    const Buffer<double>&, const size_t, const std::vector<size_t>&,
+    Buffer<int32_t>&, const size_t, const std::vector<size_t>&,
+    const Queue&, Event* event);
+
+template <typename T>
 void batch_norm(const std::vector<size_t>& dims,
                 const Buffer<T>& x_buffer,
                       Buffer<T>& y_buffer,

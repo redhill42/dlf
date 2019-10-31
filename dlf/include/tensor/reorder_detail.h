@@ -468,4 +468,61 @@ void sort(const Shape& shape, T* data, Compare comp) {
     });
 }
 
+template <typename T>
+void sort(const Shape& x_shape, const gpgpu::Buffer<T>& x_data,
+          const Shape& y_shape,       gpgpu::Buffer<T>& y_data,
+          const std::string& comp)
+{
+    const int dir = comp != "less" && comp != "less_equal";
+    gpgpu::dnn::sort(dir, x_shape.extents(),
+                     x_data, x_shape.offset(), x_shape.strides(),
+                     y_data, y_shape.offset(), y_shape.strides());
+}
+
+template <typename T, typename R, typename Compare>
+void argsort(const Shape& x_shape, const T* x_data,
+             const Shape& y_shape,       R* y_data,
+             Compare comp)
+{
+    const auto n = x_shape.extent(-1);
+    const auto m = x_shape.size() / n;
+    const auto x_inc = static_cast<int>(x_shape.stride(-1));
+    const auto y_inc = static_cast<int>(y_shape.stride(-1));
+
+    const auto grainsize = std::max(size_t(1), GRAINSIZE/n);
+    tbb::parallel_for(tbb::blocked_range<int>(0, m, grainsize), [&](auto r) {
+        for (int i = r.begin(); i < r.end(); ++i) {
+            auto px = x_data + x_shape.linear_offset(i*n);
+            auto py = y_data + y_shape.linear_offset(i*n);
+            if (y_inc == 1) {
+                std::iota(py, py+n, 0);
+                tbb::parallel_sort(py, py+n, [=](const auto a, const auto b) {
+                    return comp(px[a * x_inc], px[b * x_inc]);
+                });
+            } else {
+                std::iota(strided_iterator<R>(py, y_inc, 0),
+                          strided_iterator<R>(py, y_inc, n),
+                          0);
+                tbb::parallel_sort(strided_iterator<R>(py, y_inc, 0),
+                                   strided_iterator<R>(py, y_inc, n),
+                                   [=](const auto a, const auto b) {
+                    return comp(px[a * x_inc], px[b * x_inc]);
+                });
+            }
+        }
+    });
+}
+
+template <typename T, typename R, typename Compare>
+void argsort(const Shape& x_shape, const gpgpu::Buffer<T>& x_data,
+             const Shape& y_shape,       gpgpu::Buffer<R>& y_data,
+             Compare)
+{
+    const std::string comp = Compare::name;
+    const int dir = comp != "less" && comp != "less_equal";
+    gpgpu::dnn::argsort(dir, x_shape.extents(),
+                        x_data, x_shape.offset(), x_shape.strides(),
+                        y_data, y_shape.offset(), y_shape.strides());
+}
+
 }} // namespace dlf::detail

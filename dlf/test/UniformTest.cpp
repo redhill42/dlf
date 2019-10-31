@@ -2195,6 +2195,107 @@ TEST(UniformTest, MergeBatch) {
     EXPECT_EQ(merge(A, B), merge(dev(A), dev(B)).read());
 }
 
+TEST(UniformTest, Sort_CPU) {
+    auto X = Tensor<int>({3, 4, 5}, {
+         8, 19, 11, 41, 53,
+        79,  2, 10,  0, 94,
+        37, 30, 82, 81, 75,
+        60, 18, 66, 47, 51,
+
+        91, 83, 67, 88, 76,
+        17, 17, 73, 16, 65,
+        66, 62, 56, 90, 18,
+        32, 65, 11, 46, 24,
+
+        57, 38, 77, 56,  0,
+        82, 69, 78,  3, 83,
+        57, 37, 97, 93, 32,
+        78, 96, 15, 80, 95
+    });
+
+    auto Y = Tensor<int>();
+
+    sort(X, Y, 0);
+    EXPECT_EQ(Y, Tensor<int>({3, 4, 5}, {
+         8, 19, 11, 41,  0,
+        17,  2, 10,  0, 65,
+        37, 30, 56, 81, 18,
+        32, 18, 11, 46, 24,
+
+        57, 38, 67, 56, 53,
+        79, 17, 73,  3, 83,
+        57, 37, 82, 90, 32,
+        60, 65, 15, 47, 51,
+
+        91, 83, 77, 88, 76,
+        82, 69, 78, 16, 94,
+        66, 62, 97, 93, 75,
+        78, 96, 66, 80, 95,
+    }));
+
+    sort(X, Y, 1);
+    EXPECT_EQ(Y, Tensor<int>({3, 4, 5}, {
+         8,  2, 10,  0, 51,
+        37, 18, 11, 41, 53,
+        60, 19, 66, 47, 75,
+        79, 30, 82, 81, 94,
+
+        17, 17, 11, 16, 18,
+        32, 62, 56, 46, 24,
+        66, 65, 67, 88, 65,
+        91, 83, 73, 90, 76,
+
+        57, 37, 15,  3,  0,
+        57, 38, 77, 56, 32,
+        78, 69, 78, 80, 83,
+        82, 96, 97, 93, 95,
+    }));
+
+    sort(X, Y, 2);
+    EXPECT_EQ(Y, Tensor<int>({3, 4, 5}, {
+         8, 11, 19, 41, 53,
+         0,  2, 10, 79, 94,
+        30, 37, 75, 81, 82,
+        18, 47, 51, 60, 66,
+
+        67, 76, 83, 88, 91,
+        16, 17, 17, 65, 73,
+        18, 56, 62, 66, 90,
+        11, 24, 32, 46, 65,
+
+         0, 38, 56, 57, 77,
+         3, 69, 78, 82, 83,
+        32, 37, 57, 93, 97,
+        15, 78, 80, 95, 96,
+    }));
+}
+
+TEST(UniformTest, Sort_GPU) {
+    auto X = Tensor<int>({3, 4, 5}).random(0, 1000);
+    auto dev_X = dev(X);
+
+    EXPECT_EQ(sorted(X), sorted(dev_X).read());
+    EXPECT_EQ(sorted(X, 0), sorted(dev_X, 0).read());
+    EXPECT_EQ(sorted(X, 1), sorted(dev_X, 1).read());
+    EXPECT_EQ(sorted(X, 2), sorted(dev_X, 2).read());
+
+    EXPECT_EQ(sorted(X, 0, xfn::greater<>()), sorted(dev_X, 0, xfn::greater<>()).read());
+    EXPECT_EQ(sorted(X, 1, xfn::greater<>()), sorted(dev_X, 1, xfn::greater<>()).read());
+    EXPECT_EQ(sorted(X, 2, xfn::greater<>()), sorted(dev_X, 2, xfn::greater<>()).read());
+}
+
+TEST(UniformTest, ArgSort) {
+    auto X = Tensor<int>({3, 4, 5}).random(0, 1000);
+    EXPECT_EQ(sorted(X, 0), gather_elements(X, argsort(X, 0), 0));
+    EXPECT_EQ(sorted(X, 1), gather_elements(X, argsort(X, 1), 1));
+    EXPECT_EQ(sorted(X, 2), gather_elements(X, argsort(X, 2), 2));
+
+    auto dev_X = dev(X);
+    EXPECT_EQ(sorted(X, 0), gather_elements(X, argsort(dev_X, 0).read(), 0));
+    EXPECT_EQ(sorted(X, 1), gather_elements(X, argsort(dev_X, 1).read(), 1));
+    EXPECT_EQ(sorted(X, 2), gather_elements(X, argsort(dev_X, 2).read(), 2));
+}
+
 TEST(UniformTest, resize_upsample_scales_linear) {
     auto X = Tensor<float>({1, 1, 2, 2}, {1, 2, 3, 4});
     auto Y = im::resize(X, std::vector<float>{1, 1, 2, 2});
