@@ -1018,7 +1018,7 @@ std::enable_if_t<
     is_exactly_same_tensor<RHS, RET>::value &&
     !std::is_const<std::remove_reference_t<RET>>::value>
 inline merge(const LHS& A, const RHS& B, RET&& C, int axis = -1) {
-    merge(A, B, C, axis, std::less<>());
+    merge(A, B, C, axis, xfn::less<>());
 }
 
 template <typename LHS, typename RHS, typename Compare>
@@ -1032,7 +1032,7 @@ inline merge(const LHS& A, const RHS& B, int axis, Compare comp) {
 template <typename LHS, typename RHS>
 std::enable_if_t<is_exactly_same_tensor<LHS, RHS>::value, tensor_type<LHS>>
 inline merge(const LHS& A, const RHS& B, int axis = -1) {
-    return merge(A, B, axis, std::less<>());
+    return merge(A, B, axis, xfn::less<>());
 }
 
 //==-------------------------------------------------------------------------

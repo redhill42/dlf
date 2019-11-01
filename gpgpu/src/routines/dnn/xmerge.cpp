@@ -13,6 +13,7 @@ Xmerge<T>::Xmerge(const Queue& queue, Event* event, const std::string& name) :
 
 template <typename T>
 void Xmerge<T>::DoMerge(
+    const int dir,
     const std::vector<size_t>& x_dims, const std::vector<size_t>& x_strides,
     const Buffer<T>& x_buffer, const size_t x_offset,
     const std::vector<size_t>& y_dims, const std::vector<size_t>& y_strides,
@@ -24,18 +25,21 @@ void Xmerge<T>::DoMerge(
     auto y_len = y_dims.back();
 
     if (x_len <= WPT*db_["WGS"] && y_len <= WPT*db_["WGS"]) {
-        DoMergeDirect(x_dims, x_strides, x_buffer, x_offset,
+        DoDirectMerge(dir,
+                      x_dims, x_strides, x_buffer, x_offset,
                       y_dims, y_strides, y_buffer, y_offset,
                       z_dims, z_strides, z_buffer, z_offset);
     } else {
-        DoMergeIndirect(x_dims, x_strides, x_buffer, x_offset,
+        DoIndirectMerge(dir,
+                        x_dims, x_strides, x_buffer, x_offset,
                         y_dims, y_strides, y_buffer, y_offset,
                         z_dims, z_strides, z_buffer, z_offset);
     }
 }
 
 template <typename T>
-void Xmerge<T>::DoMergeDirect(
+void Xmerge<T>::DoDirectMerge(
+    const int dir,
     const std::vector<size_t>& x_dims, const std::vector<size_t>& x_strides,
     const Buffer<T>& x_buffer, const size_t x_offset,
     const std::vector<size_t>& y_dims, const std::vector<size_t>& y_strides,
@@ -55,6 +59,7 @@ void Xmerge<T>::DoMergeDirect(
 
     auto kernel = program_.getKernel("DirectMerge");
     kernel.setArguments(
+        dir,
         static_cast<int>(x_dims.size()), x_shape,
         x_buffer, static_cast<int>(x_len), static_cast<int>(x_offset), static_cast<int>(x_inc),
         static_cast<int>(y_dims.size()), y_shape,
@@ -71,7 +76,8 @@ void Xmerge<T>::DoMergeDirect(
 }
 
 template <typename T>
-void Xmerge<T>::DoMergeIndirect(
+void Xmerge<T>::DoIndirectMerge(
+    const int dir,
     const std::vector<size_t>& x_dims, const std::vector<size_t>& x_strides,
     const Buffer<T>& x_buffer, const size_t x_offset,
     const std::vector<size_t>& y_dims, const std::vector<size_t>& y_strides,
@@ -86,12 +92,13 @@ void Xmerge<T>::DoMergeIndirect(
     auto y_len = y_dims.back(), y_inc = y_strides.back();
     auto z_inc = z_strides.back();
 
-    const size_t blocks = db_["WGS"] * WPT;
+    const size_t blocks = CeilDiv(x_len + y_len, db_["WGS"] * WPT);
     size_t batch_size = std::accumulate(z_dims.begin(), z_dims.end()-1, 1, std::multiplies<>());
     auto diagonal = context_.getTemporaryBuffer<int>(2 * (blocks + 1) * batch_size);
 
     auto kernel1 = program_.getKernel("MergePath");
     kernel1.setArguments(
+        dir,
         static_cast<int>(x_dims.size()), x_shape,
         x_buffer, static_cast<int>(x_len), static_cast<int>(x_offset), static_cast<int>(x_inc),
         static_cast<int>(y_dims.size()), y_shape,
@@ -104,6 +111,7 @@ void Xmerge<T>::DoMergeIndirect(
 
     auto kernel2 = program_.getKernel("Merge");
     kernel2.setArguments(
+        dir,
         static_cast<int>(x_dims.size()), x_shape,
         x_buffer, static_cast<int>(x_len), static_cast<int>(x_offset), static_cast<int>(x_inc),
         static_cast<int>(y_dims.size()), y_shape,

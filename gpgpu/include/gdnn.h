@@ -137,7 +137,8 @@ void arg_reduce(const std::string& name, const size_t n, const size_t k,
 
 
 template <typename T>
-void merge(const std::vector<size_t>& x_dims, const std::vector<size_t>& x_strides,
+void merge(const int dir,
+           const std::vector<size_t>& x_dims, const std::vector<size_t>& x_strides,
            const Buffer<T>& x_buffer, const size_t x_offset,
            const std::vector<size_t>& y_dims, const std::vector<size_t>& y_strides,
            const Buffer<T>& y_buffer, const size_t y_offset,

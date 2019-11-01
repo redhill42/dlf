@@ -1020,7 +1020,8 @@ template void PUBLIC_API arg_reduce<double> (const std::string&, const size_t, c
                                              const Queue&, Event*);
 
 template <typename T>
-void merge(const std::vector<size_t>& x_dims, const std::vector<size_t>& x_strides,
+void merge(const int dir,
+           const std::vector<size_t>& x_dims, const std::vector<size_t>& x_strides,
            const Buffer<T>& x_buffer, const size_t x_offset,
            const std::vector<size_t>& y_dims, const std::vector<size_t>& y_strides,
            const Buffer<T>& y_buffer, const size_t y_offset,
@@ -1029,12 +1030,14 @@ void merge(const std::vector<size_t>& x_dims, const std::vector<size_t>& x_strid
            const Queue& queue, Event* event)
 {
     auto routine = Xmerge<T>(queue, event);
-    routine.DoMerge(x_dims, x_strides, x_buffer, x_offset,
+    routine.DoMerge(dir,
+                    x_dims, x_strides, x_buffer, x_offset,
                     y_dims, y_strides, y_buffer, y_offset,
                     z_dims, z_strides, z_buffer, z_offset);
 }
 
 template void PUBLIC_API merge<int32_t>(
+    const int,
     const std::vector<size_t>&, const std::vector<size_t>&,
     const Buffer<int32_t>&, const size_t,
     const std::vector<size_t>&, const std::vector<size_t>&,
@@ -1043,6 +1046,7 @@ template void PUBLIC_API merge<int32_t>(
     Buffer<int32_t>&, const size_t,
     const Queue&, Event*);
 template void PUBLIC_API merge<int64_t>(
+    const int,
     const std::vector<size_t>&, const std::vector<size_t>&,
     const Buffer<int64_t>&, const size_t,
     const std::vector<size_t>&, const std::vector<size_t>&,
@@ -1051,6 +1055,7 @@ template void PUBLIC_API merge<int64_t>(
     Buffer<int64_t>&, const size_t,
     const Queue&, Event*);
 template void PUBLIC_API merge<half>(
+    const int,
     const std::vector<size_t>&, const std::vector<size_t>&,
     const Buffer<half>&, const size_t,
     const std::vector<size_t>&, const std::vector<size_t>&,
@@ -1059,6 +1064,7 @@ template void PUBLIC_API merge<half>(
     Buffer<half>&, const size_t,
     const Queue&, Event*);
 template void PUBLIC_API merge<float>(
+    const int,
     const std::vector<size_t>&, const std::vector<size_t>&,
     const Buffer<float>&, const size_t,
     const std::vector<size_t>&, const std::vector<size_t>&,
@@ -1067,6 +1073,7 @@ template void PUBLIC_API merge<float>(
     Buffer<float>&, const size_t,
     const Queue&, Event*);
 template void PUBLIC_API merge<double>(
+    const int,
     const std::vector<size_t>&, const std::vector<size_t>&,
     const Buffer<double>&, const size_t,
     const std::vector<size_t>&, const std::vector<size_t>&,

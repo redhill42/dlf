@@ -345,28 +345,29 @@ template <typename T, typename Compare>
 void select(const T* X, int Lx, int dx, const T* Y, int Ly, int dy,
             int k, int& ix, int& iy, Compare comp)
 {
-    int ix_start = std::min(k, Lx);
+    if (k == 0) {
+        ix = iy = 0;
+        return;
+    }
+
+    int ix_start = std::min(k, Lx) - 1;
     int ix_end   = std::max(0, k - Ly);
     int iy_start = std::max(0, k - Lx);
-    int start = 0, end = ix_start - ix_end;
 
     // Binary search diagonal intersection
+    int start = 0, end = ix_start - ix_end;
     do {
         int m = (start + end) / 2;
         ix = ix_start - m;
         iy = iy_start + m;
-        if (iy != Ly && (ix == Lx || comp(Y[iy * dy], X[ix * dx]))) {
+        if (comp(Y[iy * dy], X[ix * dx])) {
             start = m + 1;
+            ++iy;
         } else {
             end = m - 1;
+            ++ix;
         }
     } while (start <= end);
-
-    // Adjust boundary
-    if (ix > 0 && iy < Ly && (ix == Lx || comp(Y[iy * dy], X[ix * dx])))
-        ix--, iy++;
-    if (iy > 0 && ix < Lx && comp(X[ix * dx], Y[(iy - 1) * dy]))
-        ix++, iy--;
 }
 
 template <typename T, typename Compare>
@@ -438,14 +439,14 @@ template <typename T, typename Compare>
 void merge(const Shape& x_shape, const gpgpu::Buffer<T>& x_data,
            const Shape& y_shape, const gpgpu::Buffer<T>& y_data,
            const Shape& z_shape, gpgpu::Buffer<T>& z_data,
-           Compare /*FIXME*/)
+           Compare)
 {
-    gpgpu::dnn::merge(x_shape.extents(), x_shape.strides(),
-                      x_data, x_shape.offset(),
-                      y_shape.extents(), y_shape.strides(),
-                      y_data, y_shape.offset(),
-                      z_shape.extents(), z_shape.strides(),
-                      z_data, z_shape.offset());
+    const std::string comp = Compare::name;
+    const int dir = comp != "less" && comp != "less_equal";
+    gpgpu::dnn::merge(dir,
+        x_shape.extents(), x_shape.strides(), x_data, x_shape.offset(),
+        y_shape.extents(), y_shape.strides(), y_data, y_shape.offset(),
+        z_shape.extents(), z_shape.strides(), z_data, z_shape.offset());
 }
 
 template <typename T, typename Compare>
