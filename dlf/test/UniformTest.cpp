@@ -2282,6 +2282,16 @@ TEST(UniformTest, Sort_GPU) {
     EXPECT_EQ(sorted(X, 0, xfn::greater<>()), sorted(dev_X, 0, xfn::greater<>()).read());
     EXPECT_EQ(sorted(X, 1, xfn::greater<>()), sorted(dev_X, 1, xfn::greater<>()).read());
     EXPECT_EQ(sorted(X, 2, xfn::greater<>()), sorted(dev_X, 2, xfn::greater<>()).read());
+
+    for (size_t n = 1; n <= 1024; n++) {
+        auto Y = Tensor<int>({2, n}).random(0, n);
+        EXPECT_EQ(sorted(Y), sorted(dev(Y)).read());
+    }
+
+    for (size_t n = 1000; n <= 10000; n += 1000) {
+        auto Y = Tensor<int>({2, n}).random(0, n);
+        EXPECT_EQ(sorted(Y), sorted(dev(Y)).read());
+    }
 }
 
 TEST(UniformTest, ArgSort) {

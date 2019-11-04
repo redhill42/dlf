@@ -6,6 +6,7 @@ using namespace gpgpu::blas;
 template <typename T>
 Xmerge<T>::Xmerge(const Queue& queue, Event* event, const std::string& name) :
     Routine(queue, event, name, {"Xaxpy"}, PrecisionValue<T>(), {}, {
+    #include "../../kernels/dnn/local_merge.cl"
     #include "../../kernels/dnn/xmerge.cl"
 }) {}
 

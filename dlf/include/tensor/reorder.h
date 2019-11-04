@@ -1046,9 +1046,10 @@ std::enable_if_t<
     !std::is_const<std::remove_reference_t<TensorR>>::value>
 sort(const TensorT& X, TensorR&& Y, int axis, Compare comp) {
     reorder(X, Y);
-
-    auto y_view = moveaxis(Y, axis, -1);
-    detail::sort(y_view.shape(), y_view.data(), comp);
+    if (X.extent(axis) > 1) {
+        auto y_view = moveaxis(Y, axis, -1);
+        detail::sort(y_view.shape(), y_view.data(), comp);
+    }
 }
 
 template <typename TensorT, typename TensorR, typename Compare>
@@ -1058,10 +1059,13 @@ std::enable_if_t<
     !std::is_const<std::remove_reference_t<TensorR>>::value>
 sort(const TensorT& X, TensorR&& Y, int axis, Compare) {
     Y.resize(X.shape());
-
-    auto x_view = moveaxis(X, axis, -1);
-    auto y_view = moveaxis(Y, axis, -1);
-    detail::sort(x_view.shape(), x_view.data(), y_view.shape(), y_view.data(), Compare::name);
+    if (X.extent(axis) > 1) {
+        auto x_view = moveaxis(X, axis, -1);
+        auto y_view = moveaxis(Y, axis, -1);
+        detail::sort(x_view.shape(), x_view.data(), y_view.shape(), y_view.data(), Compare::name);
+    } else {
+        reorder(X, Y);
+    }
 }
 
 template <typename TensorT, typename TensorR>
