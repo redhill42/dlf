@@ -1115,34 +1115,95 @@ inline sorted(TensorT&& X, int axis = -1) {
 // Argsort
 //==-------------------------------------------------------------------------
 
-template <typename TensorT, typename TensorR, typename Compare>
+template <typename TensorT, typename TensorR, typename TensorI, typename Compare>
 std::enable_if_t<
-    is_tensor<TensorT>::value && is_tensor<TensorR>::value &&
-    std::is_integral<tensor_value_type<TensorR>>::value &&
-    !std::is_const<std::remove_reference_t<TensorR>>::value>
-argsort(const TensorT& X, TensorR&& Y, int axis, Compare comp) {
-    Y.resize(X.shape());
-
-    auto x_view = moveaxis(X, axis, -1);
-    auto y_view = moveaxis(Y, axis, -1);
-    detail::argsort(x_view.shape(), x_view.data(), y_view.shape(), y_view.data(), comp);
+    is_cpu_tensor<TensorT>::value &&
+    is_exactly_same_tensor<TensorT, TensorR>::value &&
+    is_tensor<TensorI>::value &&
+    std::is_integral<tensor_value_type<TensorI>>::value &&
+    !std::is_const<std::remove_reference_t<TensorR>>::value &&
+    !std::is_const<std::remove_reference_t<TensorI>>::value>
+argsort(const TensorT& X, TensorR&& Y, TensorI&& I, int axis, Compare comp) {
+    // FIXME
+    reorder(X, Y);
+    I.resize(X.shape());
+    if (X.extent(axis) > 1) {
+        auto y_view = moveaxis(Y, axis, -1);
+        auto i_view = moveaxis(I, axis, -1);
+        detail::argsort(y_view.shape(), y_view.data(), i_view.shape(), i_view.data(), comp);
+        detail::sort(y_view.shape(), y_view.data(), comp);
+    } else {
+        I.fill(0);
+    }
 }
 
-template <typename TensorT, typename TensorR>
+template <typename TensorT, typename TensorR, typename TensorI, typename Compare>
 std::enable_if_t<
-    is_tensor<TensorT>::value && is_tensor<TensorR>::value &&
-    std::is_integral<tensor_value_type<TensorR>>::value &&
-    !std::is_const<std::remove_reference_t<TensorR>>::value>
-inline argsort(const TensorT& X, TensorR&& Y, int axis = -1) {
-    argsort(X, Y, axis, xfn::less<>());
+    is_gpu_tensor<TensorT>::value &&
+    is_exactly_same_tensor<TensorT, TensorR>::value &&
+    is_tensor<TensorI>::value &&
+    std::is_integral<tensor_value_type<TensorI>>::value &&
+    !std::is_const<std::remove_reference_t<TensorR>>::value &&
+    !std::is_const<std::remove_reference_t<TensorI>>::value>
+argsort(const TensorT& X, TensorR&& Y, TensorI&& I, int axis, Compare comp) {
+    Y.resize(X.shape());
+    I.resize(X.shape());
+    if (X.extent(axis) > 1) {
+        auto x_view = moveaxis(X, axis, -1);
+        auto y_view = moveaxis(Y, axis, -1);
+        auto i_view = moveaxis(I, axis, -1);
+        detail::argsort(x_view.shape(), x_view.data(),
+                        y_view.shape(), y_view.data(),
+                        i_view.shape(), i_view.data(),
+                        comp);
+    } else {
+        reorder(X, Y);
+        I.fill(0);
+    }
+}
+
+template <typename TensorT, typename TensorR, typename TensorI>
+std::enable_if_t<
+    is_exactly_same_tensor<TensorT, TensorR>::value &&
+    is_tensor<TensorI>::value &&
+    std::is_integral<tensor_value_type<TensorI>>::value &&
+    !std::is_const<std::remove_reference_t<TensorR>>::value &&
+    !std::is_const<std::remove_reference_t<TensorI>>::value>
+inline argsort(const TensorT& X, TensorR&& Y, TensorI&& I, int axis = -1) {
+    argsort(X, Y, I, axis, xfn::less<>());
+}
+
+template <typename TensorT, typename TensorI, typename Compare>
+std::enable_if_t<
+    is_tensor<TensorT>::value && is_tensor<TensorI>::value &&
+    std::is_integral<tensor_value_type<TensorI>>::value &&
+    !std::is_const<std::remove_reference_t<TensorI>>::value>
+argsort(const TensorT& X, TensorI&& I, int axis, Compare comp) {
+    I.resize(X.shape());
+    if (X.extent(axis) > 1) {
+        auto x_view = moveaxis(X, axis, -1);
+        auto i_view = moveaxis(I, axis, -1);
+        detail::argsort(x_view.shape(), x_view.data(), i_view.shape(), i_view.data(), comp);
+    } else {
+        I.fill(0);
+    }
+}
+
+template <typename TensorT, typename TensorI>
+std::enable_if_t<
+    is_tensor<TensorT>::value && is_tensor<TensorI>::value &&
+    std::is_integral<tensor_value_type<TensorI>>::value &&
+    !std::is_const<std::remove_reference_t<TensorI>>::value>
+inline argsort(const TensorT& X, TensorI&& I, int axis = -1) {
+    argsort(X, I, axis, xfn::less<>());
 }
 
 template <typename TensorT, typename Compare>
 enable_if_tensor<TensorT, tensor_type<TensorT, int>>
 inline argsort(const TensorT& X, int axis, Compare comp) {
-    tensor_type<TensorT, int> Y;
-    argsort(X, Y, axis, comp);
-    return Y;
+    tensor_type<TensorT, int> I{};
+    argsort(X, I, axis, comp);
+    return I;
 }
 
 template <typename TensorT>

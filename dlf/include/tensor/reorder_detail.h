@@ -516,14 +516,28 @@ void argsort(const Shape& x_shape, const T* x_data,
 
 template <typename T, typename R, typename Compare>
 void argsort(const Shape& x_shape, const gpgpu::Buffer<T>& x_data,
-             const Shape& y_shape,       gpgpu::Buffer<R>& y_data,
+             const Shape& i_shape,       gpgpu::Buffer<R>& i_data,
              Compare)
 {
     const std::string comp = Compare::name;
     const int dir = comp != "less" && comp != "less_equal";
     gpgpu::dnn::argsort(dir, x_shape.extents(),
                         x_data, x_shape.offset(), x_shape.strides(),
-                        y_data, y_shape.offset(), y_shape.strides());
+                        i_data, i_shape.offset(), i_shape.strides());
+}
+
+template <typename T, typename R, typename Compare>
+void argsort(const Shape& x_shape, const gpgpu::Buffer<T>& x_data,
+             const Shape& y_shape,       gpgpu::Buffer<T>& y_data,
+             const Shape& i_shape,       gpgpu::Buffer<R>& i_data,
+             Compare)
+{
+    const std::string comp = Compare::name;
+    const int dir = comp != "less" && comp != "less_equal";
+    gpgpu::dnn::argsort(dir, x_shape.extents(),
+                        x_data, x_shape.offset(), x_shape.strides(),
+                        y_data, y_shape.offset(), y_shape.strides(),
+                        i_data, i_shape.offset(), i_shape.strides());
 }
 
 }} // namespace dlf::detail

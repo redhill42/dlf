@@ -6,12 +6,30 @@ CL_PROGRAM R"(
 // dir = 0: ascending, dir = 1: descending
 #define comp(A, B, dir) (((A) <= (B)) != (dir))
 
+#ifdef ROUTINE_ARGSORT
+#define ARG(x) x
+#else
+#define ARG(x)
+#endif
+
+#ifndef ROUTINE_ARGSORT
 INLINE_FUNC void LocalMerge(
     const int dir,
     const __global real* restrict xgm, const int x_len, const int x_inc,
     const __global real* restrict ygm, const int y_len, const int y_inc,
           __global real*          zgm, const int z_len, const int z_inc,
     LOCAL_PTR real* xlm, LOCAL_PTR real* ylm)
+#else
+INLINE_FUNC void LocalArgMerge(
+    const int dir,
+    const int x_len, const __global real* restrict xgm, const int  x_inc,
+                     const __global int* restrict ixgm, const int ix_inc,
+    const int y_len, const __global real* restrict ygm, const int  y_inc,
+                     const __global int* restrict iygm, const int iy_inc,
+    const int z_len,       __global real*          zgm, const int  z_inc,
+                           __global int*          izgm, const int iz_inc,
+    LOCAL_PTR real* xlm, LOCAL_PTR real* ylm)
+#endif
 {
     const int lid = get_local_id(0);
     const int lsz = get_local_size(0);
@@ -53,19 +71,19 @@ INLINE_FUNC void LocalMerge(
 
     // Merge elements at the found path intersection
     for (int i = lid*WPT*2, z_end = min(i + WPT*2, z_len); i < z_end; i++) {
-        real z;
         if (comp(xlm[ix], ylm[iy], dir)) {
-            z = xlm[ix];
+            zgm[i * z_inc] = xlm[ix];
+            ARG(izgm[i * iz_inc] = ixgm[ix * ix_inc]);
             ++ix;
         } else {
-            z = ylm[iy];
+            zgm[i * z_inc] = ylm[iy];
+            ARG(izgm[i * iz_inc] = iygm[iy * iy_inc]);
             ++iy;
         }
-        zgm[i * z_inc] = z;
     }
 }
 
-
+#ifndef ROUTINE_ARGSORT
 INLINE_FUNC void LocalMultiMerge(
     const int dir,
     const __global real* restrict xgm, const int x_len, const int x_inc,
@@ -73,24 +91,32 @@ INLINE_FUNC void LocalMultiMerge(
           __global real*          zgm, const int z_len, const int z_inc,
     LOCAL_PTR int* x_block_start, LOCAL_PTR real* xlm,
     LOCAL_PTR int* y_block_start, LOCAL_PTR real* ylm)
+#else
+INLINE_FUNC void LocalMultiArgMerge(
+    const int dir,
+    const int x_len, const __global real* restrict xgm, const int  x_inc,
+                     const __global int* restrict ixgm, const int ix_inc,
+    const int y_len, const __global real* restrict ygm, const int  y_inc,
+                     const __global int* restrict iygm, const int iy_inc,
+    const int z_len,       __global real*          zgm, const int  z_inc,
+                           __global int*          izgm, const int iz_inc,
+    LOCAL_PTR int* x_block_start, LOCAL_PTR real* xlm,
+    LOCAL_PTR int* y_block_start, LOCAL_PTR real* ylm)
+#endif
 {
     const int lid = get_local_id(0);
 
     // Make sure this is before the sync
-    int iz = *x_block_start + *y_block_start + lid*WPT;
+    int gix = *x_block_start;
+    int giy = *y_block_start;
+    int giz = gix + giy + lid*WPT;
 
     // Load current local window
     const real pad = dir ? SMALLEST : LARGEST;
     #pragma unroll
     for (int _w = 0, i = lid; _w < WPT; _w++, i += get_local_size(0)) {
-        if (*x_block_start + i < x_len)
-            xlm[i] = xgm[(*x_block_start + i) * x_inc];
-        else
-            xlm[i] = pad;
-        if (*y_block_start + i < y_len)
-            ylm[i] = ygm[(*y_block_start + i) * y_inc];
-        else
-            ylm[i] = pad;
+        xlm[i] = (gix + i < x_len) ? xgm[(gix + i) * x_inc] : pad;
+        ylm[i] = (giy + i < y_len) ? ygm[(giy + i) * y_inc] : pad;
     }
     barrier(CLK_LOCAL_MEM_FENCE);
 
@@ -115,17 +141,20 @@ INLINE_FUNC void LocalMultiMerge(
 
     // Merge elements at the found path intersection
     #pragma unroll
-    for (int _w = 0; _w < WPT; _w++, iz++) {
-        real z;
+    for (int _w = 0; _w < WPT; _w++, giz++) {
+        real val; ARG(int idx);
         if (comp(xlm[ix], ylm[iy], dir)) {
-            z = xlm[ix];
+            val = xlm[ix];
+            ARG(idx = ixgm[(gix + ix) * ix_inc]);
             ++ix;
         } else {
-            z = ylm[iy];
+            val = ylm[iy];
+            ARG(idx = iygm[(giy + iy) * iy_inc]);
             ++iy;
         }
-        if (iz < z_len) {
-            zgm[iz * z_inc] = z;
+        if (giz < z_len) {
+            zgm[giz * z_inc] = val;
+            ARG(izgm[giz * iz_inc] = idx);
         }
     }
 
@@ -136,5 +165,7 @@ INLINE_FUNC void LocalMultiMerge(
     }
     barrier(CLK_LOCAL_MEM_FENCE);
 }
+
+#undef ARG
 
 )"

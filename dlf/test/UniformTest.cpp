@@ -2284,12 +2284,12 @@ TEST(UniformTest, Sort_GPU) {
     EXPECT_EQ(sorted(X, 2, xfn::greater<>()), sorted(dev_X, 2, xfn::greater<>()).read());
 
     for (size_t n = 1; n <= 1024; n++) {
-        auto Y = Tensor<int>({2, n}).random(0, n);
+        auto Y = Tensor<int>({2, n}).random(0, 2000);
         EXPECT_EQ(sorted(Y), sorted(dev(Y)).read());
     }
 
     for (size_t n = 1000; n <= 10000; n += 1000) {
-        auto Y = Tensor<int>({2, n}).random(0, n);
+        auto Y = Tensor<int>({2, n}).random(0, 100000);
         EXPECT_EQ(sorted(Y), sorted(dev(Y)).read());
     }
 }
@@ -2304,6 +2304,16 @@ TEST(UniformTest, ArgSort) {
     EXPECT_EQ(sorted(X, 0), gather_elements(X, argsort(dev_X, 0).read(), 0));
     EXPECT_EQ(sorted(X, 1), gather_elements(X, argsort(dev_X, 1).read(), 1));
     EXPECT_EQ(sorted(X, 2), gather_elements(X, argsort(dev_X, 2).read(), 2));
+
+    for (size_t n = 1; n <= 1024; n++) {
+        auto Y = Tensor<int>({2, n}).random(0, 2000);
+        EXPECT_EQ(sorted(Y), gather_elements(Y, argsort(dev(Y)).read(), -1));
+    }
+
+    for (size_t n = 1000; n <= 10000; n += 1000) {
+        auto Y = Tensor<int>({2, n}).random(0, 100000);
+        EXPECT_EQ(sorted(Y), gather_elements(Y, argsort(dev(Y)).read(), -1));
+    }
 }
 
 TEST(UniformTest, resize_upsample_scales_linear) {

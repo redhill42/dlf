@@ -73,13 +73,15 @@ void Xsort<T>::DoIndirectSort(
         return;
     }
 
-    // Allocate auxiliary ping-pong buffer
+    // Create a contiguous shape
     std::vector<size_t> aux_strides(dims.size());
     size_t aux_size = 1;
     for (int i = dims.size()-1; i >= 0; --i) {
         aux_strides[i] = aux_size;
         aux_size *= dims[i];
     }
+
+    // Allocate auxiliary ping-pong buffer
     auto aux = context_.getTemporaryBuffer<T>(aux_size);
 
     // Count number of steps in the mergesort, which will be used to determine
@@ -173,8 +175,8 @@ void Xsort<T>::DoIndirectMerge(
     kernel1.setArguments(
         static_cast<int>(n), static_cast<int>(k), dir,
         static_cast<int>(dims.size()), shape,
-        x_buffer, x_offset, static_cast<int>(x_strides.back()),
-        diag, diag.offset());
+        x_buffer, static_cast<int>(x_offset), static_cast<int>(x_strides.back()),
+        diag, static_cast<int>(diag.offset()));
 
     auto global1 = std::vector<size_t>{32 * splits * blocks, batch_size};
     auto local1  = std::vector<size_t>{32, 1};
@@ -191,33 +193,6 @@ void Xsort<T>::DoIndirectMerge(
     auto global2 = std::vector<size_t>{db_["WGS"] * splits * blocks, batch_size};
     auto local2  = std::vector<size_t>{db_["WGS"], 1};
     RunKernel(kernel2, queue_, device_, global2, local2, nullptr);
-}
-
-/*========================================================================*/
-
-template <typename T>
-void Xsort<T>::DoArgSort(
-    const int dir, const std::vector<size_t>& dims,
-    const Buffer<T>& x_buffer, const size_t x_offset, const std::vector<size_t>& x_strides,
-    Buffer<int32_t>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_strides)
-{
-    auto n = dims.back();
-    assert(n <= 2*db_["WGS"]);
-    auto shape = PackShape(dims, x_strides, y_strides, context_, queue_);
-
-    auto kernel = program_.getKernel("DirectArgSort");
-    kernel.setArguments(
-        static_cast<int>(n), dir, static_cast<int>(dims.size()), shape,
-        x_buffer, static_cast<int>(x_offset), static_cast<int>(x_strides.back()),
-        y_buffer, static_cast<int>(y_offset), static_cast<int>(y_strides.back()));
-
-    size_t batch_size = std::accumulate(dims.begin(), dims.end()-1, 1, std::multiplies<>());
-    size_t local_size = NextPowerOfTwo(n) / 2;
-    kernel.setLocalMemorySize(local_size*2 * (sizeof(T) + sizeof(int32_t)));
-
-    auto global = std::vector<size_t>{batch_size * local_size};
-    auto local  = std::vector<size_t>{local_size};
-    RunKernel(kernel, queue_, device_, global, local, event_);
 }
 
 template class Xsort<int16_t>;
