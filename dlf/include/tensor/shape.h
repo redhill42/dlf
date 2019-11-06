@@ -525,6 +525,14 @@ public:
         return self().view(m_shape.slice(range));
     }
 
+    auto take(int axis, int k) {
+        assert(k != 0);
+        if (k < 0)
+            return slice({k}, {static_cast<int>(extent(axis))}, {axis}, {1});
+        else
+            return slice({0}, {k}, {axis}, {1});
+    }
+
     auto operator[](const char* spec) const {
         return self().view(m_shape.slice(spec));
     }

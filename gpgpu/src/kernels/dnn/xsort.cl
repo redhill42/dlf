@@ -299,6 +299,13 @@ INLINE_FUNC void comparator2(LOCAL_PTR real* A, LOCAL_PTR int* iA,
     }
 }
 
+INLINE_FUNC int get_index(LOCAL_PTR int* indices, int i) {
+    int res = indices[i];
+    if (res < 0)
+        res = indices[-res];
+    return res;
+}
+
 __kernel void DirectArgSort(
     const int n, const int dir, const int rank, __constant int* shape,
     const __global real* restrict xgm, int x_offset, const int x_inc,
@@ -324,8 +331,8 @@ __kernel void DirectArgSort(
     const real pad = dir ? SMALLEST : LARGEST;
     s_val[i + 0] = (i + 0 < n) ? xgm[0        ] : pad;
     s_val[i + L] = (i + L < n) ? xgm[L * x_inc] : pad;
-    s_idx[i + 0] = i;
-    s_idx[i + L] = i + L;
+    s_idx[i + 0] = (i + 0 < n) ? (i + 0) : -(i + 0);
+    s_idx[i + L] = (i + L < n) ? (i + L) : -(i + L);
     barrier(CLK_LOCAL_MEM_FENCE);
 
     for (int k = 2; k <= L; k <<= 1) {
@@ -345,11 +352,11 @@ __kernel void DirectArgSort(
 
     if (i < n) {
         ygm[0] = s_val[i];
-        igm[0] = s_idx[i] < n ? s_idx[i] : s_idx[s_idx[i]];
+        igm[0] = get_index(s_idx, i);
     }
     if (i + L < n) {
         ygm[L * y_inc] = s_val[i+L];
-        igm[L * i_inc] = s_idx[i+L] < n ? s_idx[i+L] : s_idx[s_idx[i+L]];
+        igm[L * i_inc] = get_index(s_idx, i + L);
     }
 }
 
@@ -375,8 +382,8 @@ void BlockArgSort(
     const real pad = dir ? SMALLEST : LARGEST;
     s_val[lid +   0] = (gid +   0 < n) ? xgm[0          ] : pad;
     s_val[lid + WGS] = (gid + WGS < n) ? xgm[WGS * x_inc] : pad;
-    s_idx[lid +   0] = gid;
-    s_idx[lid + WGS] = gid + WGS;
+    s_idx[lid +   0] = (gid +   0 < n) ? gid +   0 : -(lid +   0);
+    s_idx[lid + WGS] = (gid + WGS < n) ? gid + WGS : -(lid + WGS);
     barrier(CLK_LOCAL_MEM_FENCE);
 
     for (int k = 2; k <= WGS; k <<= 1) {
@@ -396,11 +403,11 @@ void BlockArgSort(
 
     if (gid < n) {
         ygm[0] = s_val[lid];
-        igm[0] = s_idx[lid] < n ? s_idx[lid] : s_idx[s_idx[lid]];
+        igm[0] = get_index(s_idx, lid);
     }
     if (gid + WGS < n) {
         ygm[WGS * y_inc] = s_val[lid + WGS];
-        igm[WGS * i_inc] = s_idx[lid+WGS] < n ? s_idx[lid+WGS] : s_idx[s_idx[lid+WGS]];
+        igm[WGS * i_inc] = get_index(s_idx, lid + WGS);
     }
 }
 

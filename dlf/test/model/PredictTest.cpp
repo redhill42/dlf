@@ -576,6 +576,36 @@ TYPED_TEST(PredictTest, NonMaxSuppression) {
               Matrix<int32_t>({{0, 0, 3}, {0, 0, 0}, {0, 0, 5}}));
 }
 
+TYPED_TEST(PredictTest, TopK) {
+    using Context = TypeParam;
+    Graph g;
+
+    auto a = g.append<TopK>();
+    a->addInput(g.addInput("X", DataType::FLOAT, {3, 4}));
+    a->addInput(g.addInitializer(TensorData("K", DataType::INT64, {1}, {3})));
+    g.addOutput(a->addOutput("Y"));
+    g.addOutput(a->addOutput("I"));
+
+    Predictor<Context, float> predictor(g);
+    predictor.set(0, Matrix<float>({
+        { 0,  1,  2,  3},
+        { 7,  6,  5,  4},
+        {10, 11,  9,  8}
+    }));
+
+    predictor.predict();
+    EXPECT_EQ(predictor.get(0), Matrix<float>({
+        {3, 2, 1},
+        {7, 6, 5},
+        {11, 10, 9}
+    }));
+    EXPECT_EQ(predictor.template get<int32_t>(1), Matrix<int>({
+        {3, 2, 1},
+        {0, 1, 2},
+        {1, 0, 2}
+    }));
+}
+
 TYPED_PERFORMANCE_TEST(PredictTest, Performance) {
     std::fstream fs("data/resnet18v1.onnx", std::ios::in | std::ios::binary);
     auto g = import_model(fs);

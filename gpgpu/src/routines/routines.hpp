@@ -90,6 +90,7 @@
 #include "routines/dnn/xmerge.hpp"
 #include "routines/dnn/xsort.hpp"
 #include "routines/dnn/xargsort.hpp"
+#include "routines/dnn/xtopk.hpp"
 #include "routines/dnn/xnorm.hpp"
 #include "routines/dnn/xpool.hpp"
 #include "routines/dnn/xsoftmax.hpp"

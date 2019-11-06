@@ -212,6 +212,7 @@
   _(kernels)                    \
   _(kernel_shape)               \
   _(lambd)                      \
+  _(largest)                    \
   _(le)                         \
   _(lerp)                       \
   _(linear_before_reset)        \
@@ -269,6 +270,7 @@
   _(sin)                        \
   _(sinh)                       \
   _(size)                       \
+  _(sorted)                     \
   _(spatial_scale)              \
   _(split)                      \
   _(stopwords)                  \

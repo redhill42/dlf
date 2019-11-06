@@ -2316,6 +2316,24 @@ TEST(UniformTest, ArgSort) {
     }
 }
 
+TEST(UniformTest, TopK) {
+    for (size_t n = 10; n <= 1000; n += 10) {
+        auto X = Tensor<int>({2, n}).random(0, 10000);
+        auto Y = Tensor<int>();
+        auto I = Tensor<int>();
+        top_k(X, Y, I, 10);
+
+        auto dev_X = dev(X);
+        auto dev_Y = DevTensor<int>();
+        auto dev_I = DevTensor<int>();
+        top_k(dev_X, dev_Y, dev_I, 10);
+
+        EXPECT_EQ(Y, dev_Y.read());
+        // I and dev_I may not be equal
+        EXPECT_EQ(Y, gather_elements(dev_X, dev_I, 1).read());
+    }
+}
+
 TEST(UniformTest, resize_upsample_scales_linear) {
     auto X = Tensor<float>({1, 1, 2, 2}, {1, 2, 3, 4});
     auto Y = im::resize(X, std::vector<float>{1, 1, 2, 2});

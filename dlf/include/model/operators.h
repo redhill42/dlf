@@ -355,9 +355,12 @@ END_OPERATOR()
 
 BEGIN_OPERATOR(TopK)
     DEFINE_INT_ATTRIBUTE(axis, -1)
+    DEFINE_BOOL_ATTRIBUTE(largest, true)
+    DEFINE_BOOL_ATTRIBUTE(sorted, true)
 
     Value* X() { return input(0); }
     Value* K() { return input(1); }
+    Value* Y() { return output(0); }
     Value* indices() { return output(1); }
 END_OPERATOR()
 

@@ -1468,6 +1468,31 @@ private:
         result = std::make_unique<NonMaxSuppressionOp>(this, n);
     }
 
+    struct TopKOp : Operator {
+        datum_ptr X, Y, I;
+        DatumValue<int64_t> K;
+        int axis;
+        bool largest;
+
+        TopKOp(OperatorFactory* of, model::TopK* n)
+            : X(of->alloc(n->X())), Y(of->alloc(n->Y())),
+              I(of->alloc<int32_t>(n->indices())),
+              K(of, n->K()), axis(n->axis()), largest(n->largest())
+        {}
+
+        void evaluate() override {
+            auto values = deref(Y);
+            auto indices = deref<int32_t>(I);
+            top_k(deref(X), values, indices, *K, axis, largest);
+            Y->unget(values);
+            I->unget(indices);
+        }
+    };
+
+    void visit(model::TopK* n) override {
+        result = std::make_unique<TopKOp>(this, n);
+    }
+
     struct ReshapeOp : Operator {
         datum_ptr X, Y;
         DatumValues<int, int64_t> shape;
