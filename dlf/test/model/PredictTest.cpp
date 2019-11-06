@@ -605,23 +605,3 @@ TYPED_TEST(PredictTest, TopK) {
         {1, 0, 2}
     }));
 }
-
-TYPED_PERFORMANCE_TEST(PredictTest, Performance) {
-    std::fstream fs("data/resnet18v1.onnx", std::ios::in | std::ios::binary);
-    auto g = import_model(fs);
-    fs.close();
-
-    Predictor<TypeParam, float> pred(std::move(g));
-
-    auto input = Tensor<float>({1, 3, 224, 224}).random(0, 1);
-    pred.set(0, input);
-    pred.predict(); // warm up
-    pred.get(0);
-
-    std::string name = std::is_same<TypeParam, CPU>::value ? "CPU" : "GPU";
-    timing("Predict " + name, 100, [&]() {
-        pred.set(0, input);
-        pred.predict();
-        pred.get(0);
-    });
-}

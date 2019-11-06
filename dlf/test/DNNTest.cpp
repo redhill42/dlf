@@ -439,40 +439,6 @@ TEST(DNNTest, BatchNormalizationGPU) {
     }
 }
 
-PERFORMANCE_TEST(DNNTest, BatchNormalizationPerformanceCPU) {
-    auto x = Tensor<float>({2, 3, 1024, 1024}).random(-10, 10);
-    auto s = Tensor<float>({3}).random(0.5, 1.5);
-    auto b = Tensor<float>({3}).random(0, 1);
-    auto m = Tensor<float>({3}).random(0, 3);
-    auto v = Tensor<float>({3}).random(1, 1.5);
-    auto y = Tensor<float>({2, 3, 1024, 1024});
-
-    for (int i = 0; i < 3; i++) {
-        timing("Batch normalization CPU", 1, [&]() {
-            for (int j = 0; j < 100; j++)
-                dnn::batch_norm(x, y, s, b, m, v);
-        });
-    }
-    std::cout << std::endl;
-}
-
-PERFORMANCE_TEST(DNNTest, BatchNormalizationPerformanceGPU) {
-    auto x = dev(Tensor<float>({2, 3, 1024, 1024}).random(-10, 10));
-    auto s = dev(Tensor<float>({3}).random(0.5, 1.5));
-    auto b = dev(Tensor<float>({3}).random(0, 1));
-    auto m = dev(Tensor<float>({3}).random(0, 3));
-    auto v = dev(Tensor<float>({3}).random(1, 1.5));
-    auto y = dev(Tensor<float>({2, 3, 1024, 1024}));
-
-    for (int i = 0; i < 3; i++)
-        timing("Batch normalization GPU", 1, [&]() {
-            for (int j = 0; j < 100; j++)
-                dnn::batch_norm(x, y, s, b, m, v);
-            y.read();
-        });
-    std::cout << std::endl;
-}
-
 TEST(DNNTest, LRN) {
     auto X = Tensor<float>({1, 5, 5, 5}).range(1);
     auto Y = Tensor<float>({1, 5, 5, 5});
@@ -662,28 +628,6 @@ TEST(Conv2D, conv_with_group) {
     dnn::conv2d(X, W, Y, filter);
     dnn::conv2d(dev(X), dev(W), dev_Y, filter);
     ExpectElementsEQ(Y, dev_Y.read());
-}
-
-PERFORMANCE_TEST(Conv2D, performance_test) {
-    auto X = Tensor<float>({1, 3, 1000, 1000}).range(0);
-    auto W = Tensor<float>({8, 3, 3, 3}).range(0);
-    auto Y = Tensor<float>({1, 8, 1000, 1000});
-    auto filter = dnn::Filter2D(X.shape(), W.shape()).pads(1, 1);
-
-    for (int i = 0; i < 3; i++) {
-        timing("Conv2D CPU", 1, [&]() {
-            dnn::conv2d(X, W, Y, filter);
-        });
-    }
-
-    for (int i = 0; i < 3; i++) {
-        auto dev_X = dev(X), dev_W = dev(W);
-        auto dev_Y = DevTensor<float>({1, 8, 1000, 1000});
-        timing("Conv2D GPU", 1, [&]() {
-            dnn::conv2d(dev(X), dev(W), dev_Y, filter);
-            gpgpu::current::queue().finish();
-        });
-    }
 }
 
 TEST(MaxPool, basic_2d_with_padding) {
