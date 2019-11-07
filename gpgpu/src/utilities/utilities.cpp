@@ -377,6 +377,16 @@ bool IsContiguous(const std::vector<size_t>& dim, const std::vector<size_t>& str
   return true;
 }
 
+std::vector<size_t> MakeFlatShape(const std::vector<size_t>& dims) {
+    std::vector<size_t> strides(dims.size());
+    size_t size = 1;
+    for (int i = dims.size()-1; i >= 0; --i) {
+        strides[i] = size;
+        size *= dims[i];
+    }
+    return strides;
+}
+
 Buffer<int> PackShape(const std::vector<size_t>& dim,
                       const std::vector<size_t>& stride,
                       const Context& context, const Queue& queue)

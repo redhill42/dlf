@@ -166,7 +166,8 @@ void argsort(const int dir, const std::vector<size_t>& dims,
              const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 template <typename T>
-void top_k(const size_t limit, const int dir, const std::vector<size_t>& dims,
+void top_k(const size_t limit, const int dir,
+           const std::vector<size_t>& x_dims, const std::vector<size_t>& y_dims,
            const Buffer<T>& x_buffer, const size_t x_offset, const std::vector<size_t>& x_strides,
            Buffer<T>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_strides,
            Buffer<int32_t>& i_buffer, const size_t i_offset, const std::vector<size_t>& i_strides,

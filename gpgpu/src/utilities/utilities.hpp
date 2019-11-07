@@ -223,6 +223,16 @@ void EuclidGCD(int a, int b, int &p, int &q, int &r);
 
 bool IsContiguous(const std::vector<size_t>& dim, const std::vector<size_t>& stride);
 
+inline size_t GetSize(const std::vector<size_t>& dims) {
+    return std::accumulate(dims.begin(), dims.end(), 1, std::multiplies<>());
+}
+
+inline size_t GetBatchSize(const std::vector<size_t>& dims) {
+    return std::accumulate(dims.begin(), dims.end()-1, 1, std::multiplies<>());
+}
+
+std::vector<size_t> MakeFlatShape(const std::vector<size_t>& dims);
+
 Buffer<int> PackShape(const std::vector<size_t>& dim,
                       const std::vector<size_t>& stride,
                       const Context& context, const Queue& queue);

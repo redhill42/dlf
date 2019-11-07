@@ -42,48 +42,87 @@ void Xargsort<T>::DoArgSort(
     if (dims.back() <= 2*db_["WGS"]) {
         DoDirectArgSort(
             dir, dims, x_buffer, x_offset, x_strides,
+                       nullptr,  0,        nullptr,
                        y_buffer, y_offset, y_strides,
                        i_buffer, i_offset, i_strides);
     } else {
         DoIndirectArgSort(
             dir, dims, x_buffer, x_offset, x_strides,
+                       nullptr,  0,        nullptr,
                        y_buffer, y_offset, y_strides,
                        i_buffer, i_offset, i_strides);
     }
 }
 
 template <typename T>
+void Xargsort<T>::DoArgSort(
+    const int dir, const std::vector<size_t>& dims,
+    const Buffer<T>&       x_buffer, const size_t x_offset, const std::vector<size_t>& x_strides,
+    const Buffer<int32_t>& i_buffer, const size_t i_offset, const std::vector<size_t>& i_strides,
+          Buffer<T>&       y_buffer, const size_t y_offset, const std::vector<size_t>& y_strides,
+          Buffer<int32_t>& j_buffer, const size_t j_offset, const std::vector<size_t>& j_strides)
+{
+    if (dims.back() <= 2*db_["WGS"]) {
+        DoDirectArgSort(
+            dir, dims, x_buffer, x_offset, x_strides,
+                      &i_buffer, i_offset, &i_strides,
+                       y_buffer, y_offset, y_strides,
+                       j_buffer, j_offset, j_strides);
+    } else {
+        DoIndirectArgSort(
+            dir, dims, x_buffer, x_offset, x_strides,
+                      &i_buffer, i_offset, &i_strides,
+                       y_buffer, y_offset, y_strides,
+                       j_buffer, j_offset, j_strides);
+    }
+}
+
+template <typename T>
 void Xargsort<T>::DoDirectArgSort(
     const int dir, const std::vector<size_t>& dims,
-    const Buffer<T>& x_buffer, const size_t x_offset, const std::vector<size_t>& x_strides,
-          Buffer<T>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_strides,
-    Buffer<int32_t>& i_buffer, const size_t i_offset, const std::vector<size_t>& i_strides)
+    const Buffer<T>&       x_buffer, const size_t x_offset, const std::vector<size_t>& x_strides,
+    const Buffer<int32_t>* i_buffer, const size_t i_offset, const std::vector<size_t>* i_strides,
+          Buffer<T>&       y_buffer, const size_t y_offset, const std::vector<size_t>& y_strides,
+          Buffer<int32_t>& j_buffer, const size_t j_offset, const std::vector<size_t>& j_strides)
 {
-    auto n = dims.back();
-    auto shape = PackShape(dims, x_strides, y_strides, i_strides, context_, queue_);
+    auto n          = dims.back();
+    auto batch_size = GetBatchSize(dims);
+    auto local_size = NextPowerOfTwo(n) / 2;
+    auto global     = std::vector<size_t>{batch_size * local_size};
+    auto local      = std::vector<size_t>{local_size};
 
-    auto kernel = program_.getKernel("DirectArgSort");
-    kernel.setArguments(
-        static_cast<int>(n), dir, static_cast<int>(dims.size()), shape,
-        x_buffer, static_cast<int>(x_offset), static_cast<int>(x_strides.back()),
-        y_buffer, static_cast<int>(y_offset), static_cast<int>(y_strides.back()),
-        i_buffer, static_cast<int>(i_offset), static_cast<int>(i_strides.back()));
-
-    size_t batch_size = std::accumulate(dims.begin(), dims.end()-1, 1, std::multiplies<>());
-    size_t local_size = NextPowerOfTwo(n) / 2;
-    kernel.setLocalMemorySize(local_size*2 * (sizeof(T) + sizeof(int32_t)));
-
-    auto global = std::vector<size_t>{batch_size * local_size};
-    auto local  = std::vector<size_t>{local_size};
-    RunKernel(kernel, queue_, device_, global, local, event_);
+    if (i_buffer == nullptr) {
+        auto shape = PackShape(dims, x_strides, y_strides, j_strides, context_, queue_);
+        auto kernel = program_.getKernel("DirectArgSort");
+        kernel.setArguments(
+            static_cast<int>(n), dir, static_cast<int>(dims.size()), shape,
+            x_buffer, static_cast<int>(x_offset), static_cast<int>(x_strides.back()),
+            y_buffer, static_cast<int>(y_offset), static_cast<int>(y_strides.back()),
+            j_buffer, static_cast<int>(j_offset), static_cast<int>(j_strides.back()));
+        kernel.setLocalMemorySize(local_size*2 * (sizeof(T) + sizeof(int32_t)));
+        RunKernel(kernel, queue_, device_, global, local, event_);
+    } else {
+        auto x_shape = PackShape(dims, x_strides, *i_strides, context_, queue_);
+        auto y_shape = PackShape(dims, y_strides, j_strides, context_, queue_);
+        auto kernel = program_.getKernel("DirectArgSort2");
+        kernel.setArguments(
+            static_cast<int>(n), dir, static_cast<int>(dims.size()), x_shape, y_shape,
+            x_buffer, static_cast<int>(x_offset), static_cast<int>(x_strides.back()),
+            *i_buffer, static_cast<int>(i_offset), static_cast<int>(i_strides->back()),
+            y_buffer, static_cast<int>(y_offset), static_cast<int>(y_strides.back()),
+            j_buffer, static_cast<int>(j_offset), static_cast<int>(j_strides.back()));
+        kernel.setLocalMemorySize(local_size*2 * (sizeof(T) + sizeof(int32_t)));
+        RunKernel(kernel, queue_, device_, global, local, event_);
+    }
 }
 
 template <typename T>
 void Xargsort<T>::DoIndirectArgSort(
     const int dir, const std::vector<size_t>& dims,
-    const Buffer<T>& x_buffer, const size_t x_offset, const std::vector<size_t>& x_strides,
-          Buffer<T>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_strides,
-    Buffer<int32_t>& i_buffer, const size_t i_offset, const std::vector<size_t>& i_strides)
+    const Buffer<T>&       x_buffer, const size_t x_offset, const std::vector<size_t>& x_strides,
+    const Buffer<int32_t>* i_buffer, const size_t i_offset, const std::vector<size_t>* i_strides,
+          Buffer<T>&       y_buffer, const size_t y_offset, const std::vector<size_t>& y_strides,
+          Buffer<int32_t>& j_buffer, const size_t j_offset, const std::vector<size_t>& j_strides)
 {
     auto n = dims.back();
     auto k = 2*db_["WGS"];
@@ -111,6 +150,7 @@ void Xargsort<T>::DoIndirectArgSort(
         DoBlockArgSort(
             n, dir, dims,
             x_buffer, x_offset, x_strides,
+            i_buffer, i_offset, i_strides,
             aux, aux.offset(), aux_strides,
             idx, idx.offset(), aux_strides);
         DoArgMerge(
@@ -118,17 +158,18 @@ void Xargsort<T>::DoIndirectArgSort(
             aux, aux.offset(), aux_strides,
             idx, idx.offset(), aux_strides,
             y_buffer, y_offset, y_strides,
-            i_buffer, i_offset, i_strides);
+            j_buffer, j_offset, j_strides);
     } else {
         DoBlockArgSort(
             n, dir, dims,
             x_buffer, x_offset, x_strides,
+            i_buffer, i_offset, i_strides,
             y_buffer, y_offset, y_strides,
-            i_buffer, i_offset, i_strides);
+            j_buffer, j_offset, j_strides);
         DoArgMerge(
             n, k, dir, dims,
             y_buffer, y_offset, y_strides,
-            i_buffer, i_offset, i_strides,
+            j_buffer, j_offset, j_strides,
             aux, aux.offset(), aux_strides,
             idx, idx.offset(), aux_strides);
     }
@@ -137,26 +178,38 @@ void Xargsort<T>::DoIndirectArgSort(
 template <typename T>
 void Xargsort<T>::DoBlockArgSort(
     const size_t n, const int dir, const std::vector<size_t>& dims,
-    const Buffer<T>& x_buffer, const size_t x_offset, const std::vector<size_t>& x_strides,
-          Buffer<T>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_strides,
-    Buffer<int32_t>& i_buffer, const size_t i_offset, const std::vector<size_t>& i_strides)
+    const Buffer<T>&       x_buffer, const size_t x_offset, const std::vector<size_t>& x_strides,
+    const Buffer<int32_t>* i_buffer, const size_t i_offset, const std::vector<size_t>* i_strides,
+          Buffer<T>&       y_buffer, const size_t y_offset, const std::vector<size_t>& y_strides,
+          Buffer<int32_t>& j_buffer, const size_t j_offset, const std::vector<size_t>& j_strides)
 {
-    auto shape = PackShape(dims, x_strides, y_strides, i_strides, context_, queue_);
+    auto batch_size = GetBatchSize(dims);
+    auto local_size = db_["WGS"];
+    auto n_ceiled   = Ceil(n, local_size*2) / 2;
+    auto global     = std::vector<size_t>{n_ceiled, batch_size};
+    auto local      = std::vector<size_t>{local_size, 1};
 
-    auto kernel = program_.getKernel("BlockArgSort");
-    kernel.setArguments(
-        static_cast<int>(n), dir, static_cast<int>(dims.size()), shape,
-        x_buffer, static_cast<int>(x_offset), static_cast<int>(x_strides.back()),
-        y_buffer, static_cast<int>(y_offset), static_cast<int>(y_strides.back()),
-        i_buffer, static_cast<int>(i_offset), static_cast<int>(i_strides.back()));
-
-    size_t batch_size = std::accumulate(dims.begin(), dims.end()-1, 1, std::multiplies<>());
-    size_t local_size = db_["WGS"];
-    auto n_ceiled = Ceil(n, local_size*2) / 2;
-
-    auto global = std::vector<size_t>{n_ceiled, batch_size};
-    auto local  = std::vector<size_t>{local_size, 1};
-    RunKernel(kernel, queue_, device_, global, local, nullptr);
+    if (i_buffer == nullptr) {
+        auto shape = PackShape(dims, x_strides, y_strides, j_strides, context_, queue_);
+        auto kernel = program_.getKernel("BlockArgSort");
+        kernel.setArguments(
+            static_cast<int>(n), dir, static_cast<int>(dims.size()), shape,
+            x_buffer, static_cast<int>(x_offset), static_cast<int>(x_strides.back()),
+            y_buffer, static_cast<int>(y_offset), static_cast<int>(y_strides.back()),
+            j_buffer, static_cast<int>(j_offset), static_cast<int>(j_strides.back()));
+        RunKernel(kernel, queue_, device_, global, local, nullptr);
+    } else {
+        auto x_shape = PackShape(dims, x_strides, *i_strides, context_, queue_);
+        auto y_shape = PackShape(dims, y_strides, j_strides, context_, queue_);
+        auto kernel = program_.getKernel("BlockArgSort2");
+        kernel.setArguments(
+            static_cast<int>(n), dir, static_cast<int>(dims.size()), x_shape, y_shape,
+            x_buffer, static_cast<int>(x_offset), static_cast<int>(x_strides.back()),
+            *i_buffer, static_cast<int>(i_offset), static_cast<int>(i_strides->back()),
+            y_buffer, static_cast<int>(y_offset), static_cast<int>(y_strides.back()),
+            j_buffer, static_cast<int>(j_offset), static_cast<int>(j_strides.back()));
+        RunKernel(kernel, queue_, device_, global, local, nullptr);
+    }
 }
 
 template <typename T>
@@ -205,8 +258,7 @@ void Xargsort<T>::DoDirectArgMerge(
         iz_buffer, static_cast<int>(iz_offset), static_cast<int>(iz_strides.back()));
     kernel.setLocalMemorySize((k+1) * 2*sizeof(T));
 
-    size_t batch_size = std::accumulate(dims.begin(), dims.end()-1, 1, std::multiplies<>());
-    auto global = std::vector<size_t>{Ceil(n, k*2)/(WPT*2) * batch_size};
+    auto global = std::vector<size_t>{Ceil(n, k*2)/(WPT*2) * GetBatchSize(dims)};
     auto local  = std::vector<size_t>{k/WPT};
     RunKernel(kernel, queue_, device_, global, local, nullptr);
 }
@@ -219,9 +271,9 @@ void Xargsort<T>::DoIndirectArgMerge(
     Buffer<T>&        z_buffer, const size_t  z_offset, const std::vector<size_t>&  z_strides,
     Buffer<int32_t>& iz_buffer, const size_t iz_offset, const std::vector<size_t>& iz_strides)
 {
-    size_t batch_size = std::accumulate(dims.begin(), dims.end()-1, 1, std::multiplies<>());
-    size_t splits = CeilDiv(n, k*2);
-    size_t blocks = CeilDiv(k*2, db_["WGS"]*WPT);
+    auto batch_size = GetBatchSize(dims);
+    auto splits = CeilDiv(n, k*2);
+    auto blocks = CeilDiv(k*2, db_["WGS"]*WPT);
 
     auto shape1 = PackShape(dims, x_strides, z_strides, context_, queue_);
     auto shape2 = PackShape(dims, ix_strides, iz_strides, context_, queue_);

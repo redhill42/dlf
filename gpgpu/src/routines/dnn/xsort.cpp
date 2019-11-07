@@ -45,8 +45,8 @@ void Xsort<T>::DoDirectSort(
         x_buffer, static_cast<int>(x_offset), static_cast<int>(x_strides.back()),
         y_buffer, static_cast<int>(y_offset), static_cast<int>(y_strides.back()));
 
-    size_t batch_size = std::accumulate(dims.begin(), dims.end()-1, 1, std::multiplies<>());
-    size_t local_size = NextPowerOfTwo(n) / 2;
+    auto batch_size = GetBatchSize(dims);
+    auto local_size = NextPowerOfTwo(n) / 2;
     kernel.setLocalMemorySize(local_size*2 * sizeof(T));
 
     auto global = std::vector<size_t>{batch_size * local_size};
@@ -114,8 +114,8 @@ void Xsort<T>::DoBlockSort(
         x_buffer, static_cast<int>(x_offset), static_cast<int>(x_strides.back()),
         y_buffer, static_cast<int>(y_offset), static_cast<int>(y_strides.back()));
 
-    size_t batch_size = std::accumulate(dims.begin(), dims.end()-1, 1, std::multiplies<>());
-    size_t local_size = db_["WGS"];
+    auto batch_size = GetBatchSize(dims);
+    auto local_size = db_["WGS"];
     auto n_ceiled = Ceil(n, local_size*2) / 2;
 
     auto global = std::vector<size_t>{n_ceiled, batch_size};
@@ -152,8 +152,7 @@ void Xsort<T>::DoDirectMerge(
         z_buffer, static_cast<int>(z_offset), static_cast<int>(z_strides.back()));
     kernel.setLocalMemorySize((k+1) * 2*sizeof(T));
 
-    size_t batch_size = std::accumulate(dims.begin(), dims.end()-1, 1, std::multiplies<>());
-    auto global = std::vector<size_t>{Ceil(n, k*2)/(WPT*2) * batch_size};
+    auto global = std::vector<size_t>{Ceil(n, k*2)/(WPT*2) * GetBatchSize(dims)};
     auto local  = std::vector<size_t>{k/WPT};
     RunKernel(kernel, queue_, device_, global, local, nullptr);
 }
@@ -164,9 +163,9 @@ void Xsort<T>::DoIndirectMerge(
     const Buffer<T>& x_buffer, const size_t x_offset, const std::vector<size_t>& x_strides,
           Buffer<T>& z_buffer, const size_t z_offset, const std::vector<size_t>& z_strides)
 {
-    size_t batch_size = std::accumulate(dims.begin(), dims.end()-1, 1, std::multiplies<>());
-    size_t splits = CeilDiv(n, k*2);
-    size_t blocks = CeilDiv(k*2, db_["WGS"]*WPT);
+    auto batch_size = GetBatchSize(dims);
+    auto splits = CeilDiv(n, k*2);
+    auto blocks = CeilDiv(k*2, db_["WGS"]*WPT);
 
     auto diag = context_.getTemporaryBuffer<int>(batch_size * splits * (2*(blocks + 1)));
     auto shape = PackShape(dims, x_strides, z_strides, context_, queue_);

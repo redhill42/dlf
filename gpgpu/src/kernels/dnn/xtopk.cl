@@ -1,8 +1,9 @@
 CL_PROGRAM R"(
 
-INLINE_FUNC void comparator2(LOCAL_PTR real* A, LOCAL_PTR int* iA,
-                             LOCAL_PTR real* B, LOCAL_PTR int* iB,
-                             int dir)
+INLINE_FUNC void comparator2(
+    LOCAL_PTR real* A, LOCAL_PTR int* iA,
+    LOCAL_PTR real* B, LOCAL_PTR int* iB,
+    int dir)
 {
     if ((*A < *B) == dir) {
         real t = *A;
@@ -44,7 +45,8 @@ INLINE_FUNC void LocalSort(
 
 // Monolithic bitonic sort kernel for short arrays fitting into local memory
 __kernel void DirectTopK(
-    const int n, const int limit, const int dir, const int rank, __constant int* shape,
+    const int n, const int limit, const int dir,
+    const int rank, __constant int* x_shape, __constant int* y_shape,
     const __global real* restrict xgm, int x_offset, const int x_inc,
           __global real* restrict ygm, int y_offset, const int y_inc,
           __global int*           igm, int i_offset, const int i_inc
@@ -60,8 +62,8 @@ __kernel void DirectTopK(
     LOCAL_PTR real* s_val = lm;
     LOCAL_PTR int*  s_idx = (LOCAL_PTR int*)(lm + L*2);
 
-    unravel3(get_group_id(0)*n + i, &x_offset, &y_offset, &i_offset, rank, shape);
-    xgm += x_offset;
+    unravel2(get_group_id(0)*limit + i, &y_offset, &i_offset, rank, y_shape);
+    xgm += x_offset + unravel(get_group_id(0)*n + i, rank, x_shape);
     ygm += y_offset;
     igm += i_offset;
 
@@ -86,7 +88,7 @@ __kernel void DirectTopK(
 
 __kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
 void BlockTopK(
-    const int n, const int limit, const int block_size,
+    const int n, const int limit, const int y_len,
     const int dir, const int rank, __constant int* shape,
     const __global real* xgm, int x_offset, const int x_inc,
           __global real* ygm, int y_offset,
@@ -96,7 +98,7 @@ void BlockTopK(
     const int lid   = get_local_id(0);
     const int wgid  = get_group_id(0);
     const int xgid  = wgid*WGS*2 + lid;
-    const int ygid  = batch*block_size + wgid*limit + lid;
+    const int ygid  = batch*y_len + wgid*limit + lid;
 
     xgm += x_offset + unravel(batch*n + xgid, rank, shape);
     ygm += y_offset + ygid;
@@ -167,6 +169,67 @@ __kernel void CompactTopK(
     if (i + L < limit) {
         ygm[L * y_inc] = s_val[i + L];
         jgm[L * j_inc] = get_index(s_idx, i + L);
+    }
+}
+
+__kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
+void BlockCompactTopK(
+    const int n, const int limit, const int y_len, const int dir,
+    const __global real* restrict xgm, int x_offset,
+    const __global int*  restrict igm, int i_offset,
+          __global real*          ygm, int y_offset,
+          __global int*           jgm, int j_offset)
+{
+    const int batch = get_global_id(1);
+    const int lid   = get_local_id(0);
+    const int wgid  = get_group_id(0);
+    const int xgid  = wgid*WGS*2 + lid;
+    const int ygid  = batch*y_len + wgid*limit + lid;
+
+    xgm += x_offset + batch*n + xgid;
+    igm += i_offset + batch*n + xgid;
+    ygm += y_offset + ygid;
+    jgm += j_offset + ygid;
+
+    __local real s_val[WGS*2];
+    __local int  s_idx[WGS*2];
+
+    const real pad = dir ? SMALLEST : LARGEST;
+    s_val[lid +   0] = (xgid +   0 < n) ? xgm[  0] : pad;
+    s_val[lid + WGS] = (xgid + WGS < n) ? xgm[WGS] : pad;
+    s_idx[lid +   0] = (xgid +   0 < n) ? igm[  0] : -(lid +   0);
+    s_idx[lid + WGS] = (xgid + WGS < n) ? igm[WGS] : -(lid + WGS);
+    barrier(CLK_LOCAL_MEM_FENCE);
+
+    LocalSort(lid, WGS, dir, s_val, s_idx);
+
+    if (lid < limit && xgid < n) {
+        ygm[0] = s_val[lid];
+        jgm[0] = get_index(s_idx, lid);
+    }
+    if (lid + WGS < limit && xgid + WGS < n) {
+        ygm[WGS] = s_val[lid + WGS];
+        jgm[WGS] = get_index(s_idx, lid + WGS);
+    }
+}
+
+__kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
+void SelectTopK(
+    const int n, const int limit, const int rank, __constant int* y_shape,
+    const __global real* restrict xgm, const int x_offset,
+    const __global int*  restrict igm, const int i_offset,
+          __global real* restrict ygm, const int y_offset, const int y_inc,
+          __global int*  restrict jgm, const int j_offset, const int j_inc)
+{
+    unravel2(get_group_id(0)*limit, &y_offset, &j_offset, rank, y_shape);
+    xgm += x_offset + get_group_id(0)*n;
+    igm += i_offset + get_group_id(0)*n;
+    ygm += y_offset;
+    jgm += j_offset;
+
+    for (int lid = get_local_id(0); lid < limit; lid += get_local_size(0)) {
+        ygm[lid * y_inc] = xgm[lid];
+        jgm[lid * j_inc] = igm[lid];
     }
 }
 

@@ -1258,7 +1258,8 @@ top_k(const TensorT& X, TensorR&& Y, TensorI&& I,
     auto y_view = moveaxis(Y, axis, -1);
     auto i_view = moveaxis(I, axis, -1);
 
-    gpgpu::dnn::top_k(k, largest, x_view.shape().extents(),
+    gpgpu::dnn::top_k(
+        k, largest, x_view.shape().extents(), y_view.shape().extents(),
         x_view.data(), x_view.shape().offset(), x_view.shape().strides(),
         y_view.data(), y_view.shape().offset(), y_view.shape().strides(),
         i_view.data(), i_view.shape().offset(), i_view.shape().strides());

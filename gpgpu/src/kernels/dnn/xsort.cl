@@ -112,6 +112,23 @@ INLINE_FUNC void comparator(LOCAL_PTR real* A, LOCAL_PTR real* B, int dir) {
     }
 }
 
+INLINE_FUNC void LocalSort(const int i, const int L, const int dir, LOCAL_PTR real* lm) {
+    for (int k = 2; k <= L; k <<= 1) {
+        int ddd = dir ^ ((i & (k / 2)) != 0);
+        for (int j = k >> 1; j > 0; j >>= 1) {
+            int pos = 2*i - (i & (j - 1));
+            comparator(&lm[pos], &lm[pos + j], ddd);
+            barrier(CLK_LOCAL_MEM_FENCE);
+        }
+    }
+
+    for (int j = L; j > 0; j >>= 1) {
+        int pos = 2*i - (i & (j - 1));
+        comparator(&lm[pos], &lm[pos + j], dir);
+        barrier(CLK_LOCAL_MEM_FENCE);
+    }
+}
+
 // Monolithic bitonic sort kernel for short arrays fitting into local memory
 __kernel void DirectSort(
     const int n, const int dir, const int rank, __constant int* shape,
@@ -135,20 +152,7 @@ __kernel void DirectSort(
     lm[i + L] = (i + L < n) ? xgm[L * x_inc] : pad;
     barrier(CLK_LOCAL_MEM_FENCE);
 
-    for (int k = 2; k <= L; k <<= 1) {
-        int ddd = dir ^ ((i & (k / 2)) != 0);
-        for (int j = k >> 1; j > 0; j >>= 1) {
-            int pos = 2*i - (i & (j - 1));
-            comparator(&lm[pos], &lm[pos + j], ddd);
-            barrier(CLK_LOCAL_MEM_FENCE);
-        }
-    }
-
-    for (int j = L; j > 0; j >>= 1) {
-        int pos = 2*i - (i & (j - 1));
-        comparator(&lm[pos], &lm[pos + j], dir);
-        barrier(CLK_LOCAL_MEM_FENCE);
-    }
+    LocalSort(i, L, dir, lm);
 
     if (i < n)
         ygm[0] = lm[i];
@@ -179,20 +183,7 @@ void BlockSort(
     lm[lid + WGS] = (gid + WGS < n) ? xgm[WGS * x_inc] : pad;
     barrier(CLK_LOCAL_MEM_FENCE);
 
-    for (int k = 2; k <= WGS; k <<= 1) {
-        int ddd = dir ^ ((lid & (k / 2)) != 0);
-        for (int j = k >> 1; j > 0; j >>= 1) {
-            int pos = 2*lid - (lid & (j - 1));
-            comparator(&lm[pos], &lm[pos + j], ddd);
-            barrier(CLK_LOCAL_MEM_FENCE);
-        }
-    }
-
-    for (int j = WGS; j > 0; j >>= 1) {
-        int pos = 2*lid - (lid & (j - 1));
-        comparator(&lm[pos], &lm[pos + j], dir);
-        barrier(CLK_LOCAL_MEM_FENCE);
-    }
+    LocalSort(lid, WGS, dir, lm);
 
     if (gid < n)
         ygm[0] = lm[lid];
@@ -306,10 +297,30 @@ INLINE_FUNC int get_index(LOCAL_PTR int* indices, int i) {
     return res;
 }
 
+INLINE_FUNC void LocalArgSort(
+    const int i, const int L, const int dir,
+    LOCAL_PTR real* s_val, LOCAL_PTR int* s_idx)
+{
+    for (int k = 2; k <= L; k <<= 1) {
+        int ddd = dir ^ ((i & (k / 2)) != 0);
+        for (int j = k >> 1; j > 0; j >>= 1) {
+            int pos = 2*i - (i & (j - 1));
+            comparator2(&s_val[pos], &s_idx[pos], &s_val[pos+j], &s_idx[pos+j], ddd);
+            barrier(CLK_LOCAL_MEM_FENCE);
+        }
+    }
+
+    for (int j = L; j > 0; j >>= 1) {
+        int pos = 2*i - (i & (j - 1));
+        comparator2(&s_val[pos], &s_idx[pos], &s_val[pos+j], &s_idx[pos+j], dir);
+        barrier(CLK_LOCAL_MEM_FENCE);
+    }
+}
+
 __kernel void DirectArgSort(
     const int n, const int dir, const int rank, __constant int* shape,
     const __global real* restrict xgm, int x_offset, const int x_inc,
-          __global real* restrict ygm, int y_offset, const int y_inc,
+          __global real*          ygm, int y_offset, const int y_inc,
           __global int*           igm, int i_offset, const int i_inc
 #ifndef CUDA
     , __local real* lm) {
@@ -335,20 +346,7 @@ __kernel void DirectArgSort(
     s_idx[i + L] = (i + L < n) ? (i + L) : -(i + L);
     barrier(CLK_LOCAL_MEM_FENCE);
 
-    for (int k = 2; k <= L; k <<= 1) {
-        int ddd = dir ^ ((i & (k / 2)) != 0);
-        for (int j = k >> 1; j > 0; j >>= 1) {
-            int pos = 2*i - (i & (j - 1));
-            comparator2(&s_val[pos], &s_idx[pos], &s_val[pos+j], &s_idx[pos+j], ddd);
-            barrier(CLK_LOCAL_MEM_FENCE);
-        }
-    }
-
-    for (int j = L; j > 0; j >>= 1) {
-        int pos = 2*i - (i & (j - 1));
-        comparator2(&s_val[pos], &s_idx[pos], &s_val[pos+j], &s_idx[pos+j], dir);
-        barrier(CLK_LOCAL_MEM_FENCE);
-    }
+    LocalArgSort(i, L, dir, s_val, s_idx);
 
     if (i < n) {
         ygm[0] = s_val[i];
@@ -357,6 +355,51 @@ __kernel void DirectArgSort(
     if (i + L < n) {
         ygm[L * y_inc] = s_val[i+L];
         igm[L * i_inc] = get_index(s_idx, i + L);
+    }
+}
+
+__kernel void DirectArgSort2(
+    const int n, const int dir, const int rank,
+    __constant int* x_shape, __constant int* y_shape,
+    const __global real* restrict xgm, int x_offset, const int x_inc,
+    const __global int*  restrict igm, int i_offset, const int i_inc,
+          __global real*          ygm, int y_offset, const int y_inc,
+          __global int*           jgm, int j_offset, const int j_inc
+#ifndef CUDA
+    , __local real* lm) {
+#else
+    ) { extern __shared__ real lm[];
+#endif
+
+    const int i = get_local_id(0);
+    const int L = get_local_size(0);
+
+    LOCAL_PTR real* s_val = lm;
+    LOCAL_PTR int*  s_idx = (LOCAL_PTR int*)(lm + L*2);
+
+    unravel2(get_group_id(0)*n + i, &x_offset, &i_offset, rank, x_shape);
+    unravel2(get_group_id(0)*n + i, &y_offset, &j_offset, rank, y_shape);
+    xgm += x_offset;
+    igm += i_offset;
+    ygm += y_offset;
+    jgm += j_offset;
+
+    const real pad = dir ? SMALLEST : LARGEST;
+    s_val[i + 0] = (i + 0 < n) ? xgm[0        ] : pad;
+    s_val[i + L] = (i + L < n) ? xgm[L * x_inc] : pad;
+    s_idx[i + 0] = (i + 0 < n) ? igm[0        ] : -(i + 0);
+    s_idx[i + L] = (i + L < n) ? igm[L * i_inc] : -(i + L);
+    barrier(CLK_LOCAL_MEM_FENCE);
+
+    LocalArgSort(i, L, dir, s_val, s_idx);
+
+    if (i < n) {
+        ygm[0] = s_val[i];
+        jgm[0] = get_index(s_idx, i);
+    }
+    if (i + L < n) {
+        ygm[L * y_inc] = s_val[i+L];
+        jgm[L * j_inc] = get_index(s_idx, i + L);
     }
 }
 
@@ -386,20 +429,7 @@ void BlockArgSort(
     s_idx[lid + WGS] = (gid + WGS < n) ? gid + WGS : -(lid + WGS);
     barrier(CLK_LOCAL_MEM_FENCE);
 
-    for (int k = 2; k <= WGS; k <<= 1) {
-        int ddd = dir ^ ((lid & (k / 2)) != 0);
-        for (int j = k >> 1; j > 0; j >>= 1) {
-            int pos = 2*lid - (lid & (j - 1));
-            comparator2(&s_val[pos], &s_idx[pos], &s_val[pos+j], &s_idx[pos+j], ddd);
-            barrier(CLK_LOCAL_MEM_FENCE);
-        }
-    }
-
-    for (int j = WGS; j > 0; j >>= 1) {
-        int pos = 2*lid - (lid & (j - 1));
-        comparator2(&s_val[pos], &s_idx[pos], &s_val[pos+j], &s_idx[pos+j], dir);
-        barrier(CLK_LOCAL_MEM_FENCE);
-    }
+    LocalArgSort(lid, WGS, dir, s_val, s_idx);
 
     if (gid < n) {
         ygm[0] = s_val[lid];
@@ -408,6 +438,48 @@ void BlockArgSort(
     if (gid + WGS < n) {
         ygm[WGS * y_inc] = s_val[lid + WGS];
         igm[WGS * i_inc] = get_index(s_idx, lid + WGS);
+    }
+}
+
+__kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
+void BlockArgSort2(
+    const int n, const int dir, const int rank,
+    __constant int* x_shape, __constant int* y_shape,
+    const __global real* xgm, int x_offset, const int x_inc,
+    const __global int*  igm, int i_offset, const int i_inc,
+          __global real* ygm, int y_offset, const int y_inc,
+          __global int*  jgm, int j_offset, const int j_inc)
+{
+    const int batch = get_global_id(1);
+    const int lid   = get_local_id(0);
+    const int gid   = get_group_id(0)*WGS*2 + lid;
+
+    unravel2(batch*n + gid, &x_offset, &i_offset, rank, x_shape);
+    unravel2(batch*n + gid, &y_offset, &j_offset, rank, y_shape);
+    xgm += x_offset;
+    igm += i_offset;
+    ygm += y_offset;
+    jgm += j_offset;
+
+    __local real s_val[WGS*2];
+    __local int  s_idx[WGS*2];
+
+    const real pad = dir ? SMALLEST : LARGEST;
+    s_val[lid +   0] = (gid +   0 < n) ? xgm[0          ] : pad;
+    s_val[lid + WGS] = (gid + WGS < n) ? xgm[WGS * x_inc] : pad;
+    s_idx[lid +   0] = (gid +   0 < n) ? igm[0          ] : -(lid +   0);
+    s_idx[lid + WGS] = (gid + WGS < n) ? igm[WGS * i_inc] : -(lid + WGS);
+    barrier(CLK_LOCAL_MEM_FENCE);
+
+    LocalArgSort(lid, WGS, dir, s_val, s_idx);
+
+    if (gid < n) {
+        ygm[0] = s_val[lid];
+        jgm[0] = get_index(s_idx, lid);
+    }
+    if (gid + WGS < n) {
+        ygm[WGS * y_inc] = s_val[lid + WGS];
+        jgm[WGS * j_inc] = get_index(s_idx, lid + WGS);
     }
 }
 
