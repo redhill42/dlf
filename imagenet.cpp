@@ -39,8 +39,11 @@ struct ImageClass {
     ImageClass(cv::Mat&& image, size_t original)
         : image(std::move(image)), original(original) {}
 
-    void setResult(const std::vector<Score> scores) {
-        std::copy(scores.begin(), scores.begin()+5, inferred);
+    void setResult(const Tensor<Real>& scores, const Tensor<int>& indices) {
+        for (int i = 0; i < 5; i++) {
+            inferred[i].score = scores(i);
+            inferred[i].index = indices(i);
+        }
     }
 
     bool hit() const {
@@ -101,21 +104,8 @@ auto preprocess(const cv::Mat& img) {
     return ((pixels - mean) / stdev).transpose(0, 3, 1, 2);
 }
 
-template <typename TensorT>
-std::vector<Score> postprocess(TensorT&& scores_in) {
-    auto scores = dnn::softmax(squeeze(std::forward<TensorT>(scores_in)), 0);
-
-    std::vector<Score> result(scores.size());
-    for (int i = 0; i < 1000; i++) {
-        result[i].index = i;
-        result[i].score = scores(i);
-    }
-
-    std::sort(result.begin(), result.end(), [](auto x, auto y) {
-        return x.score > y.score;
-    });
-
-    return result;
+std::pair<Tensor<Real>, Tensor<int>> postprocess(const Tensor<Real>& scores) {
+    return top_k(dnn::softmax(scores), 5);
 }
 
 template <class RandomGenerator>
@@ -159,10 +149,10 @@ void predict_images(predict::Predictor<Context, Real>& predictor, std::vector<Im
 
     predictor.set(0, batch);
     predictor.predict();
-    auto result = predictor.get(0);
 
+    auto result = postprocess(predictor.get(0));
     for (int i = 0; i < images.size(); i++) {
-        images[i].setResult(postprocess(result[i]));
+        images[i].setResult(result.first[i], result.second[i]);
     }
 }
 
@@ -263,11 +253,11 @@ void run_benchmark(const char* model_path, const char* data_path,
     // show prediction result
     predictor.set(0, input);
     predictor.predict();
-    auto result = postprocess(predictor.get(0)[0]);
+    auto result = postprocess(predictor.get(0));
     for (int i = 0; i < 5; i++) {
-        auto x = result[i];
-        std::cout << ImageLabel(x.index) << ": "
-                  << x.score*100 << "%\n";
+        auto score = result.first(0, i);
+        auto index = result.second(0, i);
+        std::cout << ImageLabel(index) << ": " << score*100 << "%\n";
     }
 
     // warm up

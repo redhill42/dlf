@@ -2337,15 +2337,25 @@ TEST(UniformTest, TopK) {
         auto X = Tensor<int>({2, n}).random(0, 100000);
         auto Y = Tensor<int>();
         auto I = Tensor<int>();
-        top_k(X, Y, I, 1000);
 
         auto dev_X = dev(X);
         auto dev_Y = DevTensor<int>();
         auto dev_I = DevTensor<int>();
-        top_k(dev_X, dev_Y, dev_I, 1000);
 
+        top_k(X, Y, I, 200);
+        top_k(dev_X, dev_Y, dev_I, 200);
         EXPECT_EQ(Y, dev_Y.read());
-        EXPECT_EQ(Y, gather_elements(dev_X, dev_I, 1).read());
+        EXPECT_EQ(Y, gather_elements(dev_X, dev_I, -1).read());
+
+        top_k(X, Y, I, 500);
+        top_k(dev_X, dev_Y, dev_I, 500);
+        EXPECT_EQ(Y, dev_Y.read());
+        EXPECT_EQ(Y, gather_elements(dev_X, dev_I, -1).read());
+
+        top_k(X, Y, I, 1000);
+        top_k(dev_X, dev_Y, dev_I, 1000);
+        EXPECT_EQ(Y, dev_Y.read());
+        EXPECT_EQ(Y, gather_elements(dev_X, dev_I, -1).read());
     }
 }
 

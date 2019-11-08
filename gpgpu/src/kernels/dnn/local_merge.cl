@@ -6,20 +6,19 @@ CL_PROGRAM R"(
 // dir = 0: ascending, dir = 1: descending
 #define comp(A, B, dir) (((A) <= (B)) != (dir))
 
-#ifdef ROUTINE_ARGSORT
+#if defined(ROUTINE_ARGSORT) || defined(ROUTINE_TOPK)
+#define WITH_ARGS 1
+#else
+#define WITH_ARGS 0
+#endif
+
+#if WITH_ARGS
 #define ARG(x) x
 #else
 #define ARG(x)
 #endif
 
-#ifndef ROUTINE_ARGSORT
-INLINE_FUNC void LocalMerge(
-    const int dir,
-    const __global real* restrict xgm, const int x_len, const int x_inc,
-    const __global real* restrict ygm, const int y_len, const int y_inc,
-          __global real*          zgm, const int z_len, const int z_inc,
-    LOCAL_PTR real* xlm, LOCAL_PTR real* ylm)
-#else
+#if WITH_ARGS
 INLINE_FUNC void LocalArgMerge(
     const int dir,
     const int x_len, const __global real* restrict xgm, const int  x_inc,
@@ -28,6 +27,13 @@ INLINE_FUNC void LocalArgMerge(
                      const __global int* restrict iygm, const int iy_inc,
     const int z_len,       __global real*          zgm, const int  z_inc,
                            __global int*          izgm, const int iz_inc,
+    LOCAL_PTR real* xlm, LOCAL_PTR real* ylm)
+#else
+INLINE_FUNC void LocalMerge(
+    const int dir,
+    const __global real* restrict xgm, const int x_len, const int x_inc,
+    const __global real* restrict ygm, const int y_len, const int y_inc,
+          __global real*          zgm, const int z_len, const int z_inc,
     LOCAL_PTR real* xlm, LOCAL_PTR real* ylm)
 #endif
 {
@@ -83,15 +89,7 @@ INLINE_FUNC void LocalArgMerge(
     }
 }
 
-#ifndef ROUTINE_ARGSORT
-INLINE_FUNC void LocalMultiMerge(
-    const int dir,
-    const __global real* restrict xgm, const int x_len, const int x_inc,
-    const __global real* restrict ygm, const int y_len, const int y_inc,
-          __global real*          zgm, const int z_len, const int z_inc,
-    LOCAL_PTR int* x_block_start, LOCAL_PTR real* xlm,
-    LOCAL_PTR int* y_block_start, LOCAL_PTR real* ylm)
-#else
+#if WITH_ARGS
 INLINE_FUNC void LocalMultiArgMerge(
     const int dir,
     const int x_len, const __global real* restrict xgm, const int  x_inc,
@@ -100,6 +98,14 @@ INLINE_FUNC void LocalMultiArgMerge(
                      const __global int* restrict iygm, const int iy_inc,
     const int z_len,       __global real*          zgm, const int  z_inc,
                            __global int*          izgm, const int iz_inc,
+    LOCAL_PTR int* x_block_start, LOCAL_PTR real* xlm,
+    LOCAL_PTR int* y_block_start, LOCAL_PTR real* ylm)
+#else
+INLINE_FUNC void LocalMultiMerge(
+    const int dir,
+    const __global real* restrict xgm, const int x_len, const int x_inc,
+    const __global real* restrict ygm, const int y_len, const int y_inc,
+          __global real*          zgm, const int z_len, const int z_inc,
     LOCAL_PTR int* x_block_start, LOCAL_PTR real* xlm,
     LOCAL_PTR int* y_block_start, LOCAL_PTR real* ylm)
 #endif

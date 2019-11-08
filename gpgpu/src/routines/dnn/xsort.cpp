@@ -152,8 +152,10 @@ void Xsort<T>::DoDirectMerge(
         z_buffer, static_cast<int>(z_offset), static_cast<int>(z_strides.back()));
     kernel.setLocalMemorySize((k+1) * 2*sizeof(T));
 
-    auto global = std::vector<size_t>{Ceil(n, k*2)/(WPT*2) * GetBatchSize(dims)};
-    auto local  = std::vector<size_t>{k/WPT};
+    auto local_size = k / WPT;
+    auto blocks = CeilDiv(n, k*2);
+    auto global = std::vector<size_t>{blocks * local_size * GetBatchSize(dims)};
+    auto local  = std::vector<size_t>{local_size};
     RunKernel(kernel, queue_, device_, global, local, nullptr);
 }
 

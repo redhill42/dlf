@@ -1,5 +1,8 @@
 CL_PROGRAM R"(
 
+#undef WPT
+#define WPT 4
+
 INLINE_FUNC void comparator2(
     LOCAL_PTR real* A, LOCAL_PTR int* iA,
     LOCAL_PTR real* B, LOCAL_PTR int* iB,
@@ -126,100 +129,49 @@ void BlockTopK(
     }
 }
 
-__kernel void CompactTopK(
-    const int n, const int limit, const int dir,
-    const int rank, __constant int* shape,
+__kernel void DoMerge(
+    const int input_len, const int output_len, const int limit, const int dir,
     const __global real* restrict xgm, int x_offset,
     const __global int*  restrict igm, int i_offset,
-          __global real*          ygm, int y_offset, const int y_inc,
-          __global int*           jgm, int j_offset, const int j_inc
+          __global real*          ygm, int y_offset,
+          __global int*           jgm, int j_offset
 #ifndef CUDA
     , __local real* lm) {
 #else
     ) { extern __shared__ real lm[];
 #endif
 
-    const int i = get_local_id(0);
-    const int L = get_local_size(0);
+    const int lsz    = get_local_size(0) * WPT;
+    const int wgid   = get_group_id(0);
+    const int blocks = (input_len - 1) / (lsz*2) + 1;
+    const int batch  = wgid / blocks;
+    const int x_gid  = (wgid % blocks) * lsz*2;
+    const int y_gid  = (wgid % blocks) * limit;
 
-    LOCAL_PTR real* s_val = lm;
-    LOCAL_PTR int*  s_idx = (LOCAL_PTR int*)(lm + L*2);
+          int z_len  = min(input_len - x_gid, lsz*2);
+    const int x_len  = min(z_len, lsz);
+    const int y_len  = z_len - x_len;
+              z_len  = min(output_len - y_gid, limit);
 
-    const int batch = get_group_id(0);
-    xgm += x_offset + batch*n + i;
-    igm += i_offset + batch*n + i;
+    xgm += x_offset  + batch*input_len  + x_gid;
+    igm += i_offset  + batch*input_len  + x_gid;
+    ygm += y_offset  + batch*output_len + y_gid;
+    jgm += j_offset  + batch*output_len + y_gid;
 
-    unravel2(batch*limit + i, &y_offset, &j_offset, rank, shape);
-    ygm += y_offset;
-    jgm += j_offset;
-
-    const real pad = dir ? SMALLEST : LARGEST;
-    s_val[i + 0] = (i + 0 < n) ? xgm[0] : pad;
-    s_val[i + L] = (i + L < n) ? xgm[L] : pad;
-    s_idx[i + 0] = (i + 0 < n) ? igm[0] : -(i + 0);
-    s_idx[i + L] = (i + L < n) ? igm[L] : -(i + L);
-    barrier(CLK_LOCAL_MEM_FENCE);
-
-    LocalSort(i, L, dir, s_val, s_idx);
-
-    if (i < limit) {
-        ygm[0] = s_val[i];
-        jgm[0] = get_index(s_idx, i);
-    }
-    if (i + L < limit) {
-        ygm[L * y_inc] = s_val[i + L];
-        jgm[L * j_inc] = get_index(s_idx, i + L);
-    }
-}
-
-__kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
-void BlockCompactTopK(
-    const int n, const int limit, const int y_len, const int dir,
-    const __global real* restrict xgm, int x_offset,
-    const __global int*  restrict igm, int i_offset,
-          __global real*          ygm, int y_offset,
-          __global int*           jgm, int j_offset)
-{
-    const int batch = get_global_id(1);
-    const int lid   = get_local_id(0);
-    const int wgid  = get_group_id(0);
-    const int xgid  = wgid*WGS*2 + lid;
-    const int ygid  = batch*y_len + wgid*limit + lid;
-
-    xgm += x_offset + batch*n + xgid;
-    igm += i_offset + batch*n + xgid;
-    ygm += y_offset + ygid;
-    jgm += j_offset + ygid;
-
-    __local real s_val[WGS*2];
-    __local int  s_idx[WGS*2];
-
-    const real pad = dir ? SMALLEST : LARGEST;
-    s_val[lid +   0] = (xgid +   0 < n) ? xgm[  0] : pad;
-    s_val[lid + WGS] = (xgid + WGS < n) ? xgm[WGS] : pad;
-    s_idx[lid +   0] = (xgid +   0 < n) ? igm[  0] : -(lid +   0);
-    s_idx[lid + WGS] = (xgid + WGS < n) ? igm[WGS] : -(lid + WGS);
-    barrier(CLK_LOCAL_MEM_FENCE);
-
-    LocalSort(lid, WGS, dir, s_val, s_idx);
-
-    if (lid < limit && xgid < n) {
-        ygm[0] = s_val[lid];
-        jgm[0] = get_index(s_idx, lid);
-    }
-    if (lid + WGS < limit && xgid + WGS < n) {
-        ygm[WGS] = s_val[lid + WGS];
-        jgm[WGS] = get_index(s_idx, lid + WGS);
-    }
+    LocalArgMerge(dir,
+                  x_len, xgm,       1, igm,       1,
+                  y_len, xgm+x_len, 1, igm+x_len, 1,
+                  z_len, ygm,       1, jgm,       1,
+                  lm, lm + lsz + 1);
 }
 
 __kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
 void SelectTopK(
     const int n, const int limit, const int rank, __constant int* y_shape,
-    const __global real* restrict xgm, const int x_offset,
-    const __global int*  restrict igm, const int i_offset,
-          __global real* restrict ygm, const int y_offset, const int y_inc,
-          __global int*  restrict jgm, const int j_offset, const int j_inc)
+    const __global real* restrict xgm, int x_offset,
+    const __global int*  restrict igm, int i_offset,
+          __global real*          ygm, int y_offset, const int y_inc,
+          __global int*           jgm, int j_offset, const int j_inc)
 {
     unravel2(get_group_id(0)*limit, &y_offset, &j_offset, rank, y_shape);
     xgm += x_offset + get_group_id(0)*n;

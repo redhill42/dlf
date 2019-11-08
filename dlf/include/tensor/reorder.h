@@ -1265,4 +1265,13 @@ top_k(const TensorT& X, TensorR&& Y, TensorI&& I,
         i_view.data(), i_view.shape().offset(), i_view.shape().strides());
 }
 
+template <typename TensorT>
+std::enable_if_t<is_tensor<TensorT>::value, std::pair<tensor_type<TensorT>, tensor_type<TensorT, int>>>
+top_k(TensorT&& X, size_t k, int axis = -1, bool largest = true) {
+    auto Y = tensor_type<TensorT>();
+    auto I = tensor_type<TensorT, int>();
+    top_k(std::forward<TensorT>(X), Y, I, k, axis, largest);
+    return std::make_pair(std::move(Y), std::move(I));
+}
+
 } // namespace dlf

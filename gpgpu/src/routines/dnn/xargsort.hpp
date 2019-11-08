@@ -20,34 +20,24 @@ public:
               Buffer<T>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_strides,
         Buffer<int32_t>& i_buffer, const size_t i_offset, const std::vector<size_t>& i_strides);
 
-    void DoArgSort(
-        const int dir, const std::vector<size_t>& dims,
-        const Buffer<T>&       x_buffer, const size_t x_offset, const std::vector<size_t>& x_strides,
-        const Buffer<int32_t>& i_buffer, const size_t i_offset, const std::vector<size_t>& i_strides,
-              Buffer<T>&       y_buffer, const size_t y_offset, const std::vector<size_t>& y_strides,
-              Buffer<int32_t>& j_buffer, const size_t j_offset, const std::vector<size_t>& j_strides);
-
 private:
     void DoDirectArgSort(
         const int dir, const std::vector<size_t>& dims,
-        const Buffer<T>&       x_buffer, const size_t x_offset, const std::vector<size_t>& x_strides,
-        const Buffer<int32_t>* i_buffer, const size_t i_offset, const std::vector<size_t>* i_strides,
-              Buffer<T>&       y_buffer, const size_t y_offset, const std::vector<size_t>& y_strides,
-              Buffer<int32_t>& j_buffer, const size_t j_offset, const std::vector<size_t>& j_strides);
+        const Buffer<T>& x_buffer, const size_t x_offset, const std::vector<size_t>& x_strides,
+              Buffer<T>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_strides,
+        Buffer<int32_t>& i_buffer, const size_t i_offset, const std::vector<size_t>& i_strides);
 
     void DoIndirectArgSort(
         const int dir, const std::vector<size_t>& dims,
-        const Buffer<T>&       x_buffer, const size_t x_offset, const std::vector<size_t>& x_strides,
-        const Buffer<int32_t>* i_buffer, const size_t i_offset, const std::vector<size_t>* i_strides,
-              Buffer<T>&       y_buffer, const size_t y_offset, const std::vector<size_t>& y_strides,
-              Buffer<int32_t>& j_buffer, const size_t j_offset, const std::vector<size_t>& j_strides);
+        const Buffer<T>& x_buffer, const size_t x_offset, const std::vector<size_t>& x_strides,
+              Buffer<T>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_strides,
+        Buffer<int32_t>& i_buffer, const size_t i_offset, const std::vector<size_t>& i_strides);
 
     void DoBlockArgSort(
         const size_t n, const int dir, const std::vector<size_t>& dims,
-        const Buffer<T>&       x_buffer, const size_t x_offset, const std::vector<size_t>& x_strides,
-        const Buffer<int32_t>* i_buffer, const size_t i_offset, const std::vector<size_t>* i_strides,
-              Buffer<T>&       y_buffer, const size_t y_offset, const std::vector<size_t>& y_strides,
-              Buffer<int32_t>& j_buffer, const size_t j_offset, const std::vector<size_t>& j_strides);
+        const Buffer<T>& x_buffer, const size_t x_offset, const std::vector<size_t>& x_strides,
+              Buffer<T>& y_buffer, const size_t y_offset, const std::vector<size_t>& y_strides,
+        Buffer<int32_t>& i_buffer, const size_t i_offset, const std::vector<size_t>& i_strides);
 
     void DoArgMerge(
         const size_t n, const size_t k, const int dir, const std::vector<size_t>& dims,
