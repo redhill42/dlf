@@ -1472,18 +1472,19 @@ private:
         datum_ptr X, Y, I;
         DatumValue<int64_t> K;
         int axis;
-        bool largest;
+        bool largest, sorted;
 
         TopKOp(OperatorFactory* of, model::TopK* n)
             : X(of->alloc(n->X())), Y(of->alloc(n->Y())),
               I(of->alloc<int32_t>(n->indices())),
-              K(of, n->K()), axis(n->axis()), largest(n->largest())
+              K(of, n->K()), axis(n->axis()),
+              largest(n->largest()), sorted(n->sorted())
         {}
 
         void evaluate() override {
             auto values = deref(Y);
             auto indices = deref<int32_t>(I);
-            top_k(deref(X), values, indices, *K, axis, largest);
+            top_k(deref(X), values, indices, *K, axis, largest, sorted);
             Y->unget(values);
             I->unget(indices);
         }

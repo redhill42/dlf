@@ -1216,33 +1216,12 @@ inline argsort(const TensorT& X, int axis = -1) {
 
 template <typename TensorT, typename TensorR, typename TensorI>
 std::enable_if_t<
-    is_cpu_tensor<TensorT>::value && is_cpu_tensor<TensorI>::value &&
     is_exactly_same_tensor<TensorT, TensorR>::value &&
-    std::is_integral<tensor_value_type<TensorI>>::value &&
+    is_exactly_same_tensor<TensorI, tensor_type<TensorT, int32_t>>::value &&
     !std::is_const<std::remove_reference_t<TensorR>>::value &&
     !std::is_const<std::remove_reference_t<TensorI>>::value>
-top_k(const TensorT& X, TensorR&& Y, TensorI&& indices,
-      size_t k, int axis = -1, bool largest = true)
-{
-    tensor_type<TensorR> sorted_values{};
-    tensor_type<TensorI> sorted_indices{};
-    if (largest)
-        argsort(X, sorted_values, sorted_indices, axis, xfn::greater<>());
-    else
-        argsort(X, sorted_values, sorted_indices, axis, xfn::less<>());
-    reorder(sorted_values.take(axis, k), Y);
-    reorder(sorted_indices.take(axis, k), indices);
-}
-
-template <typename TensorT, typename TensorR, typename TensorI>
-std::enable_if_t<
-    is_gpu_tensor<TensorT>::value && is_gpu_tensor<TensorI>::value &&
-    is_exactly_same_tensor<TensorT, TensorR>::value &&
-    std::is_integral<tensor_value_type<TensorI>>::value &&
-    !std::is_const<std::remove_reference_t<TensorR>>::value &&
-    !std::is_const<std::remove_reference_t<TensorI>>::value>
-top_k(const TensorT& X, TensorR&& Y, TensorI&& I,
-      size_t k, int axis = -1, bool largest = true)
+top_k(const TensorT& X, TensorR&& Y, TensorI&& I, size_t k,
+      int axis = -1, bool largest = true, bool sorted = true)
 {
     detail::norm_axis(X.rank(), axis);
     k = std::min(k, X.extent(axis));
@@ -1257,20 +1236,18 @@ top_k(const TensorT& X, TensorR&& Y, TensorI&& I,
     auto x_view = moveaxis(X, axis, -1);
     auto y_view = moveaxis(Y, axis, -1);
     auto i_view = moveaxis(I, axis, -1);
-
-    gpgpu::dnn::top_k(
-        k, largest, x_view.shape().extents(), y_view.shape().extents(),
-        x_view.data(), x_view.shape().offset(), x_view.shape().strides(),
-        y_view.data(), y_view.shape().offset(), y_view.shape().strides(),
-        i_view.data(), i_view.shape().offset(), i_view.shape().strides());
+    detail::top_k(x_view.shape(), x_view.data(),
+                  y_view.shape(), y_view.data(),
+                  i_view.shape(), i_view.data(),
+                  largest, sorted);
 }
 
 template <typename TensorT>
 std::enable_if_t<is_tensor<TensorT>::value, std::pair<tensor_type<TensorT>, tensor_type<TensorT, int>>>
-top_k(TensorT&& X, size_t k, int axis = -1, bool largest = true) {
+top_k(TensorT&& X, size_t k, int axis = -1, bool largest = true, bool sorted = true) {
     auto Y = tensor_type<TensorT>();
     auto I = tensor_type<TensorT, int>();
-    top_k(std::forward<TensorT>(X), Y, I, k, axis, largest);
+    top_k(std::forward<TensorT>(X), Y, I, k, axis, largest, sorted);
     return std::make_pair(std::move(Y), std::move(I));
 }
 

@@ -540,4 +540,110 @@ void argsort(const Shape& x_shape, const gpgpu::Buffer<T>& x_data,
                         i_data, i_shape.offset(), i_shape.strides());
 }
 
+template <typename K, typename V, typename Compare>
+void percolate_down(std::pair<K,V>* heap, size_t k, size_t i, Compare comp) {
+    const auto left  = i * 2;
+    const auto right = i * 2 + 1;
+
+    auto j = i;
+    if (left <= k && comp(heap[j].first, heap[left].first))
+        j = left;
+    if (right <= k && comp(heap[j].first, heap[right].first))
+        j = right;
+    if (j != i) {
+        std::swap(heap[i], heap[j]);
+        percolate_down(heap, k, j, comp);
+    }
+}
+
+template <typename K, typename V, typename Compare>
+std::vector<std::pair<K,V>>
+heap_top_k(const size_t n, const size_t k,
+           const K* data, const size_t stride,
+           V index, Compare comp)
+{
+    std::vector<std::pair<K,V>> heap;
+
+    // build heap from first k elements
+    heap.reserve(k);
+    for (size_t i = 0; i < k; ++i, data += stride, ++index)
+        heap.emplace_back(*data, index);
+    for (size_t i = k/2; i > 0; --i)
+        percolate_down(heap.data()-1, k, i, comp);
+
+    // replace minimum element with greater value
+    for (size_t i = k; i < n; ++i, data += stride, ++index) {
+        if (comp(*data, heap.front().first)) {
+            heap.front().first  = *data;
+            heap.front().second = index;
+            percolate_down(heap.data()-1, k, 1, comp);
+        }
+    }
+
+    return heap;
+}
+
+template <typename T, typename I, typename Compare>
+void top_k(const Shape& x_shape, const T* x_data,
+           const Shape& y_shape,       T* y_data,
+           const Shape& i_shape,       I* i_data,
+           bool sorted, Compare comp)
+{
+    const auto n = x_shape.extent(-1);
+    const auto k = y_shape.extent(-1);
+    const auto m = x_shape.size() / n;
+    assert(k <= n);
+
+    const auto grainsize = std::max(size_t(1), GRAINSIZE/n);
+    tbb::parallel_for(tbb::blocked_range<int>(0, m, grainsize), [&](auto r) {
+        for (int batch = r.begin(); batch < r.end(); ++batch) {
+            auto px = x_data + x_shape.linear_offset(batch*n);
+            auto py = y_data + y_shape.linear_offset(batch*k);
+            auto pi = i_data + i_shape.linear_offset(batch*k);
+
+            const auto x_inc = static_cast<int>(x_shape.stride(-1));
+            const auto y_inc = static_cast<int>(y_shape.stride(-1));
+            const auto i_inc = static_cast<int>(i_shape.stride(-1));
+
+            auto heap = heap_top_k(n, k, px, x_inc, 0, comp);
+            if (sorted) {
+                std::sort(heap.begin(), heap.end(), [comp](const auto& x, const auto& y) {
+                    return comp(x.first, y.first);
+                });
+            }
+
+            auto it = heap.begin();
+            for (int i = 0; i < k; ++i, ++it, py += y_inc, pi += i_inc) {
+                *py = it->first;
+                *pi = it->second;
+            }
+        }
+    });
+}
+
+template <typename T, typename I>
+void top_k(const Shape& x_shape, const T* x_data,
+           const Shape& y_shape,       T* y_data,
+           const Shape& i_shape,       I* i_data,
+           bool largest, bool sorted)
+{
+    if (largest)
+        top_k(x_shape, x_data, y_shape, y_data, i_shape, i_data, sorted, std::greater<T>());
+    else
+        top_k(x_shape, x_data, y_shape, y_data, i_shape, i_data, sorted, std::less<T>());
+}
+
+template <typename T, typename I>
+void top_k(const Shape& x_shape, const gpgpu::Buffer<T>& x_data,
+           const Shape& y_shape,       gpgpu::Buffer<T>& y_data,
+           const Shape& i_shape,       gpgpu::Buffer<I>& i_data,
+           bool largest, bool /*sorted*/)
+{
+    gpgpu::dnn::top_k(
+        y_shape.extent(-1), largest, x_shape.extents(), y_shape.extents(),
+        x_data, x_shape.offset(), x_shape.strides(),
+        y_data, y_shape.offset(), y_shape.strides(),
+        i_data, i_shape.offset(), i_shape.strides());
+}
+
 }} // namespace dlf::detail
