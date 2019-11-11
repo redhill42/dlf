@@ -2170,7 +2170,8 @@ TEST(UniformTest, Merge) {
     auto C = Tensor<int>();
     auto D = Tensor<int>({M+N}, 0);
 
-    sort(A); sort(B);
+    std::sort(A.begin(), A.end());
+    std::sort(B.begin(), B.end());
     merge(A, B, C, -1);
     std::merge(A.begin(), A.end(), B.begin(), B.end(), D.begin());
     EXPECT_EQ(C, D);
@@ -2196,6 +2197,25 @@ TEST(UniformTest, MergeBatch) {
 }
 
 TEST(UniformTest, Sort_CPU) {
+    auto rd = std::random_device();
+    auto rg = std::mt19937(rd());
+
+    auto sample = Tensor<int>({10000}).range(0);
+    std::shuffle(sample.begin(), sample.end(), rg);
+
+    auto expected = sample;
+    std::sort(expected.begin(), expected.end());
+
+    auto X = Tensor<int>();
+    auto Y = sample;
+    sort(sample, X);
+    sort(Y);
+
+    EXPECT_EQ(X, expected);
+    EXPECT_EQ(Y, expected);
+}
+
+TEST(UniformTest, SortAxis_CPU) {
     auto X = Tensor<int>({3, 4, 5}, {
          8, 19, 11, 41, 53,
         79,  2, 10,  0, 94,
@@ -2283,7 +2303,7 @@ TEST(UniformTest, Sort_GPU) {
     EXPECT_EQ(sorted(X, 1, xfn::greater<>()), sorted(dev_X, 1, xfn::greater<>()).read());
     EXPECT_EQ(sorted(X, 2, xfn::greater<>()), sorted(dev_X, 2, xfn::greater<>()).read());
 
-    for (size_t n = 1; n <= 1024; n++) {
+    for (size_t n = 10; n <= 1000; n += 10) {
         auto Y = Tensor<int>({2, n}).random(0, 2000);
         EXPECT_EQ(sorted(Y), sorted(dev(Y)).read());
     }
@@ -2295,24 +2315,85 @@ TEST(UniformTest, Sort_GPU) {
 }
 
 TEST(UniformTest, ArgSort) {
-    auto X = Tensor<int>({3, 4, 5}).random(0, 1000);
-    EXPECT_EQ(sorted(X, 0), gather_elements(X, argsort(X, 0), 0));
-    EXPECT_EQ(sorted(X, 1), gather_elements(X, argsort(X, 1), 1));
-    EXPECT_EQ(sorted(X, 2), gather_elements(X, argsort(X, 2), 2));
+    {
+        auto X = Tensor<int>({3, 4, 5}).random(0, 1000);
+        auto Y = Tensor<int>();
+        auto I = Tensor<int>();
 
-    auto dev_X = dev(X);
-    EXPECT_EQ(sorted(X, 0), gather_elements(X, argsort(dev_X, 0).read(), 0));
-    EXPECT_EQ(sorted(X, 1), gather_elements(X, argsort(dev_X, 1).read(), 1));
-    EXPECT_EQ(sorted(X, 2), gather_elements(X, argsort(dev_X, 2).read(), 2));
+        for (int axis = 0; axis < 3; ++axis) {
+            auto sorted_X = sorted(X, axis);
 
-    for (size_t n = 1; n <= 1024; n++) {
-        auto Y = Tensor<int>({2, n}).random(0, 2000);
-        EXPECT_EQ(sorted(Y), gather_elements(Y, argsort(dev(Y)).read(), -1));
+            EXPECT_EQ(sorted_X, gather_elements(X, argsort(X, axis), axis));
+
+            argsort(X, Y, I, axis);
+            EXPECT_EQ(sorted_X, Y);
+            EXPECT_EQ(sorted_X, gather_elements(X, I, axis));
+
+            reorder(X, Y);
+            argsort(Y, Y, I, axis);
+            EXPECT_EQ(sorted_X, Y);
+            EXPECT_EQ(sorted_X, gather_elements(X, I, axis));
+            if (sorted_X != Y) {
+                std::cout << sorted_X << Y;
+            }
+        }
+
+        auto dev_X = dev(X);
+        auto dev_Y = DevTensor<int>();
+        auto dev_I = DevTensor<int>();
+
+        for (int axis = 0; axis < 3; ++axis) {
+            auto sorted_X = sorted(X, axis);
+
+            EXPECT_EQ(sorted_X, gather_elements(X, argsort(dev_X, axis).read(), axis));
+
+            argsort(dev_X, dev_Y, dev_I, axis);
+            EXPECT_EQ(sorted_X, dev_Y.read());
+            EXPECT_EQ(sorted_X, gather_elements(dev_X, dev_I, axis).read());
+
+            reorder(dev_X, dev_Y);
+            argsort(dev_Y, dev_Y, dev_I, axis);
+            EXPECT_EQ(sorted_X, dev_Y.read());
+            EXPECT_EQ(sorted_X, gather_elements(dev_X, dev_I, axis).read());
+        }
+    }
+
+    for (size_t n = 10; n <= 1000; n += 10) {
+        auto X = Tensor<int>({2, n}).random(0, 2000);
+        auto Y = Tensor<int>();
+        auto I = Tensor<int>();
+        auto Z = sorted(X);
+
+        auto dev_X = dev(X);
+        auto dev_Y = DevTensor<int>();
+        auto dev_I = DevTensor<int>();
+
+        argsort(X, Y, I);
+        argsort(dev_X, dev_Y, dev_I);
+
+        EXPECT_EQ(Z, Y);
+        EXPECT_EQ(Z, dev_Y.read());
+        EXPECT_EQ(Z, gather_elements(X, I, -1));
+        EXPECT_EQ(Z, gather_elements(dev_X, dev_I, -1).read());
     }
 
     for (size_t n = 1000; n <= 10000; n += 1000) {
-        auto Y = Tensor<int>({2, n}).random(0, 100000);
-        EXPECT_EQ(sorted(Y), gather_elements(Y, argsort(dev(Y)).read(), -1));
+        auto X = Tensor<int>({2, n}).random(0, 100000);
+        auto Y = Tensor<int>();
+        auto I = Tensor<int>();
+        auto Z = sorted(X);
+
+        auto dev_X = dev(X);
+        auto dev_Y = DevTensor<int>();
+        auto dev_I = DevTensor<int>();
+
+        argsort(X, Y, I);
+        argsort(dev_X, dev_Y, dev_I);
+
+        EXPECT_EQ(Z, Y);
+        EXPECT_EQ(Z, dev_Y.read());
+        EXPECT_EQ(Z, gather_elements(X, I, -1));
+        EXPECT_EQ(Z, gather_elements(dev_X, dev_I, -1).read());
     }
 }
 
