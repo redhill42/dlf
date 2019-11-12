@@ -1494,6 +1494,50 @@ TEST(UniformTest, Rot90) {
     }));
 }
 
+TEST(UniformTest, Reverse) {
+    {
+        auto X = Tensor<int>({5, 5}).range(1);
+        auto dev_X = dev(X);
+        reverse(X);
+        reverse(dev_X);
+        EXPECT_EQ(X, Tensor<int>({5, 5}, {
+             5,  4,  3,  2,  1,
+            10,  9,  8,  7,  6,
+            15, 14, 13, 12, 11,
+            20, 19, 18, 17, 16,
+            25, 24, 23, 22, 21
+        }));
+        EXPECT_EQ(X, dev_X.read());
+    }
+
+    {
+        auto X = Tensor<int>({5, 5}).range(1);
+        auto dev_X = dev(X);
+        reverse(X, 0);
+        reverse(dev_X, 0);
+        EXPECT_EQ(X, Tensor<int>({5, 5}, {
+            21, 22, 23, 24, 25,
+            16, 17, 18, 19, 20,
+            11, 12, 13, 14, 15,
+             6,  7,  8,  9, 10,
+             1,  2,  3,  4,  5
+        }));
+        EXPECT_EQ(X, dev_X.read());
+    }
+
+    {
+        auto X = Tensor<int>({10000}).range(1);
+        auto Y = X;
+        auto dev_X = dev(X);
+
+        reverse(X);
+        std::reverse(Y.begin(), Y.end());
+        reverse(dev_X);
+        EXPECT_EQ(X, Y);
+        EXPECT_EQ(X, dev_X.read());
+    }
+}
+
 TEST(UniformTest, Where_CPU) {
     auto condition = Tensor<bool>({2}, {true, false});
     auto X = Tensor<int>({2, 2}, {1, 2, 3, 4});

@@ -186,6 +186,48 @@ reshape(const TensorT& X, Shape&& new_shape) {
 }
 
 //==-------------------------------------------------------------------------
+// Reverse
+//==-------------------------------------------------------------------------
+
+template <typename T>
+void parallel_reverse(const size_t n, T* first, T* last, const int stride) {
+    constexpr size_t REVERSE_CUT_OFF = 1000;
+    if (n <= REVERSE_CUT_OFF) {
+        last -= stride;
+        for (size_t i = 0; i < n; ++i, first += stride, last -= stride)
+            std::swap(*first, *last);
+    } else {
+        auto mid = n / 2;
+        auto offset = mid * stride;
+        tbb::parallel_invoke(
+            [&]{ parallel_reverse(  mid, first,        last,        stride); },
+            [&]{ parallel_reverse(n-mid, first+offset, last-offset, stride); });
+    }
+}
+
+template <typename T>
+void reverse(const Shape& x_shape, T* x_data) {
+    auto n = x_shape.extent(-1);
+    auto m = x_shape.size() / n;
+    auto grainsize = std::max(size_t(1), GRAINSIZE/n);
+
+    tbb::parallel_for(tbb::blocked_range<int>(0, m, grainsize), [&](auto r) {
+        for (int batch = r.begin(); batch < r.end(); ++batch) {
+            auto px = x_data + x_shape.linear_offset(batch * n);
+            auto stride = static_cast<int>(x_shape.stride(-1));
+            parallel_reverse(n/2, px, px + n*stride, stride);
+        }
+    });
+}
+
+template <typename T>
+void reverse(const Shape& x_shape, gpgpu::Buffer<T>& x_data) {
+    auto n = x_shape.extent(-1);
+    auto m = x_shape.size() / n;
+    gpgpu::dnn::reverse(m, n, x_shape.extents(), x_shape.strides(), x_data, x_shape.offset());
+}
+
+//==-------------------------------------------------------------------------
 // Gather and scatter
 //==-------------------------------------------------------------------------
 

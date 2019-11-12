@@ -26,6 +26,12 @@ void fill(const size_t n, const std::vector<size_t>& dims, const std::vector<siz
           const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 template <typename T>
+void reverse(const size_t m, const size_t n, 
+             const std::vector<size_t>& dims, const std::vector<size_t>& strides,
+             Buffer<T>& x_buffer, const size_t x_offset,
+             const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
+
+template <typename T>
 void range(const size_t n, const T start, const T delta, Buffer<T>& x_buffer, const size_t x_offset,
            const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 

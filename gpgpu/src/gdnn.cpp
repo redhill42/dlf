@@ -152,6 +152,57 @@ template void PUBLIC_API fill<double2> (const size_t, const std::vector<size_t>&
                                        const Queue&, Event*);
 
 template <typename T>
+void reverse(const size_t m, const size_t n,
+             const std::vector<size_t>& dims, const std::vector<size_t>& strides,
+             Buffer<T>& x_buffer, const size_t x_offset,
+             const Queue& queue, Event* event)
+{
+    auto routine = Xreverse<T>(queue, event);
+    routine.DoReverse(m, n, dims, strides, x_buffer, x_offset);
+}
+
+template void PUBLIC_API reverse<int16_t>(
+    const size_t, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<int16_t>&, const size_t,
+    const Queue&, Event*);
+template void PUBLIC_API reverse<int32_t>(
+    const size_t, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<int32_t>&, const size_t,
+    const Queue&, Event*);
+template void PUBLIC_API reverse<int64_t>(
+    const size_t, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<int64_t>&, const size_t,
+    const Queue&, Event*);
+template void PUBLIC_API reverse<half>(
+    const size_t, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<half>&, const size_t,
+    const Queue&, Event*);
+template void PUBLIC_API reverse<float>(
+    const size_t, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<float>&, const size_t,
+    const Queue&, Event*);
+template void PUBLIC_API reverse<double>(
+    const size_t, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<double>&, const size_t,
+    const Queue&, Event*);
+template void PUBLIC_API reverse<float2>(
+    const size_t, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<float2>&, const size_t,
+    const Queue&, Event*);
+template void PUBLIC_API reverse<double2>(
+    const size_t, const size_t,
+    const std::vector<size_t>&, const std::vector<size_t>&,
+    Buffer<double2>&, const size_t,
+    const Queue&, Event*);
+
+template <typename T>
 void range(const size_t n, const T start, const T delta,
            Buffer<T>& x_buffer, const size_t x_offset,
            const Queue& queue , Event* event)

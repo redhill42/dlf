@@ -460,6 +460,23 @@ inline flip(const TensorT& X, const int axis) {
 }
 
 /**
+ * Physically reverse the order of elements in a tensor along the given axis.
+ *
+ * @param X The tensor to be reversed
+ * @param axis Axis along which to reverse over.
+ */
+template <typename TensorT>
+std::enable_if_t<
+    is_tensor<TensorT>::value &&
+    !std::is_const<std::remove_reference_t<TensorT>>::value>
+reverse(TensorT&& X, int axis = -1) {
+    if (X.extent(-1) > 1) {
+        auto x_view = moveaxis(X, axis, -1);
+        detail::reverse(x_view.shape(), x_view.data());
+    }
+}
+
+/**
  * Rotate a tensor by 90 degrees in the plane specified by axes.
  *
  * Rotation direction is from the first towards the second axis.
