@@ -131,40 +131,18 @@ void batch_norm(const Tensor<T>& X, Tensor<T>& Y,
                 const Tensor<T>& mean, const Tensor<T>& var,
                 const T epsilon = T(1e-5))
 {
-    auto batches  = X.extent(0);
-    auto channels = X.extent(1);
-    auto spatial  = X.size() / (batches * channels);
-
-    assert(scale.is_vector() && scale.extent(0) == channels);
-    assert(bias.is_vector() && bias.extent(0) == channels);
-    assert(mean.is_vector() && mean.extent(0) == channels);
-    assert(var.is_vector() && var.extent(0) == channels);
+    assert(scale.is_vector() && scale.extent(0) == X.extent(1));
+    assert(bias.is_vector()  && bias.extent(0)  == X.extent(1));
+    assert(mean.is_vector()  && mean.extent(0)  == X.extent(1));
+    assert(var.is_vector()   && var.extent(0)   == X.extent(1));
 
     Y.resize(X.shape());
-
-    const T* x = X.data();
-          T* y = Y.data();
-    const T* s = scale.data();
-    const T* b = bias.data();
-    const T* m = mean.data();
-
-    T* v = reinterpret_cast<T*>(alloca(channels * sizeof(T)));
-    std::transform(var.begin(), var.end(), v, [=](auto x) {
-        return std::sqrt(x + epsilon);
-    });
-
-    tbb::parallel_for(tbb::blocked_range<size_t>(0, spatial, 256), [=](auto& r) {
-        for (size_t bat = 0; bat < batches; bat++) {
-            for (size_t c = 0; c < channels; c++) {
-                auto offset = (bat * channels + c) * spatial + r.begin();
-                auto px = x + offset;
-                auto py = y + offset;
-                for (auto n = r.size(); n--; ) {
-                    *py++ = s[c] * (*px++ - m[c]) / v[c] + b[c];
-                }
-            }
-        }
-    });
+    map([=](auto x, auto& y, auto s, auto b, auto m, auto v) {
+        y = s * (x - m) / std::sqrt(v + epsilon) + b;
+    })(X, Y, unsqueeze_right(scale, X.rank() - 1),
+             unsqueeze_right(bias,  X.rank() - 1),
+             unsqueeze_right(mean,  X.rank() - 1),
+             unsqueeze_right(var,   X.rank() - 1));
 }
 
 template <typename T>
@@ -174,9 +152,9 @@ void batch_norm(const DevTensor<T>& X, DevTensor<T>& Y,
                 const T epsilon = T(1e-5))
 {
     assert(scale.is_vector() && scale.extent(0) == X.extent(1));
-    assert(bias.is_vector() && bias.extent(0) == X.extent(1));
-    assert(mean.is_vector() && mean.extent(0) == X.extent(1));
-    assert(var.is_vector() && var.extent(0) == X.extent(1));
+    assert(bias.is_vector()  && bias.extent(0)  == X.extent(1));
+    assert(mean.is_vector()  && mean.extent(0)  == X.extent(1));
+    assert(var.is_vector()   && var.extent(0)   == X.extent(1));
 
     Y.resize(X.shape());
     gpgpu::dnn::batch_norm(X.shape().extents(), X.data(), Y.data(),
@@ -429,7 +407,6 @@ void global_pooling(const Tensor<T>& X, Tensor<T>& Y, const T identity,
                     Accum accum, Join join, Reduce reduce)
 {
     assert(X.rank() >= 3);
-    assert(X.rank() == Y.rank());
     auto M = X.extent(0) * X.extent(1);
     auto N = X.size() / M;
 

@@ -19,6 +19,7 @@
 #include "tensor/host.h"
 #include "tensor/device.h"
 #include "tensor/traits.h"
+#include "tensor/map.h"
 #include "tensor/reorder.h"
 #include "tensor/transform.h"
 #include "tensor/reduce.h"

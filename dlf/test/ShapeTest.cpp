@@ -1,7 +1,5 @@
 #include "tensor.h"
 #include "gtest/gtest.h"
-#include "gmock/gmock.h"
-#include "test_utility.h"
 
 using namespace dlf;
 
@@ -20,7 +18,7 @@ TEST(Shape, ShapeBroadcast) {
 }
 
 static void broadcast_stride_test(Shape from, Shape to, std::vector<size_t> expected) {
-    Shape shape = from.broadcast(to);
+    Shape shape = from.broadcast_to(to);
     EXPECT_EQ(shape.strides(), expected);
 }
 
@@ -55,7 +53,7 @@ TEST(ShapeIterator, Backward) {
 }
 
 TEST(ShapeIterator, BroadcastScalarForward) {
-    auto shape = Shape(1).broadcast({2, 3, 4});
+    auto shape = Shape(1).broadcast_to({2, 3, 4});
     auto begin = shaped_iterator<int>(shape, nullptr, 0);
     auto end = shaped_iterator<int>(shape, nullptr, shape.size());
     for (auto it = begin; it != end; ) {
@@ -65,7 +63,7 @@ TEST(ShapeIterator, BroadcastScalarForward) {
 }
 
 TEST(ShapeIterator, BroadcastScalarBackward) {
-    auto shape = Shape(1).broadcast({2, 3, 4});
+    auto shape = Shape(1).broadcast_to({2, 3, 4});
     auto begin = shaped_iterator<int>(shape, nullptr, 0);
     auto end = shaped_iterator<int>(shape, nullptr, shape.size());
     for (auto it = end; it != begin; ) {
@@ -75,7 +73,7 @@ TEST(ShapeIterator, BroadcastScalarBackward) {
 }
 
 TEST(ShapeIterator, BroadcastRowForward) {
-    auto shape = Shape(3, 4).broadcast({2, 3, 4});
+    auto shape = Shape(3, 4).broadcast_to({2, 3, 4});
     auto begin = shaped_iterator<int>(shape, nullptr, 0);
     auto end = shaped_iterator<int>(shape, nullptr, shape.size());
     auto i = 0;
@@ -86,7 +84,7 @@ TEST(ShapeIterator, BroadcastRowForward) {
 }
 
 TEST(ShapeIterator, BroadcastRowBackward) {
-    auto shape = Shape(3, 4).broadcast({2, 3, 4});
+    auto shape = Shape(3, 4).broadcast_to({2, 3, 4});
     auto begin = shaped_iterator<int>(shape, nullptr, 0);
     auto end = shaped_iterator<int>(shape, nullptr, shape.size());
     auto i = static_cast<int>(shape.size());
@@ -97,7 +95,7 @@ TEST(ShapeIterator, BroadcastRowBackward) {
 }
 
 TEST(ShapeIterator, BroadcastColumnForward) {
-    auto shape = Shape(3, 1).broadcast({2, 3, 4});
+    auto shape = Shape(3, 1).broadcast_to({2, 3, 4});
     auto begin = shaped_iterator<int>(shape, nullptr, 0);
     auto end = shaped_iterator<int>(shape, nullptr, shape.size());
     std::vector<size_t> indices{0, 0, 0};
@@ -109,7 +107,7 @@ TEST(ShapeIterator, BroadcastColumnForward) {
 }
 
 TEST(ShapeIterator, BroadcastColumnBackward) {
-    auto shape = Shape(3, 1).broadcast({2, 3, 4});
+    auto shape = Shape(3, 1).broadcast_to({2, 3, 4});
     auto begin = shaped_iterator<int>(shape, nullptr, 0);
     auto end = shaped_iterator<int>(shape, nullptr, shape.size());
     std::vector<size_t> indices{0, 0, 0};

@@ -3,172 +3,78 @@
 namespace dlf { namespace detail {
 
 //==-------------------------------------------------------------------------
-// Utilities
-//==-------------------------------------------------------------------------
-
-template <typename T>
-void copy(int n, const T* px, const int x_inc, T* py, const int y_inc) {
-    if (x_inc == 1 && y_inc == 1) {
-        std::copy(px, px + n, py);
-    } else {
-        for (; n > 0; --n, px += x_inc, py += y_inc)
-            *py = *px;
-    }
-}
-
-template <typename T>
-void move(int n, T* px, const int x_inc, T* py, const int y_inc) {
-    if (x_inc == 1 && y_inc == 1) {
-        std::move(px, px + n, py);
-    } else {
-        for (; n > 0; --n, px += x_inc, py += y_inc)
-            *py = std::move(*px);
-    }
-}
-
-template <typename T, typename Compare>
-int lower_bound(int n, const T* data, const int stride, const T& value, Compare comp) {
-    int i = 0;
-    while (n != 0) {
-        int m = n / 2;
-        if (comp(data[(m + i) * stride], value)) {
-            i += m + 1;
-            n -= m + 1;
-        } else {
-            n = m;
-        }
-    }
-    return i;
-}
-
-template <typename T, typename Compare>
-int upper_bound(int n, const T* data, const int stride, const T& value, Compare comp) {
-    int i = 0;
-    while (n != 0) {
-        int m = n / 2;
-        if (comp(value, data[(m + i) * stride]))
-            n = m;
-        else {
-            i += m + 1;
-            n -= m + 1;
-        }
-    }
-    return i;
-}
-
-//==-------------------------------------------------------------------------
 // Tensor reorder operations
 //==-------------------------------------------------------------------------
 
 #if HAS_MKL
-template <typename Src, typename Dst>
+template <typename TensorX, typename TensorY>
 std::enable_if_t<
-    is_cpu_tensor<Src>::value && is_cpu_tensor<Dst>::value,
+    is_cpu_tensor<TensorX>::value && is_cpu_tensor<TensorY>::value,
     bool>
-inline reorder_transpose(const Src& src, const Shape& src_shape, Dst& dst, const Shape& dst_shape) {
-    if (src_shape.rank() != 2)
+inline reorder_transpose(const TensorX& X, TensorY& Y) {
+    if (X.rank() != 2)
         return false;
     return cblas::omatcopy2(
-        'R', 'T', src_shape.extent(1), src_shape.extent(0),
-        tensor_value_type<Src>{1},
-        src.data() + src_shape.offset(), src_shape.stride(1), src_shape.stride(0),
-        dst.data() + dst_shape.offset(), dst_shape.stride(0), dst_shape.stride(1)) ;
+        'R', 'T', X.extent(1), X.extent(0), xfn::one<tensor_value_type<TensorX>>(),
+        X.data() + X.shape().offset(), X.stride(1), X.stride(0),
+        Y.data() + Y.shape().offset(), Y.stride(0), Y.stride(1)) ;
 }
 #endif
 
-template <typename Src, typename Dst>
-std::enable_if_t<is_cpu_tensor<Src>::value && is_cpu_tensor<Dst>::value>
-reorder(const Src& src, const Shape& src_shape, Dst& dst, const Shape& dst_shape) {
-    assert(src_shape == dst_shape);
-    using T = tensor_value_type<Src>;
-    using U = tensor_value_type<Dst>;
+template <typename TensorX, typename TensorY>
+std::enable_if_t<is_cpu_tensor<TensorX>::value && is_cpu_tensor<TensorY>::value>
+reorder_impl(const TensorX& X, TensorY&& Y) {
+    assert(X.shape() == Y.shape());
 
-    if (src_shape.is_contiguous() && dst_shape.is_contiguous() &&
-        src.data() == dst.data() && src_shape.offset() == dst_shape.offset())
+    if (X.shape().is_contiguous() && Y.shape().is_contiguous() &&
+        X.data() == Y.data() && X.shape().offset() == Y.shape().offset())
         return;
 
 #if HAS_MKL
-    if (reorder_transpose(src, src_shape, dst, dst_shape))
+    if (reorder_transpose(X, Y))
         return;
 #endif
 
-    if (dst_shape.is_contiguous()) {
-        if (src.original_shape().size() == 1) {
-            std::fill(dst.data() + dst_shape.offset(),
-                      dst.data() + dst_shape.offset() + dst_shape.size(),
-                      *src.data());
-            return;
-        }
-
-        if (src_shape.is_contiguous()) {
-            par::copy(src.data() + src_shape.offset(),
-                      src.data() + src_shape.offset() + src_shape.size(),
-                      dst.data() + dst_shape.offset());
-            return;
-        }
-
-        par::copy(const_shaped_iterator<T>(src_shape, src.data(), 0),
-                  const_shaped_iterator<T>(src_shape, src.data(), src_shape.size()),
-                  dst.data() + dst_shape.offset());
-    } else {
-        if (src.original_shape().size() == 1) {
-            std::fill(shaped_iterator<U>(dst_shape, dst.data(), 0),
-                      shaped_iterator<U>(dst_shape, dst.data(), dst_shape.size()),
-                      *src.data());
-            return;
-        }
-
-        if (src_shape.is_contiguous()) {
-            par::copy(src.data() + src_shape.offset(),
-                      src.data() + src_shape.offset() + src_shape.size(),
-                      shaped_iterator<U>(dst_shape, dst.data(), 0));
-            return;
-        }
-
-        par::copy(const_shaped_iterator<T>(src_shape, src.data(), 0),
-                  const_shaped_iterator<T>(src_shape, src.data(), src_shape.size()),
-                  shaped_iterator<U>(dst_shape, dst.data(), 0));
-    }
+    map(xfn::transfer<>())(Y, X);
 }
 
-template <typename Src, typename Dst>
-std::enable_if_t<is_gpu_tensor<Src>::value && is_gpu_tensor<Dst>::value, bool>
-reorder_transpose(const Src& src, const Shape& src_shape, Dst& dst, const Shape& dst_shape) {
-    if (src_shape.rank() != 2)
+template <typename TensorX, typename TensorY>
+std::enable_if_t<is_gpu_tensor<TensorX>::value && is_gpu_tensor<TensorY>::value, bool>
+reorder_transpose(const TensorX& X, TensorY& Y) {
+    if (X.rank() != 2)
         return false;
-    if (src_shape.stride(0) != 1 || static_cast<int>(src_shape.stride(1)) < src_shape.extent(0))
+    if (X.stride(0) != 1 || static_cast<int>(X.stride(1)) < X.extent(0))
         return false;
-    if (dst_shape.stride(1) != 1 || static_cast<int>(dst_shape.stride(0)) < dst_shape.extent(1))
+    if (Y.stride(1) != 1 || static_cast<int>(Y.stride(0)) < Y.extent(1))
         return false;
     gpgpu::blas::omatcopy(gpgpu::blas::Layout::RowMajor,
                           gpgpu::blas::Transpose::Trans,
-                          src_shape.extent(1),
-                          src_shape.extent(0),
-                          tensor_value_type<Src>{1},
-                          src.data(), src_shape.offset(), src_shape.stride(1),
-                          dst.data(), dst_shape.offset(), dst_shape.stride(0));
+                          X.extent(1), X.extent(0),
+                          xfn::one<tensor_value_type<TensorX>>(),
+                          X.data(), X.shape().offset(), X.stride(1),
+                          Y.data(), Y.shape().offset(), Y.stride(0));
     return true;
 }
 
-template <typename Src, typename Dst>
-std::enable_if_t<is_gpu_tensor<Src>::value && is_gpu_tensor<Dst>::value>
-reorder(const Src& src, const Shape& src_shape, Dst& dst, const Shape& dst_shape) {
-    assert(src_shape == dst_shape);
+template <typename TensorX, typename TensorY>
+std::enable_if_t<is_gpu_tensor<TensorX>::value && is_gpu_tensor<TensorY>::value>
+reorder_impl(const TensorX& X, TensorY&& Y) {
+    assert(X.shape() == Y.shape());
 
-    if (src_shape.is_contiguous() && dst_shape.is_contiguous() &&
-        src.data() == dst.data() && src_shape.offset() == dst_shape.offset())
+    if (X.shape().is_contiguous() && Y.shape().is_contiguous() &&
+        X.data() == Y.data() && X.shape().offset() == Y.shape().offset())
         return;
 
-    if (reorder_transpose(src, src_shape, dst, dst_shape))
+    if (reorder_transpose(X, Y))
         return;
 
-    if (src.original_shape().is_tail(src_shape) && dst_shape.is_contiguous()) {
-        gpgpu::dnn::copy(src.original_shape().size(), src.data(), src_shape.offset(),
-                         dst_shape.size(), dst.data(), dst_shape.offset());
+    if (X.original_shape().is_tail(X.shape()) && Y.shape().is_contiguous()) {
+        gpgpu::dnn::copy(X.original_shape().size(), X.data(), X.shape().offset(),
+                         Y.size(), Y.data(), Y.shape().offset());
     } else {
-        gpgpu::dnn::copy(src_shape.size(), src_shape.extents(),
-                         src.data(), src_shape.offset(), src_shape.strides(),
-                         dst.data(), dst_shape.offset(), dst_shape.strides());
+        gpgpu::dnn::copy(X.size(), X.shape().extents(),
+                         X.data(), X.shape().offset(), X.shape().strides(),
+                         Y.data(), Y.shape().offset(), Y.shape().strides());
     }
 }
 
@@ -273,26 +179,22 @@ gather(const TensorX& X, TensorY& Y, const TensorI& indices,
 template <typename TensorX, typename TensorY, typename TensorI>
 std::enable_if_t<is_cpu_tensor<TensorX>::value, void>
 gather_elements(const TensorX& X, TensorY& Y, const TensorI& indices, int axis) {
-    tbb::parallel_for(tbb::blocked_range<int>(0, indices.size(), GRAINSIZE), [&](auto r) {
-        const auto i_stride1 = indices.shape().partial_size(axis+1, indices.rank());
-        const auto i_stride2 = i_stride1 * indices.extent(axis);
-        const auto x_stride1 = X.shape().partial_size(axis+1, X.rank());
-        const auto x_stride2 = x_stride1 * X.extent(axis);
+    const auto i_stride1    = indices.shape().partial_size(axis+1, indices.rank());
+    const auto i_stride2    = i_stride1 * indices.extent(axis);
+    const auto x_stride1    = X.shape().partial_size(axis+1, X.rank());
+    const auto x_stride2    = x_stride1 * X.extent(axis);
 
-        auto px = X.data();
-        auto pi = indices.begin() + r.begin();
-        auto py = Y.begin() + r.begin();
+    const auto x_data       = X.data();
+    const auto x_shape      = X.shape();
+    const auto x_contiguous = x_shape.is_contiguous();
+    const auto x_offset     = x_shape.offset();
+    const auto max_item     = X.extent(axis);
 
-        const bool x_contiguous = X.shape().is_contiguous();
-        const auto x_offset = X.shape().offset();
-        const auto max_item = static_cast<int>(X.extent(axis));
-
-        for (int id = r.begin(); id < r.end(); ++id, ++pi, ++py) {
-            auto tmp = normalize_index(*pi, max_item);
-            auto x_id = (id % i_stride1) + (tmp * x_stride1) + (id / i_stride2 * x_stride2);
-            *py = px[x_contiguous ? x_id + x_offset : X.shape().linear_offset(x_id)];
-        }
-    });
+    map([=](auto& y, auto i, auto id) {
+        auto tmp = normalize_index(i, static_cast<int>(max_item));
+        auto x_id = (id % i_stride1) + (tmp * x_stride1) + (id / i_stride2 * x_stride2);
+        y = x_data[x_contiguous ? x_id + x_offset : x_shape.linear_offset(x_id)];
+    })(Y, indices, map_id());
 }
 
 template <typename TensorX, typename TensorY, typename TensorI>
@@ -311,26 +213,22 @@ gather_elements(const TensorX& X, TensorY& Y, const TensorI& indices, int axis) 
 template <typename TensorX, typename TensorI, typename TensorY>
 std::enable_if_t<is_cpu_tensor<TensorX>::value>
 scatter_elements(TensorX& X, const TensorI& indices, const TensorY& updates, int axis) {
-    tbb::parallel_for(tbb::blocked_range<int>(0, updates.size(), GRAINSIZE), [&](auto r) {
-        const auto i_stride1 = indices.shape().partial_size(axis+1, indices.rank());
-        const auto i_stride2 = i_stride1 * indices.extent(axis);
-        const auto x_stride1 = X.shape().partial_size(axis+1, X.rank());
-        const auto x_stride2 = x_stride1 * X.extent(axis);
+    const auto i_stride1    = indices.shape().partial_size(axis+1, indices.rank());
+    const auto i_stride2    = i_stride1 * indices.extent(axis);
+    const auto x_stride1    = X.shape().partial_size(axis+1, X.rank());
+    const auto x_stride2    = x_stride1 * X.extent(axis);
 
-        auto px = X.data();
-        auto pi = indices.begin() + r.begin();
-        auto pu = updates.begin() + r.begin();
+          auto x_data       = X.data();
+    const auto x_shape      = X.shape();
+    const auto x_contiguous = x_shape.is_contiguous();
+    const auto x_offset     = x_shape.offset();
+    const auto max_item     = X.extent(axis);
 
-        const bool x_contiguous = X.shape().is_contiguous();
-        const auto x_offset = X.shape().offset();
-        const auto max_item = static_cast<int>(X.extent(axis));
-
-        for (int id = r.begin(); id < r.end(); ++id, ++pu, ++pi) {
-            auto tmp = normalize_index(*pi, max_item);
-            auto x_id = (id % i_stride1) + (tmp * x_stride1) + (id / i_stride2 * x_stride2);
-            px[x_contiguous ? x_id + x_offset : X.shape().linear_offset(x_id)] = *pu;
-        }
-    });
+    map([=](auto i, auto y, auto id) {
+        auto tmp = normalize_index(i, static_cast<int>(max_item));
+        auto x_id = (id % i_stride1) + (tmp * x_stride1) + (id / i_stride2 * x_stride2);
+        x_data[x_contiguous ? x_id + x_offset : x_shape.linear_offset(x_id)] = y;
+    })(indices, updates, map_id());
 }
 
 template <typename TensorX, typename TensorI, typename TensorY>
@@ -454,9 +352,9 @@ void serial_merge(int x_len, const T* x_data, const int x_inc,
         z_data += z_inc;
     }
     if (x_len > 0)
-        detail::copy(x_len, x_data, x_inc, z_data, z_inc);
+        cxx::copy(x_len, x_data, x_inc, z_data, z_inc);
     if (y_len > 0)
-        detail::copy(y_len, y_data, y_inc, z_data, z_inc);
+        cxx::copy(y_len, y_data, y_inc, z_data, z_inc);
 }
 
 template <typename T, typename Compare>
@@ -470,10 +368,10 @@ void parallel_merge(int x_len, const T* x_data, const int x_inc,
         int xm, ym;
         if (x_len < y_len) {
             ym = y_len / 2;
-            xm = detail::upper_bound(x_len, x_data, x_inc, y_data[ym * y_inc], comp);
+            xm = cxx::upper_bound(x_len, x_data, x_inc, y_data[ym * y_inc], comp);
         } else {
             xm = x_len / 2;
-            ym = detail::lower_bound(y_len, y_data, y_inc, x_data[xm * x_inc], comp);
+            ym = cxx::lower_bound(y_len, y_data, y_inc, x_data[xm * x_inc], comp);
         }
 
         int zm = xm + ym;
@@ -543,7 +441,7 @@ void serial_sort(const int n,
                  Compare comp)
 {
     if (x_data != y_data)
-        detail::copy(n, x_data, x_inc, y_data, y_inc);
+        cxx::copy(n, x_data, x_inc, y_data, y_inc);
     if (y_inc == 1)
         std::sort(y_data, y_data + n, comp);
     else
@@ -571,9 +469,9 @@ void serial_merge(int x_len, T* x_data, const int x_inc,
         z_data += z_inc;
     }
     if (x_len > 0)
-        detail::move(x_len, x_data, x_inc, z_data, z_inc);
+        cxx::move(x_len, x_data, x_inc, z_data, z_inc);
     if (y_len > 0)
-        detail::move(y_len, y_data, y_inc, z_data, z_inc);
+        cxx::move(y_len, y_data, y_inc, z_data, z_inc);
 }
 
 template <typename T, typename Compare>
@@ -588,10 +486,10 @@ void parallel_merge(int x_len, T* x_data, const int x_inc,
         int xm, ym;
         if (x_len < y_len) {
             ym = y_len / 2;
-            xm = upper_bound(x_len, x_data, x_inc, y_data[ym*y_inc], comp);
+            xm = cxx::upper_bound(x_len, x_data, x_inc, y_data[ym*y_inc], comp);
         } else {
             xm = x_len / 2;
-            ym = lower_bound(y_len, y_data, y_inc, x_data[xm*x_inc], comp);
+            ym = cxx::lower_bound(y_len, y_data, y_inc, x_data[xm*x_inc], comp);
         }
 
         int zm = xm + ym;
@@ -670,7 +568,7 @@ void sort(const Shape& x_shape, const gpgpu::Buffer<T>& x_data,
           const Shape& y_shape,       gpgpu::Buffer<T>& y_data,
           Compare)
 {
-    std::string_view comp = Compare::name;
+    const cxx::string_view comp = Compare::name;
     const int dir = comp != "less" && comp != "less_equal";
     gpgpu::dnn::sort(dir, x_shape.extents(),
                      x_data, x_shape.offset(), x_shape.strides(),
@@ -720,7 +618,7 @@ void argsort(const Shape& x_shape, const gpgpu::Buffer<T>& x_data,
              const Shape& i_shape,       gpgpu::Buffer<I>& i_data,
              Compare)
 {
-    const std::string_view comp = Compare::name;
+    const cxx::string_view comp = Compare::name;
     const int dir = comp != "less" && comp != "less_equal";
     gpgpu::dnn::argsort(dir, x_shape.extents(),
                         x_data, x_shape.offset(), x_shape.strides(),
@@ -765,7 +663,7 @@ void serial_sort( /* insertion sort */
     auto pv = v_data;
 
     for (int i = 0; i < n; ++i, px += x_inc, py += y_inc, pv += v_inc) {
-        auto loc = upper_bound(i, y_data, y_inc, *px, comp);
+        auto loc = cxx::upper_bound(i, y_data, y_inc, *px, comp);
         auto val = gen(index + i);
 
         if (x_data == y_data) {
@@ -811,12 +709,12 @@ void serial_merge(int x_len, K* x_key, const int x_key_inc,
         z_val += z_val_inc;
     }
     if (x_len > 0) {
-        detail::move(x_len, x_key, x_key_inc, z_key, z_key_inc);
-        detail::move(x_len, x_val, x_val_inc, z_val, z_val_inc);
+        cxx::move(x_len, x_key, x_key_inc, z_key, z_key_inc);
+        cxx::move(x_len, x_val, x_val_inc, z_val, z_val_inc);
     }
     if (y_len > 0) {
-        detail::move(y_len, y_key, y_key_inc, z_key, z_key_inc);
-        detail::move(y_len, y_val, y_val_inc, z_val, z_val_inc);
+        cxx::move(y_len, y_key, y_key_inc, z_key, z_key_inc);
+        cxx::move(y_len, y_val, y_val_inc, z_val, z_val_inc);
     }
 }
 
@@ -838,10 +736,10 @@ void parallel_merge(int x_len, K* x_key, const int x_key_inc,
         int xm, ym;
         if (x_len < y_len) {
             ym = y_len / 2;
-            xm = upper_bound(x_len, x_key, x_key_inc, y_key[ym*y_key_inc], comp);
+            xm = cxx::upper_bound(x_len, x_key, x_key_inc, y_key[ym*y_key_inc], comp);
         } else {
             xm = x_len / 2;
-            ym = lower_bound(y_len, y_key, y_key_inc, x_key[xm*x_key_inc], comp);
+            ym = cxx::lower_bound(y_len, y_key, y_key_inc, x_key[xm*x_key_inc], comp);
         }
 
         int zm = xm + ym;
@@ -958,7 +856,7 @@ void argsort(const Shape& x_shape, const gpgpu::Buffer<T>& x_data,
              const Shape& i_shape,       gpgpu::Buffer<I>& i_data,
              Compare)
 {
-    const std::string_view comp = Compare::name;
+    const cxx::string_view comp = Compare::name;
     const int dir = comp != "less" && comp != "less_equal";
     gpgpu::dnn::argsort(dir, x_shape.extents(),
                         x_data, x_shape.offset(), x_shape.strides(),

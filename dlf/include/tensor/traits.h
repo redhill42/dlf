@@ -23,7 +23,7 @@ struct tensor_traits_impl {
     using is_tensor = std::false_type;
     using is_view = std::false_type;
     using tag = void;
-    using value_type = T;
+    using value_type = std::remove_cv_t<std::decay_t<T>>;
 
     template <typename U>
     using tensor_type = void;

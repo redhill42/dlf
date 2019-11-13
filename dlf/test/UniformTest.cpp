@@ -1208,7 +1208,7 @@ TEST(UniformTest, BroadcastCopyToSlice) {
     auto dev_Y = dev(Y);
     auto dev_Y1 = dev(Y1);
 
-    auto src_shape = X.shape().broadcast({1, 3, 5});
+    auto src_shape = X.shape().broadcast_to({1, 3, 5});
     auto dst_shape = Y.shape().slice({{1, 2}});
 
     auto R = Tensor<float>({3, 3, 5}, {
@@ -1228,13 +1228,13 @@ TEST(UniformTest, BroadcastCopyToSlice) {
     reorder(X, src_shape, Y, dst_shape);
     EXPECT_EQ(Y, R);
 
-    reorder(X1.broadcast({1, 3, 5}), Y1["1"]);
+    reorder(X1.broadcast_to({1, 3, 5}), Y1["1"]);
     EXPECT_EQ(Y1, R);
 
     reorder(dev_X, src_shape, dev_Y, dst_shape);
     EXPECT_EQ(dev_Y.read(), R);
 
-    reorder(dev_X1.broadcast({1,3,5}), dev_Y1["1"]);
+    reorder(dev_X1.broadcast_to({1,3,5}), dev_Y1["1"]);
     EXPECT_EQ(dev_Y1.read(), R);
 }
 
@@ -1252,13 +1252,13 @@ TEST(UniformTest, BroadcastSlice) {
     auto Y = Tensor<float>({2, 2, 2});
     auto Y1 = Y;
 
-    auto shape = X.shape().broadcast({2, 3, 4}).slice({{}, {1, 3}, {1, 3}});
+    auto shape = X.shape().broadcast_to({2, 3, 4}).slice({{}, {1, 3}, {1, 3}});
     reorder(X, shape, Y);
     EXPECT_EQ(Y, Tensor<float>({2, 2, 2}, {
         1, 2, 1, 2, 5, 6, 5, 6
     }));
 
-    reorder(X.broadcast({2,3,4})[":, 1:3, 1:3"], Y1);
+    reorder(X.broadcast_to({2,3,4})[":, 1:3, 1:3"], Y1);
     EXPECT_EQ(Y1, Y);
 
     auto dev_X = dev(X);
@@ -1267,7 +1267,7 @@ TEST(UniformTest, BroadcastSlice) {
     EXPECT_EQ(dev_Y.read(), Y);
 
     auto dev_Y1 = DevTensor<float>({2, 2, 2});
-    reorder(dev_X.broadcast({2,3,4})[":, 1:3, 1:3"], dev_Y1);
+    reorder(dev_X.broadcast_to({2,3,4})[":, 1:3, 1:3"], dev_Y1);
     EXPECT_EQ(dev_Y1.read(), Y);
 }
 
@@ -1285,7 +1285,7 @@ TEST(UniformTest, SliceBroadcast) {
     auto Y = Tensor<float>({2, 3, 4});
     auto Y1 = Y;
 
-    auto shape = X.shape().slice({{}, {}, {1, 2}}).broadcast({2, 3, 4});
+    auto shape = X.shape().slice({{}, {}, {1, 2}}).broadcast_to({2, 3, 4});
     reorder(X, shape, Y);
     EXPECT_EQ(Y, Tensor<float>({2, 3, 4}, {
          1,  1,  1,  1,
@@ -1296,7 +1296,7 @@ TEST(UniformTest, SliceBroadcast) {
         21, 21, 21, 21
     }));
 
-    reorder(X[":, :, 1"].broadcast({2,3,4}), Y1);
+    reorder(X[":, :, 1"].broadcast_to({2,3,4}), Y1);
     EXPECT_EQ(Y1, Y);
 
     auto dev_X = dev(X);
@@ -1305,7 +1305,7 @@ TEST(UniformTest, SliceBroadcast) {
     EXPECT_EQ(dev_Y.read(), Y);
 
     auto dev_Y1 = DevTensor<float>({2, 3, 4});
-    reorder(dev_X[":, :, 1"].broadcast({2,3,4}), dev_Y1);
+    reorder(dev_X[":, :, 1"].broadcast_to({2,3,4}), dev_Y1);
     EXPECT_EQ(dev_Y1.read(), Y);
 }
 
@@ -2241,8 +2241,8 @@ TEST(UniformTest, MergeBatch) {
 }
 
 TEST(UniformTest, Sort_CPU) {
-    auto rd = std::random_device();
-    auto rg = std::mt19937(rd());
+    std::random_device rd;
+    std::mt19937 rg(rd());
 
     auto sample = Tensor<int>({10000}).range(0);
     std::shuffle(sample.begin(), sample.end(), rg);

@@ -2,6 +2,24 @@
 
 namespace dlf { namespace xfn {
 
+template <typename F = void>
+struct transfer {
+    F f;
+    constexpr explicit transfer(F f) : f(f) {}
+    template <typename R, typename... Args>
+    void operator()(R& y, Args&&... args) const
+    noexcept(noexcept(y = f(std::forward<Args>(args)...)))
+        { y = f(std::forward<Args>(args)...); }
+};
+
+template <>
+struct transfer<void> {
+    template <typename T>
+    void operator()(T& y, T&& x) const
+    noexcept(noexcept(y = std::forward<T>(x)))
+        { y = std::forward<T>(x); }
+};
+
 template <typename T>
 std::enable_if_t<std::is_literal_type<T>::value, T>
 inline constexpr zero() { return T{}; }
@@ -40,7 +58,7 @@ struct parameterized_function {
 
 template <typename T = void>
 struct identity : std::unary_function<T,T> {
-    constexpr T operator()(const T& x) const { return x; }
+    constexpr T operator()(const T& x) const noexcept { return x; }
 };
 
 template <>
@@ -422,7 +440,7 @@ struct hard_sigmoid : std::unary_function<T,T>, parameterized_function<T> {
 
 template <typename F>
 struct post_reduce {
-    static constexpr auto f = F();
+    F f;
     template <typename T>
     constexpr T operator()(const T& acc, const int) const
     noexcept(noexcept(f(acc))) { return f(acc); }

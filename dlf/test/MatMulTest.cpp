@@ -474,11 +474,11 @@ TYPED_TEST(MatMulTest, BroadcastedVectors) {
     auto X = Scalar<TypeParam>(2);
     auto Y = Scalar<TypeParam>(3);
     auto Z = Scalar<TypeParam>(24);
-    EXPECT_EQ(matmul(X.broadcast({4}), Y.broadcast({4})), Z);
+    EXPECT_EQ(matmul(X.broadcast_to({4}), Y.broadcast_to({4})), Z);
 
     auto dev_X = dev(X);
     auto dev_Y = dev(Y);
-    EXPECT_EQ(matmul(dev_X.broadcast({4}), dev_Y.broadcast({4})).read(), Z);
+    EXPECT_EQ(matmul(dev_X.broadcast_to({4}), dev_Y.broadcast_to({4})).read(), Z);
 }
 
 TYPED_TEST(MatMulTest, MatrixAndBroadcastedVector) {
@@ -486,13 +486,13 @@ TYPED_TEST(MatMulTest, MatrixAndBroadcastedVector) {
     auto Y = Scalar<TypeParam>(3);
     auto Z = Tensor<TypeParam>({4}, {30, 78, 126, 174});
     auto W = Tensor<TypeParam>({4}, {84, 96, 108, 120});
-    EXPECT_EQ(matmul(X, Y.broadcast({4})), Z);
-    EXPECT_EQ(matmul(Y.broadcast({4}), X), W);
+    EXPECT_EQ(matmul(X, Y.broadcast_to({4})), Z);
+    EXPECT_EQ(matmul(Y.broadcast_to({4}), X), W);
 
     auto dev_X = dev(X);
     auto dev_Y = dev(Y);
-    EXPECT_EQ(matmul(dev_X, dev_Y.broadcast({4})).read(), Z);
-    EXPECT_EQ(matmul(dev_Y.broadcast({4}), dev_X).read(), W);
+    EXPECT_EQ(matmul(dev_X, dev_Y.broadcast_to({4})).read(), Z);
+    EXPECT_EQ(matmul(dev_Y.broadcast_to({4}), dev_X).read(), W);
 }
 
 TYPED_TEST(MatMulTest, Transpose) {
@@ -617,8 +617,8 @@ TYPED_TEST(MatMulTest, ScalarBroadcast) {
         270, 270, 270, 270, 270
     });
 
-    EXPECT_EQ(matmul(A, B.broadcast({2, 4, 5})), C);
-    EXPECT_EQ(matmul(dev(A), dev(B).broadcast({2,4,5})).read(), C);
+    EXPECT_EQ(matmul(A, B.broadcast_to({2, 4, 5})), C);
+    EXPECT_EQ(matmul(dev(A), dev(B).broadcast_to({2,4,5})).read(), C);
 }
 
 TYPED_TEST(MatMulTest, AsStrided) {

@@ -27,7 +27,7 @@ void prepend_edge(TensorT& X, int pad_amt, int axis) {
     if (pad_amt > 0) {
         auto x_edge_slice = X.slice({pad_amt}, {pad_amt+1}, {axis}, {1});
         auto y_edge_slice = X.slice({0}, {pad_amt}, {axis}, {1});
-        reorder(x_edge_slice.broadcast(y_edge_slice.shape()), y_edge_slice);
+        reorder(x_edge_slice.broadcast_to(y_edge_slice.shape()), y_edge_slice);
     }
 }
 
@@ -37,7 +37,7 @@ void append_edge(TensorT& X, int pad_amt, int axis) {
         auto dim = static_cast<int>(X.extent(axis));
         auto x_edge_slice = X.slice({-pad_amt-1}, {-pad_amt}, {axis}, {1});
         auto y_edge_slice = X.slice({-pad_amt}, {dim}, {axis}, {1});
-        reorder(x_edge_slice.broadcast(y_edge_slice.shape()), y_edge_slice);
+        reorder(x_edge_slice.broadcast_to(y_edge_slice.shape()), y_edge_slice);
     }
 }
 
@@ -115,11 +115,11 @@ void pad_reduce(TensorT& X, int pad_before, int pad_after, int axis) {
 
     if (pad_before > 0) {
         auto y_edge_slice = X.slice({0}, {pad_before}, {axis}, {1});
-        reorder(y_reduce_slice.broadcast(y_edge_slice.shape()), y_edge_slice);
+        reorder(y_reduce_slice.broadcast_to(y_edge_slice.shape()), y_edge_slice);
     }
     if (pad_after > 0) {
         auto y_edge_slice = X.slice({-pad_after}, {dim}, {axis}, {1});
-        reorder(y_reduce_slice.broadcast(y_edge_slice.shape()), y_edge_slice);
+        reorder(y_reduce_slice.broadcast_to(y_edge_slice.shape()), y_edge_slice);
     }
 }
 } // namespace detail

@@ -107,6 +107,62 @@ inline constexpr T max(std::initializer_list<T> t) {
     return *std::max_element(t.begin(), t.end(), std::less<T>());
 }
 
+#if CPP_VER >= 17
+using std::string_view;
+#else
+using string_view = std::string;
+#endif
+
+template <typename T>
+void copy(int n, const T* px, const int x_inc, T* py, const int y_inc) {
+    if (x_inc == 1 && y_inc == 1) {
+        std::copy(px, px + n, py);
+    } else {
+        for (; n > 0; --n, px += x_inc, py += y_inc)
+            *py = *px;
+    }
+}
+
+template <typename T>
+void move(int n, T* px, const int x_inc, T* py, const int y_inc) {
+    if (x_inc == 1 && y_inc == 1) {
+        std::move(px, px + n, py);
+    } else {
+        for (; n > 0; --n, px += x_inc, py += y_inc)
+            *py = std::move(*px);
+    }
+}
+
+template <typename T, typename Compare>
+constexpr int lower_bound(int n, const T* data, const int stride, const T& value, Compare comp) {
+    int i = 0;
+    while (n != 0) {
+        int m = n / 2;
+        if (comp(data[(m + i) * stride], value)) {
+            i += m + 1;
+            n -= m + 1;
+        } else {
+            n = m;
+        }
+    }
+    return i;
+}
+
+template <typename T, typename Compare>
+constexpr int upper_bound(int n, const T* data, const int stride, const T& value, Compare comp) {
+    int i = 0;
+    while (n != 0) {
+        int m = n / 2;
+        if (comp(value, data[(m + i) * stride]))
+            n = m;
+        else {
+            i += m + 1;
+            n -= m + 1;
+        }
+    }
+    return i;
+}
+
 } // namespace cxx
 
 namespace cxx {

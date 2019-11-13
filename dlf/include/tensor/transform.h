@@ -17,7 +17,7 @@ std::enable_if_t<
     !std::is_const<std::remove_reference_t<TensorU>>::value>
 inline transformTo(const TensorT& X, TensorU&& Y, F f) {
     Y.resize(X.shape());
-    par::transform(X.begin(), X.end(), Y.begin(), f);
+    map(xfn::transfer<F>(f))(Y, X);
 }
 
 /**
@@ -35,7 +35,7 @@ inline transform(const TensorT& X, F f) {
 template <typename T, typename F>
 std::enable_if_t<std::is_same<cxx::invoke_result_t<F,T>,T>::value, Tensor<T>>
 inline transform(Tensor<T>&& A, F f) {
-    transformTo(A, A, f);
+    map([f](auto& x){ x = f(x); })(A);
     return std::move(A);
 }
 
@@ -197,96 +197,10 @@ inline void transformChannel(const Tensor<T>& A, const Tensor<U>& B, Tensor<W>& 
     transformChannel(A.shape(), A.data(), B.shape(), B.data(), C.shape(), C.begin(), axis, f);
 }
 
-template <typename T, typename U, typename IteratorC, typename F>
-void transform(const Shape& shape_A, const T* data_A, const size_t size_A,
-               const Shape& shape_B, const U* data_B, const size_t size_B,
-               const Shape& shape_C, IteratorC begin_C, F f)
-{
-    Shape sA = shape_A.broadcast(shape_C);
-    Shape sB = shape_B.broadcast(shape_C);
-    int   axis;
-
-    if (size_A == 1) {
-        if (sB.is_contiguous()) {
-            par::transform(data_B + sB.offset(), data_B + sB.offset() + sB.size(),
-                           begin_C,
-                           [x = *data_A, f](auto& y){ return f(x, y); });
-        } else {
-            par::transform(const_shaped_iterator<U>(sB, data_B, 0),
-                           const_shaped_iterator<U>(sB, data_B, sB.size()),
-                           begin_C,
-                           [x = *data_A, f](auto& y){ return f(x, y); });
-        }
-        return;
-    }
-
-    if (size_B == 1) {
-        if (sA.is_contiguous()) {
-            par::transform(data_A + sA.offset(), data_A + sA.offset() + sA.size(),
-                           begin_C,
-                           [y = *data_B, f](auto& x){ return f(x, y); });
-        } else {
-            par::transform(const_shaped_iterator<T>(sA, data_A, 0),
-                           const_shaped_iterator<T>(sA, data_A, sA.size()),
-                           begin_C,
-                           [y = *data_B, f](auto& x){ return f(x, y); });
-        }
-        return;
-    }
-
-    if (shape_A.is_contiguous() && shape_B.is_contiguous()) {
-        if (shape_A == shape_B) {
-            assert(shape_A == sA && shape_B == sB);
-            par::transform(data_A + sA.offset(), data_A + sA.offset() + sA.size(),
-                           data_B + sB.offset(),
-                           begin_C, f);
-            return;
-        }
-
-        if ((axis = shape_A.find_channel_axis(shape_B)) != -1) {
-            transformChannel(shape_A, data_A, shape_B, data_B, shape_C, begin_C, axis, f);
-            return;
-        }
-    }
-
-    if (sA.is_contiguous()) {
-        par::transform(data_A + sA.offset(), data_A + sA.offset() + sA.size(),
-                       const_shaped_iterator<U>(sB, data_B, 0),
-                       begin_C, f);
-    } else if (sB.is_contiguous()) {
-        par::transform(const_shaped_iterator<T>(sA, data_A, 0),
-                       const_shaped_iterator<T>(sA, data_A, sA.size()),
-                       data_B + sB.offset(),
-                       begin_C, f);
-    } else {
-        par::transform(const_shaped_iterator<T>(sA, data_A, 0),
-                       const_shaped_iterator<T>(sA, data_A, sA.size()),
-                       const_shaped_iterator<U>(sB, data_B, 0),
-                       begin_C, f);
-    }
-}
-
-template <typename T, typename U, typename W, typename F>
-void transform(const Shape& shape_A, const T* data_A, const size_t size_A,
-               const Shape& shape_B, const U* data_B, const size_t size_B,
-               Tensor<W>& C, F f)
-{
-    C.resize(Shape::broadcast(shape_A, shape_B));
-    transform(shape_A, data_A, size_A, shape_B, data_B, size_B, C.shape(), C.begin(), f);
-}
-
-template <typename T, typename U, typename W, typename F>
-void transform(const Shape& shape_A, const T* data_A, const size_t size_A,
-               const Shape& shape_B, const U* data_B, const size_t size_B,
-               TensorView<W>& C, F f)
-{
-    if (C.shape() != Shape::broadcast(shape_A, shape_B))
-        throw shape_error("incompatible shape");
-    if (C.shape().is_contiguous()) {
-        transform(shape_A, data_A, size_A, shape_B, data_B, size_B, C.shape(), C.data() + C.shape().offset(), f);
-    } else {
-        transform(shape_A, data_A, size_A, shape_B, data_B, size_B, C.shape(), C.begin(), f);
-    }
+template <typename LHS, typename RHS, typename RET, typename F>
+std::enable_if_t<is_cpu_tensor<LHS>::value>
+inline transform(const LHS& A, const RHS& B, RET& C, F f) {
+    map(xfn::transfer<F>(f))(C, A, B);
 }
 } // namespace detail
 
@@ -334,20 +248,18 @@ void transform(const std::string& name,
         }
     }
 
-    auto sA = shape_A.broadcast(shape_C);
-    auto sB = shape_B.broadcast(shape_C);
+    auto sA = shape_A.broadcast_to(shape_C);
+    auto sB = shape_B.broadcast_to(shape_C);
     gpgpu::dnn::transform(name, shape_C.size(), shape_C.extents(),
                           data_A, sA.offset(), sA.strides(),
                           data_B, sB.offset(), sB.strides(),
                           data_C, shape_C.offset(), shape_C.strides());
 }
 
-template <typename T, typename TensorR, typename F>
-void transform(const Shape& shape_A, const gpgpu::Buffer<T>& data_A, const size_t,
-               const Shape& shape_B, const gpgpu::Buffer<T>& data_B, const size_t,
-               TensorR& C, F) {
-    C.resize(Shape::broadcast(shape_A, shape_B));
-    transform(F::name, shape_A, data_A, shape_B, data_B, C.shape(), C.data());
+template <typename LHS, typename RHS, typename RET, typename F>
+std::enable_if_t<is_gpu_tensor<LHS>::value>
+inline transform(const LHS& A, const RHS& B, RET& C, F) {
+    transform(F::name, A.shape(), A.data(), B.shape(), B.data(), C.shape(), C.data());
 }
 } // namespace detail
 
@@ -365,9 +277,8 @@ std::enable_if_t<
             LHS>>::value &&
     !std::is_const<std::remove_reference_t<RET>>::value>
 inline transformTo(const LHS& A, const RHS& B, RET&& C, F f) {
-    detail::transform(A.shape(), A.data(), A.original_shape().size(),
-                      B.shape(), B.data(), B.original_shape().size(),
-                      C, f);
+    C.resize(Shape::broadcast(A, B));
+    detail::transform(A, B, C, f);
 }
 
 template <typename LHS, typename RHS, typename RET, typename F>
@@ -562,6 +473,18 @@ inline operator!=(const LHS& lhs, const RHS& rhs) {
 }
 
 template <typename LHS, typename RHS>
+enable_if_tensors<LHS, RHS, xfn::equal_to<>>
+inline equal(LHS&& lhs, RHS&& rhs) {
+    return transform(std::forward<LHS>(lhs), std::forward<RHS>(rhs), xfn::equal_to<>());
+}
+
+template <typename LHS, typename RHS>
+enable_if_tensors<LHS, RHS, xfn::not_equal_to<>>
+inline not_equal(LHS&& lhs, RHS&& rhs) {
+    return transform(std::forward<LHS>(lhs), std::forward<RHS>(rhs), xfn::not_equal_to<>());
+}
+
+template <typename LHS, typename RHS>
 enable_if_tensors<LHS, RHS, xfn::less<>>
 inline operator<(LHS&& lhs, RHS&& rhs) {
     return transform(std::forward<LHS>(lhs), std::forward<RHS>(rhs), xfn::less<>());
@@ -697,60 +620,47 @@ inline auto product(First&& first, Rest&&... rest) {
 // Tensor ternary operations
 //==-------------------------------------------------------------------------
 
-template <typename TensorC, typename TensorX, typename TensorY>
+template <typename TensorK, typename TensorX, typename TensorY>
 std::enable_if_t<
     is_cpu_tensor<TensorX>::value &&
     is_exactly_same_tensor<TensorX, TensorY>::value &&
-    is_exactly_same_tensor<TensorC, tensor_type<TensorX, bool>>::value>
-inline where(const TensorC& C, const TensorX& X, const TensorY& Y, tensor_type<TensorX>& Z) {
-    auto z_shape = Shape::broadcast(C, X, Y);
-    Z.resize(z_shape);
-
-    auto c_shape = C.shape().broadcast(z_shape);
-    auto x_shape = X.shape().broadcast(z_shape);
-    auto y_shape = Y.shape().broadcast(z_shape);
-    using T = tensor_value_type<TensorX>;
-
-    tbb::parallel_for(tbb::blocked_range<size_t>(0, Z.size(), GRAINSIZE), [&](auto r) {
-        auto c_it = const_shaped_iterator<bool>(c_shape, C.data(), r.begin());
-        auto x_it = const_shaped_iterator<T>(x_shape, X.data(), r.begin());
-        auto y_it = const_shaped_iterator<T>(y_shape, Y.data(), r.begin());
-        auto pz = Z.data() + r.begin();
-        for (int count = r.size(); --count >= 0; ++pz, ++c_it, ++x_it, ++y_it) {
-            *pz = *c_it ? *x_it : *y_it;
-        }
-    });
+    is_exactly_same_tensor<TensorK, tensor_type<TensorX, bool>>::value>
+inline where(const TensorK& K, const TensorX& X, const TensorY& Y, tensor_type<TensorX>& Z) {
+    Z.resize(Shape::broadcast(K, X, Y));
+    map([](auto k, auto x, auto y, auto& z) {
+        z = k ? x : y;
+    })(K, X, Y, Z);
 }
 
-template <typename TensorC, typename TensorX, typename TensorY>
+template <typename TensorK, typename TensorX, typename TensorY>
 std::enable_if_t<
     is_gpu_tensor<TensorX>::value &&
     is_exactly_same_tensor<TensorX, TensorY>::value &&
-    is_exactly_same_tensor<TensorC, tensor_type<TensorX, bool>>::value>
-inline where(const TensorC& C, const TensorX& X, const TensorY& Y, tensor_type<TensorX>& Z) {
-    auto final_shape = Shape::broadcast(C, X, Y);
+    is_exactly_same_tensor<TensorK, tensor_type<TensorX, bool>>::value>
+inline where(const TensorK& K, const TensorX& X, const TensorY& Y, tensor_type<TensorX>& Z) {
+    auto final_shape = Shape::broadcast(K, X, Y);
     Z.resize(final_shape);
 
-    auto c_shape = C.shape().broadcast(final_shape);
-    auto x_shape = X.shape().broadcast(final_shape);
-    auto y_shape = Y.shape().broadcast(final_shape);
+    auto k_shape = K.shape().broadcast_to(final_shape);
+    auto x_shape = X.shape().broadcast_to(final_shape);
+    auto y_shape = Y.shape().broadcast_to(final_shape);
 
     gpgpu::dnn::where(
         final_shape.size(), final_shape.extents(),
-        C.data(), c_shape.offset(), c_shape.strides(),
+        K.data(), k_shape.offset(), k_shape.strides(),
         X.data(), x_shape.offset(), x_shape.strides(),
         Y.data(), y_shape.offset(), y_shape.strides(),
         Z.data(), 0);
 }
 
-template <typename TensorC, typename TensorX, typename TensorY>
+template <typename TensorK, typename TensorX, typename TensorY>
 std::enable_if_t<
     is_exactly_same_tensor<TensorX, TensorY>::value &&
-    is_exactly_same_tensor<TensorC, tensor_type<TensorX, bool>>::value,
+    is_exactly_same_tensor<TensorK, tensor_type<TensorX, bool>>::value,
     tensor_type<TensorX>>
-where(const TensorC& C, const TensorX& X, const TensorY& Y) {
+where(const TensorK& K, const TensorX& X, const TensorY& Y) {
     tensor_type<TensorX> Z{};
-    where(C, X, Y, Z);
+    where(K, X, Y, Z);
     return Z;
 }
 

@@ -402,12 +402,12 @@ inline int matmul_broadcast(Shape& shapeA, Shape& shapeB, Shape& shapeC) {
     dimsA = prefixShape.extents();
     dimsA.push_back(m);
     dimsA.push_back(k);
-    shapeA = shapeA.broadcast(Shape(dimsA));
+    shapeA = shapeA.broadcast_to(Shape(dimsA));
 
     dimsB = prefixShape.extents();
     dimsB.push_back(k);
     dimsB.push_back(n);
-    shapeB = shapeB.broadcast(Shape(dimsB));
+    shapeB = shapeB.broadcast_to(Shape(dimsB));
 
     auto dimsC = prefixShape.extents();
     dimsC.push_back(m);

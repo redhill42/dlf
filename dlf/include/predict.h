@@ -1845,7 +1845,7 @@ private:
         void evaluate() override {
             auto exp_shape = Shape::broadcast(X->shape(), *shape);
             Y->template resize<T>(exp_shape);
-            reorder(deref(X).broadcast(exp_shape), deref(Y));
+            reorder(deref(X).broadcast_to(exp_shape), deref(Y));
         }
     };
 

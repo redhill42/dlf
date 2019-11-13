@@ -11,14 +11,16 @@ namespace dlf {
 template <typename TensorT>
 enable_if_non_view_tensor<TensorT, void>
 inline reorder(const TensorT& src, const Shape& src_shape, TensorT& dst, const Shape& dst_shape) {
-    detail::reorder(src, src_shape, dst, dst_shape);
+    if (src_shape != dst_shape)
+        throw shape_error("incompatible shape");
+    detail::reorder_impl(src.view(src_shape), dst.view(dst_shape));
 }
 
 template <typename TensorT>
 enable_if_non_view_tensor<TensorT, void>
 inline reorder(const TensorT& src, const Shape& src_shape, TensorT& dst) {
     dst.resize(src_shape);
-    detail::reorder(src, src_shape, dst, dst.shape());
+    detail::reorder_impl(src.view(src_shape), dst);
 }
 
 template <typename TensorT, typename TensorR>
@@ -27,7 +29,7 @@ std::enable_if_t<
     !std::is_const<std::remove_reference_t<TensorR>>::value>
 inline reorder(const TensorT& src, TensorR&& dst) {
     dst.resize(src.shape());
-    detail::reorder(src, src.shape(), dst, dst.shape());
+    detail::reorder_impl(src, dst);
 }
 
 template <typename TensorT, typename TensorR>
@@ -35,7 +37,7 @@ std::enable_if_t<
     is_exactly_same_tensor<TensorT, TensorR>::value &&
     !std::is_const<std::remove_reference_t<TensorR>>::value>
 inline broadcast(const TensorT& src, TensorR&& dst) {
-    reorder(src.broadcast(dst.shape()), std::forward<TensorR>(dst));
+    reorder(src.broadcast_to(dst.shape()), std::forward<TensorR>(dst));
 }
 
 //==-------------------------------------------------------------------------
@@ -233,7 +235,7 @@ std::enable_if_t<
     is_cpu_tensor<Block>::value &&
     is_tensor<tensor_value_type<Block>>::value &&
     is_exactly_same_tensor<tensor_value_type<Block>, TensorR>::value &&
-    !std::is_const<std::remove_reference<TensorR>>::value>
+    !std::is_const<std::remove_reference_t<TensorR>>::value>
 join(const Block& input, TensorR&& output) {
     // Determine the final rank
     auto rank = input.rank();
@@ -324,7 +326,7 @@ join(const Block& input) {
 template <typename TensorT, typename TensorR>
 std::enable_if_t<
     is_exactly_same_tensor<TensorT, TensorR>::value &&
-    !std::is_const<std::remove_reference<TensorR>>::value>
+    !std::is_const<std::remove_reference_t<TensorR>>::value>
 tile(const TensorT& X, TensorR&& Y, std::vector<size_t> reps) {
     auto rank = std::max(X.rank(), reps.size());
     auto x_view = unsqueeze_left(X, rank);
@@ -346,7 +348,7 @@ tile(const TensorT& X, const std::vector<size_t>& reps) {
 template <typename TensorT, typename TensorR>
 std::enable_if_t<
     is_exactly_same_tensor<TensorT, TensorR>::value &&
-    !std::is_const<std::remove_reference<TensorR>>::value>
+    !std::is_const<std::remove_reference_t<TensorR>>::value>
 repeat(const TensorT& X, TensorR&& Y, int repeats, int axis) {
     assert(repeats > 0);
     detail::norm_axis(X.rank(), axis);
@@ -655,7 +657,7 @@ insert(const TensorT& X, int axis, const std::vector<int>& insertions, const Ten
     if (value_view.is_scalar()) {
         auto dims = X.shape().extents();
         dims[axis] = 1;
-        value_view = value_view.broadcast(Shape(dims));
+        value_view = value_view.broadcast_to(Shape(dims));
     }
 
     std::vector<tensor_view_type<TensorT>> slices;
@@ -691,7 +693,7 @@ replace(const TensorT& X, int axis, const std::vector<Range>& range, const Tenso
     if (value_view.is_scalar()) {
         auto dims = X.shape().extents();
         dims[axis] = 1;
-        value_view = value_view.broadcast(Shape(dims));
+        value_view = value_view.broadcast_to(Shape(dims));
     }
 
     std::unordered_set<int> erased_items;

@@ -204,39 +204,25 @@ void scan(int m, int n, bool exclusive, const T& id, Op op,
                 [&](const auto& c, auto acc, const bool is_final_scan) {
                     auto px = x_data + x_shape.linear_offset(i*n + c.begin());
                     auto py = y_data + y_shape.linear_offset(i*n + c.begin());
-                    auto incX = x_shape.stride(-1);
-                    auto incY = y_shape.stride(-1);
+                    auto ix = x_shape.stride(-1);
+                    auto iy = y_shape.stride(-1);
 
                     auto j = static_cast<int>(c.size());
-                #define SCAN_CORE(ix, iy)                               \
-                    if (is_final_scan && exclusive) {                   \
-                        for (; j > 0; --j, px += ix, py += iy) {        \
-                            *py = acc;                                  \
-                            acc = op(acc, *px);                         \
-                        }                                               \
-                    } else if (is_final_scan && !exclusive) {           \
-                        for (; j > 0; --j, px += ix, py += iy) {        \
-                            acc = op(acc, *px);                         \
-                            *py = acc;                                  \
-                        }                                               \
-                    } else {                                            \
-                        for (; j > 0; --j, px += ix) {                  \
-                            acc = op(acc, *px);                         \
-                        }                                               \
-                    }
-
-                    // Optimize for vector computation
-                    if (incX == 1 && incY == 1) {
-                        SCAN_CORE(1, 1)
-                    } else if (incX == 1) {
-                        SCAN_CORE(1, incY);
-                    } else if (incY == 1) {
-                        SCAN_CORE(incX, 1);
+                    if (is_final_scan && exclusive) {
+                        for (; j > 0; --j, px += ix, py += iy) {
+                            *py = acc;
+                            acc = op(acc, *px);
+                        }
+                    } else if (is_final_scan && !exclusive) {
+                        for (; j > 0; --j, px += ix, py += iy) {
+                            acc = op(acc, *px);
+                            *py = acc;
+                        }
                     } else {
-                        SCAN_CORE(incX, incY);
+                        for (; j > 0; --j, px += ix) {
+                            acc = op(acc, *px);
+                        }
                     }
-                #undef SCAN_CORE
-
                     return acc;
                 },
                 op);

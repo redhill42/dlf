@@ -303,7 +303,7 @@ TEST(DNNTest, TransformChannel_CPU) {
     auto D = Tensor<int>(A.shape());
 
     transformChannel(A, B, C, 1, xfn::plus<>());
-    transformTo(A, B.broadcast(A.shape()), D, xfn::plus<>());
+    transformTo(A, B.broadcast_to(A.shape()), D, xfn::plus<>());
     EXPECT_EQ(C, D);
 }
 
@@ -315,7 +315,7 @@ TEST(DNNTest, TransformChannel_GPU) {
 
     transformChannel(A, B, C, 1, xfn::plus<>());
 
-    B = B.broadcast(A.shape());
+    B = B.broadcast_to(A.shape());
     transformTo(A, B, D, xfn::plus<>());
     EXPECT_EQ(C.read(), D.read());
 }
@@ -327,7 +327,7 @@ TEST(DNNTest, ShapeBroadcastCopy) {
         1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3
     });
 
-    auto dev_A = dev(A).broadcast({2, 3, 4});
+    auto dev_A = dev(A).broadcast_to({2, 3, 4});
     EXPECT_EQ(dev_A.read(), B);
 }
 

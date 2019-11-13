@@ -227,7 +227,7 @@ public:
     /**
      * Broadcast the shape to target shape.
      */
-    Shape broadcast(const Shape& to) const;
+    Shape broadcast_to(const Shape& shape) const;
 
     /**
      * Create a transposed shape.
@@ -507,8 +507,8 @@ protected:
     }
 
 public:
-    auto broadcast(const Shape& to) const {
-        return self().view(m_shape.broadcast(to));
+    auto broadcast_to(const Shape& shape) const {
+        return self().view(m_shape.broadcast_to(shape));
     }
 
     template <typename... Args>
@@ -761,9 +761,9 @@ public:
     const_strided_iterator& operator-=(difference_type n) noexcept { m_data -= n*m_stride; return *this; }
 
     const_strided_iterator operator+(difference_type n) const noexcept
-        { return strided_iterator(m_data, m_stride, n); }
+        { return const_strided_iterator<T>(m_data, m_stride, n); }
     const_strided_iterator operator-(difference_type n) const noexcept
-        { return strided_iterator(m_data, m_stride, -n); }
+        { return const_strided_iterator(m_data, m_stride, -n); }
     difference_type operator-(const const_strided_iterator& rhs) const noexcept
         { return (m_data - rhs.m_data) / m_stride; }
 

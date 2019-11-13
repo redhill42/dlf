@@ -91,7 +91,7 @@ gemm(cblas::Transpose transA, cblas::Transpose transB,
         std::swap(p, n);
     assert(k == p);
 
-    auto Y = C.broadcast({m, n}).copy();
+    auto Y = C.broadcast_to({m, n}).copy();
     gemm(transA, transB, alpha, A, B, beta, &Y);
     return Y;
 }

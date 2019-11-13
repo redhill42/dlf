@@ -397,7 +397,7 @@ TEST_F(TensorTest, ShapeBroadcastCopy) {
         1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3,
         1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3
     });
-    EXPECT_EQ(A.broadcast({2, 3, 4}), B);
+    EXPECT_EQ(A.broadcast_to({2, 3, 4}), B);
 }
 
 template <typename T>

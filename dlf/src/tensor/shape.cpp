@@ -285,7 +285,7 @@ Shape Shape::unsqueeze(int axis) const {
     return Shape(std::move(new_dims), size(), offset());
 }
 
-Shape Shape::broadcast(const Shape& to) const {
+Shape Shape::broadcast_to(const Shape& to) const {
     int idim, ndim = static_cast<int>(to.rank());
     int idim_start = ndim - static_cast<int>(rank());
 
