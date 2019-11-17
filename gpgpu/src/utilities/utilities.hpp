@@ -58,7 +58,7 @@ inline void log_debug(const std::string&) { }
 template <typename T>
 struct PrecisionTraits {
   // Scalar of value 0, 1, and -1
-  static constexpr T Zero{0}, One{1}, NegOne{-1};
+  static constexpr T Zero{0}, One{1}, NegOne{static_cast<T>(-1)};
 
   // Converts a 'real' value to a 'real argument' value to be passed to kernel.
   // Normally there is no conversion, but half-precision is not supported as
@@ -122,9 +122,11 @@ inline bool IsIntegral(Precision precision) {
 }
 
 inline Precision DatabasePrecision(Precision precision) {
-    return IsIntegral(precision)
-        ? static_cast<Precision>(static_cast<int>(precision) - 10000)
-        : precision;
+    if (precision == Precision::Char)
+        return Precision::Single;
+    if (IsIntegral(precision))
+        return static_cast<Precision>(static_cast<int>(precision) - 10000);
+    return precision;
 }
 
 // =================================================================================================

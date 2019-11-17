@@ -104,6 +104,18 @@ R"(
   #define SMALLEST -1.79769e+308
   #define LARGEST   1.79769e+308
 
+// 8 bit integer (bool, char, unsinged char)
+#elif PRECISION == 10008
+  typedef char real;
+  typedef char2 real2;
+  typedef char4 real4;
+  typedef char8 real8;
+  typedef char16 real16;
+  #define ZERO 0
+  #define ONE 1
+  #define SMALLEST -128
+  #define LARGEST  127
+   
 // 16 bit integer
 #elif PRECISION == 10016
   typedef short real;

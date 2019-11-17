@@ -131,13 +131,12 @@ using enable_if_non_view_tensor =
     std::enable_if_t<is_tensor<TensorT>::value && !is_tensor_view<TensorT>::value, R>;
 
 template <typename Fn, typename LHS, typename RHS>
-using tensor_invoke_result =
-    tensor_type<
-        std::conditional_t<is_tensor<LHS>::value, LHS, RHS>,
-        std::conditional_t<
-            is_cpu_tensor<LHS>::value || is_cpu_tensor<RHS>::value,
+using tensor_invoke_result = tensor_type<
+    std::conditional_t<is_tensor<LHS>::value, LHS, RHS>,
+    std::conditional_t<is_relop<Fn>::value, bool,
+        std::conditional_t<is_cpu_tensor<LHS>::value || is_cpu_tensor<RHS>::value,
             cxx::invoke_result_t<Fn, tensor_value_type<LHS>, tensor_value_type<RHS>>,
-            std::conditional_t<is_relop<Fn>::value, bool, tensor_value_type<LHS>>>>;
+            tensor_value_type<LHS>>>>;
 
 template <typename LHS, typename RHS, typename Fn, typename R = tensor_invoke_result<Fn, LHS, RHS>>
 using enable_if_tensors =

@@ -2019,7 +2019,7 @@ private:
             : X(of->alloc(n->input())), Y(of->alloc<int32_t>(n->output())) {}
         void evaluate() override {
             auto out = deref<int32_t>(Y);
-            nonzero(deref(X), out);
+            nonzero(deref(X), out, true);
             Y->unget(out);
         }
     };

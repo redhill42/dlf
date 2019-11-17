@@ -270,11 +270,7 @@ inline transform(const LHS& A, const RHS& B, RET& C, F) {
 template <typename LHS, typename RHS, typename RET, typename F>
 std::enable_if_t<
     is_same_tensor<LHS, RHS>::value &&
-    is_same_tensor<RET,
-        std::conditional_t<
-            is_gpu_tensor<LHS>::value && is_relop<F>::value,
-            tensor_type<LHS, bool>,
-            LHS>>::value &&
+    is_same_tensor<RET, std::conditional_t<is_relop<F>::value, tensor_type<LHS, bool>, LHS>>::value &&
     !std::is_const<std::remove_reference_t<RET>>::value>
 inline transformTo(const LHS& A, const RHS& B, RET&& C, F f) {
     C.resize(Shape::broadcast(A, B));
@@ -287,11 +283,7 @@ std::enable_if_t<
     !is_tensor_view<LHS>::value &&
     !is_tensor_view<RHS>::value &&
     !is_tensor_view<RET>::value &&
-    is_same_tensor<RET,
-        std::conditional_t<
-            is_gpu_tensor<LHS>::value && is_relop<F>::value,
-            tensor_type<LHS, bool>,
-            LHS>>::value>
+    is_same_tensor<RET, std::conditional_t<is_relop<F>::value, tensor_type<LHS, bool>, LHS>>::value>
 inline transformChannel(const LHS& A, const RHS& B, RET& C, size_t axis, F f) {
     detail::transformChannel(A, B, C, axis, f);
 }

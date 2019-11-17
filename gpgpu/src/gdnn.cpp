@@ -993,6 +993,11 @@ void scan_nonzero(const size_t m, const size_t n,
                    y_buffer, y_offset, y_strides);
 }
 
+template void PUBLIC_API scan_nonzero<bool>(
+    const size_t, const size_t, const bool, const std::vector<size_t>&,
+    const Buffer<bool>&, const size_t, const std::vector<size_t>&,
+    Buffer<int32_t>&, const size_t, const std::vector<size_t>&,
+    const Queue&, Event*);
 template void PUBLIC_API scan_nonzero<half>(
     const size_t, const size_t, const bool, const std::vector<size_t>&,
     const Buffer<half>&, const size_t, const std::vector<size_t>&,

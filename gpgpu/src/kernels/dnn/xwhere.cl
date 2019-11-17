@@ -2,7 +2,7 @@ CL_PROGRAM R"(
 
 __kernel __attribute__((reqd_work_group_size(WGS, 1, 1)))
 void Xwhere(const int n, const int rank, __constant int* shape,
-            const __global char* restrict cgm, const int c_offset,
+            const __global bool* restrict cgm, const int c_offset,
             const __global real* restrict xgm, const int x_offset,
             const __global real* restrict ygm, const int y_offset,
             __global real* zgm, const int z_offset)

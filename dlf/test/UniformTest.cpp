@@ -1740,7 +1740,7 @@ TEST(UniformTest, ScatterElements_WithNegativeIndices) {
 TEST(UniformTest, GatherND_1) {
     auto A = Matrix({{0, 1}, {2, 3}});
 
-    auto I1 = Matrix({{0, 0,}, {1, 1}});
+    auto I1 = Matrix({{0, 0}, {1, 1}});
     auto B1 = Vector({0, 3});
     EXPECT_EQ(gather_nd(A, I1), B1);
     EXPECT_EQ(gather_nd(dev(A), dev(I1)).read(), B1);
@@ -1769,6 +1769,19 @@ TEST(UniformTest, GatherND_2) {
     EXPECT_EQ(gather_nd(A.transpose(0,2,1), I2), B2_t);
     EXPECT_EQ(gather_nd(dev(A), dev(I2)).read(), B2);
     EXPECT_EQ(gather_nd(dev(A).transpose(0,2,1), dev(I2)).read(), B2_t);
+}
+
+TEST(UniformTest, GatherND_3) {
+    auto X = Matrix<int>({
+        {97, 83, 24, 49, 50, 53, 68,  1, 5, 14},
+        {77, 39, 93, 13, 87, 42,  8, 82, 4,  7}
+    });
+    auto I = Matrix<int>({
+        {0, 2}, {0, 4}, {0, 6}, {0, 9}, {1, 5}, {1, 6}, {1, 7}, {1, 8}
+    });
+    auto Y = Vector<int>({24, 50, 68, 14, 42, 8, 82, 4});
+    EXPECT_EQ(gather_nd(X, I), Y);
+    EXPECT_EQ(gather_nd(dev(X), dev(I)).read(), Y);
 }
 
 TEST(UniformTest, ScatterND_1) {
@@ -1810,6 +1823,27 @@ TEST(UniformTest, ScatterND_2) {
 
     scatter_nd(dev_A, dev(indices), dev(updates));
     EXPECT_EQ(dev_A.read(), B);
+}
+
+TEST(UniformTest, ScatterND_3) {
+    auto X = Vector<int>({24, 50, 68, 14, 42, 8, 82, 4});
+    auto I = Matrix<int>({
+        {0, 2}, {0, 4}, {0, 6}, {0, 9}, {1, 5}, {1, 6}, {1, 7}, {1, 8}
+    });
+    auto Y = Tensor<int>({2, 10}).fill(0);
+    auto expected = Matrix<int>({
+        {0, 0, 24, 0, 50,  0, 68,  0, 0, 14},
+        {0, 0,  0, 0,  0, 42,  8, 82, 4,  0}
+    });
+
+    scatter_nd(Y, I, X);
+    EXPECT_EQ(Y, expected);
+
+    auto dev_X = dev(X);
+    auto dev_I = dev(I);
+    auto dev_Y = DevTensor<int>({2, 10}).fill(0);
+    scatter_nd(dev_Y, dev_I, dev_X);
+    EXPECT_EQ(dev_Y.read(), expected);
 }
 
 TEST(UniformTest, ReduceMax) {
@@ -2504,6 +2538,8 @@ TEST(UniformTest, NonZero) {
     auto X = Tensor<float>({2, 2, 2}, {1, 0, 0, 2, 5, 6, 0, 0});
     auto Y = Matrix<int>({{0, 0, 1, 1}, {0, 1, 0, 0}, {0, 1, 0, 1}});
 
-    EXPECT_EQ(nonzero(X), Y);
-    EXPECT_EQ(nonzero(dev(X)).read(), Y);
+    EXPECT_EQ(nonzero(X).transpose(), Y);
+    EXPECT_EQ(nonzero(dev(X)).transpose().read(), Y);
+    EXPECT_EQ(nonzero(X, true), Y);
+    EXPECT_EQ(nonzero(dev(X), true).read(), Y);
 }

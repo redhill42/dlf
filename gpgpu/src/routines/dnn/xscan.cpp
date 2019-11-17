@@ -143,6 +143,7 @@ template class Xscan<double2>;
 template class Xscan<int32_t>;
 template class Xscan<int64_t>;
 
+template class Xscan<bool, int32_t>;
 template class Xscan<half, int32_t>;
 template class Xscan<float, int32_t>;
 template class Xscan<double, int32_t>;

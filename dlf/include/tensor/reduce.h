@@ -246,8 +246,7 @@ template <typename TensorT, typename TensorR, typename Op>
 std::enable_if_t<
     is_exactly_same_tensor<TensorT, TensorR>::value &&
     !std::is_const<std::remove_reference_t<TensorR>>::value>
-scan(const TensorT& X, TensorR&& Y,
-     int axis, bool exclusive, bool reverse,
+scan(const TensorT& X, TensorR&& Y, int axis, bool exclusive, bool reverse,
      const tensor_value_type<TensorT>& id, Op op)
 {
     detail::norm_axis(X.rank(), axis);
@@ -261,9 +260,7 @@ scan(const TensorT& X, TensorR&& Y,
         Xt = flip(Xt, -1);
         Yt = flip(Yt, -1);
     }
-    detail::scan(m, n, exclusive, id, op,
-                 Xt.shape(), Xt.data(),
-                 Yt.shape(), Yt.data());
+    detail::scan(m, n, exclusive, id, op, Xt.shape(), Xt.data(), Yt.shape(), Yt.data());
 }
 
 template <typename TensorT, typename Op>
@@ -388,7 +385,7 @@ inline cummin(TensorT&& X, int axis = -1, bool reverse = false) {
 
 template <typename TensorT>
 std::enable_if_t<is_cpu_tensor<TensorT>::value>
-nonzero(const TensorT& X, Tensor<int32_t>& Y) {
+nonzero(const TensorT& X, Tensor<int32_t>& Y, bool row_major = false) {
     // Calculate non-zero prefix sum
     auto indices = Tensor<int32_t>({X.size()});
     transformTo(X, reshape(indices, X.shape()), [](auto x){ return x != 0; });
@@ -396,32 +393,32 @@ nonzero(const TensorT& X, Tensor<int32_t>& Y) {
 
     // Get number of non-zero values
     auto rank = X.rank();
-    auto n = *(indices.end()-1);
+    auto n    = *(indices.end()-1);
+    auto dims = X.shape().extents();
 
     // Allocate 2D output tensor
-    Y.resize(rank, n);
+    if (row_major)
+        Y.resize(rank, n);
+    else
+        Y.resize(n, rank);
 
     // Gather non-zero value indices
-    tbb::parallel_for(
-        tbb::blocked_range<int>(0, X.size(), GRAINSIZE),
-        [rank, n, idx = indices.data(), out = Y.data(), dims = X.shape().extents()](const auto& r) {
-            for (int i = r.begin(); i < r.end(); i++) {
-                int32_t prev = (i == 0) ? 0 : idx[i - 1];
-                int32_t curr = idx[i];
-                if (curr != prev) {
-                    int temp = i;
-                    for (int j = static_cast<int>(rank); --j >= 0; ) {
-                        out[n*j + prev] = temp % dims[j];
-                        temp /= dims[j];
-                    }
-                }
+    map([=, idx = indices.data(), out = Y.data()](auto curr, auto i) {
+        auto prev = (i == 0) ? 0 : idx[i - 1];
+        if (curr != prev) {
+            int temp = i;
+            for (int j = static_cast<int>(rank); --j >= 0; ) {
+                auto id = row_major ? (n*j + prev) : (prev*rank + j);
+                out[id] = temp % dims[j];
+                temp /= dims[j];
             }
-        });
+        }
+    })(indices, map_id());
 }
 
 template <typename TensorT>
 std::enable_if_t<is_gpu_tensor<TensorT>::value>
-nonzero(const TensorT& X, DevTensor<int32_t>& Y) {
+nonzero(const TensorT& X, DevTensor<int32_t>& Y, bool row_major = false) {
     auto indices_buffer = gpgpu::current::context().getTemporaryBuffer<int32_t>(X.size());
     auto indices_shape  = Shape(X.shape().extents());
 
@@ -436,19 +433,22 @@ nonzero(const TensorT& X, DevTensor<int32_t>& Y) {
     indices_buffer.read(gpgpu::current::queue(), &n, 1, indices_buffer.offset() + X.size() - 1);
 
     // Allocate 2D output tensor
-    Y.resize(X.rank(), n);
+    if (row_major)
+        Y.resize(X.rank(), n);
+    else
+        Y.resize(n, X.rank());
 
     // Gather non-zero value indices
-    gpgpu::dnn::gather_indices(X.size(), n, true, X.shape().extents(),
+    gpgpu::dnn::gather_indices(X.size(), n, row_major, X.shape().extents(),
                                indices_buffer, indices_buffer.offset(),
                                Y.data(), Y.shape().offset());
 }
 
 template <typename TensorT>
 enable_if_tensor<TensorT, tensor_type<TensorT, int32_t>>
-inline nonzero(const TensorT& X) {
+inline nonzero(const TensorT& X, bool row_major = false) {
     tensor_type<TensorT, int32_t> Y{};
-    nonzero(X, Y);
+    nonzero(X, Y, row_major);
     return Y;
 }
 

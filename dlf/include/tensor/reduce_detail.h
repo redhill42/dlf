@@ -192,42 +192,76 @@ void arg_reduce(const TensorT& X, TensorR& Y, int axis, bool keepdims,
 //==-------------------------------------------------------------------------
 
 template <typename T, typename Op>
-void scan(int m, int n, bool exclusive, const T& id, Op op,
-          const Shape& x_shape, const T* x_data,
-          const Shape& y_shape, T* y_data)
+T serial_scan(int n, int i, bool is_exclusive, bool is_final_scan, T acc, Op op,
+              const Shape& x_shape, const T* x_data,
+              const Shape& y_shape,       T* y_data)
 {
-    const auto grainsize = std::max(1, GRAINSIZE/n);
-    tbb::parallel_for(tbb::blocked_range<int>(0, m, grainsize), [&](const auto& r) {
-        for (int i = r.begin(); i < r.end(); ++i) {
+    auto px = x_data + x_shape.linear_offset(i);
+    auto py = y_data + y_shape.linear_offset(i);
+    auto ix = x_shape.stride(-1);
+    auto iy = y_shape.stride(-1);
+
+    if (is_final_scan) {
+        if (is_exclusive) {
+            for (; n > 0; --n, px += ix, py += iy) {
+                *py = acc;
+                acc = op(std::move(acc), *px);
+            }
+        } else {
+            for (; n > 0; --n, px += ix, py += iy) {
+                acc = op(std::move(acc), *px);
+                *py = acc;
+            }
+        }
+    } else {
+        for (; n > 0; --n, px += ix) {
+            acc = op(std::move(acc), *px);
+        }
+    }
+    return acc;
+}
+
+template <typename T, typename Op>
+void parallel_scan(int n, int i, int j, bool exclusive, const T& id, Op op,
+                   const Shape& x_shape, const T* x_data,
+                   const Shape& y_shape,       T* y_data)
+{
+    if (n < GRAINSIZE) {
+        for (; i < j; ++i) {
+            serial_scan(n, i*n, exclusive, true, id, op,
+                        x_shape, x_data, y_shape, y_data);
+        }
+    } else {
+        for (; i < j; ++i) {
             tbb::parallel_scan(tbb::blocked_range<int>(0, n, GRAINSIZE),
                 id,
-                [&](const auto& c, auto acc, const bool is_final_scan) {
-                    auto px = x_data + x_shape.linear_offset(i*n + c.begin());
-                    auto py = y_data + y_shape.linear_offset(i*n + c.begin());
-                    auto ix = x_shape.stride(-1);
-                    auto iy = y_shape.stride(-1);
-
-                    auto j = static_cast<int>(c.size());
-                    if (is_final_scan && exclusive) {
-                        for (; j > 0; --j, px += ix, py += iy) {
-                            *py = acc;
-                            acc = op(acc, *px);
-                        }
-                    } else if (is_final_scan && !exclusive) {
-                        for (; j > 0; --j, px += ix, py += iy) {
-                            acc = op(acc, *px);
-                            *py = acc;
-                        }
-                    } else {
-                        for (; j > 0; --j, px += ix) {
-                            acc = op(acc, *px);
-                        }
-                    }
-                    return acc;
+                [=, &x_shape, &y_shape](const auto& r, auto acc, const bool is_final_scan) {
+                    return serial_scan(
+                        r.size(), i*n + r.begin(), exclusive, is_final_scan,
+                        std::move(acc), op, x_shape, x_data, y_shape, y_data);
                 },
                 op);
         }
-    });
+    }
+}
+
+template <typename T, typename Op>
+void scan(int m, int n, bool exclusive, const T& id, Op op,
+          const Shape& x_shape, const T* x_data,
+          const Shape& y_shape,       T* y_data)
+{
+    if (m*n < GRAINSIZE) {
+        for (int i = 0; i < m; ++i) {
+            serial_scan(n, i*n, exclusive, true, id, op,
+                        x_shape, x_data, y_shape, y_data);
+        }
+    } else {
+        const auto grainsize = std::max(1, GRAINSIZE/n);
+        tbb::parallel_for(tbb::blocked_range<int>(0, m, grainsize), [&](const auto& r) {
+            parallel_scan(n, r.begin(), r.end(), exclusive, id, op,
+                          x_shape, x_data, y_shape, y_data);
+        });
+    }
 }
 
 template <typename T, typename Op>

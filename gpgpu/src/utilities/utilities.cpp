@@ -43,6 +43,8 @@ template <> const Precision PrecisionTraits<float>::precision{Precision::Single}
 template <> const Precision PrecisionTraits<double>::precision{Precision::Double};
 template <> const Precision PrecisionTraits<float2>::precision{Precision::ComplexSingle};
 template <> const Precision PrecisionTraits<double2>::precision{Precision::ComplexDouble};
+template <> const Precision PrecisionTraits<int8_t>::precision{Precision::Char};
+template <> const Precision PrecisionTraits<bool>::precision{Precision::Char};
 template <> const Precision PrecisionTraits<int16_t>::precision{Precision::Short};
 template <> const Precision PrecisionTraits<int32_t>::precision{Precision::Int};
 template <> const Precision PrecisionTraits<int64_t>::precision{Precision::Long};
@@ -131,6 +133,7 @@ std::string ToString(Precision value) {
     case Precision::Double: return ToString(static_cast<int>(value))+" (double)";
     case Precision::ComplexSingle: return ToString(static_cast<int>(value))+" (complex-single)";
     case Precision::ComplexDouble: return ToString(static_cast<int>(value))+" (complex-double)";
+    case Precision::Char: return ToString(static_cast<char>(value))+" (char)";
     case Precision::Short: return ToString(static_cast<short>(value))+" (short)";
     case Precision::Int: return ToString(static_cast<int>(value))+" (int)";
     case Precision::Long: return ToString(static_cast<int>(value))+" (long)";

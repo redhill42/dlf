@@ -178,22 +178,21 @@ do_serial_map(Function f, size_t begin, First&& first, Rest&&... rest) {
 }
 
 template <typename Function, typename... Args>
-void serial_map_range(Function f, size_t begin, size_t n, Args&&... args) {
+void serial_map(Function f, size_t begin, size_t n, Args&&... args) {
     do_serial_map([f, n](auto... its) {
         map_impl<Function>()(f, n, its...);
     }, begin, std::forward<Args>(args)...);
 }
 
 template <typename Function, typename... Args>
-inline void parallel_map(Function f, size_t n, Args&&... args) {
-    tbb::parallel_for(tbb::blocked_range<size_t>(0, n, GRAINSIZE), [&](const auto& r) {
-        serial_map_range(f, r.begin(), r.size(), std::forward<Args>(args)...);
-    });
-}
-
-template <typename Function, typename... Args>
-inline void serial_map(Function f, size_t n, Args&&... args) {
-    serial_map_range(f, 0, n, std::forward<Args>(args)...);
+void parallel_map(Function f, size_t n, Args&&... args) {
+    if (n < GRAINSIZE) {
+        serial_map(f, 0, n, std::forward<Args>(args)...);
+    } else {
+        tbb::parallel_for(tbb::blocked_range<size_t>(0, n, GRAINSIZE), [&](const auto& r) {
+            serial_map(f, r.begin(), r.size(), std::forward<Args>(args)...);
+        });
+    }
 }
 
 } // namespace map_detail
@@ -216,7 +215,39 @@ auto serial_map(Function f) {
             cxx::conjunction<cxx::negation<is_gpu_tensor<decltype(args)>>...>::value,
             "This operation only supports CPU tensors");
         auto shape = Shape::broadcast(map_detail::shape_of(args)...);
-        map_detail::serial_map(f, shape.size(), map_detail::broadcast_to(args, shape)...);
+        map_detail::serial_map(f, 0, shape.size(), map_detail::broadcast_to(args, shape)...);
+    };
+}
+
+template <typename TensorT, typename Function>
+auto map(TensorT&& Y, Function f) {
+    static_assert(is_cpu_tensor<TensorT>::value, "");
+    static_assert(!std::is_const<std::remove_reference_t<TensorT>>::value, "");
+    return [&Y, f](auto&&... args) {
+        static_assert(
+            cxx::conjunction<cxx::negation<is_gpu_tensor<decltype(args)>>...>::value,
+            "This operation only supports CPU tensors");
+        auto shape = Shape::broadcast(map_detail::shape_of(args)...);
+        Y.resize(shape);
+        map_detail::parallel_map(xfn::transfer<Function>(f),
+            shape.size(), std::forward<TensorT>(Y),
+            map_detail::broadcast_to(args, shape)...);
+    };
+}
+
+template <typename TensorT, typename Function>
+auto serial_map(TensorT&& Y, Function f) {
+    static_assert(is_cpu_tensor<TensorT>::value, "");
+    static_assert(!std::is_const<std::remove_reference_t<TensorT>>::value, "");
+    return [&Y, f](auto&&... args) {
+        static_assert(
+            cxx::conjunction<cxx::negation<is_gpu_tensor<decltype(args)>>...>::value,
+            "This operation only supports CPU tensors");
+        auto shape = Shape::broadcast(map_detail::shape_of(args)...);
+        Y.resize(shape);
+        map_detail::serial_map(xfn::transfer<Function>(f),
+            0, shape.size(), std::forward<TensorT>(Y),
+            map_detail::broadcast_to(args, shape)...);
     };
 }
 

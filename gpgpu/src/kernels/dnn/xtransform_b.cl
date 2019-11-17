@@ -6,7 +6,7 @@ typedef real realY;
 #if defined(ROUTINE_equal_to) || defined(ROUTINE_not_equal_to) || \
     defined(ROUTINE_less)     || defined(ROUTINE_less_equal)   || \
     defined(ROUTINE_greater)  || defined(ROUTINE_greater_equal)
-  typedef char realZ;
+  typedef bool realZ;
 #else
   typedef real realZ;
 #endif

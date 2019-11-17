@@ -260,7 +260,7 @@ gather_nd(const TensorX& X, TensorY& Y, const TensorI& indices,
             int offset = 0, dim = 1;
             for (int j = 0; j < k; ++j, ++pi) {
                 offset = offset*dim + normalize_index(*pi, dims[j]);
-                dim = dims[j];
+                dim = dims[j+1];
             }
             offset *= chunk;
 
@@ -302,7 +302,7 @@ scatter_nd(TensorX& X, const TensorI& indices, const TensorY& updates,
             int offset = 0, dim = 1;
             for (int j = 0; j < k; ++j, ++pi) {
                 offset = offset*dim + detail::normalize_index(*pi, dims[j]);
-                dim = dims[j];
+                dim = dims[j+1];
             }
             offset *= chunk;
 

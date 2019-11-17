@@ -133,7 +133,7 @@ void Xgather_nd(
     igm = &igm[i*k + i_offset];
     for (int j = 0; j < k; j++) {
         offset = offset*dim + norm_index(igm[j], shape[j]);
-        dim = shape[j];
+        dim = shape[j+1];
     }
     offset *= chunk;
 
@@ -160,7 +160,7 @@ void Xgather_ndStrided(
     for (int j = 0; j < k; j++) {
         const int tmp = igm[unravel(i*k+j, i_rank, i_shape) + i_offset];
         offset = offset*dim + norm_index(tmp, x_shape[j]);
-        dim = x_shape[j];
+        dim = x_shape[j+1];
     }
     offset *= chunk;
 
@@ -185,7 +185,7 @@ void Xscatter_nd(
     igm += i_offset + i*k;
     for (int j = 0; j < k; j++) {
         offset = offset*dim + norm_index(igm[j], shape[j]);
-        dim = shape[j];
+        dim = shape[j+1];
     }
     offset *= chunk;
 
@@ -212,7 +212,7 @@ void Xscatter_ndStrided(
     for (int j = 0; j < k; j++) {
         const int tmp = igm[unravel(i*k+j, i_rank, i_shape) + i_offset];
         offset = offset*dim + norm_index(tmp, x_shape[j]);
-        dim = x_shape[j];
+        dim = x_shape[j+1];
     }
     offset *= chunk;
 
