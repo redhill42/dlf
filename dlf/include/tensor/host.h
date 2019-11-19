@@ -11,9 +11,9 @@ template <typename T> class TensorView;
 template <typename T, typename D>
 using is_random_distribution_type = cxx::conjunction<
     cxx::disjunction<
-        std::is_same<T, typename D::result_type>,
-        std::is_same<T, std::complex<typename D::result_type>>>,
-    std::is_same<D, typename D::param_type::distribution_type>>;
+        std::is_same<T, typename std::decay_t<D>::result_type>,
+        std::is_same<T, std::complex<typename std::decay_t<D>::result_type>>>,
+    std::is_same<std::decay_t<D>, typename std::decay_t<D>::param_type::distribution_type>>;
 
 /**
  * Tensor is a geometric object that maps in a multi-linear manner geometric
@@ -206,13 +206,21 @@ public: // Constructors
      *
      * @param dist the random distribution.
      */
-    template <typename D>
+    template <typename Engine = std::mt19937, typename D>
     std::enable_if_t<is_random_distribution_type<T, D>::value, Tensor&>
     random(D&& d) &;
 
-    template <typename D>
+    template <typename Engine, typename D>
+    std::enable_if_t<is_random_distribution_type<T, D>::value, Tensor&>
+    random(Engine&& eng, D&& d) &;
+
+    template <typename Engine = std::mt19937, typename D>
     std::enable_if_t<is_random_distribution_type<T, D>::value, Tensor>
     random(D&& d) &&;
+
+    template <typename Engine, typename D>
+    std::enable_if_t<is_random_distribution_type<T, D>::value, Tensor>
+    random(Engine&& eng, D&& d) &&;
 
     /**
      * Fill the tensor with random data with uniform distribution.
@@ -220,8 +228,17 @@ public: // Constructors
      * @param low the lowest random value
      * @param high the highest random value
      */
+    template <typename Engine = std::mt19937>
     Tensor& random(T low = 0, T high = std::numeric_limits<T>::max()) &;
+
+    template <typename Engine = std::mt19937>
     Tensor random(T low = 0, T high = std::numeric_limits<T>::max()) &&;
+
+    template <typename Engine>
+    Tensor& random(Engine&& eng, T low, T high) &;
+
+    template <typename Engine>
+    Tensor random(Engine&& eng, T low, T high) &&;
 
     // Copy and move constructors/assignments.
     Tensor(const Tensor& t);
@@ -462,11 +479,19 @@ public: // Operations
 
     TensorView& range(T start = 0, T delta = 1);
 
-    template <typename D>
+    template <typename Engine = std::mt19937, typename D>
     std::enable_if_t<is_random_distribution_type<T, D>::value, TensorView&>
     random(D&& d);
 
+    template <typename Engine, typename D>
+    std::enable_if_t<is_random_distribution_type<T, D>::value, TensorView&>
+    random(Engine&& eng, D&& d);
+
+    template <typename Engine = std::mt19937>
     TensorView& random(T low = 0, T high = std::numeric_limits<T>::max());
+
+    template <typename Engine>
+    TensorView& random(Engine&& eng, T low, T high);
 };
 
 //==-------------------------------------------------------------------------
@@ -790,77 +815,328 @@ TensorView<T>& TensorView<T>::range(T start, T delta) {
 // Tensor randomize
 //==-------------------------------------------------------------------------
 
+template <typename Range, typename Engine, typename Body>
+inline void parallel_randomize(Range&& range, Engine&& engine, Body&& body) {
+    body(range, engine);
+}
+
+namespace detail {
+template <typename UIntType>
+inline constexpr UIntType modmul(UIntType a, UIntType x, UIntType m) {
+    return static_cast<UIntType>(uint64_t(a) * x % m);
+}
+
+template <typename UIntType>
+constexpr UIntType modpow(UIntType a, UIntType x, size_t n, UIntType m) {
+    while (n > 0) {
+        if (n & 1)
+            x = modmul(a, x, m);
+        a = modmul(a, a, m);
+        n >>= 1;
+    }
+    return x;
+}
+
+template <typename UIntType, UIntType m>
+class skipable_lcg {
+public:
+    using result_type = UIntType;
+
+private:
+    result_type a, x;
+
+public:
+    static constexpr result_type min() { return 1u;     }
+    static constexpr result_type max() { return m - 1u; }
+    static constexpr result_type default_seed = 1u;
+
+    explicit skipable_lcg(result_type a, result_type s = default_seed)
+        : a(a) { seed(s); }
+
+    void seed(result_type s = default_seed) { x = s % m == 0 ? 1 : s % m; }
+    result_type operator()()                { return x = modmul(a, x, m); }
+    void discard(size_t n)                  { x = modpow(a, x, n, m);     }
+
+    static inline result_type skip(result_type a, size_t n) {
+        return modpow(a, result_type(1), n, m);
+    }
+};
+} // namespace detail
+
+template <typename Range, typename UIntType, UIntType a, UIntType m, typename Body>
+void parallel_randomize(Range&& range, std::linear_congruential_engine<UIntType, a, 0, m>& eng, Body&& body) {
+    auto n_size     = range.size();
+    auto n_split    = tbb::this_task_arena::max_concurrency();
+    auto chunk_size = n_size / n_split;
+    auto left_over  = n_size - chunk_size * n_split;
+
+    if (n_size < GRAINSIZE || n_split < 2) {
+        body(range, eng);
+        return;
+    }
+
+    tbb::task_group tg;
+    auto skip = detail::skipable_lcg<UIntType, m>::skip(a, n_split);
+
+    for (int i = 0; i < n_split; ++i) {
+        auto len = chunk_size + (i < left_over);
+        auto left = range;
+        auto split = tbb::proportional_split(len, range.size() - len);
+        range = Range(left, split);
+        tg.run([left, skip, seed = eng(), &body] {
+            auto rg = detail::skipable_lcg<UIntType, m>(skip, seed);
+            body(left, rg);
+        });
+    }
+    tg.wait();
+}
+
+namespace detail {
+template <typename UIntType, size_t w, size_t n, size_t m, size_t r,
+          UIntType a, size_t u, UIntType d, size_t s,
+          UIntType b, size_t t, UIntType c, size_t l, UIntType f>
+class skipable_mt {
+public:
+    using result_type = UIntType;
+
+private:
+    result_type state[n];
+    size_t offset, skip;
+    size_t current = n;
+
+    static constexpr result_type D   = std::numeric_limits<result_type>::digits;
+    static constexpr result_type Min = 0;
+    static constexpr result_type Max = w == D ? result_type(~0) :
+                                       (result_type(1) << w) - result_type(1);
+
+public:
+    static constexpr result_type min() { return Min; }
+    static constexpr result_type max() { return Max; }
+
+    explicit skipable_mt(size_t offset, size_t skip, result_type sd)
+        : offset(offset), skip(skip) { seed(sd); }
+
+    void seed(result_type sd);
+    result_type operator()();
+    void twist();
+
+private:
+    template <size_t count>
+    static inline std::enable_if_t<count < w, result_type>
+    lshift(result_type x) { return (x << count) & Max; }
+
+    template <size_t count>
+    static inline std::enable_if_t<count >= w, result_type>
+    lshift(result_type) { return result_type(0); }
+
+    template <size_t count>
+    static inline std::enable_if_t<count < D, result_type>
+    rshift(result_type x) { return x >> count; }
+
+    template <size_t count>
+    static inline std::enable_if_t<count >= D, result_type>
+    rshift(result_type) { return result_type(0); }
+};
+
+template <typename UIntType, size_t w, size_t n, size_t m, size_t r,
+          UIntType a, size_t u, UIntType d, size_t s,
+          UIntType b, size_t t, UIntType c, size_t l, UIntType f>
+void skipable_mt<UIntType, w, n, m, r, a, u, d, s, b, t, c, l, f>::seed(result_type sd) {
+    state[0] = sd & Max;
+    for (size_t i = 1; i < n; ++i)
+        state[i] = (f * (state[i-1] ^ rshift<w-2>(state[i-1])) + i) & Max;
+    current = n + offset;
+}
+
+template <typename UIntType, size_t w, size_t n, size_t m, size_t r,
+          UIntType a, size_t u, UIntType d, size_t s,
+          UIntType b, size_t t, UIntType c, size_t l, UIntType f>
+UIntType skipable_mt<UIntType, w, n, m, r, a, u, d, s, b, t, c, l, f>::operator()() {
+    if (current >= n) {
+        twist();
+        current -= n;
+    }
+
+    result_type y = state[current];
+    y ^= rshift<u>(y) & d;
+    y ^= lshift<s>(y) & b;
+    y ^= lshift<t>(y) & c;
+    y ^= rshift<l>(y);
+    current += skip;
+    return y;
+}
+
+template <typename UIntType, size_t w, size_t n, size_t m, size_t r,
+          UIntType a, size_t u, UIntType d, size_t s,
+          UIntType b, size_t t, UIntType c, size_t l, UIntType f>
+void skipable_mt<UIntType, w, n, m, r, a, u, d, s, b, t, c, l, f>::twist() {
+    const result_type mask = r == D ? result_type(~0) : (result_type(1) << r) - result_type(1);
+    for (size_t i = 0; i < n - m; ++i) {
+        result_type x = (state[i] & ~mask) | (state[i+1] & mask);
+        state[i] = state[i + m] ^ rshift<1>(x) ^ (a * (x & 1));
+    }
+    for (size_t i = n - m; i < n - 1; ++i) {
+        result_type x = (state[i] & ~mask) | (state[i+1] & mask);
+        state[i] = state[i + (m - n)] ^ rshift<1>(x) ^ (a * (x & 1));
+    }
+    result_type x = (state[n-1] & ~mask) | (state[0] & mask);
+    state[n-1] = state[m-1] ^ rshift<1>(x) ^ (a * (x & 1));
+}
+} // namespace detail
+
+template <typename Range, typename UIntType,
+          size_t w, size_t n, size_t m, size_t r,
+          UIntType a, size_t u, UIntType d, size_t s,
+          UIntType b, size_t t, UIntType c, size_t l, UIntType f,
+          typename Body>
+void parallel_randomize(Range&& range,
+    std::mersenne_twister_engine<UIntType,w,n,m,r,a,u,d,s,b,t,c,l,f>& eng,
+    Body&& body)
+{
+    auto n_size     = range.size();
+    auto n_split    = std::min(static_cast<size_t>(tbb::this_task_arena::max_concurrency()), n/8);
+    auto chunk_size = n_size / n_split;
+    auto left_over  = n_size - chunk_size * n_split;
+
+    if (n_size < GRAINSIZE || n_split < 2) {
+        body(range, eng);
+        return;
+    }
+
+    tbb::task_group tg;
+    auto seed = eng();
+
+    for (int i = 0; i < n_split; ++i) {
+        auto len = chunk_size + (i < left_over);
+        auto left = range;
+        auto split = tbb::proportional_split(len, range.size() - len);
+        range = Range(left, split);
+        tg.run([left, i, n_split, seed, &body] {
+            auto rg = detail::skipable_mt<UIntType,w,n,m,r,a,u,d,s,b,t,c,l,f>(i, n_split, seed);
+            body(left, rg);
+        });
+    }
+    tg.wait();
+}
+
 namespace detail {
 template <typename T> struct is_complex : std::false_type {};
 template <typename T> struct is_complex<std::complex<T>> : std::true_type {};
 
-template <typename T, typename TensorT, typename D>
+template <typename T, typename TensorT, typename Engine, typename D>
 std::enable_if_t<!is_complex<T>::value, TensorT&>
-inline randomize(TensorT& t, D&& d) {
-    std::random_device rd;
-    std::mt19937 eng(rd());
-    return t.generate(std::bind(std::forward<D>(d), eng));
+inline randomize(TensorT& t, Engine&& eng, D&& d) {
+    parallel_randomize(tbb::blocked_range<int>(0, t.size()), eng, [&](auto& r, auto& g) {
+        auto px = t.begin() + r.begin();
+        for (int k = r.size(); k > 0; --k, ++px) {
+            *px = d(g);
+        }
+    });
+    return t;
 }
 
-template <typename T, typename TensorT, typename D>
+template <typename T, typename TensorT, typename Engine, typename D>
 std::enable_if_t<is_complex<T>::value, TensorT&>
-inline randomize(TensorT& t, D&& d) {
-    std::random_device rd;
-    std::mt19937 eng(rd());
-    return t.generate([&](){ return T(d(eng), d(eng)); });
+inline randomize(TensorT& t, Engine&& eng, D&& d) {
+    parallel_randomize(tbb::blocked_range<int>(0, t.size()), eng, [&](auto& r, auto& g) {
+        auto px = t.begin() + r.begin();
+        for (int k = r.size(); k > 0; --k, ++px) {
+            px->real(d(g));
+            px->imag(d(g));
+        }
+    });
+    return t;
 }
 
-template <typename TensorT, typename T>
+template <typename T, typename TensorT, typename Engine>
 std::enable_if_t<std::is_integral<T>::value, TensorT&>
-inline randomize(TensorT& t, T low, T high) {
-    std::random_device rd;
-    std::mt19937 eng(rd());
-    return t.generate(std::bind(std::uniform_int_distribution<T>(low, high), eng));
+inline randomize(TensorT& t, Engine&& eng, T low, T high) {
+    return randomize<T>(t, std::forward<Engine>(eng), std::uniform_int_distribution<T>(low, high));
 }
 
-template <typename TensorT, typename T>
+template <typename T, typename TensorT, typename Engine>
 std::enable_if_t<std::is_floating_point<T>::value, TensorT&>
-inline randomize(TensorT& t, T low, T high) {
-    std::random_device rd;
-    std::mt19937 eng(rd());
-    return t.generate(std::bind(std::uniform_real_distribution<T>(low, high), eng));
+inline randomize(TensorT& t, Engine&& eng, T low, T high) {
+    return randomize<T>(t, std::forward<Engine>(eng), std::uniform_real_distribution<T>(low, high));
 }
 } // namespace detail
 
 template <typename T>
-template <typename D>
+template <typename Engine, typename D>
 std::enable_if_t<is_random_distribution_type<T, D>::value, Tensor<T>&>
 inline Tensor<T>::random(D&& d) & {
-    return detail::randomize<T>(*this, std::forward<D>(d));
+    return detail::randomize<T>(*this, Engine(std::random_device()()), std::forward<D>(d));
 }
 
 template <typename T>
-template <typename D>
+template <typename Engine, typename D>
+std::enable_if_t<is_random_distribution_type<T, D>::value, Tensor<T>&>
+inline Tensor<T>::random(Engine&& eng, D&& d) & {
+    return detail::randomize<T>(*this, std::forward<Engine>(eng), std::forward<D>(d));
+}
+
+template <typename T>
+template <typename Engine, typename D>
 std::enable_if_t<is_random_distribution_type<T, D>::value, Tensor<T>>
 inline Tensor<T>::random(D&& d) && {
-    return detail::randomize<T>(*this, std::forward<D>(d));
+    return std::move(detail::randomize<T>(*this, Engine(std::random_device()()), std::forward<D>(d)));
 }
 
 template <typename T>
+template <typename Engine, typename D>
+std::enable_if_t<is_random_distribution_type<T, D>::value, Tensor<T>>
+inline Tensor<T>::random(Engine&& eng, D&& d) && {
+    return std::move(detail::randomize<T>(*this, std::forward<Engine>(eng), std::forward<D>(d)));
+}
+
+template <typename T>
+template <typename Engine>
 inline Tensor<T>& Tensor<T>::random(T low, T high) & {
-    return detail::randomize(*this, low, high);
+    return detail::randomize<T>(*this, Engine(std::random_device()()), low, high);
 }
 
 template <typename T>
+template <typename Engine>
 inline Tensor<T> Tensor<T>::random(T low, T high) && {
-    return std::move(detail::randomize(*this, low, high));
+    return std::move(detail::randomize<T>(*this, Engine(std::random_device()()), low, high));
 }
 
 template <typename T>
-template <typename D>
+template <typename Engine>
+inline Tensor<T>& Tensor<T>::random(Engine&& eng, T low, T high) & {
+    return detail::randomize<T>(*this, std::forward<Engine>(eng), low, high);
+}
+
+template <typename T>
+template <typename Engine>
+inline Tensor<T> Tensor<T>::random(Engine&& eng, T low, T high) && {
+    return std::move(detail::randomize<T>(*this, std::forward<Engine>(eng), low, high));
+}
+
+template <typename T>
+template <typename Engine, typename D>
 std::enable_if_t<is_random_distribution_type<T, D>::value, TensorView<T>&>
 inline TensorView<T>::random(D&& d) {
-    return detail::randomize<T>(*this, std::forward<D>(d));
+    return detail::randomize<T>(*this, Engine(std::random_device()()), std::forward<D>(d));
 }
 
 template <typename T>
+template <typename Engine, typename D>
+std::enable_if_t<is_random_distribution_type<T, D>::value, TensorView<T>&>
+inline TensorView<T>::random(Engine&& eng, D&& d) {
+    return detail::randomize<T>(*this, std::forward<Engine>(eng), std::forward<D>(d));
+}
+
+template <typename T>
+template <typename Engine>
 inline TensorView<T>& TensorView<T>::random(T low, T high) {
-    return detail::randomize(*this, low, high);
+    return detail::randomize<T>(*this, Engine(std::random_device()()), low, high);
+}
+
+template <typename T>
+template <typename Engine>
+inline TensorView<T>& TensorView<T>::random(Engine&& eng, T low, T high) {
+    return detail::randomize<T>(*this, std::forward<Engine>(eng), low, high);
 }
 
 //==-------------------------------------------------------------------------
