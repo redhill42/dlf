@@ -868,15 +868,16 @@ inline TensorView<T>& TensorView<T>::random(T low, T high) {
 //==-------------------------------------------------------------------------
 
 class tensor_printer {
-    template <typename Iterator>
-    static Iterator print_rec(std::ostream& out, int w, const Shape& shape, size_t level, Iterator cur) {
+    template <typename Iterator, typename CharT, typename Traits>
+    static Iterator print_rec(std::basic_ostream<CharT, Traits>& out, int w, const Shape& shape, size_t level, Iterator cur) {
         auto d = shape.extent(level);
 
         if (level == shape.rank()-1) {
             // last level, printing data
             out << '[';
-            for (int i = 0; ; i++) {
-                out << std::setw(w) << *cur++;
+            for (int i = 0; ; ++i) {
+                out << std::setw(w) << *cur;
+                ++cur;
                 if (i == d-1)
                     break;
                 out << ',';
@@ -885,7 +886,7 @@ class tensor_printer {
         } else {
             // Intermediate levels, recursive
             out << '[';
-            for (int i = 0; ; i++) {
+            for (int i = 0; ; ++i) {
                 cur = print_rec(out, w, shape, level+1, cur);
                 if (i == d-1)
                     break;
@@ -901,9 +902,42 @@ class tensor_printer {
         return cur;
     }
 
+    template <typename T>
+    std::enable_if_t<std::is_unsigned<T>::value, size_t>
+    static element_width(T n) {
+        size_t w = 1;
+        for (n /= 10; n > 0; n /= 10)
+            ++w;
+        return w;
+    }
+
+    template <typename T>
+    std::enable_if_t<std::is_signed<T>::value, size_t>
+    static element_width(T n) {
+        return n < 0 ? element_width(static_cast<std::make_unsigned_t<T>>(-n)) + 1
+                     : element_width(static_cast<std::make_unsigned_t<T>>(n));
+    }
+
     template <typename TensorT>
-    static std::ostream& print(std::ostream& out, const TensorT& t) {
+    std::enable_if_t<std::is_integral<typename TensorT::value_type>::value, size_t>
+    static compute_width(const TensorT& t) {
+        return std::accumulate(t.begin(), t.end(), size_t(0), [](auto a, auto x) {
+            return std::max(a, element_width(x));
+        });
+    }
+
+    template <typename TensorT>
+    std::enable_if_t<!std::is_integral<typename TensorT::value_type>::value, size_t>
+    static compute_width(const TensorT& t) {
+        return 0;
+    }
+
+    template <typename TensorT, typename CharT, typename Traits>
+    static std::basic_ostream<CharT, Traits>&
+    print(std::basic_ostream<CharT, Traits>& out, const TensorT& t) {
         auto w = out.width(0);
+        if (w == 0 && t.rank() > 1)
+            w = compute_width(t) + 1;
         if (!t.empty()) {
             if (t.is_scalar()) {
                 out << *t;
@@ -916,20 +950,24 @@ class tensor_printer {
         return out;
     }
 
-    template <typename T>
-    friend std::ostream& operator<<(std::ostream& out, const Tensor<T>& t);
+    template <typename T, typename CharT, typename Traits>
+    friend std::basic_ostream<CharT, Traits>&
+    operator<<(std::basic_ostream<CharT, Traits>& out, const Tensor<T>& t);
 
-    template <typename T>
-    friend std::ostream& operator<<(std::ostream& out, const TensorView<T>& t);
+    template <typename T, typename CharT, typename Traits>
+    friend std::basic_ostream<CharT, Traits>&
+    operator<<(std::basic_ostream<CharT, Traits>& out, const TensorView<T>& t);
 };
 
-template <typename T>
-inline std::ostream& operator<<(std::ostream& out, const Tensor<T>& t) {
+template <typename T, typename CharT, typename Traits>
+inline std::basic_ostream<CharT, Traits>&
+operator<<(std::basic_ostream<CharT, Traits>& out, const Tensor<T>& t) {
     return tensor_printer::print(out, t);
 }
 
-template <typename T>
-inline std::ostream& operator<<(std::ostream& out, const TensorView<T>& v) {
+template <typename T, typename CharT, typename Traits>
+inline std::basic_ostream<CharT, Traits>&
+operator<<(std::basic_ostream<CharT, Traits>& out, const TensorView<T>& v) {
     return tensor_printer::print(out, v);
 }
 

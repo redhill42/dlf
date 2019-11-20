@@ -492,4 +492,16 @@ inline DevTensorView<T>& DevTensorView<T>::random(T low, T high) {
     return detail::gpu_randomize(*this, low, high);
 }
 
+template <typename T, typename CharT, typename Traits>
+inline std::basic_ostream<CharT, Traits>&
+operator<<(std::basic_ostream<CharT, Traits>& out, const DevTensor<T>& t) {
+    return out << t.read();
+}
+
+template <typename T, typename CharT, typename Traits>
+inline std::basic_ostream<CharT, Traits>&
+operator<<(std::basic_ostream<CharT, Traits>& out, const DevTensorView<T>& v) {
+    return out << v.read();
+}
+
 } // namespace dlf
