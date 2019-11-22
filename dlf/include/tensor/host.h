@@ -1,5 +1,8 @@
 #pragma once
 
+#include "pcg_random.h"
+#include "pcg_extras.h"
+
 namespace dlf {
 
 //==-------------------------------------------------------------------------
@@ -206,7 +209,7 @@ public: // Constructors
      *
      * @param dist the random distribution.
      */
-    template <typename Engine = std::mt19937, typename D>
+    template <typename Engine = pcg32, typename D>
     std::enable_if_t<is_random_distribution_type<T, D>::value, Tensor&>
     random(D&& d) &;
 
@@ -214,7 +217,7 @@ public: // Constructors
     std::enable_if_t<is_random_distribution_type<T, D>::value, Tensor&>
     random(Engine&& eng, D&& d) &;
 
-    template <typename Engine = std::mt19937, typename D>
+    template <typename Engine = pcg32, typename D>
     std::enable_if_t<is_random_distribution_type<T, D>::value, Tensor>
     random(D&& d) &&;
 
@@ -228,10 +231,10 @@ public: // Constructors
      * @param low the lowest random value
      * @param high the highest random value
      */
-    template <typename Engine = std::mt19937>
+    template <typename Engine = pcg32>
     Tensor& random(T low = 0, T high = std::numeric_limits<T>::max()) &;
 
-    template <typename Engine = std::mt19937>
+    template <typename Engine = pcg32>
     Tensor random(T low = 0, T high = std::numeric_limits<T>::max()) &&;
 
     template <typename Engine>
@@ -479,7 +482,7 @@ public: // Operations
 
     TensorView& range(T start = 0, T delta = 1);
 
-    template <typename Engine = std::mt19937, typename D>
+    template <typename Engine = pcg32, typename D>
     std::enable_if_t<is_random_distribution_type<T, D>::value, TensorView&>
     random(D&& d);
 
@@ -487,7 +490,7 @@ public: // Operations
     std::enable_if_t<is_random_distribution_type<T, D>::value, TensorView&>
     random(Engine&& eng, D&& d);
 
-    template <typename Engine = std::mt19937>
+    template <typename Engine = pcg32>
     TensorView& random(T low = 0, T high = std::numeric_limits<T>::max());
 
     template <typename Engine>
@@ -815,9 +818,59 @@ TensorView<T>& TensorView<T>::range(T start, T delta) {
 // Tensor randomize
 //==-------------------------------------------------------------------------
 
+namespace detail {
+template <typename Engine>
+struct is_pcg_engine : std::false_type {};
+
+template <typename xtype, typename itype,
+          class output_mixin, bool output_previous,
+          class stream_mixin, class multiplier_mixin>
+struct is_pcg_engine<pcg_detail::engine<xtype, itype,
+                                       output_mixin, output_previous,
+                                       stream_mixin, multiplier_mixin>>
+    : std::bool_constant<
+        stream_mixin::can_specify_stream ||
+        std::is_same<stream_mixin, pcg_detail::unique_stream<itype>>::value> {};
+
+template <pcg_extras::bitcount_t table_pow2, pcg_extras::bitcount_t advanced_pow2,
+          class baseclass, class extvalclass, bool kdd>
+struct is_pcg_engine<pcg_detail::extended<table_pow2, advanced_pow2, baseclass, extvalclass, kdd>>
+    : is_pcg_engine<baseclass> {};
+} // namespace detail
+
 template <typename Range, typename Engine, typename Body>
-inline void parallel_randomize(Range&& range, Engine&& engine, Body&& body) {
+std::enable_if_t<!detail::is_pcg_engine<std::decay_t<Engine>>::value>
+inline parallel_randomize(Range&& range, Engine&& engine, Body&& body) {
     body(range, engine);
+}
+
+template <typename Range, typename Engine, typename Body>
+std::enable_if_t<detail::is_pcg_engine<std::decay_t<Engine>>::value>
+parallel_randomize(Range&& range, Engine&& eng, Body&& body) {
+    auto n_size     = range.size();
+    auto n_split    = tbb::this_task_arena::max_concurrency();
+    auto chunk_size = n_size / n_split;
+    auto left_over  = n_size - chunk_size * n_split;
+
+    if (n_size < GRAINSIZE || n_split < 2) {
+        body(range, eng);
+        return;
+    }
+
+    tbb::task_group tg;
+    auto seed_seq = pcg_extras::seed_seq_from<decltype(std::ref(eng))>(std::ref(eng));
+
+    for (int i = 0; i < n_split; ++i) {
+        auto len = chunk_size + (i < left_over);
+        auto left = range;
+        auto split = tbb::proportional_split(len, range.size() - len);
+        range = Range(left, split);
+        tg.run([stream = std::decay_t<Engine>(seed_seq), left, &body] {
+            auto rg = stream;
+            body(left, rg);
+        });
+    }
+    tg.wait();
 }
 
 namespace detail {
@@ -1065,7 +1118,8 @@ template <typename T>
 template <typename Engine, typename D>
 std::enable_if_t<is_random_distribution_type<T, D>::value, Tensor<T>&>
 inline Tensor<T>::random(D&& d) & {
-    return detail::randomize<T>(*this, Engine(std::random_device()()), std::forward<D>(d));
+    auto seed_seq = pcg_extras::seed_seq_from<std::random_device>();
+    return detail::randomize<T>(*this, Engine(seed_seq), std::forward<D>(d));
 }
 
 template <typename T>
@@ -1079,7 +1133,8 @@ template <typename T>
 template <typename Engine, typename D>
 std::enable_if_t<is_random_distribution_type<T, D>::value, Tensor<T>>
 inline Tensor<T>::random(D&& d) && {
-    return std::move(detail::randomize<T>(*this, Engine(std::random_device()()), std::forward<D>(d)));
+    auto seed_seq = pcg_extras::seed_seq_from<std::random_device>();
+    return std::move(detail::randomize<T>(*this, Engine(seed_seq), std::forward<D>(d)));
 }
 
 template <typename T>
@@ -1092,13 +1147,15 @@ inline Tensor<T>::random(Engine&& eng, D&& d) && {
 template <typename T>
 template <typename Engine>
 inline Tensor<T>& Tensor<T>::random(T low, T high) & {
-    return detail::randomize<T>(*this, Engine(std::random_device()()), low, high);
+    auto seed_seq = pcg_extras::seed_seq_from<std::random_device>();
+    return detail::randomize<T>(*this, Engine(seed_seq), low, high);
 }
 
 template <typename T>
 template <typename Engine>
 inline Tensor<T> Tensor<T>::random(T low, T high) && {
-    return std::move(detail::randomize<T>(*this, Engine(std::random_device()()), low, high));
+    auto seed_seq = pcg_extras::seed_seq_from<std::random_device>();
+    return std::move(detail::randomize<T>(*this, Engine(seed_seq), low, high));
 }
 
 template <typename T>
@@ -1117,7 +1174,8 @@ template <typename T>
 template <typename Engine, typename D>
 std::enable_if_t<is_random_distribution_type<T, D>::value, TensorView<T>&>
 inline TensorView<T>::random(D&& d) {
-    return detail::randomize<T>(*this, Engine(std::random_device()()), std::forward<D>(d));
+    auto seed_seq = pcg_extras::seed_seq_from<std::random_device>();
+    return detail::randomize<T>(*this, Engine(seed_seq), std::forward<D>(d));
 }
 
 template <typename T>
@@ -1130,7 +1188,8 @@ inline TensorView<T>::random(Engine&& eng, D&& d) {
 template <typename T>
 template <typename Engine>
 inline TensorView<T>& TensorView<T>::random(T low, T high) {
-    return detail::randomize<T>(*this, Engine(std::random_device()()), low, high);
+    auto seed_seq = pcg_extras::seed_seq_from<std::random_device>();
+    return detail::randomize<T>(*this, Engine(seed_seq), low, high);
 }
 
 template <typename T>
