@@ -177,6 +177,25 @@ struct cheap_multiplier<pcg128_t> {
     }
 };
 
+/* Mutable multiplier */
+
+template <typename itype>
+class specific_multiplier {
+protected:
+    itype mult_ = default_multiplier<itype>::multiplier();
+
+    void set_multiplier(itype mult) {
+        mult_ = mult;
+    }
+
+public:
+    itype multiplier() const {
+        return mult_;
+    }
+
+protected:
+    specific_multiplier() = default;
+};
 
 /*
  * Each PCG generator is available in four variants, based on how it applies
@@ -318,6 +337,10 @@ protected:
 
     itype inc_ = default_increment<itype>::increment();
 
+    void set_increment(itype inc) {
+        inc_ = inc;
+    }
+
 public:
     typedef itype state_type;
     typedef itype stream_state;
@@ -384,12 +407,15 @@ protected:
     struct can_specify_stream_tag {};
     struct no_specifiable_stream_tag {};
 
-    using stream_mixin::increment;
-    using multiplier_mixin::multiplier;
+    template <typename, typename, typename, bool, typename, typename>
+    friend class engine;
 
 public:
     typedef xtype result_type;
     typedef itype state_type;
+
+    using stream_mixin::increment;
+    using multiplier_mixin::multiplier;
 
     static constexpr size_t period_pow2()
     {
@@ -442,8 +468,12 @@ public:
     }
 
 protected:
-    static itype advance(itype state, itype delta,
-                         itype cur_mult, itype cur_plus);
+    static std::pair<itype, itype> advance(itype delta, itype cur_mult, itype cur_plus);
+
+    static itype advance(itype state, itype delta, itype cur_mult, itype cur_plus) {
+        auto p = advance(delta, cur_mult, cur_plus);
+        return state * p.first + p.second;
+    }
 
     static itype distance(itype cur_state, itype newstate, itype cur_mult,
                           itype cur_plus, itype mask = ~itype(0U));
@@ -530,6 +560,39 @@ public:
         new (this) engine(std::forward<Args>(args)...);
     }
 
+private:
+    using leapfrog_type = engine<xtype, itype, output_mixin, true,
+                                std::conditional_t<
+                                    std::is_same<stream_mixin, no_stream<itype>>::value,
+                                    no_stream<itype>, specific_stream<itype>>,
+                                specific_multiplier<itype>>;
+
+    engine(itype multiplier, itype increment, itype state, can_specify_stream_tag) {
+        this->set_multiplier(multiplier);
+        this->set_increment(increment);
+        this->state_ = state;
+    }
+
+    engine(itype multiplier, itype /*increment*/, itype state, no_specifiable_stream_tag) {
+        this->set_multiplier(multiplier);
+        this->state_ = state;
+    }
+
+public:
+    leapfrog_type leapfrog(size_t step) const {
+        auto p = advance(step, this->multiplier(), this->increment());
+        return leapfrog_type(p.first, p.second, state_,
+            std::conditional_t<
+                std::is_same<stream_mixin, no_stream<itype>>::value,
+                typename leapfrog_type::no_specifiable_stream_tag,
+                typename leapfrog_type::can_specify_stream_tag>());
+    }
+
+    itype leapfrog_distance(const leapfrog_type& frog) const {
+        return distance(state_, frog.state_, this->multiplier(), this->increment());
+    }
+
+public:
     template <typename xtype1, typename itype1,
               typename output_mixin1, bool output_previous1,
               typename stream_mixin_lhs, typename multiplier_mixin_lhs,
@@ -640,9 +703,9 @@ operator>>(std::basic_istream<CharT,Traits>& in,
 template <typename xtype, typename itype,
           typename output_mixin, bool output_previous,
           typename stream_mixin, typename multiplier_mixin>
-itype engine<xtype,itype,output_mixin,output_previous,stream_mixin,
-             multiplier_mixin>::advance(
-    itype state, itype delta, itype cur_mult, itype cur_plus)
+std::pair<itype, itype>
+engine<xtype,itype,output_mixin,output_previous,stream_mixin,
+      multiplier_mixin>::advance(itype delta, itype cur_mult, itype cur_plus)
 {
     // The method used here is based on Brown, "Random Number Generation
     // with Arbitrary Stride,", Transactions of the American Nuclear
@@ -665,7 +728,7 @@ itype engine<xtype,itype,output_mixin,output_previous,stream_mixin,
        cur_mult *= cur_mult;
        delta >>= 1;
     }
-    return acc_mult * state + acc_plus;
+    return std::make_pair(acc_mult, acc_plus);
 }
 
 template <typename xtype, typename itype,
@@ -1296,7 +1359,7 @@ public:
     PCG_ALWAYS_INLINE result_type operator()()
     {
         result_type rhs = get_extended_value();
-        result_type lhs = this->baseclass::operator()();
+        result_type lhs = baseclass::operator()();
         return lhs ^ rhs;
     }
 

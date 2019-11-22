@@ -21,6 +21,24 @@ public:
         { return g(); }
 };
 
+TEST(RandomTest, pcg32) {
+    const size_t n = tbb::this_task_arena::max_concurrency();
+
+    auto r1 = pcg32();
+    auto d = bypass_distribution<uint32_t>();
+    auto X = Tensor<uint32_t>({n, 10000}).random(r1, d);
+
+    auto r2 = pcg32();
+    auto Y = Tensor<uint32_t>({10000, n});
+    Y.generate(std::ref(r2));
+
+    EXPECT_EQ(X, Y.transpose());
+
+    for (int i = 0; i < 10; ++i) {
+        EXPECT_EQ(r1(), r2());
+    }
+}
+
 TEST(RandomTest, minstd) {
     const size_t n = tbb::this_task_arena::max_concurrency();
 

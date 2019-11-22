@@ -818,35 +818,21 @@ TensorView<T>& TensorView<T>::range(T start, T delta) {
 // Tensor randomize
 //==-------------------------------------------------------------------------
 
-namespace detail {
-template <typename Engine>
-struct is_pcg_engine : std::false_type {};
-
-template <typename xtype, typename itype,
-          class output_mixin, bool output_previous,
-          class stream_mixin, class multiplier_mixin>
-struct is_pcg_engine<pcg_detail::engine<xtype, itype,
-                                       output_mixin, output_previous,
-                                       stream_mixin, multiplier_mixin>>
-    : std::bool_constant<
-        stream_mixin::can_specify_stream ||
-        std::is_same<stream_mixin, pcg_detail::unique_stream<itype>>::value> {};
-
-template <pcg_extras::bitcount_t table_pow2, pcg_extras::bitcount_t advanced_pow2,
-          class baseclass, class extvalclass, bool kdd>
-struct is_pcg_engine<pcg_detail::extended<table_pow2, advanced_pow2, baseclass, extvalclass, kdd>>
-    : is_pcg_engine<baseclass> {};
-} // namespace detail
-
 template <typename Range, typename Engine, typename Body>
-std::enable_if_t<!detail::is_pcg_engine<std::decay_t<Engine>>::value>
-inline parallel_randomize(Range&& range, Engine&& engine, Body&& body) {
+inline void parallel_randomize(Range&& range, Engine&& engine, Body&& body) {
     body(range, engine);
 }
 
-template <typename Range, typename Engine, typename Body>
-std::enable_if_t<detail::is_pcg_engine<std::decay_t<Engine>>::value>
-parallel_randomize(Range&& range, Engine&& eng, Body&& body) {
+template <typename Range, typename xtype, typename itype,
+          class output_mixin, bool output_previous,
+          class stream_mixin, class multiplier_mixin,
+          typename Body>
+void parallel_randomize(
+    Range&& range,
+    pcg_detail::engine<xtype, itype, output_mixin, output_previous,
+                       stream_mixin, multiplier_mixin>& eng,
+    Body&& body)
+{
     auto n_size     = range.size();
     auto n_split    = tbb::this_task_arena::max_concurrency();
     auto chunk_size = n_size / n_split;
@@ -858,14 +844,62 @@ parallel_randomize(Range&& range, Engine&& eng, Body&& body) {
     }
 
     tbb::task_group tg;
-    auto seed_seq = pcg_extras::seed_seq_from<decltype(std::ref(eng))>(std::ref(eng));
+    std::atomic<size_t> consumed{0};
 
     for (int i = 0; i < n_split; ++i) {
         auto len = chunk_size + (i < left_over);
         auto left = range;
         auto split = tbb::proportional_split(len, range.size() - len);
-        range = Range(left, split);
-        tg.run([stream = std::decay_t<Engine>(seed_seq), left, &body] {
+        range = std::decay_t<Range>(left, split);
+        tg.run([eng, n_split, &consumed, left, &body] {
+            auto rg = eng.leapfrog(n_split);
+            body(left, rg);
+            consumed += eng.leapfrog_distance(rg) / n_split;
+        });
+        eng();
+    }
+    tg.wait();
+    eng.advance(consumed - n_split);
+}
+
+template <typename Range,
+          typename xtype, typename itype, typename output_mixin, bool output_previous,
+          typename stream_mixin, typename multiplier_mixin,
+          pcg_detail::bitcount_t table_pow2, pcg_detail::bitcount_t advance_pow2,
+          typename extvalclass, bool kdd,
+          typename Body>
+std::enable_if_t<
+    stream_mixin::can_specify_stream ||
+    std::is_same<stream_mixin, pcg_detail::unique_stream<itype>>::value>
+parallel_randomize(
+    Range&& range,
+    pcg_detail::extended<
+        table_pow2, advance_pow2,
+        pcg_detail::engine<xtype, itype, output_mixin, output_previous,
+                           stream_mixin, multiplier_mixin>,
+        extvalclass, kdd>& eng,
+    Body&& body)
+{
+    auto n_size     = range.size();
+    auto n_split    = tbb::this_task_arena::max_concurrency();
+    auto chunk_size = n_size / n_split;
+    auto left_over  = n_size - chunk_size * n_split;
+
+    if (n_size < GRAINSIZE || n_split < 2) {
+        body(range, eng);
+        return;
+    }
+
+    using Engine = std::remove_reference_t<decltype(eng)>;
+    auto seed_seq = pcg_extras::seed_seq_from<decltype(std::ref(eng))>(std::ref(eng));
+
+    tbb::task_group tg;
+    for (int i = 0; i < n_split; ++i) {
+        auto len = chunk_size + (i < left_over);
+        auto left = range;
+        auto split = tbb::proportional_split(len, range.size() - len);
+        range = std::decay_t<Range>(left, split);
+        tg.run([stream = Engine(seed_seq), left, &body] {
             auto rg = stream;
             body(left, rg);
         });
@@ -935,7 +969,7 @@ void parallel_randomize(Range&& range, std::linear_congruential_engine<UIntType,
         auto len = chunk_size + (i < left_over);
         auto left = range;
         auto split = tbb::proportional_split(len, range.size() - len);
-        range = Range(left, split);
+        range = std::decay_t<Range>(left, split);
         tg.run([left, skip, seed = eng(), &body] {
             auto rg = detail::skipable_lcg<UIntType, m>(skip, seed);
             body(left, rg);
@@ -1063,7 +1097,7 @@ void parallel_randomize(Range&& range,
         auto len = chunk_size + (i < left_over);
         auto left = range;
         auto split = tbb::proportional_split(len, range.size() - len);
-        range = Range(left, split);
+        range = std::decay_t<Range>(left, split);
         tg.run([left, i, n_split, seed, &body] {
             auto rg = detail::skipable_mt<UIntType,w,n,m,r,a,u,d,s,b,t,c,l,f>(i, n_split, seed);
             body(left, rg);
