@@ -42,15 +42,20 @@ TEST(RandomTest, pcg32) {
 TEST(RandomTest, minstd) {
     const size_t n = tbb::this_task_arena::max_concurrency();
 
+    auto r1 = std::minstd_rand();
     auto d = bypass_distribution<uint32_t>();
-    auto X = Tensor<uint32_t>({n, 10000}).random(std::minstd_rand(), d);
+    auto X = Tensor<uint32_t>({n, 10000}).random(r1, d);
 
-    auto r = std::minstd_rand();
+    auto r2 = std::minstd_rand();
     auto Y = Tensor<uint32_t>({10000, n});
-    r.discard(n);
-    Y.generate(r);
+    r2.discard(n);
+    Y.generate(std::ref(r2));
 
     EXPECT_EQ(X, Y.transpose());
+
+    for (int i = 0; i < 10; ++i) {
+        EXPECT_EQ(r1(), r2());
+    }
 }
 
 TEST(RandomTest, mt19937) {

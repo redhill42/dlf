@@ -13,6 +13,7 @@
 #include "utility.h"
 #include "parallel.h"
 #include "cxxblas.h"
+#include "randomize.h"
 
 #include "tensor/shape.h"
 #include "tensor/xfn.h"
