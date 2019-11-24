@@ -426,10 +426,11 @@ template <typename T, typename TensorT, typename D>
 std::enable_if_t<is_uniform_distribution<D>::value, TensorT&>
 gpu_randomize(TensorT& t, D&& d) {
     std::random_device rd;
-    std::uniform_int_distribution<uint64_t> rng;
+    uint64_t seed = ((uint64_t)rd() << 32) + rd();
+    uint64_t stream = ((uint64_t)rd() << 32) + rd();
     gpgpu::dnn::random(
         t.size(), t.shape().extents(), t.shape().strides(),
-        t.data(), t.shape().offset(), rng(rd),
+        t.data(), t.shape().offset(), seed, stream,
         static_cast<T>(d.a()), static_cast<T>(d.b()));
     return t;
 }
@@ -437,10 +438,11 @@ gpu_randomize(TensorT& t, D&& d) {
 template <typename T, typename TensorT, typename U>
 TensorT& gpu_randomize(TensorT& t, const std::normal_distribution<U>& d) {
     std::random_device rd;
-    std::uniform_int_distribution<uint64_t> rng;
+    uint64_t seed = ((uint64_t)rd() << 32) + rd();
+    uint64_t stream = ((uint64_t)rd() << 32) + rd();
     gpgpu::dnn::random_normal(
         t.size(), t.shape().extents(), t.shape().strides(),
-        t.data(), t.shape().offset(), rng(rd),
+        t.data(), t.shape().offset(), seed, stream,
         static_cast<T>(d.mean()), static_cast<T>(d.stddev()));
     return t;
 }
@@ -448,10 +450,11 @@ TensorT& gpu_randomize(TensorT& t, const std::normal_distribution<U>& d) {
 template <typename TensorT, typename T>
 TensorT& gpu_randomize(TensorT& t, T low, T high) {
     std::random_device rd;
-    std::uniform_int_distribution<uint64_t> rng;
+    uint64_t seed = ((uint64_t)rd() << 32) + rd();
+    uint64_t stream = ((uint64_t)rd() << 32) + rd();
     gpgpu::dnn::random(
         t.size(), t.shape().extents(), t.shape().strides(),
-        t.data(), t.shape().offset(), rng(rd), low, high);
+        t.data(), t.shape().offset(), seed, stream, low, high);
     return t;
 }
 } // namespace detail

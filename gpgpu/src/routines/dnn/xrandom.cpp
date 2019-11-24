@@ -6,16 +6,17 @@ using namespace gpgpu::blas;
 template <typename T>
 Xrandom<T>::Xrandom(const Queue& queue, Event* event, const std::string& name) :
     Routine(queue, event, name, {"Xaxpy"}, PrecisionValue<T>(), {}, {
-    #include "../../kernels/dnn/mwc64x.cl"
     #include "../../kernels/dnn/xrandom.cl"
 }) {}
 
 template <typename T>
 void Xrandom<T>::DoRandom(
     const size_t n, const std::vector<size_t>& dims, const std::vector<size_t>& strides,
-    Buffer<T>& x_buffer, const size_t x_offset, const uint64_t seed, const T low, const T high)
+    Buffer<T>& x_buffer, const size_t x_offset,
+    const uint64_t seed, const uint64_t stream,
+    const T low, const T high)
 {
-    auto wgs = db_["WGS"], wpt = size_t(4096);
+    auto wgs = db_["WGS"], wpt = size_t(1024);
     auto n_ceiled = Ceil(n, wgs * wpt);
     auto global = std::vector<size_t>{n_ceiled/wpt};
     auto local = std::vector<size_t>{wgs};
@@ -25,7 +26,7 @@ void Xrandom<T>::DoRandom(
         kernel.setArguments(
             static_cast<int>(n),
             x_buffer, static_cast<int>(x_offset),
-            seed, low, high);
+            seed, stream, low, high);
         RunKernel(kernel, queue_, device_, global, local, event_);
     } else {
         auto shape_buffer = PackShape(dims, strides, context_, queue_);
@@ -33,7 +34,7 @@ void Xrandom<T>::DoRandom(
         kernel.setArguments(static_cast<int>(n),
             static_cast<int>(dims.size()), shape_buffer,
             x_buffer, static_cast<int>(x_offset),
-            seed, low, high);
+            seed, stream, low, high);
         RunKernel(kernel, queue_, device_, global, local, event_);
     }
 }
@@ -41,9 +42,11 @@ void Xrandom<T>::DoRandom(
 template <typename T>
 void Xrandom<T>::DoRandomNormal(
     const size_t n, const std::vector<size_t>& dims, const std::vector<size_t>& strides,
-    Buffer<T>& x_buffer, const size_t x_offset, const uint64_t seed, const T mean, const T stdev)
+    Buffer<T>& x_buffer, const size_t x_offset,
+    const uint64_t seed, const uint64_t stream,
+    const T mean, const T stdev)
 {
-    auto wgs = db_["WGS"], wpt = size_t(4096);
+    auto wgs = db_["WGS"], wpt = size_t(1024);
     auto n_ceiled = Ceil(n, wgs * wpt);
     auto global = std::vector<size_t>{n_ceiled/wpt};
     auto local = std::vector<size_t>{wgs};
@@ -53,7 +56,7 @@ void Xrandom<T>::DoRandomNormal(
         kernel.setArguments(
             static_cast<int>(n),
             x_buffer, static_cast<int>(x_offset),
-            seed, mean, stdev);
+            seed, stream, mean, stdev);
         RunKernel(kernel, queue_, device_, global, local, event_);
     } else {
         auto shape_buffer = PackShape(dims, strides, context_, queue_);
@@ -61,7 +64,7 @@ void Xrandom<T>::DoRandomNormal(
         kernel.setArguments(static_cast<int>(n),
             static_cast<int>(dims.size()), shape_buffer,
             x_buffer, static_cast<int>(x_offset),
-            seed, mean, stdev);
+            seed, stream, mean, stdev);
         RunKernel(kernel, queue_, device_, global, local, event_);
     }
 }

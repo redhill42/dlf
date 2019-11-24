@@ -45,14 +45,16 @@ template <typename T>
 void random(
     const size_t n, const std::vector<size_t>& dims, const std::vector<size_t>& strides,
     Buffer<T>& x_buffer, const size_t x_offset,
-    const uint64_t seed, const T low, const T high,
+    const uint64_t seed, const uint64_t stream,
+    const T low, const T high,
     const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 template <typename T>
 void random_normal(
     const size_t n, const std::vector<size_t>& dims, const std::vector<size_t>& strides,
     Buffer<T>& x_buffer, const size_t x_offset,
-    const uint64_t seed, const T low, const T high,
+    const uint64_t seed, const uint64_t stream,
+    const T mean, const T stdev,
     const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
 template <typename T>

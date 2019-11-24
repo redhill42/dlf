@@ -70,3 +70,22 @@ TEST(RandomTest, mt19937) {
 
     EXPECT_EQ(X, Y.transpose());
 }
+
+TEST(RandomTest, pcg32_gpu) {
+    const uint64_t seed = 0xcafef00dd15ea5e5ULL;
+    const uint64_t stream = 1442695040888963407ULL;
+    const size_t   data_size = 1'000'000;
+
+    auto dev_X = DevTensor<int>({data_size});
+    gpgpu::dnn::random(dev_X.size(), dev_X.shape().extents(), dev_X.shape().strides(),
+                       dev_X.data(), dev_X.shape().offset(),
+                       seed, stream,
+                       std::numeric_limits<int>::lowest(),
+                       std::numeric_limits<int>::max());
+
+    auto X = Tensor<int>({data_size});
+    auto rg = pcg32(seed, stream);
+    std::generate(X.begin(), X.end(), rg);
+
+    EXPECT_EQ(X, dev_X.read());
+}
