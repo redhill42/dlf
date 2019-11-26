@@ -822,10 +822,11 @@ template <typename T> struct is_complex<std::complex<T>> : std::true_type {};
 template <typename T, typename TensorT, typename Engine, typename D>
 std::enable_if_t<!is_complex<T>::value, TensorT&>
 inline randomize(TensorT& t, Engine&& eng, D&& d) {
-    parallel_randomize(tbb::blocked_range<size_t>(0, t.size()), eng, [&](auto& r, auto& g) {
+    parallel_randomize(tbb::blocked_range<size_t>(0, t.size(), GRAINSIZE), eng, [&](const auto& r, auto& g) {
         auto px = t.begin() + r.begin();
+        auto dist = d;
         for (size_t k = r.size(); k > 0; --k, ++px) {
-            *px = d(g);
+            *px = dist(g);
         }
     });
     return t;
@@ -834,11 +835,12 @@ inline randomize(TensorT& t, Engine&& eng, D&& d) {
 template <typename T, typename TensorT, typename Engine, typename D>
 std::enable_if_t<is_complex<T>::value, TensorT&>
 inline randomize(TensorT& t, Engine&& eng, D&& d) {
-    parallel_randomize(tbb::blocked_range<size_t>(0, t.size()), eng, [&](auto& r, auto& g) {
+    parallel_randomize(tbb::blocked_range<size_t>(0, t.size(), GRAINSIZE), eng, [&](const auto& r, auto& g) {
         auto px = t.begin() + r.begin();
+        auto dist = d;
         for (size_t k = r.size(); k > 0; --k, ++px) {
-            px->real(d(g));
-            px->imag(d(g));
+            px->real(dist(g));
+            px->imag(dist(g));
         }
     });
     return t;

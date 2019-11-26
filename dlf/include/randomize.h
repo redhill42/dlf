@@ -108,6 +108,158 @@ parallel_randomize(
     tg.wait();
 }
 
+/**
+ * A generator of uniform pseudorandom values applicable for use in isolated
+ * parallel computations that may generate subtasks.
+ */
+class splitmix64 {
+public:
+    using result_type = uint64_t;
+
+private:
+    static constexpr uint64_t GOLDEN_GAMMA = 0x9e3779b97f4a7c15ull;
+
+    uint64_t seed_;
+    uint64_t gamma_;
+
+    explicit splitmix64(uint64_t seed, uint64_t gamma)
+        : seed_(seed), gamma_(gamma) {}
+
+    static uint64_t mix64(uint64_t z) {
+        z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9ull;
+        z = (z ^ (z >> 27)) * 0x94d049bb133111ebull;
+        return z ^ (z >> 31);
+    }
+
+    static uint64_t mix_gamma(uint64_t z) {
+        z = (z ^ (z >> 33)) * 0xff51afd7ed558ccdull;
+        z = (z ^ (z >> 33)) * 0xc4ceb9fe1a85ec53ull;
+        z = (z ^ (z >> 33)) | 1ull;
+        int n = __builtin_popcountll(z ^ (z >> 1)); // FIXME
+        return (n < 24) ? z ^ 0xaaaaaaaaaaaaaaaaull : z;
+    }
+
+    uint64_t next_seed() {
+        return seed_ += gamma_;
+    }
+
+public:
+    static constexpr result_type min() { return result_type(0); }
+    static constexpr result_type max() { return std::numeric_limits<result_type>::max(); }
+    static constexpr result_type default_seed = result_type(1);
+
+    explicit splitmix64(result_type sd = default_seed) : splitmix64(sd, GOLDEN_GAMMA) {}
+
+    template <class SeedSeq>
+    explicit splitmix64(SeedSeq&& q,
+        std::enable_if_t<!std::is_convertible<SeedSeq, result_type>::value &&
+                         !std::is_same<std::decay_t<SeedSeq>, splitmix64>::value>* = 0)
+        : splitmix64(pcg_extras::generate_one<uint64_t>(std::forward<SeedSeq>(q))) {}
+
+    template <typename T>
+    void seed(T&& sd) { new (this) splitmix64(std::forward<T>(sd)); }
+    void seed() { seed(default_seed); }
+
+    result_type operator()() {
+        return mix64(next_seed());
+    }
+
+    void discard(unsigned long long z) {
+        seed_ += gamma_ * z;
+    }
+
+    splitmix64 split() {
+        return splitmix64(mix64(next_seed()), mix_gamma(next_seed()));
+    }
+
+    splitmix64 leapfrog(size_t step) {
+        uint64_t leap = gamma_ * step;
+        return splitmix64(next_seed() - leap, leap);
+    }
+
+    friend bool operator==(const splitmix64& x, const splitmix64& y)
+        { return x.seed_ == y.seed_ && x.gamma_ == y.gamma_; }
+    friend bool operator!=(const splitmix64& x, const splitmix64& y)
+        { return !(x == y); }
+
+    template <typename CharT, typename Traits>
+    friend std::basic_ostream<CharT, Traits>&
+    operator<<(std::basic_ostream<CharT, Traits>& os, const splitmix64& x);
+
+    template <typename CharT, typename Traits>
+    friend std::basic_istream<CharT, Traits>&
+    operator>>(std::basic_istream<CharT, Traits>& is, splitmix64& x);
+};
+
+template <typename CharT, typename Traits>
+std::basic_ostream<CharT, Traits>&
+operator<<(std::basic_ostream<CharT, Traits>& out, const splitmix64& x) {
+    auto orig_flags = out.flags(std::ios_base::dec | std::ios_base::left);
+    auto space = out.widen(' ');
+    auto orig_fill = out.fill();
+
+    out << x.seed_ << space << x.gamma_;
+    out.flags(orig_flags);
+    out.fill(orig_fill);
+    return out;
+}
+
+template <typename CharT, typename Traits>
+std::basic_istream<CharT, Traits>&
+operator>>(std::basic_istream<CharT, Traits>& in, splitmix64& x) {
+    auto orig_flags = in.flags(std::ios_base::dec | std::ios_base::skipws);
+    uint64_t seed, gamma;
+    in >> seed >> gamma;
+    if (!in.fail()) {
+        x.seed_ = seed;
+        x.gamma_ = gamma;
+    }
+    in.flags(orig_flags);
+    return in;
+}
+
+namespace detail {
+template <typename Range, typename Engine, typename Body>
+class random_task : tbb::task {
+    Range   m_range;
+    Engine  m_engine;
+    Body    m_body;
+
+    random_task(Range range, Engine engine, Body body)
+        : m_range(range), m_engine(std::move(engine)), m_body(body) {}
+
+    task* execute() override;
+
+public:
+    static void run(Range range, Engine& engine, Body body) {
+        if (!range.empty()) {
+            auto& root = *new(allocate_root()) random_task(range, engine, body);
+            spawn_root_and_wait(root);
+            engine = root.m_engine;
+        }
+    }
+};
+
+template <typename Range, typename Engine, typename Body>
+tbb::task* random_task<Range, Engine, Body>::execute() {
+    if (!m_range.is_divisible()) {
+        m_body(m_range, m_engine);
+        return nullptr;
+    } else {
+        auto& right = *new(allocate_additional_child_of(*parent()))
+            random_task(Range(m_range, tbb::split()), m_engine.split(), m_body);
+        spawn(right);
+        recycle_as_continuation();
+        return this;
+    }
+}
+} // namespace detail
+
+template <typename Range, typename Body>
+inline void parallel_randomize(Range range, splitmix64& eng, Body body) {
+    detail::random_task<Range, splitmix64, Body>::run(range, eng, body);
+}
+
 namespace detail {
 template <typename UIntType, UIntType m>
 class skipable_lcg {
