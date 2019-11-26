@@ -70,14 +70,12 @@ struct identity<void> {
 
 template <typename T = void>
 struct abs : std::unary_function<T,T> {
-    static constexpr auto name = "abs";
     constexpr T operator()(const T& x) const
         { return std::abs(x); }
 };
 
 template <>
 struct abs<void> {
-    static constexpr auto name = "abs";
     template <typename T>
     constexpr auto operator()(T&& x) const
     noexcept(noexcept(std::abs(std::forward<T>(x))))
@@ -85,21 +83,23 @@ struct abs<void> {
         { return      std::abs(std::forward<T>(x)); }
 };
 
+template <typename T> inline constexpr const char*
+function_kernel_name(abs<T>) { return "abs"; }
+
 template <typename T = void>
-struct negate : std::negate<T> {
-    static constexpr auto name = "neg";
-};
+struct negate : std::negate<T> {};
+
+template <typename T> inline constexpr const char*
+function_kernel_name(std::negate<T>) { return "neg"; }
 
 template <typename T = void>
 struct sign : std::unary_function<T,T> {
-    static constexpr auto name = "sign";
     constexpr T operator()(const T& x) const
         { return (zero<T>() < x) - (x < zero<T>()); }
 };
 
 template <>
 struct sign<void> {
-    static constexpr auto name = "sign";
     template <typename T>
     constexpr auto operator()(T&& x) const
     noexcept(noexcept((zero<T>() < x) - (x < zero<T>())))
@@ -107,23 +107,23 @@ struct sign<void> {
         { return      (zero<T>() < x) - (x < zero<T>()); }
 };
 
+template <typename T> inline constexpr const char*
+function_kernel_name(sign<T>) { return "sign"; }
+
 template <typename T = void>
 struct conj : std::unary_function<T,T> {
-    static constexpr auto name = "conj";
     constexpr T operator()(const T& x) const
         { return x; }
 };
 
 template <typename T>
 struct conj<std::complex<T>> {
-    static constexpr auto name = "conj";
     constexpr std::complex<T> operator()(const std::complex<T>& x) const
         { return std::conj(x); }
 };
 
 template <>
 struct conj<void> {
-    static constexpr auto name = "conj";
     template <typename T>
     constexpr T operator()(T&& x) const noexcept
         { return std::forward<T>(x); }
@@ -134,16 +134,17 @@ struct conj<void> {
         { return      std::conj(x); }
 };
 
+template <typename T> inline constexpr const char*
+function_kernel_name(conj<T>) { return "conj"; }
+
 template <typename T = void>
 struct norm : std::unary_function<T,T> {
-    static constexpr auto name = "norm";
     constexpr T operator()(const T& x) const
         { return std::norm(x); }
 };
 
 template <>
 struct norm<void> {
-    static constexpr auto name = "norm";
     template <typename T>
     constexpr auto operator()(T&& x) const
     noexcept(noexcept(std::norm(x)))
@@ -151,12 +152,16 @@ struct norm<void> {
         { return      std::norm(x); }
 };
 
+template <typename T> inline constexpr const char*
+function_kernel_name(norm<T>) { return "norm"; }
+
 #define DEFINE_UNARY_FUNCTION(fn, op) \
 template <typename T> \
 struct fn : std::unary_function<T,T> { \
-    static constexpr auto name = #fn; \
     T operator()(const T& x) const { return op; } \
-};
+}; \
+template <typename T> inline constexpr const char* \
+function_kernel_name(fn<T>) { return #fn; }
 
 DEFINE_UNARY_FUNCTION(reciprocal, one<T>()/x)
 DEFINE_UNARY_FUNCTION(floor, std::floor(x))
@@ -188,38 +193,41 @@ DEFINE_UNARY_FUNCTION(softplus, std::log(std::exp(x)+one<T>()))
 //==-------------------------------------------------------------------------
 
 template <typename T = void>
-struct plus : std::plus<T> {
-    static constexpr auto name = "add";
-    static constexpr auto cumulative = "cumsum";
-};
+struct plus : std::plus<T> {};
+
+template <typename T> inline constexpr const char*
+function_kernel_name(std::plus<T>) { return "add"; }
+template <typename T> inline constexpr const char*
+scan_kernel_name(std::plus<T>) { return "cumsum"; }
 
 template <typename T = void>
-struct minus : std::minus<T> {
-    static constexpr auto name = "sub";
-};
+struct minus : std::minus<T> {};
+
+template <typename T> inline constexpr const char*
+function_kernel_name(std::minus<T>) { return "sub"; }
 
 template <typename T = void>
-struct multiplies : std::multiplies<T> {
-    static constexpr auto name = "mul";
-    static constexpr auto cumulative = "cumprod";
-};
+struct multiplies : std::multiplies<T> {};
+
+template <typename T> inline constexpr const char*
+function_kernel_name(std::multiplies<T>) { return "mul"; }
+template <typename T> inline constexpr const char*
+scan_kernel_name(std::multiplies<T>) { return "cumprod"; }
 
 template <typename T = void>
-struct divides : std::divides<T> {
-    static constexpr auto name = "div";
-};
+struct divides : std::divides<T> {};
+
+template <typename T> inline constexpr const char*
+function_kernel_name(std::divides<T>) { return "div"; }
 
 template <typename T = void>
 struct power : std::binary_function<T,T,T> {
-    static constexpr auto name = "pow";
-    T operator()(const T& x, const T& y) const {
-        return std::pow(x, y);
-    }
+    T operator()(const T& x, const T& y) const
+        { return std::pow(x, y); }
 };
 
 template <>
 struct power<void> {
-    static constexpr auto name = "pow";
     template <class T1, class T2>
     auto operator()(T1&& x, T2&& y) const
     noexcept(noexcept(std::pow(std::forward<T1>(x), std::forward<T2>(y))))
@@ -227,12 +235,13 @@ struct power<void> {
         { return      std::pow(std::forward<T1>(x), std::forward<T2>(y)); }
 };
 
+template <typename T> inline constexpr const char*
+function_kernel_name(power<T>) { return "pow"; }
+
 template <typename T = void>
 struct modulus : std::binary_function<T, T, T> {
-    static constexpr auto name = "mod";
-    T operator()(const T& x, const T& y) const {
-        return x % y;
-    }
+    T operator()(const T& x, const T& y) const
+        { return x % y; }
 };
 
 template <>
@@ -247,8 +256,6 @@ inline double modulus<double>::operator()(const double& x, const double& y) cons
 
 template <>
 struct modulus<void> {
-    static constexpr auto name = "mod";
-
     template <class T1, class T2, std::enable_if_t<
         !(std::is_floating_point<T1>::value || std::is_floating_point<T2>::value), int> = 0>
     constexpr auto operator()(T1&& x, T2&& y) const
@@ -264,10 +271,11 @@ struct modulus<void> {
         { return      std::fmod(x, y); }
 };
 
+template <typename T> inline constexpr const char*
+function_kernel_name(modulus<T>) { return "mod"; }
+
 template <typename T, typename Compare = std::less<>>
 struct max : std::binary_function<T,T,T> {
-    static constexpr auto name = "max";
-    static constexpr auto cumulative = "cummax";
     const Compare comp{};
     constexpr max() = default;
     constexpr max(Compare comp) : comp(comp) {}
@@ -275,10 +283,13 @@ struct max : std::binary_function<T,T,T> {
         { return std::max(x, y, comp); }
 };
 
+template <typename T, typename Compare> inline constexpr const char*
+function_kernel_name(max<T, Compare>) { return "max"; }
+template <typename T, typename Compare> inline constexpr const char*
+scan_kernel_name(max<T, Compare>) { return "cummax"; }
+
 template <typename T, typename Compare = std::less<>>
 struct min : std::binary_function<T,T,T> {
-    static constexpr auto name = "min";
-    static constexpr auto cumulative = "cummin";
     const Compare comp{};
     constexpr min() = default;
     constexpr min(Compare comp) : comp(comp) {}
@@ -286,80 +297,97 @@ struct min : std::binary_function<T,T,T> {
         { return std::min(x, y, comp); }
 };
 
-//==-------------------------------------------------------------------------
-
-template <typename T = void>
-struct equal_to : std::equal_to<T> {
-    static constexpr auto name = "equal_to";
-};
-
-template <typename T = void>
-struct not_equal_to : std::not_equal_to<T> {
-    static constexpr auto name = "not_equal_to";
-};
-
-template <typename T = void>
-struct less : std::less<T> {
-    static constexpr auto name = "less";
-};
-
-template <typename T = void>
-struct less_equal : std::less_equal<T> {
-    static constexpr auto name = "less_equal";
-};
-
-template <typename T = void>
-struct greater : std::greater<T> {
-    static constexpr auto name = "greater";
-};
-
-template <typename T = void>
-struct greater_equal : std::greater_equal<T> {
-    static constexpr auto name = "greater_equal";
-};
+template <typename T, typename Compare> inline constexpr const char*
+function_kernel_name(min<T, Compare>) { return "min"; }
+template <typename T, typename Compare> inline constexpr const char*
+scan_kernel_name(min<T, Compare>) { return "cummin"; }
 
 //==-------------------------------------------------------------------------
 
 template <typename T = void>
-struct bit_and : std::bit_and<T> {
-    static constexpr auto name = "bit_and";
-};
+struct equal_to : std::equal_to<T> {};
+
+template <typename T> inline constexpr const char*
+function_kernel_name(std::equal_to<T>) { return "equal_to"; }
 
 template <typename T = void>
-struct bit_or : std::bit_or<T> {
-    static constexpr auto name = "bit_or";
-};
+struct not_equal_to : std::not_equal_to<T> {};
+
+template <typename T> inline constexpr const char*
+function_kernel_name(std::not_equal_to<T>) { return "not_equal_to"; }
 
 template <typename T = void>
-struct bit_xor : std::bit_xor<T> {
-    static constexpr auto name = "bit_xor";
-};
+struct less : std::less<T> {};
+
+template <typename T> inline constexpr const char*
+function_kernel_name(std::less<T>) { return "less"; }
 
 template <typename T = void>
-struct bit_not : std::bit_not<T> {
-    static constexpr auto name = "bit_not";
-};
+struct less_equal : std::less_equal<T> {};
+
+template <typename T> inline constexpr const char*
+function_kernel_name(std::less_equal<T>) { return "less_equal"; }
 
 template <typename T = void>
-struct logical_and : std::logical_and<T> {
-    static constexpr auto name = "logical_and";
-};
+struct greater : std::greater<T> {};
+
+template <typename T> inline constexpr const char*
+function_kernel_name(std::greater<T>) { return "greater"; }
 
 template <typename T = void>
-struct logical_or : std::logical_or<T> {
-    static constexpr auto name = "logical_or";
-};
+struct greater_equal : std::greater_equal<T> {};
+
+template <typename T> inline constexpr const char*
+function_kernel_name(std::greater_equal<T>) { return "greater_equal"; }
+
+//==-------------------------------------------------------------------------
 
 template <typename T = void>
-struct logical_not : std::logical_not<T> {
-    static constexpr auto name = "logical_not";
-};
+struct bit_and : std::bit_and<T> {};
+
+template <typename T> inline constexpr const char*
+function_kernel_name(std::bit_and<T>) { return "bit_and"; }
+
+template <typename T = void>
+struct bit_or : std::bit_or<T> {};
+
+template <typename T> inline constexpr const char*
+function_kernel_name(std::bit_or<T>) { return "bit_or"; }
+
+template <typename T = void>
+struct bit_xor : std::bit_xor<T> {};
+
+template <typename T> inline constexpr const char*
+function_kernel_name(std::bit_xor<T>) { return "bit_xor"; }
+
+template <typename T = void>
+struct bit_not : std::bit_not<T> {};
+
+template <typename T> inline constexpr const char*
+function_kernel_name(std::bit_not<T>) { return "bit_not"; }
+
+template <typename T = void>
+struct logical_and : std::logical_and<T> {};
+
+template <typename T> inline constexpr const char*
+function_kernel_name(std::logical_and<T>) { return "logical_and"; }
+
+template <typename T = void>
+struct logical_or : std::logical_or<T> {};
+
+template <typename T> inline constexpr const char*
+function_kernel_name(std::logical_or<T>) { return "logical_or"; }
+
+template <typename T = void>
+struct logical_not : std::logical_not<T> {};
+
+template <typename T> inline constexpr const char*
+function_kernel_name(std::logical_not<T>) { return "logical_not"; }
 
 //==-------------------------------------------------------------------------
 
 template <typename T>
 struct clip : std::unary_function<T,T>, parameterized_function<T> {
-    static constexpr auto name = "clip";
     constexpr clip(const T& min, const T& max)
         : parameterized_function<T>(min, max) {}
     constexpr T operator()(const T& x) const {
@@ -367,9 +395,11 @@ struct clip : std::unary_function<T,T>, parameterized_function<T> {
     }
 };
 
+template <typename T> inline constexpr const char*
+function_kernel_name(clip<T>) { return "clip"; }
+
 template <typename T>
 struct shrink : std::unary_function<T,T>, parameterized_function<T> {
-    static constexpr auto name = "shrink";
     constexpr shrink(const T& lambd, const T& bias)
         : parameterized_function<T>(lambd, bias) {}
     const T operator()(const T& x) const {
@@ -378,63 +408,80 @@ struct shrink : std::unary_function<T,T>, parameterized_function<T> {
     }
 };
 
+template <typename T> inline constexpr const char*
+function_kernel_name(shrink<T>) { return "shrink"; }
+
 template <typename T>
 struct relu : std::unary_function<T,T>, parameterized_function<T> {
-    static constexpr auto name = "relu";
     constexpr T operator()(const T& x) const
         { return std::max(zero<T>(), x); }
 };
 
+template <typename T> inline constexpr const char*
+function_kernel_name(relu<T>) { return "relu"; }
+
 template <typename T>
 struct prelu : std::binary_function<T,T,T> {
-    static constexpr auto name = "prelu";
     constexpr T operator()(const T& x, const T& slope) const
         { return x < zero<T>() ? x*slope : x; }
 };
 
+template <typename T> inline constexpr const char*
+function_kernel_name(prelu<T>) { return "prelu"; }
+
 template <typename T>
 struct leaky_relu : std::unary_function<T,T>, parameterized_function<T> {
-    static constexpr auto name = "leaky_relu";
     constexpr leaky_relu(const T& alpha)
         : parameterized_function<T>(alpha) {}
     constexpr T operator()(const T& x) const
         { return x < zero<T>() ? x*this->alpha : x; }
 };
 
+template <typename T> inline constexpr const char*
+function_kernel_name(leaky_relu<T>) { return "leaky_relu"; }
+
 template <typename T>
 struct thresholded_relu : std::unary_function<T,T>, parameterized_function<T> {
-    static constexpr auto name = "thresholded_relu";
     constexpr thresholded_relu(const T& alpha)
         : parameterized_function<T>(alpha) {}
     constexpr T operator()(const T& x) const
         { return x > this->alpha ? x : zero<T>(); }
 };
 
+template <typename T> inline constexpr const char*
+function_kernel_name(thresholded_relu<T>) { return "thresholded_relu"; }
+
 template <typename T>
 struct selu : std::unary_function<T,T>, parameterized_function<T> {
-    static constexpr auto name = "selu";
     selu(const T& alpha, const T& gamma)
         : parameterized_function<T>(alpha, gamma) {}
     constexpr T operator()(const T& x) const
         { return this->beta * (x < zero<T>() ? this->alpha*(std::exp(x) - one<T>()) : x); }
 };
 
+template <typename T> inline constexpr const char*
+function_kernel_name(selu<T>) { return "selu"; }
+
 template <typename T>
 struct elu : std::unary_function<T,T>, parameterized_function<T> {
-    static constexpr auto name = "elu";
     elu(const T& alpha) : parameterized_function<T>(alpha) {}
     constexpr T operator()(const T& x) const
         { return x < zero<T>() ? this->alpha*(std::exp(x) - one<T>()) : x; }
 };
 
+template <typename T> inline constexpr const char*
+function_kernel_name(elu<T>) { return "elu"; }
+
 template <typename T>
 struct hard_sigmoid : std::unary_function<T,T>, parameterized_function<T> {
-    static constexpr auto name = "hard_sigmoid";
     constexpr hard_sigmoid(const T& alpha, const T& beta)
         : parameterized_function<T>(alpha, beta) {}
     constexpr T operator()(const T& x) const
         { return cxx::clamp(this->alpha*x + this->beta, zero<T>(), one<T>()); }
 };
+
+template <typename T> inline constexpr const char*
+function_kernel_name(hard_sigmoid<T>) { return "hard_sigmoid"; }
 
 //==-------------------------------------------------------------------------
 
@@ -460,102 +507,128 @@ struct post_reduce_average {
 
 template <typename T>
 struct reduce_max {
-    static constexpr auto name = "reduce_max";
     static constexpr T identity() { return std::numeric_limits<T>::lowest(); }
     using Map = xfn::identity<T>;
     using Reduce = xfn::max<T>;
     using Final = post_reduce_identity<T>;
 };
 
+template <typename T> inline constexpr const char*
+reduction_kernel_name(reduce_max<T>) { return "reduce_max"; }
+
 template <typename T>
 struct reduce_amax {
-    static constexpr auto name = "reduce_amax";
     static constexpr T identity() { return zero<T>(); }
     using Map = xfn::abs<T>;
     using Reduce = xfn::max<T>;
     using Final = post_reduce_identity<T>;
 };
 
+template <typename T> inline constexpr const char*
+reduction_kernel_name(reduce_amax<T>) { return "reduce_amax"; }
+
 template <typename T>
 struct reduce_min {
-    static constexpr auto name = "reduce_min";
     static constexpr T identity() { return std::numeric_limits<T>::max(); }
     using Map = xfn::identity<T>;
     using Reduce = xfn::min<T>;
     using Final = post_reduce_identity<T>;
 };
 
+template <typename T> inline constexpr const char*
+reduction_kernel_name(reduce_min<T>) { return "reduce_min"; }
+
 template <typename T>
 struct reduce_amin {
-    static constexpr auto name = "reduce_amin";
     static constexpr T identity() { return std::numeric_limits<T>::max(); }
     using Map = xfn::abs<T>;
     using Reduce = xfn::min<T>;
     using Final = post_reduce_identity<T>;
 };
 
+template <typename T> inline constexpr const char*
+reduction_kernel_name(reduce_amin<T>) { return "reduce_amin"; }
+
 template <typename T>
 struct reduce_sum {
-    static constexpr auto name = "reduce_sum";
     static constexpr T identity() { return zero<T>(); }
     using Map = xfn::identity<T>;
     using Reduce = xfn::plus<T>;
     using Final = post_reduce_identity<T>;
 };
 
+template <typename T> inline constexpr const char*
+reduction_kernel_name(reduce_sum<T>) { return "reduce_sum"; }
+
 template <typename T>
 struct reduce_asum : reduce_sum<T> {
-    static constexpr auto name = "reduce_asum";
     using Map = xfn::abs<T>;
 };
 
+template <typename T> inline constexpr const char*
+reduction_kernel_name(reduce_asum<T>) { return "reduce_asum"; }
+
 template <typename T>
 struct reduce_mean : reduce_sum<T> {
-    static constexpr auto name = "reduce_mean";
     using Final = post_reduce_average<T>;
 };
 
+template <typename T> inline constexpr const char*
+reduction_kernel_name(reduce_mean<T>) { return "reduce_mean"; }
+
 template <typename T>
 struct reduce_sum_square : reduce_sum<T> {
-    static constexpr auto name = "reduce_sum_square";
     using Map = xfn::square<T>;
 };
 
+template <typename T> inline constexpr const char*
+reduction_kernel_name(reduce_sum_square<T>) { return "reduce_sum_square"; }
+
 template <typename T>
 struct reduce_nrm2 {
-    static constexpr auto name = "reduce_nrm2";
     static constexpr T identity() { return zero<T>(); }
     using Map = xfn::norm<T>;
     using Reduce = xfn::plus<T>;
     using Final = post_reduce<xfn::sqrt<T>>;
 };
 
+template <typename T> inline constexpr const char*
+reduction_kernel_name(reduce_nrm2<T>) { return "reduce_nrm2"; }
+
 template <typename T>
 struct reduce_log_sum : reduce_sum<T> {
-    static constexpr auto name = "reduce_log_sum";
     using Final = post_reduce<xfn::log<T>>;
 };
 
+template <typename T> inline constexpr const char*
+reduction_kernel_name(reduce_log_sum<T>) { return "reduce_log_sum"; }
+
 template <typename T>
 struct reduce_sum_exp : reduce_sum<T> {
-    static constexpr auto name = "reduce_sum_exp";
     using Map = xfn::exp<T>;
 };
 
+template <typename T> inline constexpr const char*
+reduction_kernel_name(reduce_sum_exp<T>) { return "reduce_sum_exp"; }
+
 template <typename T>
 struct reduce_log_sum_exp : reduce_sum_exp<T> {
-    static constexpr auto name = "reduce_log_sum_exp";
     static constexpr T identity() { return zero<T>(); }
     using Final = post_reduce<xfn::log<T>>;
 };
 
+template <typename T> inline constexpr const char*
+reduction_kernel_name(reduce_log_sum_exp<T>) { return "reduce_log_sum_exp"; }
+
 template <typename T>
 struct reduce_prod {
-    static constexpr auto name = "reduce_prod";
     static constexpr T identity() { return one<T>(); }
     using Map = xfn::identity<T>;
     using Reduce = xfn::multiplies<T>;
     using Final = post_reduce_identity<T>;
 };
+
+template <typename T> inline constexpr const char*
+reduction_kernel_name(reduce_prod<T>) { return "reduce_prod"; }
 
 }} // namespace dlf::xfn

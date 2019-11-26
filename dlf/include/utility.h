@@ -29,12 +29,9 @@
 namespace cxx {
 
 #if CPP_VER >= 17
-template <typename... B>
-using conjunction = std::conjunction<B...>;
-template <typename... B>
-using disjunction = std::disjunction<B...>;
-template <typename B>
-using negation = std::negation<B>;
+using std::conjunction;
+using std::disjunction;
+using std::negation;
 #else
 template <class...> struct conjunction;
 template <> struct conjunction<> : std::true_type {};
@@ -59,10 +56,8 @@ struct negation : std::conditional<T::value, std::false_type, std::true_type>::t
 #endif
 
 #if CPP_VER >= 17
-template <typename Fn, typename... Args>
-using invoke_result = std::invoke_result<Fn, Args...>;
-template <typename Fn, typename... Args>
-using invoke_result_t = std::invoke_result_t<Fn, Args...>;
+using std::invoke_result;
+using std::invoke_result_t;
 #else
 template <typename Fn, typename... Args>
 using invoke_result = std::result_of<Fn(Args...)>;
@@ -105,6 +100,33 @@ inline constexpr T max(std::initializer_list<T> t, Compare comp) {
 template <class T>
 inline constexpr T max(std::initializer_list<T> t) {
     return *std::max_element(t.begin(), t.end(), std::less<T>());
+}
+
+template <typename InputIterator, typename T, typename BinaryOp, typename UnaryOp>
+inline T transform_reduce(InputIterator first, InputIterator last,
+                          T init, BinaryOp b, UnaryOp u)
+{
+    for (; first != last; ++first)
+        init = b(init, u(*first));
+    return init;
+}
+
+template <typename InputIterator1, typename InputIterator2,
+          typename T, typename BinaryOp1, typename BinaryOp2>
+inline T transform_reduce(InputIterator1 first1, InputIterator1 last1,
+                          InputIterator2 first2, T init, BinaryOp1 b1, BinaryOp2 b2)
+{
+    for (; first1 != last1; ++first1, (void) ++first2)
+        init = b1(init, b2(*first1, *first2));
+    return init;
+}
+
+template <typename InputIterator1, typename InputIterator2, typename T>
+inline T transform_reduce(InputIterator1 first1, InputIterator1 last1,
+                          InputIterator2 first2, T init)
+{
+    return transform_reduce(first1, last1, first2, std::move(init),
+                            std::plus<>(), std::multiplies<>());
 }
 
 #if CPP_VER >= 17
@@ -180,8 +202,6 @@ namespace cxx {
  * This is intended to be trivially copyable, so it should be passed by
  * value.
  */
-#pragma clang diagnostic push
-#pragma ide diagnostic ignored "google-explicit-constructor"
 template <typename T>
 class array_ref {
 public:
@@ -310,7 +330,6 @@ public:
         return std::vector<T>(m_data, m_data + m_length);
     }
 };
-#pragma clang diagnostic pop
 
 namespace detail {
 #if CPP_VER >= 17

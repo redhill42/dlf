@@ -44,31 +44,32 @@ inline transform(Tensor<T>&& A, F f) {
 //==-------------------------------------------------------------------------
 
 namespace detail {
-template <typename TensorX, typename TensorY>
-void gpu_transform(const std::string& name, const TensorX& X, TensorY& Y) {
+template <typename TensorX, typename TensorY, typename F>
+std::enable_if_t<!std::is_base_of<xfn::parameterized_function<tensor_value_type<TensorX>>, F>::value>
+gpu_transform(const TensorX& X, TensorY& Y, F f) {
     assert(X.shape() == Y.shape());
     if (X.shape().is_contiguous() && Y.shape().is_contiguous()) {
-        gpgpu::dnn::transform(name, X.size(),
+        gpgpu::dnn::transform(xfn::function_kernel_name(f), X.size(),
                               X.data(), X.shape().offset(),
                               Y.data(), Y.shape().offset());
     } else {
-        gpgpu::dnn::transform(name, X.size(), X.shape().extents(),
+        gpgpu::dnn::transform(xfn::function_kernel_name(f), X.size(), X.shape().extents(),
                               X.data(), X.shape().offset(), X.shape().strides(),
                               Y.data(), Y.shape().offset(), Y.shape().strides());
     }
 }
 
-template <typename T, typename TensorX, typename TensorY>
-void gpu_transform(const std::string name, const T alpha, const T beta,
-                   const TensorX& X, TensorY& Y)
-{
+template <typename TensorX, typename TensorY, typename F>
+std::enable_if_t<std::is_base_of<xfn::parameterized_function<tensor_value_type<TensorX>>, F>::value>
+gpu_transform(const TensorX& X, TensorY& Y, F f) {
     assert(X.shape() == Y.shape());
     if (X.shape().is_contiguous() && Y.shape().is_contiguous()) {
-        gpgpu::dnn::transform(name, alpha, beta, X.size(),
+        gpgpu::dnn::transform(xfn::function_kernel_name(f), f.alpha, f.beta, X.size(),
                               X.data(), X.shape().offset(),
                               Y.data(), Y.shape().offset());
     } else {
-        gpgpu::dnn::transform(name, alpha, beta, X.size(), X.shape().extents(),
+        gpgpu::dnn::transform(xfn::function_kernel_name(f), f.alpha, f.beta,
+                              X.size(), X.shape().extents(),
                               X.data(), X.shape().offset(), X.shape().strides(),
                               Y.data(), Y.shape().offset(), Y.shape().strides());
     }
@@ -79,22 +80,10 @@ template <typename TensorT, typename TensorU, typename F>
 std::enable_if_t<
     is_gpu_tensor<TensorT>::value &&
     is_same_tensor<TensorT, TensorU>::value &&
-    !std::is_const<std::remove_reference_t<TensorU>>::value &&
-    !std::is_base_of<xfn::parameterized_function<tensor_value_type<TensorT>>, F>::value>
-inline transformTo(const TensorT& X, TensorU&& Y, F) {
-    Y.resize(X.shape());
-    detail::gpu_transform(F::name, X, Y);
-}
-
-template <typename TensorT, typename TensorU, typename F>
-std::enable_if_t<
-    is_gpu_tensor<TensorT>::value &&
-    is_same_tensor<TensorT, TensorU>::value &&
-    !std::is_const<std::remove_reference_t<TensorU>>::value &&
-    std::is_base_of<xfn::parameterized_function<tensor_value_type<TensorT>>, F>::value>
+    !std::is_const<std::remove_reference_t<TensorU>>::value>
 inline transformTo(const TensorT& X, TensorU&& Y, F f) {
     Y.resize(X.shape());
-    detail::gpu_transform(F::name, f.alpha, f.beta, X, Y);
+    detail::gpu_transform(X, Y, f);
 }
 
 template <typename TensorT, typename F>
@@ -210,7 +199,7 @@ inline transform(const LHS& A, const RHS& B, RET& C, F f) {
 
 namespace detail {
 template <typename T, typename R, typename F>
-void transformChannel(const DevTensor<T>& A, const DevTensor<T>& B, DevTensor<R>& C, size_t axis, F) {
+void transformChannel(const DevTensor<T>& A, const DevTensor<T>& B, DevTensor<R>& C, size_t axis, F f) {
     assert(B.is_vector() || A.shape().find_channel_axis(B.shape()) == axis);
     assert(axis < A.rank());
     assert(A.extent(axis) == B.size());
@@ -218,7 +207,8 @@ void transformChannel(const DevTensor<T>& A, const DevTensor<T>& B, DevTensor<R>
 
     size_t m = A.shape().partial_size(0, axis+1);
     size_t n = A.size() / m;
-    gpgpu::dnn::transform(F::name, m, n, B.size(), A.data(), 0, B.data(), 0, C.data(), 0);
+    gpgpu::dnn::transform(xfn::function_kernel_name(f), m, n, B.size(),
+                          A.data(), 0, B.data(), 0, C.data(), 0);
 }
 
 template <typename T, typename R>
@@ -258,8 +248,9 @@ void transform(const std::string& name,
 
 template <typename LHS, typename RHS, typename RET, typename F>
 std::enable_if_t<is_gpu_tensor<LHS>::value>
-inline transform(const LHS& A, const RHS& B, RET& C, F) {
-    transform(F::name, A.shape(), A.data(), B.shape(), B.data(), C.shape(), C.data());
+inline transform(const LHS& A, const RHS& B, RET& C, F f) {
+    transform(xfn::function_kernel_name(f),
+              A.shape(), A.data(), B.shape(), B.data(), C.shape(), C.data());
 }
 } // namespace detail
 

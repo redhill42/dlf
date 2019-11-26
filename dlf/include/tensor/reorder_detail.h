@@ -418,10 +418,10 @@ template <typename T, typename Compare>
 void merge(const Shape& x_shape, const gpgpu::Buffer<T>& x_data,
            const Shape& y_shape, const gpgpu::Buffer<T>& y_data,
            const Shape& z_shape, gpgpu::Buffer<T>& z_data,
-           Compare)
+           Compare comp)
 {
-    const std::string comp = Compare::name;
-    const int dir = comp != "less" && comp != "less_equal";
+    const cxx::string_view name = xfn::function_kernel_name(comp);
+    const int dir = name != "less" && name != "less_equal";
     gpgpu::dnn::merge(dir,
         x_shape.extents(), x_shape.strides(), x_data, x_shape.offset(),
         y_shape.extents(), y_shape.strides(), y_data, y_shape.offset(),
@@ -566,10 +566,10 @@ void sort(const Shape& x_shape, const T* x_data,
 template <typename T, typename Compare>
 void sort(const Shape& x_shape, const gpgpu::Buffer<T>& x_data,
           const Shape& y_shape,       gpgpu::Buffer<T>& y_data,
-          Compare)
+          Compare comp)
 {
-    const cxx::string_view comp = Compare::name;
-    const int dir = comp != "less" && comp != "less_equal";
+    const cxx::string_view name = xfn::function_kernel_name(comp);
+    const int dir = name != "less" && name != "less_equal";
     gpgpu::dnn::sort(dir, x_shape.extents(),
                      x_data, x_shape.offset(), x_shape.strides(),
                      y_data, y_shape.offset(), y_shape.strides());
@@ -616,10 +616,10 @@ void argsort(const Shape& x_shape, const T* x_data,
 template <typename T, typename I, typename Compare>
 void argsort(const Shape& x_shape, const gpgpu::Buffer<T>& x_data,
              const Shape& i_shape,       gpgpu::Buffer<I>& i_data,
-             Compare)
+             Compare comp)
 {
-    const cxx::string_view comp = Compare::name;
-    const int dir = comp != "less" && comp != "less_equal";
+    const cxx::string_view name = xfn::function_kernel_name(comp);
+    const int dir = name != "less" && name != "less_equal";
     gpgpu::dnn::argsort(dir, x_shape.extents(),
                         x_data, x_shape.offset(), x_shape.strides(),
                         i_data, i_shape.offset(), i_shape.strides());
@@ -854,10 +854,10 @@ template <typename T, typename I, typename Compare>
 void argsort(const Shape& x_shape, const gpgpu::Buffer<T>& x_data,
              const Shape& y_shape,       gpgpu::Buffer<T>& y_data,
              const Shape& i_shape,       gpgpu::Buffer<I>& i_data,
-             Compare)
+             Compare comp)
 {
-    const cxx::string_view comp = Compare::name;
-    const int dir = comp != "less" && comp != "less_equal";
+    const cxx::string_view name = xfn::function_kernel_name(comp);
+    const int dir = name != "less" && name != "less_equal";
     gpgpu::dnn::argsort(dir, x_shape.extents(),
                         x_data, x_shape.offset(), x_shape.strides(),
                         y_data, y_shape.offset(), y_shape.strides(),

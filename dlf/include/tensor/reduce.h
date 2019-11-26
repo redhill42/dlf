@@ -19,7 +19,7 @@ inline reduce(const TensorT& X, TensorR&& Y,
               std::vector<int> axes, bool keepdims,
               const U& identity, Map f, Reduce g, Final h)
 {
-    detail::reduce(X, Y, std::move(axes), keepdims, nullptr, identity, f, g, h);
+    detail::reduce(X, Y, std::move(axes), keepdims, identity, f, g, h);
 }
 
 template <typename TensorT, typename TensorR, typename U, typename Map, typename Reduce>
@@ -70,12 +70,7 @@ std::enable_if_t<
     is_exactly_same_tensor<TensorT, TensorR>::value &&
     !std::is_const<std::remove_reference_t<TensorR>>::value>
 inline reduce(const TensorT& X, TensorR&& Y, std::vector<int> axes = {}, bool keepdims = false) {
-    detail::reduce(X, Y, std::move(axes), keepdims,
-                   Reducer::name,
-                   Reducer::identity(),
-                   typename Reducer::Map(),
-                   typename Reducer::Reduce(),
-                   typename Reducer::Final());
+    detail::reduce<Reducer>(X, Y, std::move(axes), keepdims);
 }
 
 template <typename Reducer, typename TensorT>
@@ -157,7 +152,7 @@ inline count(const TensorT& X, TensorR&& Y, const tensor_value_type<TensorT>& va
             std::vector<int> axes = {}, bool keepdims = false)
 {
     using R = tensor_value_type<TensorR>;
-    detail::reduce(X, Y, std::move(axes), keepdims, nullptr, xfn::zero<R>(),
+    detail::reduce(X, Y, std::move(axes), keepdims, xfn::zero<R>(),
                    [value](auto x){ return x==value ? xfn::one<R>() : xfn::zero<R>(); },
                    xfn::plus<R>(), xfn::post_reduce_identity<R>());
 }

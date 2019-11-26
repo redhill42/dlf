@@ -2,6 +2,46 @@
 
 namespace dlf {
 
+template <typename Body, typename First>
+std::enable_if_t<is_cpu_tensor<First>::value && !is_tensor_view<First>::value>
+inline unravel(Body body, First&& first) {
+    body(first.data());
+}
+
+template <typename Body, typename First>
+std::enable_if_t<is_cpu_tensor<First>::value && is_tensor_view<First>::value>
+inline unravel(Body body, First&& first) {
+    if (first.shape().is_contiguous()) {
+        body(first.data() + first.shape().offset());
+    } else {
+        body(first.begin());
+    }
+}
+
+template <typename Body, typename First, typename... Rest>
+std::enable_if_t<is_cpu_tensor<First>::value && !is_tensor_view<First>::value>
+inline unravel(Body body, First&& first, Rest&&... rest) {
+    unravel([begin = first.data(), body](auto... args) {
+        body(begin, args...);
+    }, std::forward<Rest>(rest)...);
+}
+
+template <typename Body, typename First, typename... Rest>
+std::enable_if_t<is_cpu_tensor<First>::value && is_tensor_view<First>::value>
+inline unravel(Body body, First&& first, Rest&&... rest) {
+    if (first.shape().is_contiguous()) {
+        unravel([begin = first.data() + first.shape().offset(), body](auto... args) {
+            body(begin, args...);
+        }, std::forward<Rest>(rest)...);
+    } else {
+        unravel([begin = first.begin(), body](auto... args) {
+            body(begin, args...);
+        }, std::forward<Rest>(rest)...);
+    }
+}
+
+/*-------------------------------------------------------------------------*/
+
 struct map_id {};
 
 namespace map_detail {
