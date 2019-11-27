@@ -714,6 +714,33 @@ inline Tensor<T> Matrix(std::initializer_list<std::initializer_list<T>> list) {
     return make_tensor<T, 2>(list);
 }
 
+// Convenient functions to treat array or std::vector to a 1D-tensor.
+
+template <typename T, size_t N>
+inline Tensor<T> wrap(T (&a)[N]) {
+    return Tensor<T>::wrap(Shape(N), a);
+}
+
+template <typename T, size_t N>
+inline Tensor<T> wrap(std::array<T, N>& a) {
+    return Tensor<T>::wrap(Shape(N), a.data());
+}
+
+template <typename T, size_t N>
+inline Tensor<const T> wrap(const std::array<T, N>& a) {
+    return Tensor<const T>::wrap(Shape(N), a.data());
+}
+
+template <typename T>
+inline Tensor<T> wrap(std::vector<T>& v) {
+    return Tensor<T>::wrap(Shape(v.size()), v.data());
+}
+
+template <typename T>
+inline Tensor<const T> wrap(const std::vector<T>& v) {
+    return Tensor<const T>::wrap(Shape(v.size()), v.data());
+}
+
 //==-------------------------------------------------------------------------
 // TensorView implementation
 //==-------------------------------------------------------------------------

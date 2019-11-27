@@ -1082,14 +1082,18 @@ inline sort(const TensorT& X, TensorR&& Y, int axis = -1) {
 }
 
 template <typename TensorT, typename Compare>
-std::enable_if_t<is_tensor<TensorT>::value>
-inline sort(TensorT& X, int axis, Compare comp) {
+std::enable_if_t<
+    is_tensor<TensorT>::value &&
+    !std::is_const<std::remove_reference_t<TensorT>>::value>
+inline sort(TensorT&& X, int axis, Compare comp) {
     sort(X, X, axis, comp);
 }
 
 template <typename TensorT>
-std::enable_if_t<is_tensor<TensorT>::value>
-inline sort(TensorT& X, int axis = -1) {
+std::enable_if_t<
+    is_tensor<TensorT>::value &&
+    !std::is_const<std::remove_reference_t<TensorT>>::value>
+inline sort(TensorT&& X, int axis = -1) {
     sort(X, X, axis, xfn::less<>());
 }
 
