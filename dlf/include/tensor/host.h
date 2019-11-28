@@ -1117,7 +1117,7 @@ template <typename T>
 inline void flat_copy(const Tensor<T>& src, Tensor<T>& dst) {
     assert(src.size() == dst.size());
     if (src.data() != dst.data()) {
-        par::copy(src.begin(), src.end(), dst.begin());
+        std::copy(src.begin(), src.end(), dst.begin());
     }
 }
 

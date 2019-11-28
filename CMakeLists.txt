@@ -37,6 +37,9 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${FLAGS}")
 include(cmake/tbb.cmake)
 fetch_tbb(${PROJECT_SOURCE_DIR}/cmake ${PROJECT_BINARY_DIR}/tbb)
 
+include(cmake/pstl.cmake)
+fetch_pstl(${PROJECT_SOURCE_DIR}/cmake ${PROJECT_BINARY_DIR}/pstl)
+
 if(NOT(DEFINED USE_MKL))
   if(APPLE)
     set(USE_MKL NO)

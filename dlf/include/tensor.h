@@ -10,8 +10,9 @@
 #include <cstdlib>
 #include <cmath>
 
+#include <tbb/tbb.h>
+
 #include "utility.h"
-#include "parallel.h"
 #include "cxxblas.h"
 #include "randomize.h"
 

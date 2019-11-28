@@ -75,9 +75,9 @@ gemm(cblas::Transpose transA, cblas::Transpose transB,
         std::swap(ldb, incB);
 
     if (beta == xfn::zero<T>()) {
-        par::fill(C, C + m*n, beta);
+        std::fill(C, C + m*n, beta);
     } else if (beta != xfn::one<T>()) {
-        par::transform(C, C + m*n, C, [&beta](const auto& x){ return beta*x; });
+        std::transform(C, C + m*n, C, [&beta](const auto& x){ return beta*x; });
     }
     if (alpha == xfn::zero<T>()) {
         return;

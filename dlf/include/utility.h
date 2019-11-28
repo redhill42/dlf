@@ -25,6 +25,14 @@
 #  error C++14 is the minimal requirement
 #endif
 
+#ifndef GRAINSIZE
+#  ifdef NDEBUG
+#    define GRAINSIZE 1024
+#  else
+#    define GRAINSIZE 4
+#  endif
+#endif
+
 // C++17 back ports
 namespace cxx {
 
