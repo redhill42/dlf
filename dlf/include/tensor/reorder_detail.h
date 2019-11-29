@@ -96,18 +96,29 @@ reshape(const TensorT& X, Shape&& new_shape) {
 //==-------------------------------------------------------------------------
 
 template <typename T>
-void parallel_reverse(const size_t n, T* first, T* last, const int stride) {
-    constexpr size_t REVERSE_CUT_OFF = 1000;
-    if (n <= REVERSE_CUT_OFF) {
-        last -= stride;
-        for (size_t i = 0; i < n; ++i, first += stride, last -= stride)
-            std::swap(*first, *last);
+void serial_reverse(T* first, T* last, T* result, const int stride) {
+    if (stride == 1) {
+        for (; first != last; ++result) {
+            std::swap(*--last, *result);
+        }
     } else {
-        auto mid = n / 2;
-        auto offset = mid * stride;
-        tbb::parallel_invoke(
-            [&]{ parallel_reverse(  mid, first,        last,        stride); },
-            [&]{ parallel_reverse(n-mid, first+offset, last-offset, stride); });
+        for (; first != last; result += stride) {
+            last -= stride;
+            std::swap(*last, *result);
+        }
+    }
+}
+
+template <typename T>
+void parallel_reverse(const size_t n, T* first, T* last, const int stride) {
+    auto m = n / 2;
+    if (m < GRAINSIZE) {
+        serial_reverse(first, first + m*stride, last - m*stride, stride);
+    } else {
+        tbb::parallel_for(tbb::blocked_range<size_t>(0, m, GRAINSIZE), [=](const auto& r) {
+            serial_reverse(first + r.begin() * stride, first + r.end() * stride,
+                           last - r.end() * stride, stride);
+        });
     }
 }
 
@@ -121,7 +132,7 @@ void reverse(const Shape& x_shape, T* x_data) {
         for (int batch = r.begin(); batch < r.end(); ++batch) {
             auto px = x_data + x_shape.linear_offset(batch * n);
             auto stride = static_cast<int>(x_shape.stride(-1));
-            parallel_reverse(n/2, px, px + n*stride, stride);
+            parallel_reverse(n, px, px + n*stride, stride);
         }
     });
 }
@@ -335,9 +346,10 @@ scatter_nd(TensorX& X, const TensorI& indices, const TensorY& updates,
 constexpr int MERGE_CUT_OFF = 1000;
 
 template <typename T, typename Compare>
-void serial_merge(int x_len, const T* x_data, const int x_inc,
-                  int y_len, const T* y_data, const int y_inc,
-                  T* z_data, const int z_inc, Compare comp)
+void serial_merge(size_t x_len, const T* x_data, const int x_inc,
+                  size_t y_len, const T* y_data, const int y_inc,
+                                      T* z_data, const int z_inc,
+                  Compare comp)
 {
     while (x_len > 0 && y_len > 0) {
         if (comp(*y_data, *x_data)) {
@@ -358,32 +370,98 @@ void serial_merge(int x_len, const T* x_data, const int x_inc,
 }
 
 template <typename T, typename Compare>
-void parallel_merge(int x_len, const T* x_data, const int x_inc,
-                    int y_len, const T* y_data, const int y_inc,
-                    T* z_data, const int z_inc, Compare comp)
+void serial_merge(size_t x_len, T* x_data, const int x_inc,
+                  size_t y_len, T* y_data, const int y_inc,
+                                T* z_data, const int z_inc,
+                  Compare comp)
+{
+    while (x_len > 0 && y_len > 0) {
+        if (comp(*y_data, *x_data)) {
+            *z_data = std::move(*y_data);
+            y_data += y_inc;
+            --y_len;
+        } else {
+            *z_data = std::move(*x_data);
+            x_data += x_inc;
+            --x_len;
+        }
+        z_data += z_inc;
+    }
+    if (x_len > 0)
+        cxx::move(x_len, x_data, x_inc, z_data, z_inc);
+    if (y_len > 0)
+        cxx::move(y_len, y_data, y_inc, z_data, z_inc);
+}
+
+template <typename T, typename Compare>
+struct merge_task : tbb::task {
+    using R = std::remove_const_t<T>;
+
+    size_t x_len; T* x_data; const int x_inc;
+    size_t y_len; T* y_data; const int y_inc;
+                  R* z_data; const int z_inc;
+    Compare comp;
+
+    merge_task(size_t x_len, T* x_data, const int x_inc,
+               size_t y_len, T* y_data, const int y_inc,
+                             R* z_data, const int z_inc,
+               Compare comp)
+        : x_len(x_len), x_data(x_data), x_inc(x_inc),
+          y_len(y_len), y_data(y_data), y_inc(y_inc),
+                        z_data(z_data), z_inc(z_inc),
+          comp(comp) {}
+
+    task* execute() override;
+
+    static void run(size_t x_len, T* x_data, const int x_inc,
+                    size_t y_len, T* y_data, const int y_inc,
+                                  R* z_data, const int z_inc,
+                    Compare comp)
+    {
+        spawn_root_and_wait(*new(allocate_root()) merge_task(
+            x_len, x_data, x_inc, y_len, y_data, y_inc, z_data, z_inc, comp));
+    }
+};
+
+template <typename T, typename Compare>
+tbb::task* merge_task<T, Compare>::execute() {
+    if (x_len + y_len <= MERGE_CUT_OFF) {
+        serial_merge(x_len, x_data, x_inc, y_len, y_data, y_inc, z_data, z_inc, comp);
+        return nullptr;
+    } else {
+        size_t xm, ym;
+        if (x_len < y_len) {
+            ym = y_len / 2;
+            xm = cxx::upper_bound(x_len, x_data, x_inc, y_data[ym*y_inc], comp);
+        } else {
+            xm = x_len / 2;
+            ym = cxx::lower_bound(y_len, y_data, y_inc, x_data[xm*x_inc], comp);
+        }
+
+        auto right = new(allocate_additional_child_of(*parent()))
+            merge_task(x_len - xm, x_data + xm*x_inc, x_inc,
+                       y_len - ym, y_data + ym*y_inc, y_inc,
+                       z_data + (xm + ym)*z_inc, z_inc, comp);
+        spawn(*right);
+        recycle_as_continuation();
+        x_len = xm;
+        y_len = ym;
+        return this;
+    }
+}
+
+template <typename T, typename Compare>
+void parallel_merge(size_t x_len, T* x_data, const int x_inc,
+                    size_t y_len, T* y_data, const int y_inc,
+                    std::remove_const_t<T>* z_data, const int z_inc,
+                    Compare comp)
 {
     if (x_len + y_len <= MERGE_CUT_OFF) {
         serial_merge(x_len, x_data, x_inc, y_len, y_data, y_inc, z_data, z_inc, comp);
     } else {
-        int xm, ym;
-        if (x_len < y_len) {
-            ym = y_len / 2;
-            xm = cxx::upper_bound(x_len, x_data, x_inc, y_data[ym * y_inc], comp);
-        } else {
-            xm = x_len / 2;
-            ym = cxx::lower_bound(y_len, y_data, y_inc, x_data[xm * x_inc], comp);
-        }
-
-        int zm = xm + ym;
-        tbb::parallel_invoke(
-            [=] {
-                parallel_merge(xm, x_data, x_inc, ym, y_data, y_inc, z_data, z_inc, comp);
-            },
-            [=] {
-                parallel_merge(x_len - xm, x_data + xm*x_inc, x_inc,
-                               y_len - ym, y_data + ym*y_inc, y_inc,
-                               z_data + zm*z_inc, z_inc, comp);
-            });
+        merge_task<T, Compare>::run(x_len, x_data, x_inc,
+                                    y_len, y_data, y_inc,
+                                    z_data, z_inc, comp);
     }
 }
 
@@ -451,95 +529,70 @@ void serial_sort(const int n,
 }
 
 template <typename T, typename Compare>
-void serial_merge(int x_len, T* x_data, const int x_inc,
-                  int y_len, T* y_data, const int y_inc,
-                             T* z_data, const int z_inc,
-                  Compare comp)
-{
-    while (x_len > 0 && y_len > 0) {
-        if (comp(*y_data, *x_data)) {
-            *z_data = std::move(*y_data);
-            y_data += y_inc;
-            --y_len;
-        } else {
-            *z_data = std::move(*x_data);
-            x_data += x_inc;
-            --x_len;
-        }
-        z_data += z_inc;
-    }
-    if (x_len > 0)
-        cxx::move(x_len, x_data, x_inc, z_data, z_inc);
-    if (y_len > 0)
-        cxx::move(y_len, y_data, y_inc, z_data, z_inc);
-}
+struct sort_task : public tbb::task {
+    int n;
+    const T* x_data; int x_inc;
+          T* y_data; int y_inc;
+          T* t_data; int t_inc;
+    Compare comp;
 
-template <typename T, typename Compare>
-void parallel_merge(int x_len, T* x_data, const int x_inc,
-                    int y_len, T* y_data, const int y_inc,
-                               T* z_data, const int z_inc,
+    sort_task(const int n,
+              const T* x_data, const int x_inc,
+                    T* y_data, const int y_inc,
+                    T* t_data, const int t_inc,
+              Compare comp)
+        : n(n), x_data(x_data), x_inc(x_inc),
+                y_data(y_data), y_inc(y_inc),
+                t_data(t_data), t_inc(t_inc),
+          comp(comp) {}
+
+    task* execute() override;
+
+    static void run(const int n,
+                    const T* x_data, const int x_inc,
+                          T* y_data, const int y_inc,
                     Compare comp)
-{
-    if (x_len + y_len <= MERGE_CUT_OFF) {
-        serial_merge(x_len, x_data, x_inc, y_len, y_data, y_inc, z_data, z_inc, comp);
-    } else {
-        int xm, ym;
-        if (x_len < y_len) {
-            ym = y_len / 2;
-            xm = cxx::upper_bound(x_len, x_data, x_inc, y_data[ym*y_inc], comp);
-        } else {
-            xm = x_len / 2;
-            ym = cxx::lower_bound(y_len, y_data, y_inc, x_data[xm*x_inc], comp);
-        }
-
-        int zm = xm + ym;
-        tbb::parallel_invoke(
-            [=]{ parallel_merge(xm, x_data, x_inc, ym, y_data, y_inc, z_data, z_inc, comp); },
-            [=]{ parallel_merge(x_len - xm, x_data + xm*x_inc, x_inc,
-                                y_len - ym, y_data + ym*y_inc, y_inc,
-                                            z_data + zm*z_inc, z_inc,
-                                comp); });
+    {
+        std::vector<T> aux(n);
+        spawn_root_and_wait(*new(allocate_root()) sort_task(
+            n, x_data, x_inc, y_data, y_inc, aux.data(), 1, comp));
     }
-}
+};
 
 template <typename T, typename Compare>
-void parallel_merge_sort_aux(const int n,
-                             const T* x_data, const int x_inc,
-                                   T* y_data, const int y_inc,
-                                   T* t_data, const int t_inc,
-                             Compare comp)
-{
+tbb::task* sort_task<T, Compare>::execute() {
     if (n <= SORT_CUT_OFF) {
         serial_sort(n, x_data, x_inc, y_data, y_inc, comp);
+        return nullptr;
     } else {
-        auto mid = n / 2;
-        tbb::parallel_invoke(
-            [=] { parallel_merge_sort_aux(mid, x_data, x_inc,
-                                          t_data, t_inc,
-                                          y_data, y_inc, comp);
-            },
-            [=] { parallel_merge_sort_aux(n - mid,
-                                          x_data + mid*x_inc, x_inc,
-                                          t_data + mid*t_inc, t_inc,
-                                          y_data + mid*y_inc, y_inc, comp);
-            });
-        parallel_merge(mid, t_data, t_inc,
-                       n-mid, t_data + mid*t_inc, t_inc,
-                       y_data, y_inc, comp);
+        auto m = n / 2;
+        auto c = new(allocate_continuation()) merge_task<T, Compare>(
+            m, t_data, t_inc, n-m, t_data + m*t_inc, t_inc, y_data, y_inc, comp);
+        c->set_ref_count(2);
+
+        spawn(*new(c->allocate_child()) sort_task(
+            n-m, x_data + m*x_inc, x_inc,
+                 t_data + m*t_inc, t_inc,
+                 y_data + m*y_inc, y_inc, comp));
+
+        n = m;
+        std::swap(y_data, t_data);
+        std::swap(y_inc,  t_inc);
+        recycle_as_child_of(*c);
+        return this;
     }
 }
 
 template <typename T, typename Compare>
-void parallel_merge_sort(const int n,
-                         const T* x_data, const int x_inc,
-                               T* y_data, const int y_inc,
-                         Compare comp)
+void parallel_sort(const int n,
+                   const T* x_data, const int x_inc,
+                         T* y_data, const int y_inc,
+                   Compare comp)
 {
     if (n < SORT_CUT_OFF) {
         serial_sort(n, x_data, x_inc, y_data, y_inc, comp);
     } else {
-        std::vector<T> aux(n);
-        parallel_merge_sort_aux(n, x_data, x_inc, y_data, y_inc, aux.data(), 1, comp);
+        sort_task<T, Compare>::run(n, x_data, x_inc, y_data, y_inc, comp);
     }
 }
 
@@ -558,7 +611,7 @@ void sort(const Shape& x_shape, const T* x_data,
         for (int batch = r.begin(); batch < r.end(); ++batch) {
             auto px = x_data + x_shape.linear_offset(batch*n);
             auto py = y_data + y_shape.linear_offset(batch*n);
-            parallel_merge_sort(n, px, x_inc, py, y_inc, comp);
+            parallel_sort(n, px, x_inc, py, y_inc, comp);
         }
     });
 }
@@ -651,7 +704,7 @@ void insert(int loc, int n, K key, V val, K* k_data, int k_inc, V* v_data, int v
 }
 
 template <typename K, typename V, typename Generator, typename Compare>
-void serial_sort( /* insertion sort */
+void serial_argsort( /* insertion sort */
     const int n,
     const K* x_data, const int x_inc,
           K* y_data, const int y_inc,
@@ -683,13 +736,14 @@ void serial_sort( /* insertion sort */
 }
 
 template <typename K, typename V, typename Compare>
-void serial_merge(int x_len, K* x_key, const int x_key_inc,
-                             V* x_val, const int x_val_inc,
-                  int y_len, K* y_key, const int y_key_inc,
-                             V* y_val, const int y_val_inc,
-                             K* z_key, const int z_key_inc,
-                             V* z_val, const int z_val_inc,
-                  Compare comp)
+void serial_arg_merge(
+    size_t x_len, K* x_key, const int x_key_inc,
+                  V* x_val, const int x_val_inc,
+    size_t y_len, K* y_key, const int y_key_inc,
+                  V* y_val, const int y_val_inc,
+                  K* z_key, const int z_key_inc,
+                  V* z_val, const int z_val_inc,
+    Compare comp)
 {
     while (x_len > 0 && y_len > 0) {
         if (comp(*y_key, *x_key)) {
@@ -719,110 +773,156 @@ void serial_merge(int x_len, K* x_key, const int x_key_inc,
 }
 
 template <typename K, typename V, typename Compare>
-void parallel_merge(int x_len, K* x_key, const int x_key_inc,
-                               V* x_val, const int x_val_inc,
-                    int y_len, K* y_key, const int y_key_inc,
-                               V* y_val, const int y_val_inc,
-                               K* z_key, const int z_key_inc,
-                               V* z_val, const int z_val_inc,
-                    Compare comp)
-{
+struct arg_merge_task : tbb::task {
+    size_t x_len; K* x_key; const int x_key_inc;
+                  V* x_val; const int x_val_inc;
+    size_t y_len; K* y_key; const int y_key_inc;
+                  V* y_val; const int y_val_inc;
+                  K* z_key; const int z_key_inc;
+                  V* z_val; const int z_val_inc;
+    Compare comp;
+
+    arg_merge_task(size_t x_len, K* x_key, const int x_key_inc,
+                                 V* x_val, const int x_val_inc,
+                   size_t y_len, K* y_key, const int y_key_inc,
+                                 V* y_val, const int y_val_inc,
+                                 K* z_key, const int z_key_inc,
+                                 V* z_val, const int z_val_inc,
+                   Compare comp)
+        : x_len(x_len), x_key(x_key), x_key_inc(x_key_inc),
+                        x_val(x_val), x_val_inc(x_val_inc),
+          y_len(y_len), y_key(y_key), y_key_inc(y_key_inc),
+                        y_val(y_val), y_val_inc(y_val_inc),
+                        z_key(z_key), z_key_inc(z_key_inc),
+                        z_val(z_val), z_val_inc(z_val_inc),
+          comp(comp) {}
+
+    task* execute() override;
+};
+
+template <typename K, typename V, typename Compare>
+tbb::task* arg_merge_task<K, V, Compare>::execute() {
     if (x_len + y_len <= MERGE_CUT_OFF) {
-        serial_merge(x_len, x_key, x_key_inc, x_val, x_val_inc,
-                     y_len, y_key, y_key_inc, y_val, y_val_inc,
-                            z_key, z_key_inc, z_val, z_val_inc,
-                     comp);
+        serial_arg_merge(x_len, x_key, x_key_inc, x_val, x_val_inc,
+                         y_len, y_key, y_key_inc, y_val, y_val_inc,
+                                z_key, z_key_inc, z_val, z_val_inc,
+                         comp);
+        return nullptr;
     } else {
-        int xm, ym;
+        size_t xm, ym;
         if (x_len < y_len) {
             ym = y_len / 2;
             xm = cxx::upper_bound(x_len, x_key, x_key_inc, y_key[ym*y_key_inc], comp);
         } else {
             xm = x_len / 2;
-            ym = cxx::lower_bound(y_len, y_key, y_key_inc, x_key[xm*x_key_inc], comp);
+            ym = cxx::upper_bound(y_len, y_key, y_key_inc, x_key[xm*x_key_inc], comp);
         }
 
-        int zm = xm + ym;
-        tbb::parallel_invoke(
-            [=] {
-                parallel_merge(xm, x_key, x_key_inc, x_val, x_val_inc,
-                               ym, y_key, y_key_inc, y_val, y_val_inc,
-                                   z_key, z_key_inc, z_val, z_val_inc,
-                               comp);
-            },
-            [=] {
-                parallel_merge(x_len - xm, x_key + xm*x_key_inc, x_key_inc,
-                                           x_val + xm*x_val_inc, x_val_inc,
-                               y_len - ym, y_key + ym*y_key_inc, y_key_inc,
-                                           y_val + ym*y_val_inc, y_val_inc,
-                                           z_key + zm*z_key_inc, z_key_inc,
-                                           z_val + zm*z_val_inc, z_val_inc,
-                               comp);
-            });
+        auto zm = xm + ym;
+        auto right = new(allocate_additional_child_of(*parent()))
+            arg_merge_task(x_len - xm, x_key + xm*x_key_inc, x_key_inc,
+                                       x_val + xm*x_val_inc, x_val_inc,
+                           y_len - ym, y_key + ym*y_key_inc, y_key_inc,
+                                       y_val + ym*y_val_inc, y_val_inc,
+                                       z_key + zm*z_key_inc, z_key_inc,
+                                       z_val + zm*z_val_inc, z_val_inc,
+                           comp);
+        spawn(*right);
+        recycle_as_continuation();
+        x_len = xm;
+        y_len = ym;
+        return this;
     }
 }
 
 template <typename K, typename V, typename Generator, typename Compare>
-void parallel_merge_sort_aux(const int n,
-                             const K* x_key, const int x_key_inc,
-                                   K* y_key, const int y_key_inc,
-                                   V* y_val, const int y_val_inc,
-                                   K* t_key, const int t_key_inc,
-                                   V* t_val, const int t_val_inc,
-                             const int index, Generator gen, Compare comp)
-{
+struct argsort_task : public tbb::task {
+    int n;
+    const K* x_key; int x_key_inc;
+          K* y_key; int y_key_inc;
+          V* y_val; int y_val_inc;
+          K* t_key; int t_key_inc;
+          V* t_val; int t_val_inc;
+    const int index; Generator gen; Compare comp;
+
+    argsort_task(const int n,
+                 const K* x_key, const int x_key_inc,
+                       K* y_key, const int y_key_inc,
+                       V* y_val, const int y_val_inc,
+                       K* t_key, const int t_key_inc,
+                       V* t_val, const int t_val_inc,
+                 const int index, Generator gen, Compare comp)
+        : n(n), x_key(x_key), x_key_inc(x_key_inc),
+                y_key(y_key), y_key_inc(y_key_inc),
+                y_val(y_val), y_val_inc(y_val_inc),
+                t_key(t_key), t_key_inc(t_key_inc),
+                t_val(t_val), t_val_inc(t_val_inc),
+          index(index), gen(gen), comp(comp) {}
+
+    task* execute() override;
+
+    static void run(const int n,
+                    const K* x_key, const int x_key_inc,
+                          K* y_key, const int y_key_inc,
+                          V* y_val, const int y_val_inc,
+                    Generator gen, Compare comp)
+    {
+        std::vector<K> aux_key(n);
+        std::vector<V> aux_val(n);
+        spawn_root_and_wait(*new(allocate_root()) argsort_task(
+            n, x_key, x_key_inc, y_key, y_key_inc, y_val, y_val_inc,
+            aux_key.data(), 1, aux_val.data(), 1, 0, gen, comp));
+    }
+};
+
+template <typename K, typename V, typename Generator, typename Compare>
+tbb::task* argsort_task<K, V, Generator, Compare>::execute() {
     if (n <= ARGSORT_CUT_OFF) {
-        serial_sort(n, x_key, x_key_inc, y_key, y_key_inc, y_val, y_val_inc, index, gen, comp);
+        serial_argsort(n, x_key, x_key_inc, y_key, y_key_inc, y_val, y_val_inc,
+                       index, gen, comp);
+        return nullptr;
     } else {
-        auto mid = n / 2;
+        auto m = n / 2;
+        auto c = new(allocate_continuation()) arg_merge_task<K, V, Compare>(
+            m,   t_key, t_key_inc, t_val, t_val_inc,
+            n-m, t_key + m*t_key_inc, t_key_inc,
+                 t_val + m*t_val_inc, t_val_inc,
+            y_key, y_key_inc, y_val, y_val_inc, comp);
+        c->set_ref_count(2);
 
-        tbb::parallel_invoke(
-            [=] {
-                parallel_merge_sort_aux(
-                    mid,
-                    x_key, x_key_inc,
-                    t_key, t_key_inc,
-                    t_val, t_val_inc,
-                    y_key, y_key_inc,
-                    y_val, y_val_inc,
-                    index, gen, comp);
-            },
-            [=] {
-                parallel_merge_sort_aux(
-                    n-mid,
-                    x_key + mid*x_key_inc, x_key_inc,
-                    t_key + mid*t_key_inc, t_key_inc,
-                    t_val + mid*t_val_inc, t_val_inc,
-                    y_key + mid*y_key_inc, y_key_inc,
-                    y_val + mid*y_val_inc, y_val_inc,
-                    index + mid, gen, comp);
-            });
+        spawn(*new(c->allocate_child()) argsort_task(
+            n-m, x_key + m*x_key_inc, x_key_inc,
+                 t_key + m*t_key_inc, t_key_inc,
+                 t_val + m*t_val_inc, t_val_inc,
+                 y_key + m*y_key_inc, y_key_inc,
+                 y_val + m*y_val_inc, y_val_inc,
+                 index + m, gen, comp));
 
-        parallel_merge(  mid, t_key,                 t_key_inc,
-                              t_val,                 t_val_inc,
-                       n-mid, t_key + mid*t_key_inc, t_key_inc,
-                              t_val + mid*t_val_inc, t_val_inc,
-                       y_key, y_key_inc, y_val, y_val_inc, comp);
+        n = m;
+        std::swap(y_key, t_key);
+        std::swap(y_key_inc, t_key_inc);
+        std::swap(y_val, t_val);
+        std::swap(y_val_inc, t_val_inc);
+        recycle_as_child_of(*c);
+        return this;
     }
 }
 
 template <typename T, typename I, typename Compare>
-void parallel_merge_argsort(const int n,
-                            const T* x_data, const int x_inc,
-                                  T* y_data, const int y_inc,
-                                  I* i_data, const int i_inc,
-                            Compare comp)
+void parallel_argsort(const int n,
+                      const T* x_data, const int x_inc,
+                            T* y_data, const int y_inc,
+                            I* i_data, const int i_inc,
+                      Compare comp)
 {
+    using Generator = xfn::identity<I>;
+
     if (n <= ARGSORT_CUT_OFF) {
-        serial_sort(n, x_data, x_inc, y_data, y_inc, i_data, i_inc,
-                    0, xfn::identity<I>(), comp);
+        serial_argsort(n, x_data, x_inc, y_data, y_inc, i_data, i_inc,
+                       0, Generator(), comp);
     } else {
-        std::vector<T> aux_data(n);
-        std::vector<I> aux_idx(n);
-        parallel_merge_sort_aux(
-            n, x_data, x_inc, y_data, y_inc, i_data, i_inc,
-            aux_data.data(), 1, aux_idx.data(), 1,
-            0, xfn::identity<I>(), comp);
+        argsort_task<T, I, Generator, Compare>::run(
+            n, x_data, x_inc, y_data, y_inc, i_data, i_inc, Generator(), comp);
     }
 }
 
@@ -845,7 +945,7 @@ void argsort(const Shape& x_shape, const T* x_data,
             auto px = x_data + x_shape.linear_offset(i*n);
             auto py = y_data + y_shape.linear_offset(i*n);
             auto pi = i_data + i_shape.linear_offset(i*n);
-            parallel_merge_argsort(n, px, x_inc, py, y_inc, pi, i_inc, comp);
+            parallel_argsort(n, px, x_inc, py, y_inc, pi, i_inc, comp);
         }
     });
 }
