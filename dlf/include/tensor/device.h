@@ -71,6 +71,8 @@ public:
         return resize({static_cast<size_t>(args)...});
     }
 
+    void clear();
+
 public:
     /**
      * Read data from device.
@@ -248,6 +250,10 @@ public:
         return resize({static_cast<size_t>(args)...});
     }
 
+    void clear() {
+        throw shape_error("incompatible shape");
+    }
+
 public:
     using Spatial<DevTensorView>::shape;
     using Spatial<DevTensorView>::size;
@@ -340,6 +346,11 @@ DevTensor<T>& DevTensor<T>::resize(const Shape& shape) {
             init();
     }
     return *this;
+}
+
+template <typename T>
+void DevTensor<T>::clear() {
+    Spatial<DevTensor>::clear_shape();
 }
 
 template <typename T>

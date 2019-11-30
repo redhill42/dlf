@@ -510,23 +510,6 @@ Shape Shape::diagonal(int offset, int axis1, int axis2) const {
     return Shape(std::move(dims), shape_size, shape_offset);
 }
 
-std::ostream& operator<<(std::ostream& os, const Shape& shape) {
-    if (shape.rank() == 0) {
-        os << "<<>>";
-        return os;
-    }
-
-    os << "<<";
-    for (auto i = 0; ; i++) {
-        os << shape.extent(i);
-        if (i == shape.rank()-1)
-            break;
-        os << ',';
-    }
-    os << ">>";
-    return os;
-}
-
 //---------------------------------------------------------------------------
 
 namespace detail {

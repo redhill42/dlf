@@ -391,6 +391,11 @@ nonzero(const TensorT& X, Tensor<int32_t>& Y, bool row_major = false) {
     auto n    = *(indices.end()-1);
     auto dims = X.shape().extents();
 
+    if (n == 0) {
+        Y.clear();
+        return;
+    }
+
     // Allocate 2D output tensor
     if (row_major)
         Y.resize(rank, n);
@@ -426,6 +431,11 @@ nonzero(const TensorT& X, DevTensor<int32_t>& Y, bool row_major = false) {
     // Read number of non-zero values
     int32_t n;
     indices_buffer.read(gpgpu::current::queue(), &n, 1, indices_buffer.offset() + X.size() - 1);
+
+    if (n == 0) {
+        Y.clear();
+        return;
+    }
 
     // Allocate 2D output tensor
     if (row_major)

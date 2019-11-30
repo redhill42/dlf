@@ -322,7 +322,9 @@ public:
         return m_dims != other.m_dims;
     }
 
-    friend std::ostream& operator<<(std::ostream& os, const Shape& shape);
+    template <typename CharT, typename Traits>
+    friend std::basic_ostream<CharT, Traits>&
+    operator<<(std::basic_ostream<CharT, Traits>& os, const Shape& shape);
 
 public:
     template <typename... Shapes>
@@ -356,6 +358,25 @@ private:
         return dim;
     }
 };
+
+template <typename CharT, typename Traits>
+std::basic_ostream<CharT, Traits>&
+operator<<(std::basic_ostream<CharT, Traits>& os, const Shape& shape) {
+    if (shape.rank() == 0) {
+        os << "<<>>";
+        return os;
+    }
+
+    os << "<<";
+    for (auto i = 0; ; i++) {
+        os << shape.extent(i);
+        if (i == shape.rank()-1)
+            break;
+        os << ',';
+    }
+    os << ">>";
+    return os;
+}
 
 /**
  * Base class for spatial objects.
@@ -452,14 +473,23 @@ public:
 
 protected:
     /**
-     * Reshape the tensor without changing shaped data. The new shape
-     * should be compatible with the original shape.
+     * Reset the shape. The derived class is responsible to resize
+     * the data.
      *
      * @param new_shape specifies the new shape.
      */
     void set_shape(Shape new_shape) {
         m_shape = std::move(new_shape);
         m_shape.init();
+    }
+
+    /**
+     * Clear the shape. The derived class is responsible to clear
+     * the data.
+     */
+    void clear_shape() {
+        m_shape = Shape();
+        m_shape.m_size = 0;
     }
 
     /**

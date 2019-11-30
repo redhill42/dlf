@@ -259,6 +259,11 @@ public: // Constructors
         return resize({static_cast<size_t>(args)...});
     }
 
+    /**
+     * Empty the tensor.
+     */
+    void clear();
+
 public: // Attributes
     using Spatial<Tensor>::shape;
     using Spatial<Tensor>::size;
@@ -376,6 +381,10 @@ public:
     std::enable_if_t<cxx::conjunction<std::is_integral<Args>...>::value, TensorView&>
     resize(Args... args) {
         return resize({static_cast<size_t>(args)...});
+    }
+
+    void clear() {
+        throw shape_error("incompatible shape");
     }
 
 public: // Container View
@@ -615,6 +624,13 @@ Tensor<T>& Tensor<T>::resize(const Shape& shape) {
             init();
     }
     return *this;
+}
+
+template <typename T>
+void Tensor<T>::clear() {
+    Spatial<Tensor>::clear_shape();
+    m_alloc_data.reset();
+    m_data = nullptr;
 }
 
 //==-------------------------------------------------------------------------

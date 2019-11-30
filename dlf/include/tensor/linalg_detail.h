@@ -59,6 +59,71 @@ inline void gemv(cblas::Transpose trans, int m, int n,
 }
 
 template <typename T>
+void gemm_serial(const int m, const int n, const int p,
+                 const T& alpha,
+                 const T* A, int lda, int incA,
+                 const T* B, int ldb, int incB,
+                 const T& beta, T* C, const int ldc)
+{
+    for (int i = 0; i < m; ++i, A += lda, C += ldc) {
+        if (beta == xfn::zero<T>())
+            std::fill(C, C+n, beta);
+        else if (beta != xfn::one<T>())
+            std::transform(C, C+n, C, [&](const auto& x){ return beta*x; });
+        if (alpha == xfn::zero<T>())
+            continue;
+
+        auto pa = A, pb = B;
+        for (int k = 0; k < p; ++k, pa += incA, pb += ldb) {
+            auto const temp = alpha * *pa;
+            if (incB == 1) {
+                for (int j = 0; j < n; ++j)
+                    C[j] += temp * pb[j];
+            } else {
+                for (int j = 0; j < n; ++j, pb += incB)
+                    C[j] += temp * *pb;
+                pb -= n * incB;
+            }
+        }
+    }
+}
+
+template <typename T>
+void gemm_direct(const int m, const int n, const int p,
+                 const T& alpha,
+                 const T* A, int lda, int incA,
+                 const T* B, int ldb, int incB,
+                 const T& beta,
+                 T* C, const int ldc)
+{
+    if (m == 1 && n == 1) {
+        auto v = (alpha == xfn::zero<T>()) ? alpha : tbb::parallel_reduce(
+            tbb::blocked_range<int>(0, p, GRAINSIZE),
+            xfn::zero<T>(),
+            [=](auto r, T sum) {
+                auto px = A + r.begin()*incA;
+                auto py = B + r.begin()*ldb;
+                for (int k = r.size(); --k >= 0; px += incA, py += ldb)
+                    sum += *px * *py;
+                return sum;
+            },
+            std::plus<T>());
+        *C = alpha * v + beta * *C;
+    } else {
+        if (m * n < GRAINSIZE) {
+            gemm_serial(m, n, p, alpha, A, lda, incA, B, ldb, incB, beta, C, ldc);
+        } else {
+            tbb::parallel_for(tbb::blocked_range<int>(0, m), [=, &alpha, &beta](const auto& r) {
+                gemm_serial(r.size(), n, p, alpha,
+                            A + r.begin()*lda, lda, incA,
+                            B, ldb, incB,
+                            beta, C + r.begin()*ldc, ldc);
+            });
+        }
+    }
+}
+
+template <typename T>
 std::enable_if_t<!cblas::is_blasable<T>::value>
 gemm(cblas::Transpose transA, cblas::Transpose transB,
      const int m, const int n, const int p,
@@ -73,36 +138,7 @@ gemm(cblas::Transpose transA, cblas::Transpose transB,
         std::swap(lda, incA);
     if (transB != cblas::Transpose::NoTrans)
         std::swap(ldb, incB);
-
-    if (beta == xfn::zero<T>()) {
-        std::fill(C, C + m*n, beta);
-    } else if (beta != xfn::one<T>()) {
-        std::transform(C, C + m*n, C, [&beta](const auto& x){ return beta*x; });
-    }
-    if (alpha == xfn::zero<T>()) {
-        return;
-    }
-
-    tbb::parallel_for(tbb::blocked_range2d<int>(0, m, 32, 0, n, 32), [=](auto r) {
-        const int i0   = r.rows().begin();
-        const int j0   = r.cols().begin();
-        const int rows = r.rows().size();
-        const int cols = r.cols().size();
-
-        auto pa0 = A + i0*lda;
-        auto pb0 = B + j0*incB;
-        auto pc  = C + i0*ldc + j0;
-
-        for (int i = 0; i < rows; i++, pa0 += lda, pc += ldc) {
-            auto pa = pa0, pb = pb0;
-            for (int k = 0; k < p; k++, pa += incA, pb += ldb) {
-                const auto temp = alpha * *pa;
-                for (int j = 0; j < cols; j++, pb += incB)
-                    pc[j] += temp * *pb;
-                pb -= cols*incB;
-            }
-        }
-    });
+    gemm_direct(m, n, p, alpha, A, lda, incA, B, ldb, incB, beta, C, ldc);
 }
 
 template <typename T>
@@ -494,8 +530,8 @@ std::enable_if_t<
     is_cpu_tensor<RHS>::value &&
     !cblas::is_blasable<tensor_value_type<RHS>>::value,
     bool>
-inline constexpr is_matmul_rhs_need_reorder(int, int, int, int) {
-    return false;
+inline constexpr is_matmul_rhs_need_reorder(int m, int n, int ldb, int incB) {
+    return m * n >= GRAINSIZE && incB > 32; // transpose B if stride too large
 }
 
 template <typename T>
@@ -550,66 +586,13 @@ matmul_cpu(int m, int n, int k,
 
 template <typename T>
 std::enable_if_t<!cblas::is_blasable<T>::value>
-matmul_cpu(int m, int n, int p,
-           const T& alpha,
-           const T* A, int lda, int incA,
-           const T* B, int ldb, int incB,
-           const T& beta, T* C, int ldc)
+inline matmul_cpu(int m, int n, int k,
+                  const T& alpha,
+                  const T* A, int lda, int incA,
+                  const T* B, int ldb, int incB,
+                  const T& beta, T* C, int ldc)
 {
-    if (m == 1 && n == 1) {
-        auto v = (alpha == xfn::zero<T>()) ? alpha : tbb::parallel_reduce(
-            tbb::blocked_range<int>(0, p, GRAINSIZE),
-            xfn::zero<T>(),
-            [=](auto r, T sum) {
-                auto px = A + r.begin()*incA;
-                auto py = B + r.begin()*ldb;
-                for (int k = r.size(); --k >= 0; px += incA, py += ldb)
-                    sum += *px * *py;
-                return sum;
-            },
-            std::plus<T>());
-        *C = alpha * v + beta * *C;
-    } else {
-        if (beta == xfn::zero<T>()) {
-            tbb::parallel_for(tbb::blocked_range<int>(0, m, 32), [=](auto r) {
-                for (int i = r.begin(); i < r.end(); i++) {
-                    auto pc = C + i*ldc;
-                    std::fill(pc, pc + n, xfn::zero<T>());
-                }
-            });
-        } else if (beta != xfn::one<T>()) {
-            tbb::parallel_for(tbb::blocked_range<int>(0, m, 32), [=,&beta](auto r) {
-                for (int i = r.begin(); i < r.end(); i++) {
-                    auto pc = C + i*ldc;
-                    std::transform(pc, pc+n, pc, [&](const auto& x){ return beta*x; });
-                }
-            });
-        }
-        if (alpha == xfn::zero<T>()) {
-            return;
-        }
-
-        tbb::parallel_for(tbb::blocked_range2d<int>(0, m, 32, 0, n, 32), [=](auto r) {
-            const int i0   = r.rows().begin();
-            const int j0   = r.cols().begin();
-            const int rows = r.rows().size();
-            const int cols = r.cols().size();
-
-            auto pa0 = A + i0*lda;
-            auto pb0 = B + j0*incB;
-            auto pc  = C + i0*ldc + j0;
-
-            for (int i = 0; i < rows; i++, pa0 += lda, pc += ldc) {
-                auto pa = pa0, pb = pb0;
-                for (int k = 0; k < p; k++, pa += incA, pb += ldb) {
-                    const auto temp = alpha * *pa;
-                    for (int j = 0; j < cols; j++, pb += incB)
-                        pc[j] += temp * *pb;
-                    pb -= cols*incB;
-                }
-            }
-        });
-    }
+    gemm_direct(m, n, k, alpha, A, lda, incA, B, ldb, incB, beta, C, ldc);
 }
 
 template <typename T>

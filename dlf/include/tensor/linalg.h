@@ -738,7 +738,8 @@ enable_if_tensor<TensorT> diag(const TensorT& diagonal) {
  *        axes of X.
  */
 template <typename TensorT>
-enable_if_tensor<TensorT> trace(const TensorT& X, int offset = 0, int axis1 = -2, int axis2 = -1) {
+enable_if_tensor<TensorT>
+trace(const TensorT& X, int offset = 0, int axis1 = -2, int axis2 = -1) {
     return reduce_sum(X.diagonal(offset, axis1, axis2), {-1}, false);
 }
 
