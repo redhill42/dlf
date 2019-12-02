@@ -2453,6 +2453,10 @@ TEST(UniformTest, ArgSort) {
         EXPECT_EQ(Z, dev_Y.read());
         EXPECT_EQ(Z, gather_elements(X, I, -1));
         EXPECT_EQ(Z, gather_elements(dev_X, dev_I, -1).read());
+
+        // inplace argsort is supported in GPU tensor
+        argsort(dev_X, dev_X);
+        EXPECT_EQ(dev_X.read(), dev_I.read());
     }
 
     for (size_t n = 1000; n <= 10000; n += 1000) {
@@ -2472,6 +2476,10 @@ TEST(UniformTest, ArgSort) {
         EXPECT_EQ(Z, dev_Y.read());
         EXPECT_EQ(Z, gather_elements(X, I, -1));
         EXPECT_EQ(Z, gather_elements(dev_X, dev_I, -1).read());
+
+        // inplace argsort is supported in GPU tensor
+        argsort(dev_X, dev_X);
+        EXPECT_EQ(dev_X.read(), dev_I.read());
     }
 }
 

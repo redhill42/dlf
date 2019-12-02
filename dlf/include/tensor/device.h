@@ -43,6 +43,13 @@ public:
         : Spatial<DevTensor>(std::move(shape)), m_data(std::move(data))
     {}
 
+    // Note: This constructor should used with caution. The DevTensor should
+    // not has lifespan longer than the TemporaryBuffer.
+    explicit DevTensor(Shape shape, gpgpu::TemporaryBuffer<T>& data)
+        : Spatial<DevTensor>(std::move(shape), data.offset()),
+          m_data(gpgpu::Buffer<T>(data.handle(), data.size()))
+    {}
+
     DevTensor(const DevTensor& src) : Spatial<DevTensor>(src) {
         init();
         src.copyTo(*this);

@@ -35,10 +35,32 @@ inline reorder(const TensorT& src, TensorR&& dst) {
 template <typename TensorT, typename TensorR>
 std::enable_if_t<
     is_exactly_same_tensor<TensorT, TensorR>::value &&
-    !std::is_const<std::remove_reference_t<TensorR>>::value>
-inline broadcast(const TensorT& src, TensorR&& dst) {
-    reorder(src.broadcast_to(dst.shape()), std::forward<TensorR>(dst));
+    !std::is_const<std::remove_reference_t<TensorR>>::value,
+    TensorR&&>
+inline operator>>(const TensorT& X, TensorR&& Y) {
+    reorder(X, Y);
+    return std::forward<TensorR>(Y);
 }
+
+template <typename TensorT, typename Function>
+std::enable_if_t<is_tensor<TensorT>::value, cxx::invoke_result_t<Function, TensorT>>
+inline operator>>(TensorT&& X, Function&& f) {
+#if CPP_VER >= 17
+    return std::invoke(std::forward<Function>(f), std::forward<TensorT>(X));
+#else
+    return f(std::forward<TensorT>(X));
+#endif
+}
+
+template <typename TensorT, typename CharT, typename Traits>
+std::enable_if_t<is_tensor<TensorT>::value, TensorT&&>
+inline operator>>(TensorT&& X, std::basic_ostream<CharT, Traits>& os) {
+    os << X;
+    return std::forward<TensorT>(X);
+}
+
+#define BIND(op, ...) \
+    [&](auto&& X__){ return op(std::forward<decltype(X__)>(X__), ##__VA_ARGS__); }
 
 //==-------------------------------------------------------------------------
 // Reshape operations
@@ -107,6 +129,41 @@ unsqueeze_right(TensorT&& X, size_t rank) {
         return unsqueeze(std::forward<TensorT>(X), axes);
     }
     return X.view();
+}
+
+template <typename TensorT, typename TensorR>
+std::enable_if_t<
+    is_exactly_same_tensor<TensorT, TensorR>::value &&
+    !std::is_const<std::remove_reference_t<TensorR>>::value>
+inline broadcast(TensorT&& X, TensorR&& Y) {
+    reorder(X.broadcast_to(Y.shape()), std::forward<TensorR>(Y));
+}
+
+template <typename TensorT>
+enable_if_tensor<TensorT, tensor_view_type<TensorT>>
+inline broadcast(TensorT&& X, const Shape& shape) {
+    return X.broadcast_to(shape);
+}
+
+template <typename TensorT, typename... Args>
+enable_if_tensor<TensorT, tensor_view_type<TensorT>>
+inline transpose(TensorT&& X, Args&&... args) {
+    return X.transpose(std::forward<Args>(args)...);
+}
+
+template <typename TensorT>
+enable_if_tensor<TensorT, tensor_view_type<TensorT>>
+inline slice(TensorT&& X,
+             const std::vector<int>& starts, const std::vector<int>& ends,
+             const std::vector<int>& axes, const std::vector<int>& steps)
+{
+    return X.slice(starts, ends, axes, steps);
+}
+
+template <typename TensorT, typename Spec>
+enable_if_tensor<TensorT, tensor_view_type<TensorT>>
+inline slice(TensorT&& X, Spec&& spec) {
+    return X.view(X.shape().slice(std::forward<Spec>(spec)));
 }
 
 //==-------------------------------------------------------------------------
@@ -493,7 +550,9 @@ template <typename TensorT>
 enable_if_tensor<TensorT, tensor_view_type<TensorT>>
 rot90(const TensorT& X, int k = 1, int axis1 = -2, int axis2 = -1) {
     detail::norm_axes(X.rank(), axis1, axis2);
-    switch (k % 4) {
+    if ((k %= 4) < 0)
+        k += 4;
+    switch (k) {
     default: // k == 0
         return X.view();
     case 1:
@@ -1194,6 +1253,11 @@ inline argsort(const TensorT& X, int axis = -1) {
     return argsort(X, axis, xfn::less<>());
 }
 
+inline DevTensor<int32_t> argsort(DevTensor<int32_t>&& X, int axis = -1) {
+    argsort(X, X, axis);
+    return std::move(X);
+}
+
 //==-------------------------------------------------------------------------
 // Top-K
 //==-------------------------------------------------------------------------
@@ -1233,6 +1297,63 @@ top_k(TensorT&& X, size_t k, int axis = -1, bool largest = true, bool sorted = t
     auto I = tensor_type<TensorT, int32_t>();
     top_k(std::forward<TensorT>(X), Y, I, k, axis, largest, sorted);
     return std::make_pair(std::move(Y), std::move(I));
+}
+
+//==-------------------------------------------------------------------------
+// Shuffle
+//==-------------------------------------------------------------------------
+
+template <typename TensorT, typename TensorR>
+std::enable_if_t<
+    is_cpu_tensor<TensorT>::value &&
+    is_exactly_same_tensor<TensorT, TensorR>::value &&
+    !std::is_const<std::remove_reference_t<TensorR>>::value>
+shuffle(const TensorT& X, TensorR&& Y, int axis = -1) {
+    auto temp = Tensor<uint32_t>(X.shape()).random([](auto& g){ return g(); });
+    gather_elements(X, Y, argsort(temp, axis), axis);
+}
+
+template <typename TensorT, typename TensorR, typename Engine>
+std::enable_if_t<
+    is_cpu_tensor<TensorT>::value &&
+    is_exactly_same_tensor<TensorT, TensorR>::value &&
+    !std::is_const<std::remove_reference_t<TensorR>>::value>
+shuffle(const TensorT& X, TensorR&& Y, Engine&& eng, int axis = -1) {
+    auto temp = Tensor<uint32_t>(X.shape()).random(
+        std::forward<Engine>(eng), [](auto& g){ return g(); });
+    gather_elements(X, Y, argsort(temp, axis), axis);
+}
+
+template <typename TensorT, typename TensorR>
+std::enable_if_t<
+    is_gpu_tensor<TensorT>::value &&
+    is_exactly_same_tensor<TensorT, TensorR>::value &&
+    !std::is_const<std::remove_reference_t<TensorR>>::value>
+shuffle(const TensorT& X, TensorR&& Y, int axis = -1) {
+    auto temp_buffer = gpgpu::current::context().getTemporaryBuffer<int32_t>(X.size());
+    auto temp = DevTensor<int32_t>(X.shape(), temp_buffer).random();
+
+    // HACK: inplace argsort is supported by GPU tensor but not CPU tensor
+    argsort(temp, temp, axis);
+    gather_elements(X, Y, temp, axis);
+}
+
+template <typename TensorT>
+enable_if_tensor<TensorT>
+shuffle(const TensorT& X, int axis = -1) {
+    tensor_type<TensorT> Y{};
+    shuffle(X, Y, axis);
+    return Y;
+}
+
+template <typename TensorT, typename Engine>
+std::enable_if_t<
+    is_tensor<TensorT>::value && !is_tensor<Engine>::value,
+    tensor_type<TensorT>>
+shuffle(const TensorT& X, Engine&& eng, int axis = -1) {
+    tensor_type<TensorT> Y{};
+    shuffle(X, Y, std::forward<Engine>(eng), axis);
+    return Y;
 }
 
 } // namespace dlf

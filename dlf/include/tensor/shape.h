@@ -393,6 +393,10 @@ public:
         : m_shape(shape) { if (!keep) m_shape.init(); }
     explicit Spatial(Shape&& shape, bool keep = false)
         : m_shape(std::move(shape)) { if (!keep) m_shape.init(); }
+    explicit Spatial(const Shape& shape, size_t offset)
+        : m_shape(shape) { m_shape.init(); m_shape.m_offset = offset; }
+    explicit Spatial(Shape&& shape, size_t offset)
+        : m_shape(std::move(shape)) { m_shape.init(); m_shape.m_offset = offset; }
 
     /**
      * Returns the shape of this shaped object.

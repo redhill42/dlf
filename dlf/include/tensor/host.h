@@ -822,7 +822,7 @@ template <typename T, typename Iterator>
 void range(int n, Iterator begin, T start, T delta) {
     tbb::parallel_for(tbb::blocked_range<int>(0, n, GRAINSIZE), [&](auto r) {
         auto p = begin + r.begin();
-        auto v = r.begin() * delta + start;
+        T    v = r.begin() * delta + start;
         for (int k = static_cast<int>(r.size()); k != 0; --k, ++p, v += delta)
             *p = v;
     });
