@@ -79,7 +79,7 @@ public:
      */
     Tensor<T> read() const {
         Tensor<T> host(shape());
-        m_data.read(gpgpu::current::queue(), host.data(), host.size());
+        readTo(host);
         return host;
     }
 
@@ -88,7 +88,9 @@ public:
      */
     void readTo(Tensor<T>& host) const {
         assert(shape() == host.shape());
-        m_data.read(gpgpu::current::queue(), host.data(), host.size());
+        if (size() > 0) {
+            m_data.read(gpgpu::current::queue(), host.data(), host.size());
+        }
     }
 
     /**
@@ -96,7 +98,9 @@ public:
      */
     void readToAsync(Tensor<T>& host) const {
         assert(shape() == host.shape());
-        m_data.readAsync(gpgpu::current::queue(), host.data(), host.size());
+        if (size() > 0) {
+            m_data.readAsync(gpgpu::current::queue(), host.data(), host.size());
+        }
     }
 
     /**
@@ -104,7 +108,9 @@ public:
      */
     void write(const Tensor<T>& host) {
         assert(shape() == host.shape());
-        m_data.write(gpgpu::current::queue(), host.data(), host.size());
+        if (size() > 0) {
+            m_data.write(gpgpu::current::queue(), host.data(), host.size());
+        }
     }
 
     /**
@@ -112,14 +118,16 @@ public:
      */
     void writeAsync(const Tensor<T>& host) {
         assert(shape() == host.shape());
-        m_data.writeAsync(gpgpu::current::queue(), host.data(), host.size());
+        if (size() > 0) {
+            m_data.writeAsync(gpgpu::current::queue(), host.data(), host.size());
+        }
     }
 
     /**
      * Copy data into target.
      */
     void copyTo(DevTensor<T>& dest) const {
-        if (m_data != dest.data()) {
+        if (size() > 0 && m_data != dest.data()) {
             m_data.copyTo(gpgpu::current::queue(), dest.data(), size());
         }
     }
@@ -128,7 +136,7 @@ public:
      * Asynchronously copy data into destination.
      */
     void copyToAsync(DevTensor<T>& dest) const {
-        if (m_data != dest.data()) {
+        if (size() > 0 && m_data != dest.data()) {
             m_data.copyToAsync(gpgpu::current::queue(), dest.data(), size());
         }
     }

@@ -27,12 +27,14 @@ class Tensor : public Spatial<Tensor<T>> {
     std::shared_ptr<T> m_alloc_data;
 
     void init() {
-        assert(size() != 0);
-        if (std::is_trivially_destructible<T>::value)
-            m_alloc_data = std::shared_ptr<T>(new T[size()]);
-        else
-            m_alloc_data = std::shared_ptr<T>(new T[size()], std::default_delete<T[]>());
-        m_data = m_alloc_data.get();
+        auto n = size();
+        if (n == 0) {
+            m_alloc_data.reset();
+            m_data = nullptr;
+        } else {
+            m_alloc_data = std::shared_ptr<T>(new T[n], std::default_delete<T[]>());
+            m_data = m_alloc_data.get();
+        }
     }
 
     friend class TensorView<T>;
@@ -629,8 +631,7 @@ Tensor<T>& Tensor<T>::resize(const Shape& shape) {
 template <typename T>
 void Tensor<T>::clear() {
     Spatial<Tensor>::clear_shape();
-    m_alloc_data.reset();
-    m_data = nullptr;
+    init();
 }
 
 //==-------------------------------------------------------------------------
