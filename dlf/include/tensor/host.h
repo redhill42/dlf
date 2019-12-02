@@ -8,13 +8,6 @@ namespace dlf {
 
 template <typename T> class TensorView;
 
-template <typename T, typename D>
-using is_random_distribution_type = cxx::conjunction<
-    cxx::disjunction<
-        std::is_same<T, typename std::decay_t<D>::result_type>,
-        std::is_same<T, std::complex<typename std::decay_t<D>::result_type>>>,
-    std::is_same<std::decay_t<D>, typename std::decay_t<D>::param_type::distribution_type>>;
-
 /**
  * Tensor is a geometric object that maps in a multi-linear manner geometric
  * vectors, scalars, and other tensors to a resulting tensor.
@@ -209,19 +202,21 @@ public: // Constructors
      * @param dist the random distribution.
      */
     template <typename Engine = pcg32, typename D>
-    std::enable_if_t<is_random_distribution_type<T, D>::value, Tensor&>
+    std::enable_if_t<!std::is_convertible<D, T>::value, Tensor&>
     random(D&& d) &;
 
     template <typename Engine, typename D>
-    std::enable_if_t<is_random_distribution_type<T, D>::value, Tensor&>
+    std::enable_if_t<!std::is_convertible<Engine, T>::value &&
+                     !std::is_convertible<D, T>::value, Tensor&>
     random(Engine&& eng, D&& d) &;
 
     template <typename Engine = pcg32, typename D>
-    std::enable_if_t<is_random_distribution_type<T, D>::value, Tensor>
+    std::enable_if_t<!std::is_convertible<D, T>::value, Tensor>
     random(D&& d) &&;
 
     template <typename Engine, typename D>
-    std::enable_if_t<is_random_distribution_type<T, D>::value, Tensor>
+    std::enable_if_t<!std::is_convertible<Engine, T>::value &&
+                     !std::is_convertible<D, T>::value, Tensor>
     random(Engine&& eng, D&& d) &&;
 
     /**
@@ -491,11 +486,12 @@ public: // Operations
     TensorView& range(T start = 0, T delta = 1);
 
     template <typename Engine = pcg32, typename D>
-    std::enable_if_t<is_random_distribution_type<T, D>::value, TensorView&>
+    std::enable_if_t<!std::is_convertible<D, T>::value, TensorView&>
     random(D&& d);
 
     template <typename Engine, typename D>
-    std::enable_if_t<is_random_distribution_type<T, D>::value, TensorView&>
+    std::enable_if_t<!std::is_convertible<Engine, T>::value &&
+                     !std::is_convertible<D, T>::value, TensorView&>
     random(Engine&& eng, D&& d);
 
     template <typename Engine = pcg32>
@@ -905,7 +901,7 @@ inline randomize(TensorT& t, Engine&& eng, T low, T high) {
 
 template <typename T>
 template <typename Engine, typename D>
-std::enable_if_t<is_random_distribution_type<T, D>::value, Tensor<T>&>
+std::enable_if_t<!std::is_convertible<D, T>::value, Tensor<T>&>
 inline Tensor<T>::random(D&& d) & {
     auto seed_seq = pcg_extras::seed_seq_from<std::random_device>();
     return detail::randomize<T>(*this, Engine(seed_seq), std::forward<D>(d));
@@ -913,14 +909,15 @@ inline Tensor<T>::random(D&& d) & {
 
 template <typename T>
 template <typename Engine, typename D>
-std::enable_if_t<is_random_distribution_type<T, D>::value, Tensor<T>&>
+std::enable_if_t<!std::is_convertible<Engine, T>::value &&
+                 !std::is_convertible<D, T>::value, Tensor<T>&>
 inline Tensor<T>::random(Engine&& eng, D&& d) & {
     return detail::randomize<T>(*this, std::forward<Engine>(eng), std::forward<D>(d));
 }
 
 template <typename T>
 template <typename Engine, typename D>
-std::enable_if_t<is_random_distribution_type<T, D>::value, Tensor<T>>
+std::enable_if_t<!std::is_convertible<D, T>::value, Tensor<T>>
 inline Tensor<T>::random(D&& d) && {
     auto seed_seq = pcg_extras::seed_seq_from<std::random_device>();
     return std::move(detail::randomize<T>(*this, Engine(seed_seq), std::forward<D>(d)));
@@ -928,7 +925,8 @@ inline Tensor<T>::random(D&& d) && {
 
 template <typename T>
 template <typename Engine, typename D>
-std::enable_if_t<is_random_distribution_type<T, D>::value, Tensor<T>>
+std::enable_if_t<!std::is_convertible<Engine, T>::value &&
+                 !std::is_convertible<D, T>::value, Tensor<T>>
 inline Tensor<T>::random(Engine&& eng, D&& d) && {
     return std::move(detail::randomize<T>(*this, std::forward<Engine>(eng), std::forward<D>(d)));
 }
@@ -961,7 +959,7 @@ inline Tensor<T> Tensor<T>::random(Engine&& eng, T low, T high) && {
 
 template <typename T>
 template <typename Engine, typename D>
-std::enable_if_t<is_random_distribution_type<T, D>::value, TensorView<T>&>
+std::enable_if_t<!std::is_convertible<D, T>::value, TensorView<T>&>
 inline TensorView<T>::random(D&& d) {
     auto seed_seq = pcg_extras::seed_seq_from<std::random_device>();
     return detail::randomize<T>(*this, Engine(seed_seq), std::forward<D>(d));
@@ -969,7 +967,8 @@ inline TensorView<T>::random(D&& d) {
 
 template <typename T>
 template <typename Engine, typename D>
-std::enable_if_t<is_random_distribution_type<T, D>::value, TensorView<T>&>
+std::enable_if_t<!std::is_convertible<Engine, T>::value &&
+                 !std::is_convertible<D, T>::value, TensorView<T>&>
 inline TensorView<T>::random(Engine&& eng, D&& d) {
     return detail::randomize<T>(*this, std::forward<Engine>(eng), std::forward<D>(d));
 }

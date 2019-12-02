@@ -206,11 +206,11 @@ public:
      * Fill then tensor with random data.
      */
     template <typename D>
-    std::enable_if_t<is_random_distribution_type<T, D>::value, DevTensor&>
+    std::enable_if_t<!std::is_convertible<D, T>::value, DevTensor&>
     random(D&& d) &;
 
     template <typename D>
-    std::enable_if_t<is_random_distribution_type<T, D>::value, DevTensor>
+    std::enable_if_t<!std::is_convertible<D, T>::value, DevTensor>
     random(D&& d) &&;
 
     /**
@@ -311,7 +311,7 @@ public:
     DevTensorView& range(T start = 0, T delta = 1);
 
     template <typename D>
-    std::enable_if_t<is_random_distribution_type<T, D>::value, DevTensorView&>
+    std::enable_if_t<!std::is_convertible<D, T>::value, DevTensorView&>
     random(D&& d);
 
     DevTensorView& random(T low = 0, T high = std::numeric_limits<T>::max());
@@ -480,14 +480,14 @@ TensorT& gpu_randomize(TensorT& t, T low, T high) {
 
 template <typename T>
 template <typename D>
-std::enable_if_t<is_random_distribution_type<T, D>::value, DevTensor<T>&>
+std::enable_if_t<!std::is_convertible<D, T>::value, DevTensor<T>&>
 inline DevTensor<T>::random(D&& d) & {
     return detail::gpu_randomize<T>(*this, std::forward<D>(d));
 }
 
 template <typename T>
 template <typename D>
-std::enable_if_t<is_random_distribution_type<T, D>::value, DevTensor<T>>
+std::enable_if_t<!std::is_convertible<D, T>::value, DevTensor<T>>
 inline DevTensor<T>::random(D&& d) && {
     return std::move(detail::gpu_randomize<T>(*this, std::forward<D>(d)));
 }
@@ -504,7 +504,7 @@ inline DevTensor<T> DevTensor<T>::random(T low, T high) && {
 
 template <typename T>
 template <typename D>
-std::enable_if_t<is_random_distribution_type<T, D>::value, DevTensorView<T>&>
+std::enable_if_t<!std::is_convertible<D, T>::value, DevTensorView<T>&>
 inline DevTensorView<T>::random(D&& d) {
     return detail::gpu_randomize<T>(*this, std::forward<D>(d));
 }
