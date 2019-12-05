@@ -5,6 +5,7 @@ namespace dlf { namespace xfn {
 template <typename F = void>
 struct transfer {
     F f;
+    constexpr transfer() : f(F()) {}
     constexpr explicit transfer(F f) : f(f) {}
     template <typename R, typename... Args>
     void operator()(R& y, Args&&... args) const

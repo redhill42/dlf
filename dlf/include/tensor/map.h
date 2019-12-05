@@ -144,8 +144,13 @@ struct map_id_iter {
         { return i >= rhs.i; }
 };
 
+struct map_impl_base {
+    template <typename... Args>
+    static constexpr bool is_prefer_serial(Args&&...) { return false; }
+};
+
 template <typename Function>
-struct map_impl {
+struct map_impl : map_impl_base {
     template <typename... Args>
     void operator()(Function f, size_t n, Args... its) {
         while (n--) {
@@ -156,7 +161,7 @@ struct map_impl {
 };
 
 template <>
-struct map_impl<xfn::transfer<void>> {
+struct map_impl<xfn::transfer<void>> : map_impl_base {
     template <typename Iterator1, typename T>
     void operator()(xfn::transfer<void>, size_t n, Iterator1 q, scalar_iter<T> p) {
         std::fill(q, q + n, *p);
@@ -167,6 +172,10 @@ struct map_impl<xfn::transfer<void>> {
         std::copy(p, p + n, q);
     }
 };
+
+#include "vml.h"
+
+/*-------------------------------------------------------------------------*/
 
 template <typename Function, typename First, typename... Rest>
 std::enable_if_t<!is_tensor<First>::value>
@@ -186,9 +195,9 @@ inline void do_serial_map(Function f, size_t) {
 
 template <typename Function, typename First, typename... Rest>
 std::enable_if_t<!is_tensor<First>::value>
-do_serial_map(Function f, size_t begin, First&& first, Rest&&... rest) {
+do_serial_map(Function f, size_t begin, First&& scalar, Rest&&... rest) {
     do_serial_map([&](auto... args) {
-        f(scalar_iter<std::remove_reference_t<First>>(std::forward<First>(first)), args...);
+        f(scalar_iter<std::remove_reference_t<First>>(std::forward<First>(scalar)), args...);
     }, begin, std::forward<Rest>(rest)...);
 }
 
@@ -201,18 +210,18 @@ void do_serial_map(Function f, size_t begin, map_id, Rest&&... rest) {
 
 template <typename Function, typename First, typename... Rest>
 std::enable_if_t<is_cpu_tensor<First>::value>
-do_serial_map(Function f, size_t begin, First&& first, Rest&&... rest) {
-    if (first.original_shape().size() == 1) {
+do_serial_map(Function f, size_t begin, First&& tensor, Rest&&... rest) {
+    if (tensor.original_shape().size() == 1) {
         do_serial_map([&](auto... args) {
-            f(scalar_iter<std::remove_reference_t<decltype(*first)>>(*first), args...);
+            f(scalar_iter<std::remove_reference_t<decltype(*tensor)>>(*tensor), args...);
         }, begin, std::forward<Rest>(rest)...);
-    } else if (first.shape().is_contiguous()) {
+    } else if (tensor.shape().is_contiguous()) {
         do_serial_map([&](auto... args) {
-            f(first.data() + first.shape().offset() + begin, args...);
+            f(tensor.data() + tensor.shape().offset() + begin, args...);
         }, begin, std::forward<Rest>(rest)...);
     } else {
         do_serial_map([&](auto... args) {
-            f(first.begin() + begin, args...);
+            f(tensor.begin() + begin, args...);
         }, begin, std::forward<Rest>(rest)...);
     }
 }
@@ -226,7 +235,7 @@ void serial_map(Function f, size_t begin, size_t n, Args&&... args) {
 
 template <typename Function, typename... Args>
 void parallel_map(Function f, size_t n, Args&&... args) {
-    if (n < GRAINSIZE) {
+    if (n < GRAINSIZE || map_impl<Function>::is_prefer_serial(std::forward<Args>(args)...)) {
         serial_map(f, 0, n, std::forward<Args>(args)...);
     } else {
         tbb::parallel_for(tbb::blocked_range<size_t>(0, n, GRAINSIZE), [&](const auto& r) {
@@ -236,6 +245,8 @@ void parallel_map(Function f, size_t n, Args&&... args) {
 }
 
 } // namespace map_detail
+
+/*-------------------------------------------------------------------------*/
 
 template <typename Function>
 auto map(Function f) {

@@ -35,7 +35,7 @@ inline transform(const TensorT& X, F f) {
 template <typename T, typename F>
 std::enable_if_t<std::is_same<cxx::invoke_result_t<F,T>,T>::value, Tensor<T>>
 inline transform(Tensor<T>&& A, F f) {
-    map([f](auto& x){ x = f(x); })(A);
+    transformTo(A, A, f);
     return std::move(A);
 }
 

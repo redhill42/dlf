@@ -1,12 +1,6 @@
 file(GLOB_RECURSE DLF_TESTS "${CMAKE_CURRENT_LIST_DIR}/*.cpp")
 add_executable(unit_tests ${DLF_TESTS})
-target_link_libraries(unit_tests gmock_main gpgpu dlf ${TBB_LIBRARIES})
-
-if (USE_MKL)
-  target_link_libraries(unit_tests ${MKL_LIBRARIES})
-elseif (APPLE)
-  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -framework Accelerate")
-endif()
+target_link_libraries(unit_tests gmock_main gpgpu dlf ${TBB_LIBRARIES} ${BLAS_LIBRARY})
 
 find_package(GMP)
 if (GMP_FOUND)

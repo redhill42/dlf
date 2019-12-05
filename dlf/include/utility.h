@@ -100,6 +100,36 @@ template <typename T, size_t Sz>
 inline constexpr size_t size(const T (&)[Sz]) noexcept { return Sz; }
 #endif
 
+template <typename Predicate>
+inline constexpr bool all_of(Predicate f) {
+    return true;
+}
+
+template <typename Predicate, typename T, typename... Rest>
+inline constexpr bool all_of(Predicate f, T&& x, Rest&&... xs) {
+    return f(std::forward<T>(x)) && all_of(f, std::forward<Rest>(xs)...);
+}
+
+template <typename Predicate>
+inline constexpr bool none_of(Predicate f) {
+    return true;
+}
+
+template <typename Predicate, typename T, typename... Rest>
+inline constexpr bool none_of(Predicate f, T&& x, Rest&&... xs) {
+    return !f(std::forward<T>(x)) && none_of(f, std::forward<Rest>(xs)...);
+}
+
+template <typename Predicate>
+inline constexpr bool any_of(Predicate f) {
+    return false;
+}
+
+template <typename Predicate, typename T, typename... Rest>
+inline constexpr bool any_of(Predicate f, T&& x, Rest&&... xs) {
+    return f(std::forward<T>(x)) || any_of(f, std::forward<Rest>(xs)...);
+}
+
 template <class T, class Compare>
 inline constexpr T max(std::initializer_list<T> t, Compare comp) {
     return *std::max_element(t.begin(), t.end(), comp);

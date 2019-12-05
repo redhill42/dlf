@@ -34,7 +34,7 @@ target_link_libraries(
   PRIVATE
     ${PROTOBUF_LIBRARIES}
     ${TBB_LIBRARIES}
-    ${MKL_LIBRARIES}
+    ${BLAS_LIBRARY}
     gpgpu
 )
 
