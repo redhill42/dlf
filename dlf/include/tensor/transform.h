@@ -16,8 +16,7 @@ std::enable_if_t<
     is_cpu_tensor<TensorU>::value &&
     !std::is_const<std::remove_reference_t<TensorU>>::value>
 inline transformTo(const TensorT& X, TensorU&& Y, F f) {
-    Y.resize(X.shape());
-    map(xfn::transfer<F>(f))(Y, X);
+    mapTo(Y, f, X);
 }
 
 /**
@@ -187,9 +186,9 @@ inline void transformChannel(const Tensor<T>& A, const Tensor<U>& B, Tensor<W>& 
 }
 
 template <typename LHS, typename RHS, typename RET, typename F>
-std::enable_if_t<is_cpu_tensor<LHS>::value>
-inline transform(const LHS& A, const RHS& B, RET& C, F f) {
-    map(xfn::transfer<F>(f))(C, A, B);
+std::enable_if_t<is_cpu_tensor<LHS>::value || is_cpu_tensor<RHS>::value>
+inline transform(LHS&& A, RHS&& B, RET&& C, F f) {
+    mapTo(std::forward<RET>(C), f, std::forward<LHS>(A), std::forward<RHS>(B));
 }
 } // namespace detail
 
@@ -247,10 +246,23 @@ void transform(const std::string& name,
 }
 
 template <typename LHS, typename RHS, typename RET, typename F>
-std::enable_if_t<is_gpu_tensor<LHS>::value>
-inline transform(const LHS& A, const RHS& B, RET& C, F f) {
+std::enable_if_t<is_gpu_tensor<LHS>::value && is_gpu_tensor<RHS>::value>
+inline transform(LHS&& A, RHS&& B, RET&& C, F f) {
+    C.resize(Shape::broadcast(A, B));
     transform(xfn::function_kernel_name(f),
               A.shape(), A.data(), B.shape(), B.data(), C.shape(), C.data());
+}
+
+template <typename LHS, typename RHS, typename RET, typename F>
+std::enable_if_t<is_gpu_tensor<LHS>::value && !is_tensor<RHS>::value>
+inline transform(LHS&& A, RHS&& B, RET&& C, F f) {
+    detail::transform(std::forward<LHS>(A), tensor_scalar<LHS>(std::forward<RHS>(B)), std::forward<RET>(C), f);
+}
+
+template <typename LHS, typename RHS, typename RET, typename F>
+std::enable_if_t<!is_tensor<LHS>::value && is_gpu_tensor<RHS>::value>
+inline transform(LHS&& A, RHS&& B, RET&& C, F f) {
+    detail::transform(tensor_scalar<RHS>(std::forward<LHS>(A)), std::forward<RHS>(B), std::forward<RET>(C), f);
 }
 } // namespace detail
 
@@ -260,11 +272,10 @@ inline transform(const LHS& A, const RHS& B, RET& C, F f) {
 
 template <typename LHS, typename RHS, typename RET, typename F>
 std::enable_if_t<
-    is_same_tensor<LHS, RHS>::value &&
-    is_same_tensor<RET, std::conditional_t<is_relop<F>::value, tensor_type<LHS, bool>, LHS>>::value &&
+    (is_same_tensor<LHS, RHS>::value || (is_tensor<LHS>::value ^ is_tensor<RHS>::value)) &&
+    is_same_tensor<RET, tensor_invoke_result<F, LHS, RHS>>::value &&
     !std::is_const<std::remove_reference_t<RET>>::value>
 inline transformTo(const LHS& A, const RHS& B, RET&& C, F f) {
-    C.resize(Shape::broadcast(A, B));
     detail::transform(A, B, C, f);
 }
 
@@ -274,43 +285,53 @@ std::enable_if_t<
     !is_tensor_view<LHS>::value &&
     !is_tensor_view<RHS>::value &&
     !is_tensor_view<RET>::value &&
-    is_same_tensor<RET, std::conditional_t<is_relop<F>::value, tensor_type<LHS, bool>, LHS>>::value>
+    is_same_tensor<RET, tensor_invoke_result<F, LHS, RHS>>::value>
 inline transformChannel(const LHS& A, const RHS& B, RET& C, size_t axis, F f) {
     detail::transformChannel(A, B, C, axis, f);
 }
 
 #if CPP_VER >= 17
 template <typename LHS, typename RHS, typename F>
-std::enable_if_t<is_same_tensor<LHS, RHS>::value, tensor_invoke_result<F, LHS, RHS>>
+enable_if_tensors<LHS, RHS, F>
 transform(LHS&& A, RHS&& B, F f) {
     using RET = tensor_invoke_result<F, LHS, RHS>;
 
     if constexpr (std::is_rvalue_reference<decltype(A)>::value &&
-                  !is_tensor_view<LHS>::value &&
+                  is_non_view_tensor<LHS>::value &&
                   std::is_same<tensor_value_type<LHS>, tensor_value_type<RET>>::value) {
-        if (A.shape() == Shape::broadcast(A, B)) {
+        if constexpr (is_tensor<RHS>::value) {
+            if (A.shape() == Shape::broadcast(A, B)) {
+                transformTo(A, B, A, f);
+                return std::move(A);
+            }
+        } else {
             transformTo(A, B, A, f);
             return std::move(A);
         }
     }
 
     if constexpr (std::is_rvalue_reference<decltype(B)>::value &&
-                  !is_tensor_view<RHS>::value &&
+                  is_non_view_tensor<RHS>::value &&
                   std::is_same<tensor_value_type<RHS>, tensor_value_type<RET>>::value) {
-        if (B.shape() == Shape::broadcast(A, B)) {
+        if constexpr (is_tensor<LHS>::value) {
+            if (B.shape() == Shape::broadcast(A, B)) {
+                transformTo(A, B, B, f);
+                return std::move(B);
+            }
+        } else {
             transformTo(A, B, B, f);
             return std::move(B);
         }
     }
 
-    RET C;
+    RET C{};
     transformTo(A, B, C, f);
     return C;
 }
 #else
 namespace detail {
 template <typename LHS, typename RHS, typename F>
-std::enable_if_t<is_same_tensor<LHS, RHS>::value, tensor_invoke_result<F, LHS, RHS>>
+enable_if_tensors<LHS, RHS, F>
 basic_transform(const LHS& A, const RHS& B, F f) {
     tensor_invoke_result<F, LHS, RHS> C{};
     transformTo(A, B, C, f);
@@ -318,7 +339,7 @@ basic_transform(const LHS& A, const RHS& B, F f) {
 }
 
 template <typename LHS, typename RHS, typename F>
-std::enable_if_t<is_same_tensor<LHS, RHS>::value, tensor_invoke_result<F, LHS, RHS>>
+enable_if_tensors<LHS, RHS, F>
 inline transform(const LHS& A, const RHS& B, F f) {
     return basic_transform(A, B, f);
 }
@@ -345,9 +366,9 @@ inline transform(LHS&& A, RHS&& B, F f) {
 
 template <typename LHS, typename RHS, typename F>
 std::enable_if_t<
-    is_same_tensor<LHS, RHS>::value &&
-    !is_tensor_view<LHS>::value && !std::is_lvalue_reference<LHS>::value &&
-    std::is_same<tensor_type<LHS>, tensor_invoke_result<F,LHS,RHS>>::value,
+    is_non_view_tensor<LHS>::value && !std::is_lvalue_reference<LHS>::value &&
+    std::is_same<tensor_type<LHS>, tensor_invoke_result<F,LHS,RHS>>::value &&
+    is_same_tensor<LHS, RHS>::value,
     tensor_invoke_result<F, LHS, RHS>>
 inline transform(LHS&& A, const RHS& B, F f) {
     if (A.shape() == Shape::broadcast(A, B)) {
@@ -359,9 +380,20 @@ inline transform(LHS&& A, const RHS& B, F f) {
 
 template <typename LHS, typename RHS, typename F>
 std::enable_if_t<
-    is_same_tensor<LHS, RHS>::value &&
-    !is_tensor_view<RHS>::value && !std::is_lvalue_reference<RHS>::value &&
-    std::is_same<tensor_type<RHS>, tensor_invoke_result<F,LHS,RHS>>::value,
+    is_non_view_tensor<LHS>::value && !std::is_lvalue_reference<LHS>::value &&
+    std::is_same<tensor_type<LHS>, tensor_invoke_result<F,LHS,RHS>>::value &&
+    !is_tensor<RHS>::value,
+    tensor_invoke_result<F, LHS, RHS>>
+inline transform(LHS&& A, const RHS& B, F f) {
+    transformTo(A, B, A, f);
+    return std::move(A);
+}
+
+template <typename LHS, typename RHS, typename F>
+std::enable_if_t<
+    is_non_view_tensor<RHS>::value && !std::is_lvalue_reference<RHS>::value &&
+    std::is_same<tensor_type<RHS>, tensor_invoke_result<F,LHS,RHS>>::value &&
+    is_same_tensor<LHS, RHS>::value,
     tensor_invoke_result<F, LHS, RHS>>
 inline transform(const LHS& A, RHS&& B, F f) {
     if (B.shape() == Shape::broadcast(A, B)) {
@@ -370,26 +402,25 @@ inline transform(const LHS& A, RHS&& B, F f) {
     }
     return basic_transform(A, B, f);
 }
+
+template <typename LHS, typename RHS, typename F>
+std::enable_if_t<
+    is_non_view_tensor<RHS>::value && !std::is_lvalue_reference<RHS>::value &&
+    std::is_same<tensor_type<RHS>, tensor_invoke_result<F,LHS,RHS>>::value &&
+    !is_tensor<LHS>::value,
+    tensor_invoke_result<F, LHS, RHS>>
+inline transform(const LHS& A, RHS&& B, F f) {
+    transformTo(A, B, B, f);
+    return std::move(B);
+}
 } // namespace detail
 
 template <typename LHS, typename RHS, typename F>
-std::enable_if_t<is_same_tensor<LHS, RHS>::value, tensor_invoke_result<F, LHS, RHS>>
-inline transform(LHS&& lhs, RHS&& rhs, F f) {
-    return detail::transform(std::forward<LHS>(lhs), std::forward<RHS>(rhs), f);
+enable_if_tensors<LHS, RHS, F>
+inline transform(LHS&& A, RHS&& B, F f) {
+    return detail::transform(std::forward<LHS>(A), std::forward<RHS>(B), f);
 }
 #endif
-
-template <typename LHS, typename RHS, typename F>
-std::enable_if_t<is_tensor<LHS>::value && !is_tensor<RHS>::value, tensor_invoke_result<F, LHS, RHS>>
-inline transform(LHS&& A, RHS&& B, F f) {
-    return transform(std::forward<LHS>(A), tensor_scalar<LHS>(std::forward<RHS>(B)), f);
-}
-
-template <typename LHS, typename RHS, typename F>
-std::enable_if_t<!is_tensor<LHS>::value && is_tensor<RHS>::value, tensor_invoke_result<F, LHS, RHS>>
-inline transform(LHS&& A, RHS&& B, F f) {
-    return transform(tensor_scalar<RHS>(std::forward<LHS>(A)), std::forward<RHS>(B), f);
-}
 
 //==-------------------------------------------------------------------------
 // Uniform tensor binary operators
@@ -397,27 +428,17 @@ inline transform(LHS&& A, RHS&& B, F f) {
 
 #define DEFINE_BINARY_OPERATOR(op, fn)                                              \
 template <typename LHS, typename RHS>                                               \
-std::enable_if_t<is_same_tensor<LHS, RHS>::value, LHS&>                             \
+std::enable_if_t<is_tensor<LHS>::value, LHS&>                                       \
 inline operator op##=(LHS& lhs, RHS&& rhs) {                                        \
+    static_assert(is_same_tensor<RHS, LHS>::value || !is_tensor<RHS>::value, "");   \
     transformTo(lhs, std::forward<RHS>(rhs), lhs, xfn::fn<>());                     \
     return lhs;                                                                     \
 }                                                                                   \
                                                                                     \
 template <typename LHS, typename RHS>                                               \
-std::enable_if_t<is_same_tensor<LHS, RHS>::value, LHS>                              \
+std::enable_if_t<is_tensor<LHS>::value, LHS>                                        \
 inline operator op##=(LHS&& lhs, RHS&& rhs) {                                       \
-    return std::move(operator op##=(lhs, std::forward<RHS>(rhs)));                  \
-}                                                                                   \
-                                                                                    \
-template <typename LHS, typename RHS>                                               \
-std::enable_if_t<is_tensor<LHS>::value && !is_tensor<RHS>::value, LHS&>             \
-inline operator op##=(LHS& lhs, RHS&& rhs) {                                        \
-    return operator op##=(lhs, tensor_scalar<LHS>(std::forward<RHS>(rhs)));         \
-}                                                                                   \
-                                                                                    \
-template <typename LHS, typename RHS>                                               \
-std::enable_if_t<is_tensor<LHS>::value && !is_tensor<RHS>::value, LHS>              \
-inline operator op##=(LHS&& lhs, RHS&& rhs) {                                       \
+    static_assert(is_same_tensor<RHS, LHS>::value || !is_tensor<RHS>::value, "");   \
     return std::move(operator op##=(lhs, std::forward<RHS>(rhs)));                  \
 }                                                                                   \
                                                                                     \
@@ -609,10 +630,7 @@ std::enable_if_t<
     is_exactly_same_tensor<TensorX, TensorY>::value &&
     is_exactly_same_tensor<TensorK, tensor_type<TensorX, bool>>::value>
 inline where(const TensorK& K, const TensorX& X, const TensorY& Y, tensor_type<TensorX>& Z) {
-    Z.resize(Shape::broadcast(K, X, Y));
-    map([](auto k, auto x, auto y, auto& z) {
-        z = k ? x : y;
-    })(K, X, Y, Z);
+    mapTo(Z, [](auto k, auto x, auto y){ return k ? x : y; }, K, X, Y);
 }
 
 template <typename TensorK, typename TensorX, typename TensorY>

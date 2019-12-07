@@ -1972,7 +1972,7 @@ TEST(UniformTest, ReduceSumSquare_GPU) {
 
 TEST(UniformTest, ReduceLogSum) {
     auto X = Tensor<float>({3, 2, 2}, {5, 1, 20, 2, 30, 1, 40, 2, 55, 1, 60, 2});
-    EXPECT_EQ(reduce_log_sum(X, {1}), log(reduce_sum(X, {1})));
+    ExpectElementsEQ(reduce_log_sum(X, {1}), log(reduce_sum(X, {1})));
 }
 
 TEST(UniformTest, ReduceLogSum_GPU) {
@@ -1986,7 +1986,7 @@ TEST(UniformTest, ReduceLogSum_GPU) {
 
 TEST(UniformTest, ReduceLogSumExp) {
     auto X = Tensor<float>({3, 2, 2}, {5, 1, 20, 2, 30, 1, 40, 2, 55, 1, 60, 2});
-    EXPECT_EQ(reduce_log_sum_exp(X, {1}), log(reduce_sum(exp(X), {1})));
+    ExpectElementsEQ(reduce_log_sum_exp(X, {1}), log(reduce_sum(exp(X), {1})));
 }
 
 TEST(UniformTest, ReduceLogSumExp_GPU) {

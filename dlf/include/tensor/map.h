@@ -48,7 +48,7 @@ namespace map_detail {
 
 template <typename T>
 std::enable_if_t<!is_tensor<T>::value, Shape>
-inline shape_of(T&&) { return Shape({}); }
+inline shape_of(T&&) { return Shape(); }
 
 template <typename T>
 std::enable_if_t<is_cpu_tensor<T>::value, Shape>
@@ -185,7 +185,11 @@ template <typename Function, typename... Rest>
 void do_serial_map(Function f, size_t begin, map_id, Rest&&... rest);
 
 template <typename Function, typename First, typename... Rest>
-std::enable_if_t<is_cpu_tensor<First>::value>
+std::enable_if_t<is_cpu_tensor<First>::value && !is_tensor_view<First>::value>
+do_serial_map(Function f, size_t begin, First&& first, Rest&&... rest);
+
+template <typename Function, typename First, typename... Rest>
+std::enable_if_t<is_cpu_tensor<First>::value && is_tensor_view<First>::value>
 do_serial_map(Function f, size_t begin, First&& first, Rest&&... rest);
 
 template <typename Function>
@@ -197,7 +201,7 @@ template <typename Function, typename First, typename... Rest>
 std::enable_if_t<!is_tensor<First>::value>
 do_serial_map(Function f, size_t begin, First&& scalar, Rest&&... rest) {
     do_serial_map([&](auto... args) {
-        f(scalar_iter<std::remove_reference_t<First>>(std::forward<First>(scalar)), args...);
+        f(scalar_iter<std::remove_reference_t<First>>(scalar), args...);
     }, begin, std::forward<Rest>(rest)...);
 }
 
@@ -209,21 +213,22 @@ void do_serial_map(Function f, size_t begin, map_id, Rest&&... rest) {
 }
 
 template <typename Function, typename First, typename... Rest>
-std::enable_if_t<is_cpu_tensor<First>::value>
+std::enable_if_t<is_cpu_tensor<First>::value && !is_tensor_view<First>::value>
 do_serial_map(Function f, size_t begin, First&& tensor, Rest&&... rest) {
-    if (tensor.original_shape().size() == 1) {
-        do_serial_map([&](auto... args) {
-            f(scalar_iter<std::remove_reference_t<decltype(*tensor)>>(*tensor), args...);
-        }, begin, std::forward<Rest>(rest)...);
-    } else if (tensor.shape().is_contiguous()) {
-        do_serial_map([&](auto... args) {
+    do_serial_map([&](auto... args) {
+        f(tensor.data() + begin, args...);
+    }, begin, std::forward<Rest>(rest)...);
+}
+
+template <typename Function, typename First, typename... Rest>
+std::enable_if_t<is_cpu_tensor<First>::value && is_tensor_view<First>::value>
+do_serial_map(Function f, size_t begin, First&& tensor, Rest&&... rest) {
+    do_serial_map([&](auto... args) {
+        if (tensor.shape().is_contiguous())
             f(tensor.data() + tensor.shape().offset() + begin, args...);
-        }, begin, std::forward<Rest>(rest)...);
-    } else {
-        do_serial_map([&](auto... args) {
+        else
             f(tensor.begin() + begin, args...);
-        }, begin, std::forward<Rest>(rest)...);
-    }
+    }, begin, std::forward<Rest>(rest)...);
 }
 
 template <typename Function, typename... Args>
@@ -235,11 +240,11 @@ void serial_map(Function f, size_t begin, size_t n, Args&&... args) {
 
 template <typename Function, typename... Args>
 void parallel_map(Function f, size_t n, Args&&... args) {
-    if (n < GRAINSIZE || map_impl<Function>::is_prefer_serial(std::forward<Args>(args)...)) {
+    if (n < GRAINSIZE || map_impl<Function>::is_prefer_serial(args...)) {
         serial_map(f, 0, n, std::forward<Args>(args)...);
     } else {
         tbb::parallel_for(tbb::blocked_range<size_t>(0, n, GRAINSIZE), [&](const auto& r) {
-            serial_map(f, r.begin(), r.size(), std::forward<Args>(args)...);
+            serial_map(f, r.begin(), r.size(), args...);
         });
     }
 }
@@ -248,58 +253,41 @@ void parallel_map(Function f, size_t n, Args&&... args) {
 
 /*-------------------------------------------------------------------------*/
 
-template <typename Function>
-auto map(Function f) {
-    return [=](auto&&... args) {
-        static_assert(
-            cxx::conjunction<cxx::negation<is_gpu_tensor<decltype(args)>>...>::value,
-            "This operation only supports CPU tensors");
-        auto shape = Shape::broadcast(map_detail::shape_of(args)...);
-        map_detail::parallel_map(f, shape.size(), map_detail::broadcast_to(args, shape)...);
-    };
+template <typename Function, typename... Args>
+std::enable_if_t<cxx::conjunction<cxx::negation<is_gpu_tensor<Args>>...>::value>
+map(Function f, Args&&... args) {
+    auto shape = Shape::broadcast(map_detail::shape_of(args)...);
+    map_detail::parallel_map(f, shape.size(), map_detail::broadcast_to(args, shape)...);
 }
 
-template <typename Function>
-auto serial_map(Function f) {
-    return [=](auto&&... args) {
-        static_assert(
-            cxx::conjunction<cxx::negation<is_gpu_tensor<decltype(args)>>...>::value,
-            "This operation only supports CPU tensors");
-        auto shape = Shape::broadcast(map_detail::shape_of(args)...);
-        map_detail::serial_map(f, 0, shape.size(), map_detail::broadcast_to(args, shape)...);
-    };
+template <typename Function, typename TensorX, typename TensorY>
+std::enable_if_t<
+    is_cpu_tensor<TensorX>::value && is_cpu_tensor<TensorY>::value &&
+    !std::is_const<std::remove_reference_t<TensorY>>::value>
+map(xfn::transfer<Function> f, TensorY&& Y, TensorX&& X) {
+    Y.resize(X.shape());
+    map_detail::parallel_map(f, X.size(), std::forward<TensorY>(Y), std::forward<TensorX>(X));
 }
 
-template <typename TensorT, typename Function>
-auto map(TensorT&& Y, Function f) {
-    static_assert(is_cpu_tensor<TensorT>::value, "");
-    static_assert(!std::is_const<std::remove_reference_t<TensorT>>::value, "");
-    return [&Y, f](auto&&... args) {
-        static_assert(
-            cxx::conjunction<cxx::negation<is_gpu_tensor<decltype(args)>>...>::value,
-            "This operation only supports CPU tensors");
-        auto shape = Shape::broadcast(map_detail::shape_of(args)...);
-        Y.resize(shape);
-        map_detail::parallel_map(xfn::transfer<Function>(f),
-            shape.size(), std::forward<TensorT>(Y),
-            map_detail::broadcast_to(args, shape)...);
-    };
+template <typename Function, typename TensorY, typename... Args>
+std::enable_if_t<
+    is_cpu_tensor<TensorY>::value &&
+    !std::is_const<std::remove_reference_t<TensorY>>::value &&
+    cxx::conjunction<cxx::negation<is_gpu_tensor<Args>>...>::value>
+mapTo(TensorY&& Y, Function f, Args&&... args) {
+    auto shape = Shape::broadcast(map_detail::shape_of(args)...);
+    Y.resize(shape);
+    map_detail::parallel_map(xfn::transfer<Function>(f),
+        shape.size(), std::forward<TensorY>(Y),
+        map_detail::broadcast_to(args, shape)...);
 }
 
-template <typename TensorT, typename Function>
-auto serial_map(TensorT&& Y, Function f) {
-    static_assert(is_cpu_tensor<TensorT>::value, "");
-    static_assert(!std::is_const<std::remove_reference_t<TensorT>>::value, "");
-    return [&Y, f](auto&&... args) {
-        static_assert(
-            cxx::conjunction<cxx::negation<is_gpu_tensor<decltype(args)>>...>::value,
-            "This operation only supports CPU tensors");
-        auto shape = Shape::broadcast(map_detail::shape_of(args)...);
-        Y.resize(shape);
-        map_detail::serial_map(xfn::transfer<Function>(f),
-            0, shape.size(), std::forward<TensorT>(Y),
-            map_detail::broadcast_to(args, shape)...);
-    };
+template <typename Function, typename TensorX, typename TensorY>
+std::enable_if_t<
+    is_cpu_tensor<TensorX>::value && is_cpu_tensor<TensorY>::value &&
+    !std::is_const<std::remove_reference_t<TensorY>>::value>
+inline mapTo(TensorY&& Y, Function f, TensorX&& X) {
+    map(xfn::transfer<Function>(f), std::forward<TensorY>(Y), std::forward<TensorX>(X));
 }
 
 } // namespace dlf

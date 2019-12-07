@@ -104,6 +104,9 @@ using is_gpu_tensor = cxx::conjunction<is_tensor<TensorT>, cxx::negation<is_cpu_
 template <typename TensorT>
 using is_tensor_view = typename tensor_traits<TensorT>::is_view;
 
+template <typename TensorT>
+using is_non_view_tensor = cxx::conjunction<is_tensor<TensorT>, cxx::negation<is_tensor_view<TensorT>>>;
+
 template <typename X, typename Y>
 using is_same_tensor = cxx::conjunction<
     is_tensor<X>, is_tensor<Y>,
@@ -127,8 +130,7 @@ template <typename TensorT, typename R = tensor_type<TensorT>>
 using enable_if_tensor = std::enable_if_t<is_tensor<TensorT>::value, R>;
 
 template <typename TensorT, typename R = tensor_type<TensorT>>
-using enable_if_non_view_tensor =
-    std::enable_if_t<is_tensor<TensorT>::value && !is_tensor_view<TensorT>::value, R>;
+using enable_if_non_view_tensor = std::enable_if_t<is_non_view_tensor<TensorT>::value, R>;
 
 template <typename Fn, typename LHS, typename RHS>
 using tensor_invoke_result = tensor_type<

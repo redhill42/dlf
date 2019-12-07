@@ -35,7 +35,7 @@ reorder_impl(const TensorX& X, TensorY&& Y) {
         return;
 #endif
 
-    map(xfn::transfer<>())(Y, X);
+    map(xfn::transfer<>(), Y, X);
 }
 
 template <typename TensorX, typename TensorY>
@@ -205,7 +205,7 @@ gather_elements(const TensorX& X, TensorY& Y, const TensorI& indices, int axis) 
         auto tmp = normalize_index(i, static_cast<int>(max_item));
         auto x_id = (id % i_stride1) + (tmp * x_stride1) + (id / i_stride2 * x_stride2);
         y = x_data[x_contiguous ? x_id + x_offset : x_shape.linear_offset(x_id)];
-    })(Y, indices, map_id());
+    }, Y, indices, map_id());
 }
 
 template <typename TensorX, typename TensorY, typename TensorI>
@@ -239,7 +239,7 @@ scatter_elements(TensorX& X, const TensorI& indices, const TensorY& updates, int
         auto tmp = normalize_index(i, static_cast<int>(max_item));
         auto x_id = (id % i_stride1) + (tmp * x_stride1) + (id / i_stride2 * x_stride2);
         x_data[x_contiguous ? x_id + x_offset : x_shape.linear_offset(x_id)] = y;
-    })(indices, updates, map_id());
+    }, indices, updates, map_id());
 }
 
 template <typename TensorX, typename TensorI, typename TensorY>

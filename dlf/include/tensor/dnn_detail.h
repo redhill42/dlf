@@ -14,7 +14,7 @@ void batch_norm(const Tensor<T>& X, Tensor<T>& Y,
 {
     map([=](auto x, auto& y, auto s, auto b, auto m, auto v) {
         y = s * (x - m) / std::sqrt(v + epsilon) + b;
-    })(X, Y, unsqueeze_right(scale, X.rank() - 1),
+    }, X, Y, unsqueeze_right(scale, X.rank() - 1),
              unsqueeze_right(bias,  X.rank() - 1),
              unsqueeze_right(mean,  X.rank() - 1),
              unsqueeze_right(var,   X.rank() - 1));

@@ -74,6 +74,13 @@ bool Shape::is_contiguous() const noexcept {
     return true;
 }
 
+bool Shape::is_single_element() const noexcept {
+    for (size_t i = 0; i < rank(); ++i)
+        if (extent(i) > 1 && stride(i) != 0)
+            return false;
+    return true;
+}
+
 bool Shape::is_tail(const dlf::Shape& shape) const noexcept {
     // scalar is always the tail of another shape
     if (size() == 1)
@@ -536,16 +543,8 @@ void shape_indexer::reset(ptrdiff_t linear_idx) noexcept {
     }
 }
 
-void shape_indexer::increment() noexcept {
-    auto linear_idx = m_linear_idx++;
-    if (linear_idx < 0) {
-        return;
-    }
-
-    if (m_shape.rank() == 0) {
-        m_offset = m_shape.offset() + m_linear_idx;
-        return;
-    }
+void shape_indexer::increment(ptrdiff_t linear_idx) noexcept {
+    assert(m_shape.rank() > 0);
 
     // last dimension optimization
     auto i = static_cast<int>(m_shape.rank()) - 1;
@@ -572,16 +571,8 @@ void shape_indexer::increment() noexcept {
     }
 }
 
-void shape_indexer::decrement() noexcept {
-    auto linear_idx = m_linear_idx--;
-    if (linear_idx <= 0) {
-        return;
-    }
-
-    if (m_shape.rank() == 0) {
-        m_offset = m_shape.offset() + m_linear_idx;
-        return;
-    }
+void shape_indexer::decrement(ptrdiff_t linear_idx) noexcept {
+    assert(m_shape.rank() > 0);
 
     // last dimension optimization
     auto i = static_cast<int>(m_shape.rank()) - 1;

@@ -413,7 +413,7 @@ nonzero(const TensorT& X, Tensor<int32_t>& Y, bool row_major = false) {
                 temp /= dims[j];
             }
         }
-    })(indices, map_id());
+    }, indices, map_id());
 }
 
 template <typename TensorT>

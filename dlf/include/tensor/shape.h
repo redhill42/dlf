@@ -172,6 +172,12 @@ public:
     bool is_contiguous() const noexcept;
 
     /**
+     * Returns true if the shape represents a single-element addressing,
+     * false otherwise.
+     */
+    bool is_single_element() const noexcept;
+
+    /**
      * Returns true if the shape is the tail of another shape.
      */
     bool is_tail(const Shape& shape) const noexcept;
@@ -606,20 +612,23 @@ private:
     ptrdiff_t m_linear_idx;
     ptrdiff_t m_last_idx;
     size_t    m_offset;
+    bool      m_single;
 
 protected:
     Shape m_shape;
 
     shape_indexer(const Shape& shape, ptrdiff_t start)
-        : m_shape(shape) { reset(start); }
+        : m_single(shape.is_single_element()), m_shape(shape)
+        { reset(start); }
     shape_indexer(Shape&& shape, ptrdiff_t start)
-        : m_shape(std::move(shape)) { reset(start);}
+        : m_single(shape.is_single_element()), m_shape(std::move(shape))
+        { reset(start); }
 
     void reset(ptrdiff_t linear_idx) noexcept;
     void increment() noexcept;
     void decrement() noexcept;
-    void increment(ptrdiff_t n) noexcept { reset(m_linear_idx + n); }
-    void decrement(ptrdiff_t n) noexcept { reset(m_linear_idx - n); }
+    void add(ptrdiff_t n) noexcept { reset(m_linear_idx + n); }
+    void sub(ptrdiff_t n) noexcept { reset(m_linear_idx - n); }
 
 public:
     ptrdiff_t index() const noexcept { return m_linear_idx; }
@@ -640,7 +649,23 @@ public:
 
 private:
     ptrdiff_t update(int i, ptrdiff_t& linear_idx) noexcept;
+    void increment(ptrdiff_t linear_idx) noexcept;
+    void decrement(ptrdiff_t linear_idx) noexcept;
 };
+
+inline void shape_indexer::increment() noexcept {
+    auto linear_idx = m_linear_idx++;
+    if (linear_idx < 0 || m_single)
+        return;
+    increment(linear_idx);
+}
+
+inline void shape_indexer::decrement() noexcept {
+    auto linear_idx = m_linear_idx--;
+    if (linear_idx < 0 || m_single)
+        return;
+    decrement(linear_idx);
+}
 } // namespace detail
 
 template <typename T>
@@ -663,13 +688,13 @@ public:
     shaped_iterator& operator--() noexcept { decrement(); return *this; }
     shaped_iterator  operator++(int) noexcept { auto t = *this; ++(*this); return t; }
     shaped_iterator  operator--(int) noexcept { auto t = *this; --(*this); return t; }
-    shaped_iterator& operator+=(difference_type n) noexcept { increment(n); return *this; }
-    shaped_iterator& operator-=(difference_type n) noexcept { decrement(n); return *this; }
+    shaped_iterator& operator+=(difference_type n) noexcept { add(n); return *this; }
+    shaped_iterator& operator-=(difference_type n) noexcept { sub(n); return *this; }
 
     shaped_iterator operator+(difference_type n) const noexcept
-        { return shaped_iterator(m_shape, m_data, index() + n); }
+        { auto t = *this; t += n; return t; }
     shaped_iterator operator-(difference_type n) const noexcept
-        { return shaped_iterator(m_shape, m_data, index() - n); }
+        { auto t = *this; t -= n; return t; }
     difference_type operator-(const shaped_iterator& rhs) const noexcept
         { return index() - rhs.index(); }
 
@@ -704,13 +729,13 @@ public:
     const_shaped_iterator& operator--() noexcept { decrement(); return *this; }
     const_shaped_iterator  operator++(int) noexcept { auto t = *this; ++(*this); return t; }
     const_shaped_iterator  operator--(int) noexcept { auto t = *this; --(*this); return t; }
-    const_shaped_iterator& operator+=(difference_type n) noexcept { increment(n); return *this; }
-    const_shaped_iterator& operator-=(difference_type n) noexcept { decrement(n); return *this; }
+    const_shaped_iterator& operator+=(difference_type n) noexcept { add(n); return *this; }
+    const_shaped_iterator& operator-=(difference_type n) noexcept { sub(n); return *this; }
 
     const_shaped_iterator operator+(difference_type n) const noexcept
-        { return const_shaped_iterator(m_shape, m_data, index() + n); }
+        { auto t = *this; t += n; return t; }
     const_shaped_iterator operator-(difference_type n) const noexcept
-        { return const_shaped_iterator(m_shape, m_data, index() - n); }
+        { auto t = *this; t -= n; return t; }
     difference_type operator-(const const_shaped_iterator& rhs) const noexcept
         { return index() - rhs.index(); }
 
