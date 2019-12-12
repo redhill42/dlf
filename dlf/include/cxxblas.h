@@ -14,10 +14,10 @@ namespace cblas {
 
 template <typename T>
 using is_blasable = cxx::disjunction<
-    std::is_same<T, float>,
-    std::is_same<T, double>,
-    std::is_same<T, std::complex<float>>,
-    std::is_same<T, std::complex<double>>>;
+    std::is_same<std::remove_cv_t<T>, float>,
+    std::is_same<std::remove_cv_t<T>, double>,
+    std::is_same<std::remove_cv_t<T>, std::complex<float>>,
+    std::is_same<std::remove_cv_t<T>, std::complex<double>>>;
 
 enum class Layout {
     RowMajor = ::CblasRowMajor,

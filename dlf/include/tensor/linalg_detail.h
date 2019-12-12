@@ -7,6 +7,125 @@ namespace dlf { namespace detail {
 //==-------------------------------------------------------------------------
 
 template <typename T>
+void vscal(const int n, const T& alpha, T* x, const int x_inc) {
+    if (alpha == xfn::one<T>())
+        return;
+    if (alpha == xfn::zero<T>()) {
+        if (x_inc == 1)
+            std::fill(x, x + n, alpha);
+        else {
+            for (int i = 0; i < n; ++i, x += x_inc)
+                *x = alpha;
+        }
+    } else {
+        if (x_inc == 1)
+            std::transform(x, x + n, x, [&alpha](const auto& x){ return alpha * x; });
+        else {
+            for (int i = 0; i < n; ++i, x += x_inc)
+                *x = alpha * *x;
+        }
+    }
+}
+
+template <typename T>
+T vdot(const int n, T init, const T* x, const int x_inc, const T* y, const int y_inc) {
+    if (x_inc == 1 && y_inc == 1) {
+        for (int i = 0; i < n; ++i, ++x, ++y)
+            init += *x * *y;
+    } else {
+        for (int i = 0; i < n; ++i, x += x_inc, y += y_inc)
+            init += *x * *y;
+    }
+    return init;
+}
+
+template <typename T>
+void gemv_serial(cblas::Transpose trans, int m, int n,
+                 const T& alpha, const T* A, int lda, const T* x, int incX,
+                 const T& beta, T* y, int incY)
+{
+    if (trans == cblas::Transpose::NoTrans) {
+        for (int i = 0; i < m; ++i, A += lda, y += incY) {
+            auto acc = vdot(n, xfn::zero<T>(), A, 1, x, incX);
+            *y = alpha * acc + beta * *y;
+        }
+    } else {
+        vscal(n, beta, y, incY);
+        if (alpha == xfn::zero<T>())
+            return;
+        for (int i = 0; i < m; ++i, x += incX, A += lda) {
+            auto pa = A;
+            auto py = y;
+            auto temp = alpha * *x;
+            if (incY == 1) {
+                for (int j = 0; j < n; ++j, ++pa, ++py)
+                    *py += temp * *pa;
+            } else {
+                for (int j = 0; j < n; ++j, ++pa, py += incY)
+                    *py += temp * *pa;
+            }
+        }
+    }
+}
+
+template <typename T>
+struct gemv_task : tbb::task {
+    int m, n;
+    const T* A; int lda;
+    const T* x; int incX;
+    std::vector<T>& v;
+
+    gemv_task(int m, int n, const T* A, int lda, const T* x, int incX, std::vector<T>& v)
+        : m(m), n(n), A(A), lda(lda), x(x), incX(incX), v(v)
+    {}
+
+    task* execute() override;
+
+    static void run(int m, int n,
+                    const T& alpha, const T* A, int lda, const T* x, int incX,
+                    const T& beta, T* y, int incY)
+    {
+        auto v = std::vector<T>(n, xfn::zero<T>());
+        auto root = new(allocate_root()) gemv_task(m, n, A, lda, x, incX, v);
+        spawn_root_and_wait(*root);
+        for (int i = 0; i < n; ++i, y += incY) {
+            *y = alpha * v[i] + beta * *y;
+        }
+    }
+};
+
+template <typename T>
+struct gemv_merge_task : tbb::task {
+    std::vector<T>& y;
+    std::vector<T> x;
+    gemv_merge_task(int n, std::vector<T>& y)
+        : y(y), x(n, xfn::zero<T>()) {}
+    task* execute() override {
+        std::transform(y.begin(), y.end(), x.begin(), y.begin(), std::plus<>());
+        return nullptr;
+    }
+};
+
+template <typename T>
+tbb::task* gemv_task<T>::execute() {
+    if (m <= 128) {
+        gemv_serial(cblas::Transpose::Trans, m, n,
+                    xfn::one<T>(), A, lda, x, incX,
+                    xfn::zero<T>(), v.data(), 1);
+        return nullptr;
+    } else {
+        auto mid = m / 2;
+        auto c = new(allocate_continuation()) gemv_merge_task<T>(n, v);
+        c->set_ref_count(2);
+        spawn(*new(c->allocate_child()) gemv_task(
+            m - mid, n, A + mid*lda, lda, x + mid*incX, incX, c->x));
+        m = mid;
+        recycle_as_child_of(*c);
+        return this;
+    }
+}
+
+template <typename T>
 std::enable_if_t<!cblas::is_blasable<T>::value>
 gemv(cblas::Transpose trans, int m, int n,
      const T& alpha, const T* A, int lda, const T* x, int incX,
@@ -20,21 +139,15 @@ gemv(cblas::Transpose trans, int m, int n,
         return;
     }
 
-    int incA = 1;
-    if (trans != cblas::Transpose::NoTrans) {
-        std::swap(lda, incA);
+    if (trans == cblas::Transpose::NoTrans) {
+        tbb::parallel_for(tbb::blocked_range<int>(0, m), [=](auto r) {
+            gemv_serial(trans, r.size(), n, alpha,
+                        A + r.begin()*lda, lda, x, incX,
+                        beta, y + r.begin()*incY, incY);
+        });
+    } else {
+        gemv_task<T>::run(m, n, alpha, A, lda, x, incX, beta, y, incY);
     }
-
-    tbb::parallel_for(tbb::blocked_range<int>(0, m, 32), [=](auto r) {
-        for (int i = r.begin(); i < r.end(); i++) {
-            auto acc = y[i*incY] * beta;
-            auto pa = A + i*lda;
-            auto px = x;
-            for (int j = 0; j < n; j++, pa += incA, px += incX)
-                acc += alpha * *pa * *px;
-            y[i*incY] = acc;
-        }
-    });
 }
 
 template <typename T>
@@ -59,11 +172,11 @@ inline void gemv(cblas::Transpose trans, int m, int n,
 }
 
 template <typename T>
-void gemm_serial(const int m, const int n, const int p,
-                 const T& alpha,
-                 const T* A, int lda, int incA,
-                 const T* B, int ldb, int incB,
-                 const T& beta, T* C, const int ldc)
+void gemm_ikj(const int m, const int n, const int p,
+              const T& alpha,
+              const T* A, int lda, int incA,
+              const T* B, int ldb, int incB,
+              const T& beta, T* C, const int ldc)
 {
     for (int i = 0; i < m; ++i, A += lda, C += ldc) {
         if (beta == xfn::zero<T>())
@@ -89,6 +202,43 @@ void gemm_serial(const int m, const int n, const int p,
 }
 
 template <typename T>
+void gemm_ijk(const int m, const int n, const int p,
+              const T& alpha,
+              const T* A, int lda, int incA,
+              const T* B, int ldb, int incB,
+              const T& beta, T* C, const int ldc)
+{
+    for (int i = 0; i < m; ++i, A += lda, C += ldc) {
+        if (alpha == xfn::zero<T>()) {
+            if (beta == xfn::zero<T>())
+                std::fill(C, C+n, beta);
+            else if (beta != xfn::one<T>())
+                std::transform(C, C+n, C, [&](const auto& x){ return beta*x; });
+            continue;
+        }
+
+        for (int j = 0; j < n; ++j) {
+            auto acc = vdot(p, xfn::zero<T>(), A, incA, B + j*incB, ldb);
+            C[j] = alpha * acc + beta * C[j];
+        }
+    }
+}
+
+template <typename T>
+void gemm_serial(const int m, const int n, const int p,
+                 const T& alpha,
+                 const T* A, int lda, int incA,
+                 const T* B, int ldb, int incB,
+                 const T& beta, T* C, const int ldc)
+{
+    if (incB < ldb) {
+        gemm_ikj(m, n, p, alpha, A, lda, incA, B, ldb, incB, beta, C, ldc);
+    } else {
+        gemm_ijk(m, n, p, alpha, A, lda, incA, B, ldb, incB, beta, C, ldc);
+    }
+}
+
+template <typename T>
 void gemm_direct(const int m, const int n, const int p,
                  const T& alpha,
                  const T* A, int lda, int incA,
@@ -97,29 +247,38 @@ void gemm_direct(const int m, const int n, const int p,
                  T* C, const int ldc)
 {
     if (m == 1 && n == 1) {
-        auto v = (alpha == xfn::zero<T>()) ? alpha : tbb::parallel_reduce(
+        if (alpha == xfn::zero<T>()) {
+            *C = beta * *C;
+            return;
+        }
+        auto v = tbb::parallel_reduce(
             tbb::blocked_range<int>(0, p, GRAINSIZE),
             xfn::zero<T>(),
             [=](auto r, T sum) {
-                auto px = A + r.begin()*incA;
-                auto py = B + r.begin()*ldb;
-                for (int k = r.size(); --k >= 0; px += incA, py += ldb)
-                    sum += *px * *py;
-                return sum;
+                return vdot(r.size(), sum, A + r.begin()*incA, incA, B + r.begin()*ldb, ldb);
             },
             std::plus<T>());
         *C = alpha * v + beta * *C;
+        return;
+    }
+
+    if (n == 1 && (incA == 1 || lda == 1)) {
+        if (incA == 1)
+            gemv(cblas::Transpose::NoTrans, m, p, alpha, A, lda, B, ldb, beta, C, ldc);
+        else
+            gemv(cblas::Transpose::Trans, p, m, alpha, A, incA, B, ldb, beta, C, ldc);
+        return;
+    }
+
+    if (m * n < GRAINSIZE) {
+        gemm_serial(m, n, p, alpha, A, lda, incA, B, ldb, incB, beta, C, ldc);
     } else {
-        if (m * n < GRAINSIZE) {
-            gemm_serial(m, n, p, alpha, A, lda, incA, B, ldb, incB, beta, C, ldc);
-        } else {
-            tbb::parallel_for(tbb::blocked_range<int>(0, m), [=, &alpha, &beta](const auto& r) {
-                gemm_serial(r.size(), n, p, alpha,
-                            A + r.begin()*lda, lda, incA,
-                            B, ldb, incB,
-                            beta, C + r.begin()*ldc, ldc);
-            });
-        }
+        tbb::parallel_for(tbb::blocked_range<int>(0, m), [=, &alpha, &beta](const auto& r) {
+            gemm_serial(r.size(), n, p, alpha,
+                        A + r.begin()*lda, lda, incA,
+                        B, ldb, incB,
+                        beta, C + r.begin()*ldc, ldc);
+        });
     }
 }
 
@@ -516,22 +675,30 @@ is_matmul_rhs_need_reorder(int k, int n, int ldb, int incB) {
     return false;
 }
 
-template <typename LHS>
+template <typename LHS, typename RHS>
 std::enable_if_t<
-    is_cpu_tensor<LHS>::value &&
-    !cblas::is_blasable<tensor_value_type<LHS>>::value,
-    bool>
-inline constexpr is_matmul_lhs_need_reorder(int, int, int, int, int) {
-    return false;
+    (is_gpu_tensor<LHS>::value || cblas::is_blasable<tensor_value_type<LHS>>::value) &&
+    (is_gpu_tensor<RHS>::value || cblas::is_blasable<tensor_value_type<RHS>>::value)>
+inline is_matmul_reorder_needed(bool* reorderA, bool* reorderB,
+                                int m, int n, int k,
+                                int lda, int incA,
+                                int ldb, int incB)
+{
+    *reorderA = is_matmul_lhs_need_reorder<LHS>(m, n, k, lda, incA);
+    *reorderB = is_matmul_rhs_need_reorder<RHS>(k, n, ldb, incB);
 }
 
-template <typename RHS>
+template <typename LHS, typename RHS>
 std::enable_if_t<
-    is_cpu_tensor<RHS>::value &&
-    !cblas::is_blasable<tensor_value_type<RHS>>::value,
-    bool>
-inline constexpr is_matmul_rhs_need_reorder(int m, int n, int ldb, int incB) {
-    return m * n >= GRAINSIZE && incB > 32; // transpose B if stride too large
+    (is_cpu_tensor<LHS>::value && !cblas::is_blasable<tensor_value_type<LHS>>::value) ||
+    (is_cpu_tensor<RHS>::value && !cblas::is_blasable<tensor_value_type<RHS>>::value)>
+inline is_matmul_reorder_needed(bool* reorderA, bool* reorderB,
+                                int m, int n, int,
+                                int lda, int incA,
+                                int ldb, int incB)
+{
+    *reorderA = false;
+    *reorderB = (m * n >= GRAINSIZE) && (incA > lda) && (incB > ldb);
 }
 
 template <typename T>

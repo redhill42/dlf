@@ -18,11 +18,15 @@ gemv(cblas::Transpose trans,
 {
     assert(A.is_matrix() && x.is_vector());
     auto m = A.extent(0), n = A.extent(1);
-    if (trans != cblas::Transpose::NoTrans)
-        std::swap(m, n);
-    if (n != x.extent(0))
-        throw shape_error("gemv: incompatible shape");
-    y.resize(m);
+    if (trans == cblas::Transpose::NoTrans) {
+        if (n != x.extent(0))
+            throw shape_error("gemv: incompatible shape");
+        y.resize(m);
+    } else {
+        if (m != x.extent(0))
+            throw shape_error("gemv: incompatible shape");
+        y.resize(n);
+    }
     detail::gemv(trans, m, n, alpha, A.data(), A.stride(0), x.data(), 1, beta, y.data(), 1);
 }
 
@@ -281,24 +285,23 @@ matmul(const tensor_value_type<LHS>& alpha,
     tensor_type<LHS> tmpA{};
     tensor_type<RHS> tmpB{};
 
-    bool reordered = false;
-    if (detail::is_matmul_lhs_need_reorder<LHS>(m, n, k, lda, incA)) {
+    bool reorderA = false, reorderB = false;
+    detail::is_matmul_reorder_needed<LHS, RHS>(&reorderA, &reorderB, m, n, k, lda, incA, ldb, incB);
+    if (reorderA) {
         reorder(A, tmpA);
         shapeA = tmpA.shape();
         dataA = tmpA.data();
         lda = k;
         incA = 1;
-        reordered = true;
     }
-    if (detail::is_matmul_rhs_need_reorder<RHS>(k, n, ldb, incB)) {
+    if (reorderB) {
         reorder(B, tmpB);
         shapeB = tmpB.shape();
         dataB = tmpB.data();
         ldb = n;
         incB = 1;
-        reordered = true;
     }
-    if (reordered) {
+    if (reorderA || reorderB) {
         batch_size = detail::matmul_broadcast(shapeA, shapeB, shapeC);
     }
 
