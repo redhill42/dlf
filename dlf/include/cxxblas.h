@@ -3,9 +3,18 @@
 #include <complex>
 
 #if HAS_MKL
+  #define HAS_LAPACKE 1
+  #define lapack_complex_float std::complex<float>
+  #define lapack_complex_double std::complex<double>
+  #define MKL_Complex8 lapack_complex_float
+  #define MKL_Complex16 lapack_complex_double
   #include <mkl.h>
 #elif defined(__APPLE__)
+  #define HAS_LAPACKE 0
   #include <Accelerate/Accelerate.h>
+  #define lapack_int __CLPK_integer
+  #define lapack_complex_float __CLPK_complex
+  #define lapack_complex_double __CLPK_doublecomplex
 #else
   #include <cblas.h>
 #endif
@@ -656,10 +665,7 @@ inline bool imatcopy(
     const std::complex<float>& alpha,
     std::complex<float>* AB, size_t lda, size_t ldb)
 {
-    mkl_cimatcopy(ordering, trans, rows, cols,
-                  *reinterpret_cast<const MKL_Complex8*>(&alpha),
-                  reinterpret_cast<MKL_Complex8*>(AB),
-                  lda, ldb);
+    mkl_cimatcopy(ordering, trans, rows, cols, alpha, AB, lda, ldb);
     return true;
 }
 
@@ -669,10 +675,7 @@ inline bool imatcopy(
     const std::complex<double>& alpha,
     std::complex<double>* AB, size_t lda, size_t ldb)
 {
-    mkl_zimatcopy(ordering, trans, rows, cols,
-                  *reinterpret_cast<const MKL_Complex16*>(&alpha),
-                  reinterpret_cast<MKL_Complex16*>(AB),
-                  lda, ldb);
+    mkl_zimatcopy(ordering, trans, rows, cols, alpha, AB, lda, ldb);
     return true;
 }
 
@@ -703,10 +706,7 @@ inline bool omatcopy(
     const std::complex<float>* A, size_t lda,
     std::complex<float>* B, size_t ldb)
 {
-    mkl_comatcopy(ordering, trans, rows, cols,
-                  *reinterpret_cast<const MKL_Complex8*>(&alpha),
-                  reinterpret_cast<const MKL_Complex8*>(A), lda,
-                  reinterpret_cast<MKL_Complex8*>(B), ldb);
+    mkl_comatcopy(ordering, trans, rows, cols, alpha, A, lda, B, ldb);
     return true;
 }
 
@@ -717,10 +717,7 @@ inline bool omatcopy(
     const std::complex<double>* A, size_t lda,
     std::complex<double>* B, size_t ldb)
 {
-    mkl_zomatcopy(ordering, trans, rows, cols,
-                  *reinterpret_cast<const MKL_Complex16*>(&alpha),
-                  reinterpret_cast<const MKL_Complex16*>(A), lda,
-                  reinterpret_cast<MKL_Complex16*>(B), ldb);
+    mkl_zomatcopy(ordering, trans, rows, cols, alpha, A, lda, B, ldb);
     return true;
 }
 
@@ -751,11 +748,7 @@ inline bool omatcopy2(
     const std::complex<float>* A, size_t lda, size_t stridea,
     std::complex<float>* B, size_t ldb, size_t strideb)
 {
-    mkl_comatcopy2(
-        ordering, trans, rows, cols,
-        *reinterpret_cast<const MKL_Complex8*>(&alpha),
-        reinterpret_cast<const MKL_Complex8*>(A), lda, stridea,
-        reinterpret_cast<MKL_Complex8*>(B), ldb, strideb);
+    mkl_comatcopy2(ordering, trans, rows, cols, alpha, A, lda, stridea, B, ldb, strideb);
     return true;
 }
 
@@ -766,13 +759,123 @@ inline bool omatcopy2(
     const std::complex<double>* A, size_t lda, size_t stridea,
     std::complex<double>* B, size_t ldb, size_t strideb)
 {
-    mkl_zomatcopy2(
-        ordering, trans, rows, cols,
-        *reinterpret_cast<const MKL_Complex16*>(&alpha),
-        reinterpret_cast<const MKL_Complex16*>(A), lda, stridea,
-        reinterpret_cast<MKL_Complex16*>(B), ldb, strideb);
+    mkl_zomatcopy2(ordering, trans, rows, cols, alpha, A, lda, stridea, B, ldb, strideb);
     return true;
 }
 #endif //!HAS_MKL
+
+#if HAS_LAPACKE
+inline lapack_int getrf(lapack_int m, lapack_int n, float* A, lapack_int lda, lapack_int* ipiv) {
+    return LAPACKE_sgetrf(LAPACK_ROW_MAJOR, m, n, A, lda, ipiv);
+}
+
+inline lapack_int getrf(lapack_int m, lapack_int n, double* A, lapack_int lda, lapack_int* ipiv) {
+    return LAPACKE_dgetrf(LAPACK_ROW_MAJOR, m, n, A, lda, ipiv);
+}
+
+inline lapack_int getrf(lapack_int m, lapack_int n, std::complex<float>* A, lapack_int lda, lapack_int* ipiv) {
+    return LAPACKE_cgetrf(LAPACK_ROW_MAJOR, m, n, reinterpret_cast<lapack_complex_float*>(A), lda, ipiv);
+}
+
+inline lapack_int getrf(lapack_int m, lapack_int n, std::complex<double>* A, lapack_int lda, lapack_int* ipiv) {
+    return LAPACKE_zgetrf(LAPACK_ROW_MAJOR, m, n, reinterpret_cast<lapack_complex_double*>(A), lda, ipiv);
+}
+
+inline lapack_int getri(lapack_int n, float* A, lapack_int lda, lapack_int* ipiv) {
+    return LAPACKE_sgetri(LAPACK_ROW_MAJOR, n, A, lda, ipiv);
+}
+
+inline lapack_int getri(lapack_int n, double* A, lapack_int lda, lapack_int* ipiv) {
+    return LAPACKE_dgetri(LAPACK_ROW_MAJOR, n, A, lda, ipiv);
+}
+
+inline lapack_int getri(lapack_int n, std::complex<float>* A, lapack_int lda, lapack_int* ipiv) {
+    return LAPACKE_cgetri(LAPACK_ROW_MAJOR, n, reinterpret_cast<lapack_complex_float*>(A), lda, ipiv);
+}
+
+inline lapack_int getri(lapack_int n, std::complex<double>* A, lapack_int lda, lapack_int* ipiv) {
+    return LAPACKE_zgetri(LAPACK_ROW_MAJOR, n, reinterpret_cast<lapack_complex_double*>(A), lda, ipiv);
+}
+#else
+inline lapack_int getrf(lapack_int m, lapack_int n, float* A, lapack_int lda, lapack_int* ipiv) {
+    lapack_int info;
+    sgetrf_(&m, &n, A, &lda, ipiv, &info);
+    return info;
+}
+
+inline lapack_int getrf(lapack_int m, lapack_int n, double* A, lapack_int lda, lapack_int* ipiv) {
+    lapack_int info;
+    dgetrf_(&m, &n, A, &lda, ipiv, &info);
+    return info;
+}
+
+inline lapack_int getrf(lapack_int m, lapack_int n, std::complex<float>* A, lapack_int lda, lapack_int* ipiv) {
+    lapack_int info;
+    cgetrf_(&m, &n, reinterpret_cast<lapack_complex_float*>(A), &lda, ipiv, &info);
+    return info;
+}
+
+inline lapack_int getrf(lapack_int m, lapack_int n, std::complex<double>* A, lapack_int lda, lapack_int* ipiv) {
+    lapack_int info;
+    zgetrf_(&m, &n, reinterpret_cast<lapack_complex_double*>(A), &lda, ipiv, &info);
+    return info;
+}
+
+inline lapack_int getri(lapack_int n, float* A, lapack_int lda, lapack_int* ipiv) {
+    lapack_int lwork = -1;
+    float work_query;
+    std::vector<float> work;
+    lapack_int info;
+
+    sgetri_(&n, A, &lda, ipiv, &work_query, &lwork, &info);
+    if (info != 0) return info;
+    lwork = (lapack_int)work_query;
+    work.resize(lwork);
+    sgetri_(&n, A, &lda, ipiv, work.data(), &lwork, &info);
+    return info;
+}
+
+inline lapack_int getri(lapack_int n, double* A, lapack_int lda, lapack_int* ipiv) {
+    lapack_int lwork = -1;
+    double work_query;
+    std::vector<double> work;
+    lapack_int info;
+
+    dgetri_(&n, A, &lda, ipiv, &work_query, &lwork, &info);
+    if (info != 0) return info;
+    lwork = (lapack_int)work_query;
+    work.resize(lwork);
+    dgetri_(&n, A, &lda, ipiv, work.data(), &lwork, &info);
+    return info;
+}
+
+inline lapack_int getri(lapack_int n, std::complex<float>* A, lapack_int lda, lapack_int* ipiv) {
+    lapack_int lwork = -1;
+    lapack_complex_float work_query;
+    std::vector<lapack_complex_float> work;
+    lapack_int info;
+
+    cgetri_(&n, reinterpret_cast<lapack_complex_float*>(A), &lda, ipiv, &work_query, &lwork, &info);
+    if (info != 0) return info;
+    lwork = (lapack_int)(*((float*)&work_query));
+    work.resize(lwork);
+    cgetri_(&n, reinterpret_cast<lapack_complex_float*>(A), &lda, ipiv, work.data(), &lwork, &info);
+    return info;
+}
+
+inline lapack_int getri(lapack_int n, std::complex<double>* A, lapack_int lda, lapack_int* ipiv) {
+    lapack_int lwork = -1;
+    lapack_complex_double work_query;
+    std::vector<lapack_complex_double> work;
+    lapack_int info;
+
+    zgetri_(&n, reinterpret_cast<lapack_complex_double*>(A), &lda, ipiv, &work_query, &lwork, &info);
+    if (info != 0) return info;
+    lwork = (lapack_int)(*((double*)&work_query));
+    work.resize(lwork);
+    zgetri_(&n, reinterpret_cast<lapack_complex_double*>(A), &lda, ipiv, work.data(), &lwork, &info);
+    return info;
+}
+#endif
 
 } // namespace cblas

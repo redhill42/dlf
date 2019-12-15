@@ -822,4 +822,71 @@ norm(const TensorT& X, float ord, bool keepdims = false) {
     throw shape_error("norm: improper number of dimensions to norm");
 }
 
+/**
+ * Compute the inverse of the given matrix.
+ */
+template <typename T>
+std::enable_if_t<cblas::is_blasable<T>::value, Tensor<T>>
+matinv(Tensor<T>&& X) {
+    if (!X.is_inner_square())
+        throw shape_error("matinv: requires square matrix");
+
+    lapack_int n  = X.extent(-1);
+    lapack_int m  = X.size() / (n*n);
+    lapack_int ld = X.stride(-2);
+    std::vector<lapack_int> ipiv(n);
+
+    auto px = X.data();
+    for (lapack_int i = 0; i < m; ++i, px += n*n) {
+        if (cblas::getrf(n, n, px, ld, ipiv.data()) != 0)
+            throw std::runtime_error("matinv: the matrix is not invertible");
+        if (cblas::getri(n, px, ld, ipiv.data()) != 0)
+            throw std::runtime_error("matinv: the matrix is not invertible");
+    }
+    return std::move(X);
+}
+
+template <typename T>
+std::enable_if_t<cblas::is_blasable<T>::value, Tensor<T>>
+inline matinv(const Tensor<T>& X) {
+    return matinv(Tensor<T>(X));
+}
+
+/**
+ * Compute the determinant of the given matrix.
+ */
+template <typename T>
+std::enable_if_t<cblas::is_blasable<T>::value, Tensor<T>>
+det(Tensor<T>&& X) {
+    if (!X.is_inner_square())
+        throw shape_error("det: requires square matrix");
+
+    lapack_int n  = X.extent(-1);
+    lapack_int ld = X.stride(-2);
+    std::vector<lapack_int> ipiv(n);
+
+    auto y_dims = X.shape().extents();
+    y_dims.erase(y_dims.end()-2, y_dims.end());
+    auto Y = Tensor<T>(Shape(y_dims));
+
+    auto px = X.data();
+    for (auto& y : Y) {
+        cblas::getrf(n, n, px, ld, ipiv.data());
+        y = T{1};
+        for (lapack_int i = 0; i < n; ++i) {
+            y *= px[i*(n+1)];
+            if (i+1 != ipiv[i])
+                y = -y;
+        }
+        px += n*n;
+    }
+    return Y;
+}
+
+template <typename T>
+std::enable_if_t<cblas::is_blasable<T>::value, Tensor<T>>
+inline det(const Tensor<T>& X) {
+    return det(Tensor<T>(X));
+}
+
 } // namespace dlf
