@@ -2552,6 +2552,84 @@ TEST(UniformTest, NonZero) {
     EXPECT_EQ(nonzero(dev(X), true).read(), Y);
 }
 
+TEST(UniformTest, TrmvUpper) {
+    constexpr size_t n = 100;
+
+    auto A = Tensor<int>({n, n}).random(0, 10);
+    auto B = A;
+    auto x = Tensor<int>({n}).random(0, 10);
+
+    for (int i = 0; i < n; ++i) {
+        for (int j = 0; j < i; j++)
+            B(i, j) = 0;
+    }
+
+    EXPECT_EQ(trmv(cblas::Triangle::Upper, cblas::Transpose::NoTrans, cblas::Diagonal::NonUnit, A, x),
+              matmul(B, x));
+    EXPECT_EQ(trmv(cblas::Triangle::Upper, cblas::Transpose::Trans, cblas::Diagonal::NonUnit, A, x),
+              matmul(B.transpose(), x));
+
+    B.diagonal().fill(1);
+    EXPECT_EQ(trmv(cblas::Triangle::Upper, cblas::Transpose::NoTrans, cblas::Diagonal::Unit, A, x),
+              matmul(B, x));
+    EXPECT_EQ(trmv(cblas::Triangle::Upper, cblas::Transpose::Trans, cblas::Diagonal::Unit, A, x),
+              matmul(B.transpose(), x));
+}
+
+TEST(UniformTest, TrmvLower) {
+    constexpr size_t n = 100;
+
+    auto A = Tensor<int>({n, n}).random(0, 10);
+    auto B = A;
+    auto x = Tensor<int>({n}).random(0, 10);
+
+    for (int i = 0; i < n; ++i) {
+        for (int j = i+1; j < n; j++)
+            B(i, j) = 0;
+    }
+
+    EXPECT_EQ(trmv(cblas::Triangle::Lower, cblas::Transpose::NoTrans, cblas::Diagonal::NonUnit, A, x),
+              matmul(B, x));
+    EXPECT_EQ(trmv(cblas::Triangle::Lower, cblas::Transpose::Trans, cblas::Diagonal::NonUnit, A, x),
+              matmul(B.transpose(), x));
+
+    B.diagonal().fill(1);
+    EXPECT_EQ(trmv(cblas::Triangle::Lower, cblas::Transpose::NoTrans, cblas::Diagonal::Unit, A, x),
+              matmul(B, x));
+    EXPECT_EQ(trmv(cblas::Triangle::Lower, cblas::Transpose::Trans, cblas::Diagonal::Unit, A, x),
+              matmul(B.transpose(), x));
+}
+
+TEST(UniformTest, SymvUpper) {
+    constexpr size_t n = 100;
+
+    auto A = Tensor<int>({n, n}).random(0, 10);
+    auto B = A;
+    auto x = Tensor<int>({n}).random(0, 10);
+
+    for (int i = 1; i < n; ++i) {
+        for (int j = 0; j < i; ++j)
+            B(i, j) = B(j, i);
+    }
+
+    EXPECT_EQ(symv(cblas::Triangle::Upper, A, x), matmul(B, x));
+}
+
+TEST(UniformTest, SymvLower) {
+    constexpr size_t n = 100;
+
+    auto A = Tensor<int>({n, n}).random(0, 10);
+    auto B = A;
+    auto x = Tensor<int>({n}).random(0, 10);
+
+    for (int i = 0; i < n; ++i) {
+        for (int j = i+1; j < n; ++j)
+            B(i, j) = B(j, i);
+    }
+
+    EXPECT_EQ(symv(cblas::Triangle::Lower, A, x), matmul(B, x));
+}
+
 TEST(UniformTest, MatrixInverse) {
     auto X = Matrix<double>({
         {1.,   1/2., 1/3., 1/4., 1/5.},

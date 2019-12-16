@@ -182,11 +182,18 @@ trmv(cblas::Triangle uplo, cblas::Transpose trans, cblas::Diagonal diag,
 template <typename TensorT>
 enable_if_non_view_tensor<TensorT, tensor_type<TensorT>>
 trmv(cblas::Triangle uplo, cblas::Transpose trans, cblas::Diagonal diag,
+     const TensorT& A, TensorT&& x)
+{
+    trmv(uplo, trans, diag, A, x, x);
+    return std::move(x);
+}
+
+template <typename TensorT>
+enable_if_non_view_tensor<TensorT, tensor_type<TensorT>>
+trmv(cblas::Triangle uplo, cblas::Transpose trans, cblas::Diagonal diag,
      const TensorT& A, const TensorT& x)
 {
-    tensor_type<TensorT> y{};
-    trmv(uplo, trans, diag, A, x, y);
-    return y;
+    return trmv(uplo, trans, diag, A, tensor_type<TensorT>(x));
 }
 
 template <typename TensorT>
@@ -213,12 +220,18 @@ trmm(cblas::Side side, cblas::Triangle uplo, cblas::Transpose transA, cblas::Dia
 template <typename TensorT>
 enable_if_non_view_tensor<TensorT, tensor_type<TensorT>>
 trmm(cblas::Side side, cblas::Triangle uplo, cblas::Transpose transA, cblas::Diagonal diag,
+     const TensorT& A, TensorT&& B)
+{
+    trmm(side, uplo, transA, diag, xfn::one<tensor_value_type<TensorT>>(), A, B, B);
+    return std::move(B);
+}
+
+template <typename TensorT>
+enable_if_non_view_tensor<TensorT, tensor_type<TensorT>>
+trmm(cblas::Side side, cblas::Triangle uplo, cblas::Transpose transA, cblas::Diagonal diag,
      const TensorT& A, const TensorT& B)
 {
-    using T = tensor_value_type<TensorT>;
-    tensor_type<TensorT> C{};
-    trmm(side, uplo, transA, diag, xfn::one<T>(), A, B, C);
-    return C;
+    return trmm(side, uplo, transA, diag, A, tensor_type<TensorT>(B));
 }
 
 //==-------------------------------------------------------------------------

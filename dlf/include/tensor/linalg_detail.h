@@ -40,6 +40,19 @@ T vdot(const int n, T init, const T* x, const int x_inc, const T* y, const int y
 }
 
 template <typename T>
+void vmad(const int n, const T& alpha, const T* x, const int x_inc, T* y, const int y_inc) {
+    if (n <= 0 || alpha == xfn::zero<T>())
+        return;
+    if (x_inc == 1 && y_inc == 1) {
+        for (int i = 0; i < n; ++i, ++x, ++y)
+            *y += alpha * *x;
+    } else {
+        for (int i = 0; i < n; ++i, x += x_inc, y += y_inc)
+            *y += alpha * *x;
+    }
+}
+
+template <typename T>
 void gemv_serial(cblas::Transpose trans, int m, int n,
                  const T& alpha, const T* A, int lda, const T* x, int incX,
                  const T& beta, T* y, int incY)
@@ -53,18 +66,8 @@ void gemv_serial(cblas::Transpose trans, int m, int n,
         vscal(n, beta, y, incY);
         if (alpha == xfn::zero<T>())
             return;
-        for (int i = 0; i < m; ++i, x += incX, A += lda) {
-            auto pa = A;
-            auto py = y;
-            auto temp = alpha * *x;
-            if (incY == 1) {
-                for (int j = 0; j < n; ++j, ++pa, ++py)
-                    *py += temp * *pa;
-            } else {
-                for (int j = 0; j < n; ++j, ++pa, py += incY)
-                    *py += temp * *pa;
-            }
-        }
+        for (int i = 0; i < m; ++i, x += incX, A += lda)
+            vmad(n, alpha * *x, A, 1, y, incY);
     }
 }
 
@@ -188,15 +191,7 @@ void gemm_ikj(const int m, const int n, const int p,
 
         auto pa = A, pb = B;
         for (int k = 0; k < p; ++k, pa += incA, pb += ldb) {
-            auto const temp = alpha * *pa;
-            if (incB == 1) {
-                for (int j = 0; j < n; ++j)
-                    C[j] += temp * pb[j];
-            } else {
-                for (int j = 0; j < n; ++j, pb += incB)
-                    C[j] += temp * *pb;
-                pb -= n * incB;
-            }
+            vmad(n, alpha * *pa, pb, incB, C, 1);
         }
     }
 }
@@ -358,17 +353,52 @@ void symmetric_upper_to_squared(const T* A, int lda, T* X, int k) {
 }
 
 template <typename T>
+void symv_up(const int n,
+             const T& alpha, const T* A, int lda, const T* x, int incX,
+             const T& beta, T* y, int incY)
+{
+    auto pa = A, px = x;
+    auto py = y;
+    int i;
+
+    for (i = 0; i < n; ++i, pa += lda, px += incX, py += incY) {
+        auto acc = vdot(n - i, xfn::zero<T>(), pa + i, 1, px, incX);
+        *py = alpha * acc + beta * *py;
+    }
+    for (i = 1, y += incY; i < n; ++i, A += lda, x += incX, y += incY) {
+        vmad(n - i, alpha * *x, A + i, 1, y, incY);
+    }
+}
+
+template <typename T>
+void symv_lo(const int n,
+             const T& alpha, const T* A, int lda, const T* x, int incX,
+             const T& beta, T* y, int incY)
+{
+    auto pa = A;
+    auto py = y;
+    int i;
+
+    for (i = 0; i < n; ++i, pa += lda, py += incY) {
+        auto acc = vdot(i+1, xfn::zero<T>(), pa, 1, x, incX);
+        *py = alpha * acc + beta * *py;
+    }
+    for (i = 1, A += lda, x += incX; i < n; ++i, A += lda, x += incX) {
+        vmad(i, alpha * *x, A, 1, y, incY);
+    }
+}
+
+template <typename T>
 std::enable_if_t<!(std::is_same<T, float>::value || std::is_same<T, double>::value)>
 symv(cblas::Triangle uplo, const int n,
      const T& alpha, const T* A, int lda, const T* x, int incX,
      const T& beta, T* y, int incY)
 {
-    auto t = std::make_unique<T[]>(n * n);
-    if (uplo == cblas::Triangle::Lower)
-        symmetric_lower_to_squared(A, lda, t.get(), n);
-    else
-        symmetric_upper_to_squared(A, lda, t.get(), n);
-    gemv(cblas::Transpose::NoTrans, n, n, alpha, t.get(), n, x, incX, beta, y, incY);
+    if (uplo == cblas::Triangle::Upper) {
+        symv_up(n, alpha, A, lda, x, incX, beta, y, incY);
+    } else {
+        symv_lo(n, alpha, A, lda, x, incX, beta, y, incY);
+    }
 }
 
 template <typename T>
@@ -475,16 +505,60 @@ void triangular_upper_to_squared(const T* A, int lda, T* X, int k, bool unit_dia
 }
 
 template <typename T>
+void trmv_up(const int n, const T* A, int lda, T* x, int incX, bool trans, bool unit) {
+    if (!trans) {
+        for (int i = 0; i < n; ++i, A += lda, x += incX) {
+            if (unit) {
+                *x = vdot(n-i-1, *x, A+i+1, 1, x+incX, incX);
+            } else {
+                *x = vdot(n-i, xfn::zero<T>(), A+i, 1, x, incX);
+            }
+        }
+    } else {
+        A += (n - 1) * lda;
+        x += (n - 1) * incX;
+        for (int i = n; --i >= 0; A -= lda, x -= incX) {
+            vmad(n-i-1, *x, A+i+1, 1, x+incX, incX);
+            if (!unit) *x *= A[i];
+        }
+    }
+}
+
+template <typename T>
+void trmv_lo(const int n, const T* A, int lda, T* x, int incX, bool trans, bool unit) {
+    if (!trans) {
+        auto y = x + (n - 1) * incX;
+        A += (n - 1) * lda;
+        for (int i = n; --i >= 0; A -= lda, y -= incX) {
+            if (unit) {
+                *y = vdot(i, *y, A, 1, x, incX);
+            } else {
+                *y = vdot(i+1, xfn::zero<T>(), A, 1, x, incX);
+            }
+        }
+    } else {
+        auto y = x;
+        for (int i = 0; i < n; ++i, A += lda, x += incX) {
+            vmad(i, *x, A, 1, y, incX);
+            if (!unit) *x *= A[i];
+        }
+    }
+}
+
+template <typename T>
 std::enable_if_t<!cblas::is_blasable<T>::value>
 trmv(cblas::Triangle uplo, cblas::Transpose trans, cblas::Diagonal diag,
      const int n, const T* A, int lda, T* x, int incX)
 {
-    auto t = std::make_unique<T[]>(n * n);
-    if (uplo == cblas::Triangle::Lower)
-        triangular_lower_to_squared(A, lda, t.get(), n, diag == cblas::Diagonal::Unit);
-    else
-        triangular_upper_to_squared(A, lda, t.get(), n, diag == cblas::Diagonal::Unit);
-    gemv(trans, n, n, xfn::one<T>(), t.get(), n, x, incX, xfn::zero<T>(), x, incX);
+    if (uplo == cblas::Triangle::Upper) {
+        trmv_up(n, A, lda, x, incX,
+                trans != cblas::Transpose::NoTrans,
+                diag  == cblas::Diagonal::Unit);
+    } else {
+        trmv_lo(n, A, lda, x, incX,
+                trans != cblas::Transpose::NoTrans,
+                diag  == cblas::Diagonal::Unit);
+    }
 }
 
 template <typename T>
