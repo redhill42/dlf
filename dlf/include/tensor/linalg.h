@@ -889,4 +889,96 @@ inline det(const Tensor<T>& X) {
     return det(Tensor<T>(X));
 }
 
+template <typename T>
+class linear_solve_function {
+    Tensor<T> A;
+    std::vector<lapack_int> ipiv;
+    lapack_int info;
+
+public:
+    linear_solve_function(Tensor<T>&& A);
+    linear_solve_function(const Tensor<T>& A);
+
+    bool has_solution() const { return info == 0; }
+
+    Tensor<T> operator()(Tensor<T>&& b) const;
+    Tensor<T> operator()(const Tensor<T>& b) const;
+};
+
+template <typename T>
+linear_solve_function<T>::linear_solve_function(Tensor<T>&& mat) : A(std::move(mat)) {
+    if (!A.is_square())
+        throw shape_error("solve: requires square matrix");
+
+    auto n = A.extent(-1);
+    ipiv.resize(n);
+    info = cblas::getrf(n, n, A.data(), A.stride(0), ipiv.data());
+}
+
+template <typename T>
+linear_solve_function<T>::linear_solve_function(const Tensor<T>& A)
+    : linear_solve_function(Tensor<T>(A)) {}
+
+template <typename T>
+Tensor<T> linear_solve_function<T>::operator()(Tensor<T>&& b) const {
+    if (info != 0)
+        throw std::runtime_error("solve: the linear equation has no solution");
+    if (!(b.is_vector() || b.is_matrix()))
+        throw shape_error("solve: the rhs must be a vector or a matrix");
+
+    lapack_int n = A.extent(0);
+    lapack_int nrhs = b.is_vector() ? 1 : b.extent(1);
+    if (b.extent(0) != n)
+        throw shape_error("solve: incompatible shape");
+
+#if HAS_LAPACKE
+    cblas::getrs(n, nrhs, A.data(), A.stride(0), ipiv.data(), b.data(), b.stride(0));
+    return std::move(b);
+#else
+    if (nrhs == 1) {
+        cblas::getrs(n, 1, A.data(), n, ipiv.data(), b.data(), n);
+        return std::move(b);
+    } else {
+        auto x = b.transpose().reorder();
+        cblas::getrs(n, nrhs, A.data(), n, ipiv.data(), x.data(), n);
+        reorder(x.transpose(), b);
+        return std::move(b);
+    }
+#endif
+}
+
+template <typename T>
+Tensor<T> linear_solve_function<T>::operator()(const Tensor<T>& b) const {
+    return operator()(Tensor<T>(b));
+}
+
+/**
+ * Generate a linear solve function that can be applied repeatedly to different b.
+ */
+template <typename T>
+std::enable_if_t<cblas::is_blasable<T>::value, linear_solve_function<T>>
+inline solve(Tensor<T>&& A) {
+    return linear_solve_function<T>(std::move(A));
+}
+
+template <typename T>
+std::enable_if_t<cblas::is_blasable<T>::value, linear_solve_function<T>>
+inline solve(const Tensor<T>& A) {
+    return linear_solve_function<T>(A);
+}
+
+/**
+ * Solve a linear equation Ax=b.
+ */
+template <typename TensorA, typename TensorB>
+std::enable_if_t<
+    is_cpu_tensor<TensorA>::value && is_cpu_tensor<TensorB>::value &&
+    !is_tensor_view<TensorA>::value && !is_tensor_view<TensorB>::value &&
+    is_exactly_same_tensor<TensorA, TensorB>::value &&
+    cblas::is_blasable<tensor_value_type<TensorA>>::value,
+    tensor_type<TensorB>>
+inline solve(TensorA&& A, TensorB&& b) {
+    return solve(std::forward<TensorA>(A))(std::forward<TensorB>(b));
+}
+
 } // namespace dlf

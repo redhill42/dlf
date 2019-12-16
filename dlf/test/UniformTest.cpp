@@ -2037,7 +2037,7 @@ TEST(UniformTest, ReduceL1_GPU) {
 
 TEST(UniformTest, ReduceL2) {
     auto X = Tensor<float>({3, 2, 2}).random(-10, 10);
-    EXPECT_EQ(reduce_nrm2(X, {1}), sqrt(reduce_sum(X*X, {1})));
+    ExpectElementsEQ(reduce_nrm2(X, {1}), sqrt(reduce_sum(X*X, {1})));
 }
 
 TEST(UniformTest, ReduceL2_GPU) {
@@ -2567,4 +2567,18 @@ TEST(UniformTest, MatrixInverse) {
         {-1400.,  26880., -117600.,  179200., -88200.},
         {  630., -12600.,   56700.,  -88200.,  44100.}
     }));
+}
+
+TEST(UniformTest, LinearSolveVector) {
+    auto A = Matrix<float>({{1, 1, 1}, {1, 2, 3}, {1, 4, 9}});
+    auto b = Vector<float>({1, 2, 3});
+    auto x = Vector<float>({-0.5, 2.0, -0.5});
+    ExpectElementsEQ(x, solve(A, b));
+}
+
+TEST(UniformTest, LinearSolveMatrix) {
+    auto A = Matrix<float>({{1, 1, 1}, {1, 2, 3}, {1, 4, 9}});
+    auto b = Matrix<float>({{1, 2}, {3, 4}, {5, 6}});
+    auto x = Matrix<float>({{-2, -1}, {4, 4}, {-1, -1}});
+    ExpectElementsEQ(x, solve(A, b));
 }

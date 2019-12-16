@@ -796,6 +796,54 @@ inline lapack_int getri(lapack_int n, std::complex<float>* A, lapack_int lda, la
 inline lapack_int getri(lapack_int n, std::complex<double>* A, lapack_int lda, lapack_int* ipiv) {
     return LAPACKE_zgetri(LAPACK_ROW_MAJOR, n, reinterpret_cast<lapack_complex_double*>(A), lda, ipiv);
 }
+
+inline void getrs(lapack_int n, lapack_int nrhs,
+                  const float* A, lapack_int lda,
+                  const lapack_int* ipiv,
+                  float* b, lapack_int ldb)
+{
+    auto info = LAPACKE_sgetrs(LAPACK_ROW_MAJOR, 'N', n, nrhs, A, lda, ipiv, b, ldb);
+    assert(info == 0);
+    (void)info;
+}
+
+inline void getrs(lapack_int n, lapack_int nrhs,
+                  const double* A, lapack_int lda,
+                  const lapack_int* ipiv,
+                  double* b, lapack_int ldb)
+{
+    auto info = LAPACKE_dgetrs(LAPACK_ROW_MAJOR, 'N', n, nrhs, A, lda, ipiv, b, ldb);
+    assert(info == 0);
+    (void)info;
+}
+
+inline void getrs(lapack_int n, lapack_int nrhs,
+                  const std::complex<float>* A, lapack_int lda,
+                  const lapack_int* ipiv,
+                  std::complex<float>* b, lapack_int ldb)
+{
+    auto info = LAPACKE_cgetrs(
+                    LAPACK_ROW_MAJOR, 'N', n, nrhs,
+                    reinterpret_cast<const lapack_complex_float*>(A), lda,
+                    ipiv,
+                    reinterpret_cast<lapack_complex_float*>(b), ldb);
+    assert(info == 0);
+    (void)info;
+}
+
+inline void getrs(lapack_int n, lapack_int nrhs,
+                  const std::complex<double>* A, lapack_int lda,
+                  const lapack_int* ipiv,
+                  std::complex<double>* b, lapack_int ldb)
+{
+    auto info = LAPACKE_zgetrs(
+                    LAPACK_ROW_MAJOR, 'N', n, nrhs,
+                    reinterpret_cast<const lapack_complex_double*>(A), lda,
+                    ipiv,
+                    reinterpret_cast<lapack_complex_double*>(b), ldb);
+    assert(info == 0);
+    (void)info;
+}
 #else
 inline lapack_int getrf(lapack_int m, lapack_int n, float* A, lapack_int lda, lapack_int* ipiv) {
     lapack_int info;
@@ -875,6 +923,58 @@ inline lapack_int getri(lapack_int n, std::complex<double>* A, lapack_int lda, l
     work.resize(lwork);
     zgetri_(&n, reinterpret_cast<lapack_complex_double*>(A), &lda, ipiv, work.data(), &lwork, &info);
     return info;
+}
+
+inline void getrs(lapack_int n, lapack_int nrhs,
+                  const float* A, lapack_int lda,
+                  const lapack_int* ipiv,
+                  float* b, lapack_int ldb) {
+    char trans = 'T';
+    lapack_int info;
+    sgetrs_(&trans, &n, &nrhs,
+            const_cast<float*>(A), &lda,
+            const_cast<lapack_int*>(ipiv),
+            b, &ldb, &info);
+    assert(info == 0);
+}
+
+inline void getrs(lapack_int n, lapack_int nrhs,
+                  const double* A, lapack_int lda,
+                  const lapack_int* ipiv,
+                  double* b, lapack_int ldb) {
+    char trans = 'T';
+    lapack_int info;
+    dgetrs_(&trans, &n, &nrhs,
+            const_cast<double*>(A), &lda,
+            const_cast<lapack_int*>(ipiv),
+            b, &ldb, &info);
+    assert(info == 0);
+}
+
+inline void getrs(lapack_int n, lapack_int nrhs,
+                  const std::complex<float>* A, lapack_int lda,
+                  const lapack_int* ipiv,
+                  std::complex<float>* b, lapack_int ldb) {
+    char trans = 'T';
+    lapack_int info;
+    cgetrs_(&trans, &n, &nrhs,
+            const_cast<lapack_complex_float*>(reinterpret_cast<const lapack_complex_float*>(A)), &lda,
+            const_cast<lapack_int*>(ipiv),
+            reinterpret_cast<lapack_complex_float*>(b), &ldb, &info);
+    assert(info == 0);
+}
+
+inline void getrs(lapack_int n, lapack_int nrhs,
+                  const std::complex<double>* A, lapack_int lda,
+                  const lapack_int* ipiv,
+                  std::complex<double>* b, lapack_int ldb) {
+    char trans = 'T';
+    lapack_int info;
+    zgetrs_(&trans, &n, &nrhs,
+            const_cast<lapack_complex_double*>(reinterpret_cast<const lapack_complex_double*>(A)), &lda,
+            const_cast<lapack_int*>(ipiv),
+            reinterpret_cast<lapack_complex_double*>(b), &ldb, &info);
+    assert(info == 0);
 }
 #endif
 
