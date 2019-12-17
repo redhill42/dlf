@@ -582,6 +582,78 @@ inline void trmv(cblas::Triangle uplo, cblas::Transpose trans, cblas::Diagonal d
 }
 
 template <typename T>
+void trsv_up(const int n, const T* A, const int lda, T* x, const int incX, bool trans, bool nounit) {
+    if (!trans) {
+        A += (n - 1)*lda;
+        x += (n - 1)*incX;
+        for (int i = n; --i >= 0; A -= lda, x -= incX) {
+            *x -= detail::vdot(n-i-1, xfn::zero<T>(), A+i+1, 1, x+incX, incX);
+            if (nounit) *x /= A[i];
+        }
+    } else {
+        for (int i = 0; i < n; ++i, A += lda, x += incX) {
+            if (nounit) *x /= A[i];
+            detail::vmad(n-i-1, -*x, A+i+1, 1, x+incX, incX);
+        }
+    }
+}
+
+template <typename T>
+void trsv_lo(const int n, const T* A, const int lda, T* x, const int incX, bool trans, bool nounit) {
+    if (!trans) {
+        auto y = x;
+        for (int i = 0; i < n; ++i, A += lda, y += incX) {
+            *y -= detail::vdot(i, xfn::zero<T>(), A, 1, x, incX);
+            if (nounit) *y /= A[i];
+        }
+    } else {
+        auto y = x;
+        A += (n - 1)*lda;
+        y += (n - 1)*incX;
+        for (int i = n; --i >= 0; A -= lda, y -= incX) {
+            if (nounit) *y /= A[i];
+            detail::vmad(i, -*y, A, 1, x, incX);
+        }
+    }
+}
+
+template <typename T>
+std::enable_if_t<!cblas::is_blasable<T>::value>
+trsv(cblas::Triangle uplo, cblas::Transpose trans, cblas::Diagonal diag,
+     const int n, const T* A, const int lda, T* x, const int incX)
+{
+    if (uplo == cblas::Triangle::Upper) {
+        trsv_up(n, A, lda, x, incX,
+                trans != cblas::Transpose::NoTrans,
+                diag  == cblas::Diagonal::NonUnit);
+    } else {
+        trsv_lo(n, A, lda, x, incX,
+                trans != cblas::Transpose::NoTrans,
+                diag  == cblas::Diagonal::NonUnit);
+    }
+}
+
+template <typename T>
+std::enable_if_t<cblas::is_blasable<T>::value>
+inline trsv(cblas::Triangle uplo, cblas::Transpose trans, cblas::Diagonal diag,
+            const int n, const T* A, const int lda, T* x, const int incX)
+{
+    cblas::trsv(cblas::Layout::RowMajor, uplo, trans, diag, n, A, lda, x, incX);
+}
+
+template <typename T>
+inline void trsv(cblas::Triangle uplo, cblas::Transpose trans, cblas::Diagonal diag,
+                 const int n, const gpgpu::Buffer<T>& A, int lda,
+                 gpgpu::Buffer<T>& x, int incX)
+{
+    gblas::trsv(gblas::Layout::RowMajor,
+                static_cast<gblas::Triangle>(uplo),
+                static_cast<gblas::Transpose>(trans),
+                static_cast<gblas::Diagonal>(diag),
+                n, A, 0, lda, x, 0, incX);
+}
+
+template <typename T>
 std::enable_if_t<!cblas::is_blasable<T>::value>
 trmm(cblas::Side side, cblas::Triangle uplo, cblas::Transpose transA, cblas::Diagonal diag,
      const int m, const int n, const T& alpha,
@@ -595,7 +667,7 @@ trmm(cblas::Side side, cblas::Triangle uplo, cblas::Transpose transA, cblas::Dia
         triangular_upper_to_squared(A, lda, X.get(), k, diag == cblas::Diagonal::Unit);
 
     auto Y = std::make_unique<T[]>(m * n);
-    std::copy(B, B+m*n, Y.get());
+    std::copy(B, B + m*n, Y.get());
 
     if (side == cblas::Side::Left) {
         gemm(transA, cblas::Transpose::NoTrans,
@@ -603,9 +675,9 @@ trmm(cblas::Side side, cblas::Triangle uplo, cblas::Transpose transA, cblas::Dia
              alpha, X.get(), k, Y.get(), n,
              xfn::zero<T>(), B, ldb);
     } else {
-        gemm(transA, cblas::Transpose::NoTrans,
+        gemm(cblas::Transpose::NoTrans, transA,
              m, n, k,
-             alpha, X.get(), k, Y.get(), n,
+             alpha, Y.get(), n, X.get(), k,
              xfn::zero<T>(), B, ldb);
     }
 }
@@ -626,6 +698,68 @@ inline void trmm(cblas::Side side, cblas::Triangle uplo, cblas::Transpose transA
                  gpgpu::Buffer<T>& B, const int ldb)
 {
     gblas::trmm(gblas::Layout::RowMajor,
+                static_cast<gblas::Side>(side),
+                static_cast<gblas::Triangle>(uplo),
+                static_cast<gblas::Transpose>(transA),
+                static_cast<gblas::Diagonal>(diag),
+                m, n, alpha, A, 0, lda, B, 0, ldb);
+}
+
+template <typename T>
+std::enable_if_t<!cblas::is_blasable<T>::value>
+trsm(cblas::Side side, cblas::Triangle uplo, cblas::Transpose transA, cblas::Diagonal diag,
+     const int m, const int n, const T& alpha,
+     const T* A, int lda, T* B, int ldb)
+{
+    if (alpha == xfn::zero<T>()) {
+        for (int i = 0; i < m; ++i, B += ldb)
+            std::fill(B, B + n, alpha);
+        return;
+    }
+
+    if (alpha != xfn::one<T>()) {
+        for (int i = 0; i < m; ++i, B += ldb) {
+            std::transform(B, B + n, B, [&alpha](const auto& x){ return alpha * x; });
+        }
+    }
+
+    if (side == cblas::Side::Left) {
+        tbb::parallel_for(tbb::blocked_range<int>(0, n), [=](const auto& r) {
+            std::vector<T> x(m);
+            for (int i = r.begin(); i < r.end(); ++i) {
+                for (int j = 0; j < m; ++j)
+                    x[j] = B[j*ldb + i];
+                trsv(uplo, transA, diag, m, A, lda, x.data(), 1);
+                for (int j = 0; j < m; ++j)
+                    B[j*ldb + i] = x[j];
+            }
+        });
+    } else {
+        transA = transA == cblas::Transpose::NoTrans ? cblas::Transpose::Trans : cblas::Transpose::NoTrans;
+        tbb::parallel_for(tbb::blocked_range<int>(0, m), [=](const auto& r) {
+            for (int i = r.begin(); i < r.end(); ++i) {
+                trsv(uplo, transA, diag, n, A, lda, B + i*ldb, 1);
+            }
+        });
+    }
+}
+
+template <typename T>
+std::enable_if_t<cblas::is_blasable<T>::value>
+inline trsm(cblas::Side side, cblas::Triangle uplo, cblas::Transpose transA, cblas::Diagonal diag,
+            const int m, const int n, const T& alpha,
+            const T* A, int lda, T* B, int ldb)
+{
+    cblas::trsm(cblas::Layout::RowMajor, side, uplo, transA, diag, m, n, alpha, A, lda, B, ldb);
+}
+
+template <typename T>
+inline void trsm(cblas::Side side, cblas::Triangle uplo, cblas::Transpose transA, cblas::Diagonal diag,
+                 const int m, const int n, const T& alpha,
+                 const gpgpu::Buffer<T>& A, const int lda,
+                 gpgpu::Buffer<T>& B, const int ldb)
+{
+    gblas::trsm(gblas::Layout::RowMajor,
                 static_cast<gblas::Side>(side),
                 static_cast<gblas::Triangle>(uplo),
                 static_cast<gblas::Transpose>(transA),

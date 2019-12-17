@@ -2630,6 +2630,73 @@ TEST(UniformTest, SymvLower) {
     EXPECT_EQ(symv(cblas::Triangle::Lower, A, x), matmul(B, x));
 }
 
+static void trsv_test(const char* name, cblas::Triangle uplo, cblas::Transpose trans, cblas::Diagonal diag) {
+    constexpr size_t n = 100;
+
+    auto A = Tensor<long double>({n, n}).random(0.1, 1.0);
+    auto x = Tensor<long double>({n}).random(0.1, 1.0);
+    auto y = x;
+
+    SCOPED_TRACE(name);
+    x = trsv(uplo, trans, diag, A, std::move(x));
+    ExpectElementsEQ(y, trmv(uplo, trans, diag, A, x));
+}
+
+TEST(UniformTest, Trsv) {
+    trsv_test("upper notrans nounit", cblas::Triangle::Upper, cblas::Transpose::NoTrans, cblas::Diagonal::NonUnit);
+    trsv_test("upper notrans unit", cblas::Triangle::Upper, cblas::Transpose::NoTrans, cblas::Diagonal::Unit);
+    trsv_test("upper trans nounit", cblas::Triangle::Upper, cblas::Transpose::Trans, cblas::Diagonal::NonUnit);
+    trsv_test("upper trans unit", cblas::Triangle::Upper, cblas::Transpose::Trans, cblas::Diagonal::Unit);
+    trsv_test("lower notrans nounit", cblas::Triangle::Lower, cblas::Transpose::NoTrans, cblas::Diagonal::NonUnit);
+    trsv_test("lower notrans unit", cblas::Triangle::Lower, cblas::Transpose::NoTrans, cblas::Diagonal::Unit);
+    trsv_test("lower trans nounit", cblas::Triangle::Lower, cblas::Transpose::Trans, cblas::Diagonal::NonUnit);
+    trsv_test("lower trans unit", cblas::Triangle::Lower, cblas::Transpose::Trans, cblas::Diagonal::Unit);
+}
+
+static void trsm_left_test(const char* name, cblas::Triangle uplo, cblas::Transpose trans, cblas::Diagonal diag) {
+    constexpr size_t m = 10, n = 20;
+
+    auto A = Tensor<double>({m, m}).random(0.1, 1.0);
+    auto B = Tensor<double>({m, n}).random(0.1, 1.0);
+    auto C = B;
+
+    SCOPED_TRACE(name);
+    B = trsm(cblas::Side::Left, uplo, trans, diag, A, std::move(B));
+    ExpectElementsEQ(C, trmm(cblas::Side::Left, uplo, trans, diag, A, B));
+}
+
+static void trsm_right_test(const char* name, cblas::Triangle uplo, cblas::Transpose trans, cblas::Diagonal diag) {
+    constexpr size_t m = 10, n = 20;
+
+    auto A = Tensor<long double>({n, n}).random(0.1, 1.0);
+    auto B = Tensor<long double>({m, n}).random(0.1, 1.0);
+    auto C = B;
+
+    SCOPED_TRACE(name);
+    B = trsm(cblas::Side::Right, uplo, trans, diag, A, std::move(B));
+    ExpectElementsEQ(C, trmm(cblas::Side::Right, uplo, trans, diag, A, B));
+}
+
+TEST(UniformTest, Trsm) {
+    trsm_left_test("left upper notrans nounit", cblas::Triangle::Upper, cblas::Transpose::NoTrans, cblas::Diagonal::NonUnit);
+    trsm_left_test("left upper notrans unit", cblas::Triangle::Upper, cblas::Transpose::NoTrans, cblas::Diagonal::Unit);
+    trsm_left_test("left upper trans nounit", cblas::Triangle::Upper, cblas::Transpose::Trans, cblas::Diagonal::NonUnit);
+    trsm_left_test("left upper trans unit", cblas::Triangle::Upper, cblas::Transpose::Trans, cblas::Diagonal::Unit);
+    trsm_left_test("left lower notrans nounit", cblas::Triangle::Lower, cblas::Transpose::NoTrans, cblas::Diagonal::NonUnit);
+    trsm_left_test("left lower notrans unit", cblas::Triangle::Lower, cblas::Transpose::NoTrans, cblas::Diagonal::Unit);
+    trsm_left_test("left lower trans nounit", cblas::Triangle::Lower, cblas::Transpose::Trans, cblas::Diagonal::NonUnit);
+    trsm_left_test("left lower trans unit", cblas::Triangle::Lower, cblas::Transpose::Trans, cblas::Diagonal::Unit);
+
+    trsm_right_test("right upper notrans nounit", cblas::Triangle::Upper, cblas::Transpose::NoTrans, cblas::Diagonal::NonUnit);
+    trsm_right_test("right upper notrans unit", cblas::Triangle::Upper, cblas::Transpose::NoTrans, cblas::Diagonal::Unit);
+    trsm_right_test("right upper trans nounit", cblas::Triangle::Upper, cblas::Transpose::Trans, cblas::Diagonal::NonUnit);
+    trsm_right_test("right upper trans unit", cblas::Triangle::Upper, cblas::Transpose::Trans, cblas::Diagonal::Unit);
+    trsm_right_test("right lower notrans nounit", cblas::Triangle::Lower, cblas::Transpose::NoTrans, cblas::Diagonal::NonUnit);
+    trsm_right_test("right lower notrans unit", cblas::Triangle::Lower, cblas::Transpose::NoTrans, cblas::Diagonal::Unit);
+    trsm_right_test("right lower trans nounit", cblas::Triangle::Lower, cblas::Transpose::Trans, cblas::Diagonal::NonUnit);
+    trsm_right_test("right lower trans unit", cblas::Triangle::Lower, cblas::Transpose::Trans, cblas::Diagonal::Unit);
+}
+
 TEST(UniformTest, MatrixInverse) {
     auto X = Matrix<double>({
         {1.,   1/2., 1/3., 1/4., 1/5.},

@@ -65,6 +65,11 @@ inline void ExpectEQ(double a, double b) {
         FAIL() << a << " and " << b << " are not equal";
 }
 
+inline void ExpectEQ(long double a, long double b) {
+    if (!isFloatEQ(a, b))
+        FAIL() << a << " and " << b << " are not equal";
+}
+
 template <typename T>
 inline void ExpectEQ(std::complex<T> a, std::complex<T> b) {
     ExpectEQ(a.real(), b.real());

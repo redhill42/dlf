@@ -196,6 +196,47 @@ trmv(cblas::Triangle uplo, cblas::Transpose trans, cblas::Diagonal diag,
     return trmv(uplo, trans, diag, A, tensor_type<TensorT>(x));
 }
 
+/**
+ * TRSV solves one of the systems of equations
+ *
+ *     A*x = b,  or  A**T*x = b,
+ *
+ * where b and x are n element vectors and A is an n by n unit, or
+ * non-unit, upper or lower triangular matrix.
+ *
+ * No test for singularity or near-singularity is included in this
+ * routine. Such tests must be performed before calling this routine.
+ */
+template <typename TensorT>
+enable_if_non_view_tensor<TensorT, void>
+trsv(cblas::Triangle uplo, cblas::Transpose trans, cblas::Diagonal diag,
+     const TensorT& A, const TensorT& x, TensorT& y)
+{
+    assert(A.is_matrix() && x.is_vector());
+    auto n = x.extent(0);
+    if (A.extent(0) < n || A.extent(1) < n)
+        throw shape_error("trsv: matrix A has too few dimensions");
+    reorder(x, y);
+    detail::trsv(uplo, trans, diag, n, A.data(), A.stride(0), y.data(), 1);
+}
+
+template <typename TensorT>
+enable_if_non_view_tensor<TensorT, tensor_type<TensorT>>
+trsv(cblas::Triangle uplo, cblas::Transpose trans, cblas::Diagonal diag,
+     const TensorT& A, TensorT&& x)
+{
+    trsv(uplo, trans, diag, A, x, x);
+    return std::move(x);
+}
+
+template <typename TensorT>
+enable_if_non_view_tensor<TensorT, tensor_type<TensorT>>
+trsv(cblas::Triangle uplo, cblas::Transpose trans, cblas::Diagonal diag,
+     const TensorT& A, const TensorT& x)
+{
+    return trsv(uplo, trans, diag, A, tensor_type<TensorT>(x));
+}
+
 template <typename TensorT>
 enable_if_non_view_tensor<TensorT, void>
 trmm(cblas::Side side, cblas::Triangle uplo, cblas::Transpose transA, cblas::Diagonal diag,
@@ -232,6 +273,44 @@ trmm(cblas::Side side, cblas::Triangle uplo, cblas::Transpose transA, cblas::Dia
      const TensorT& A, const TensorT& B)
 {
     return trmm(side, uplo, transA, diag, A, tensor_type<TensorT>(B));
+}
+
+template <typename TensorT>
+enable_if_non_view_tensor<TensorT, void>
+trsm(cblas::Side side, cblas::Triangle uplo, cblas::Transpose transA, cblas::Diagonal diag,
+     const tensor_value_type<TensorT>& alpha,
+     const TensorT& A, const TensorT& B, TensorT& C)
+{
+    assert(A.is_matrix() && B.is_matrix());
+
+    auto m = B.extent(0), n = B.extent(1);
+    auto k = (side == cblas::Side::Left) ? m : n;
+    if (A.extent(0) < k || A.extent(1) < k)
+        throw shape_error("trmm: matrix A has too few dimensions");
+    C.resize(m, n);
+    flat_copy(B, C);
+
+    detail::trsm(side, uplo, transA, diag,
+                 m, n, alpha,
+                 A.data(), A.stride(0),
+                 C.data(), C.stride(0));
+}
+
+template <typename TensorT>
+enable_if_non_view_tensor<TensorT, tensor_type<TensorT>>
+trsm(cblas::Side side, cblas::Triangle uplo, cblas::Transpose transA, cblas::Diagonal diag,
+     const TensorT& A, TensorT&& B)
+{
+    trsm(side, uplo, transA, diag, xfn::one<tensor_value_type<TensorT>>(), A, B, B);
+    return std::move(B);
+}
+
+template <typename TensorT>
+enable_if_non_view_tensor<TensorT, tensor_type<TensorT>>
+trsm(cblas::Side side, cblas::Triangle uplo, cblas::Transpose transA, cblas::Diagonal diag,
+     const TensorT& A, const TensorT& B)
+{
+    return trsm(side, uplo, transA, diag, A, tensor_type<TensorT>(B));
 }
 
 //==-------------------------------------------------------------------------
@@ -865,6 +944,12 @@ inline matinv(const Tensor<T>& X) {
     return matinv(Tensor<T>(X));
 }
 
+template <typename T>
+std::enable_if_t<cblas::is_blasable<T>::value, Tensor<T>>
+inline matinv(const TensorView<T>& X) {
+    return matinv(X.reorder());
+}
+
 /**
  * Compute the determinant of the given matrix.
  */
@@ -900,6 +985,12 @@ template <typename T>
 std::enable_if_t<cblas::is_blasable<T>::value, Tensor<T>>
 inline det(const Tensor<T>& X) {
     return det(Tensor<T>(X));
+}
+
+template <typename T>
+std::enable_if_t<cblas::is_blasable<T>::value, Tensor<T>>
+inline det(const TensorView<T>& X) {
+    return det(X.reorder());
 }
 
 template <typename T>
