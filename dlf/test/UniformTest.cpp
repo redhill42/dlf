@@ -2556,78 +2556,174 @@ TEST(UniformTest, TrmvUpper) {
     constexpr size_t n = 100;
 
     auto A = Tensor<int>({n, n}).random(0, 10);
-    auto B = A;
     auto x = Tensor<int>({n}).random(0, 10);
 
+    auto A1 = A;
     for (int i = 0; i < n; ++i) {
         for (int j = 0; j < i; j++)
-            B(i, j) = 0;
+            A1(i, j) = 0;
     }
 
     EXPECT_EQ(trmv(cblas::Triangle::Upper, cblas::Transpose::NoTrans, cblas::Diagonal::NonUnit, A, x),
-              matmul(B, x));
+              matmul(A1, x));
     EXPECT_EQ(trmv(cblas::Triangle::Upper, cblas::Transpose::Trans, cblas::Diagonal::NonUnit, A, x),
-              matmul(B.transpose(), x));
+              matmul(A1.transpose(), x));
 
-    B.diagonal().fill(1);
+    A1.diagonal().fill(1);
     EXPECT_EQ(trmv(cblas::Triangle::Upper, cblas::Transpose::NoTrans, cblas::Diagonal::Unit, A, x),
-              matmul(B, x));
+              matmul(A1, x));
     EXPECT_EQ(trmv(cblas::Triangle::Upper, cblas::Transpose::Trans, cblas::Diagonal::Unit, A, x),
-              matmul(B.transpose(), x));
+              matmul(A1.transpose(), x));
 }
 
 TEST(UniformTest, TrmvLower) {
     constexpr size_t n = 100;
 
     auto A = Tensor<int>({n, n}).random(0, 10);
-    auto B = A;
     auto x = Tensor<int>({n}).random(0, 10);
 
+    auto A1 = A;
     for (int i = 0; i < n; ++i) {
         for (int j = i+1; j < n; j++)
-            B(i, j) = 0;
+            A1(i, j) = 0;
     }
 
     EXPECT_EQ(trmv(cblas::Triangle::Lower, cblas::Transpose::NoTrans, cblas::Diagonal::NonUnit, A, x),
-              matmul(B, x));
+              matmul(A1, x));
     EXPECT_EQ(trmv(cblas::Triangle::Lower, cblas::Transpose::Trans, cblas::Diagonal::NonUnit, A, x),
-              matmul(B.transpose(), x));
+              matmul(A1.transpose(), x));
 
-    B.diagonal().fill(1);
+    A1.diagonal().fill(1);
     EXPECT_EQ(trmv(cblas::Triangle::Lower, cblas::Transpose::NoTrans, cblas::Diagonal::Unit, A, x),
-              matmul(B, x));
+              matmul(A1, x));
     EXPECT_EQ(trmv(cblas::Triangle::Lower, cblas::Transpose::Trans, cblas::Diagonal::Unit, A, x),
-              matmul(B.transpose(), x));
+              matmul(A1.transpose(), x));
 }
 
 TEST(UniformTest, SymvUpper) {
     constexpr size_t n = 100;
 
     auto A = Tensor<int>({n, n}).random(0, 10);
-    auto B = A;
     auto x = Tensor<int>({n}).random(0, 10);
 
+    auto A1 = A;
     for (int i = 1; i < n; ++i) {
         for (int j = 0; j < i; ++j)
-            B(i, j) = B(j, i);
+            A1(i, j) = A1(j, i);
     }
 
-    EXPECT_EQ(symv(cblas::Triangle::Upper, A, x), matmul(B, x));
+    EXPECT_EQ(symv(cblas::Triangle::Upper, A, x), matmul(A1, x));
 }
 
 TEST(UniformTest, SymvLower) {
     constexpr size_t n = 100;
 
     auto A = Tensor<int>({n, n}).random(0, 10);
-    auto B = A;
     auto x = Tensor<int>({n}).random(0, 10);
 
+    auto A1 = A;
     for (int i = 0; i < n; ++i) {
         for (int j = i+1; j < n; ++j)
-            B(i, j) = B(j, i);
+            A1(i, j) = A1(j, i);
     }
 
-    EXPECT_EQ(symv(cblas::Triangle::Lower, A, x), matmul(B, x));
+    EXPECT_EQ(symv(cblas::Triangle::Lower, A, x), matmul(A1, x));
+}
+
+TEST(UniformTest, TrmmUpper) {
+    constexpr size_t n = 100;
+
+    auto A = Tensor<int>({n, n}).random(0, 10);
+    auto B = Tensor<int>({n, n}).random(0, 10);
+
+    auto A1 = A;
+    for (int i = 0; i < n; ++i) {
+        for (int j = 0; j < i; ++j)
+            A1(i, j) = 0;
+    }
+
+    EXPECT_EQ(trmm(cblas::Side::Left, cblas::Triangle::Upper, cblas::Transpose::NoTrans, cblas::Diagonal::NonUnit, A, B),
+              matmul(A1, B));
+    EXPECT_EQ(trmm(cblas::Side::Left, cblas::Triangle::Upper, cblas::Transpose::Trans, cblas::Diagonal::NonUnit, A, B),
+              matmul(A1.transpose(), B));
+    EXPECT_EQ(trmm(cblas::Side::Right, cblas::Triangle::Upper, cblas::Transpose::NoTrans, cblas::Diagonal::NonUnit, A, B),
+              matmul(B, A1));
+    EXPECT_EQ(trmm(cblas::Side::Right, cblas::Triangle::Upper, cblas::Transpose::Trans, cblas::Diagonal::NonUnit, A, B),
+              matmul(B, A1.transpose()));
+
+    A1.diagonal().fill(1);
+    EXPECT_EQ(trmm(cblas::Side::Left, cblas::Triangle::Upper, cblas::Transpose::NoTrans, cblas::Diagonal::Unit, A, B),
+              matmul(A1, B));
+    EXPECT_EQ(trmm(cblas::Side::Left, cblas::Triangle::Upper, cblas::Transpose::Trans, cblas::Diagonal::Unit, A, B),
+              matmul(A1.transpose(), B));
+    EXPECT_EQ(trmm(cblas::Side::Right, cblas::Triangle::Upper, cblas::Transpose::NoTrans, cblas::Diagonal::Unit, A, B),
+              matmul(B, A1));
+    EXPECT_EQ(trmm(cblas::Side::Right, cblas::Triangle::Upper, cblas::Transpose::Trans, cblas::Diagonal::Unit, A, B),
+              matmul(B, A1.transpose()));
+}
+
+TEST(UniformTest, TrmmLower) {
+    constexpr size_t n = 100;
+
+    auto A = Tensor<int>({n, n}).random(0, 10);
+    auto B = Tensor<int>({n, n}).random(0, 10);
+
+    auto A1 = A;
+    for (int i = 0; i < n; ++i) {
+        for (int j = i+1; j < n; ++j)
+            A1(i, j) = 0;
+    }
+
+    EXPECT_EQ(trmm(cblas::Side::Left, cblas::Triangle::Lower, cblas::Transpose::NoTrans, cblas::Diagonal::NonUnit, A, B),
+              matmul(A1, B));
+    EXPECT_EQ(trmm(cblas::Side::Left, cblas::Triangle::Lower, cblas::Transpose::Trans, cblas::Diagonal::NonUnit, A, B),
+              matmul(A1.transpose(), B));
+    EXPECT_EQ(trmm(cblas::Side::Right, cblas::Triangle::Lower, cblas::Transpose::NoTrans, cblas::Diagonal::NonUnit, A, B),
+              matmul(B, A1));
+    EXPECT_EQ(trmm(cblas::Side::Right, cblas::Triangle::Lower, cblas::Transpose::Trans, cblas::Diagonal::NonUnit, A, B),
+              matmul(B, A1.transpose()));
+
+    A1.diagonal().fill(1);
+    EXPECT_EQ(trmm(cblas::Side::Left, cblas::Triangle::Lower, cblas::Transpose::NoTrans, cblas::Diagonal::Unit, A, B),
+              matmul(A1, B));
+    EXPECT_EQ(trmm(cblas::Side::Left, cblas::Triangle::Lower, cblas::Transpose::Trans, cblas::Diagonal::Unit, A, B),
+              matmul(A1.transpose(), B));
+    EXPECT_EQ(trmm(cblas::Side::Right, cblas::Triangle::Lower, cblas::Transpose::NoTrans, cblas::Diagonal::Unit, A, B),
+              matmul(B, A1));
+    EXPECT_EQ(trmm(cblas::Side::Right, cblas::Triangle::Lower, cblas::Transpose::Trans, cblas::Diagonal::Unit, A, B),
+              matmul(B, A1.transpose()));
+}
+
+TEST(UniformTest, SymmUpper) {
+    constexpr size_t n = 100;
+
+    auto A = Tensor<int>({n, n}).random(0, 10);
+    auto B = Tensor<int>({n, n}).random(0, 10);
+
+    auto A1 = A;
+    for (int i = 1; i < n; ++i) {
+        for (int j = 0; j < i; ++j)
+            A1(i, j) = A1(j, i);
+    }
+
+    EXPECT_EQ(symm(cblas::Side::Left, cblas::Triangle::Upper, A, B), matmul(A1, B));
+    EXPECT_EQ(symm(cblas::Side::Right, cblas::Triangle::Upper, A, B), matmul(B, A1));
+}
+
+TEST(UniformTest, SymmLower) {
+    constexpr size_t n = 100;
+
+    auto A = Tensor<int>({n, n}).random(0, 10);
+    auto B = Tensor<int>({n, n}).random(0, 10);
+
+    auto A1 = A;
+    for (int i = 0; i < n; ++i) {
+        for (int j = i+1; j < n; ++j)
+            A1(i, j) = A1(j, i);
+    }
+
+    EXPECT_EQ(symm(cblas::Side::Left, cblas::Triangle::Lower, A, B), matmul(A1, B));
+    EXPECT_EQ(symm(cblas::Side::Right, cblas::Triangle::Lower, A, B), matmul(B, A1));
 }
 
 static void trsv_test(const char* name, cblas::Triangle uplo, cblas::Transpose trans, cblas::Diagonal diag) {

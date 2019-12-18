@@ -329,30 +329,6 @@ inline void gemm(cblas::Transpose transA, cblas::Transpose transB,
 //==-------------------------------------------------------------------------
 
 template <typename T>
-void symmetric_lower_to_squared(const T* A, int lda, T* X, int k) {
-    tbb::parallel_for(tbb::blocked_range2d<int>(0, k, 32, 0, k, 32), [=](auto r) {
-        for (int i = r.rows().begin(); i < r.rows().end(); ++i) {
-            T* px = X + i*k + r.cols().begin();
-            for (int j = r.cols().begin(); j < r.cols().end(); j++, px++) {
-                *px = (j <= i) ? A[i*lda + j] : A[j*lda + i];
-            }
-        }
-    });
-}
-
-template <typename T>
-void symmetric_upper_to_squared(const T* A, int lda, T* X, int k) {
-    tbb::parallel_for(tbb::blocked_range2d<int>(0, k, 32, 0, k, 32), [=](auto r) {
-        for (int i = r.rows().begin(); i < r.rows().end(); ++i) {
-            T* px = X + i*k + r.cols().begin();
-            for (int j = r.cols().begin(); j < r.cols().end(); j++, px++) {
-                *px = (j >= i) ? A[i*lda + j] : A[j*lda + i];
-            }
-        }
-    });
-}
-
-template <typename T>
 void symv_up(const int n,
              const T& alpha, const T* A, int lda, const T* x, int incX,
              const T& beta, T* y, int incY)
@@ -426,19 +402,25 @@ symm(cblas::Side side, cblas::Triangle uplo, const int m, const int n,
      const T& alpha, const T* A, int lda, const T* B, int ldb,
      const T& beta, T* C, const int ldc)
 {
-    auto k = (side == cblas::Side::Left) ? m : n;
-    auto X = std::make_unique<T[]>(k * k);
-    if (uplo == cblas::Triangle::Lower)
-        symmetric_lower_to_squared(A, lda, X.get(), k);
-    else
-        symmetric_upper_to_squared(A, lda, X.get(), k);
-
     if (side == cblas::Side::Left) {
-        gemm(cblas::Transpose::NoTrans, cblas::Transpose::NoTrans,
-             m, n, k, alpha, X.get(), k, B, ldb, beta, C, ldc);
+        tbb::parallel_for(tbb::blocked_range<int>(0, n), [=](const auto& r) {
+            std::vector<T> x(m), y(m);
+            for (int i = r.begin(); i < r.end(); ++i) {
+                for (int j = 0; j < m; ++j) {
+                    x[j] = B[j*ldb + i];
+                    y[j] = C[j*ldc + i];
+                }
+                detail::symv(uplo, m, alpha, A, lda, x.data(), 1, beta, y.data(), 1);
+                for (int j = 0; j < m; ++j)
+                    C[j*ldc + i] = y[j];
+            }
+        });
     } else {
-        gemm(cblas::Transpose::NoTrans, cblas::Transpose::NoTrans,
-             m, n, k, alpha, B, ldb, X.get(), k, beta, C, ldc);
+        tbb::parallel_for(tbb::blocked_range<int>(0, m), [=](const auto& r) {
+            for (int i = r.begin(); i < r.end(); ++i) {
+                detail::symv(uplo, n, alpha, A, lda, B + i*ldb, 1, beta, C + i*ldc, 1);
+            }
+        });
     }
 }
 
@@ -469,40 +451,6 @@ inline void symm(cblas::Side side, cblas::Triangle uplo, const int m, const int 
 //==-------------------------------------------------------------------------
 // Triangular matrix multiplication
 //==-------------------------------------------------------------------------
-
-template <typename T>
-void triangular_lower_to_squared(const T* A, int lda, T* X, int k, bool unit_diagonal) {
-    tbb::parallel_for(tbb::blocked_range2d<int>(0, k, 32, 0, k, 32), [=](auto r) {
-        for (int i = r.rows().begin(); i < r.rows().end(); ++i) {
-            T* px = X + i*k + r.cols().begin();
-            for (int j = r.cols().begin(); j < r.cols().end(); j++, px++) {
-                if (unit_diagonal && i == j)
-                    *px = xfn::one<T>();
-                else if (j <= i)
-                    *px = A[i*lda + j];
-                else
-                    *px = xfn::zero<T>();
-            }
-        }
-    });
-}
-
-template <typename T>
-void triangular_upper_to_squared(const T* A, int lda, T* X, int k, bool unit_diagonal) {
-    tbb::parallel_for(tbb::blocked_range2d<int>(0, k, 32, 0, k, 32), [=](auto r) {
-        for (int i = r.rows().begin(); i < r.rows().end(); ++i) {
-            T* px = X + i*k + r.cols().begin();
-            for (int j = r.cols().begin(); j < r.cols().end(); j++, px++) {
-                if (unit_diagonal && i == j)
-                    *px = xfn::one<T>();
-                else if (j >= i)
-                    *px = A[i*lda + j];
-                else
-                    *px = xfn::zero<T>();
-            }
-        }
-    });
-}
 
 template <typename T>
 void trmv_up(const int n, const T* A, int lda, T* x, int incX, bool trans, bool unit) {
@@ -657,28 +605,38 @@ template <typename T>
 std::enable_if_t<!cblas::is_blasable<T>::value>
 trmm(cblas::Side side, cblas::Triangle uplo, cblas::Transpose transA, cblas::Diagonal diag,
      const int m, const int n, const T& alpha,
-     const T* A, int lda, T* B, int ldb)
+     const T* A, const int lda, T* B, const int ldb)
 {
-    auto k = (side == cblas::Side::Left) ? m : n;
-    auto X = std::make_unique<T[]>(k * k);
-    if (uplo == cblas::Triangle::Lower)
-        triangular_lower_to_squared(A, lda, X.get(), k, diag == cblas::Diagonal::Unit);
-    else
-        triangular_upper_to_squared(A, lda, X.get(), k, diag == cblas::Diagonal::Unit);
+    if (alpha == xfn::zero<T>()) {
+        for (int i = 0; i < m; ++i, B += ldb)
+            std::fill(B, B + n, alpha);
+        return;
+    }
 
-    auto Y = std::make_unique<T[]>(m * n);
-    std::copy(B, B + m*n, Y.get());
+    if (alpha != xfn::one<T>()) {
+        for (int i = 0; i < m; ++i, B += ldb) {
+            std::transform(B, B + n, B, [&alpha](const auto& x){ return alpha * x; });
+        }
+    }
 
     if (side == cblas::Side::Left) {
-        gemm(transA, cblas::Transpose::NoTrans,
-             m, n, k,
-             alpha, X.get(), k, Y.get(), n,
-             xfn::zero<T>(), B, ldb);
+        tbb::parallel_for(tbb::blocked_range<int>(0, n), [=](const auto& r) {
+            std::vector<T> x(m);
+            for (int i = r.begin(); i < r.end(); ++i) {
+                for (int j = 0; j < m; ++j)
+                    x[j] = B[j*ldb + i];
+                detail::trmv(uplo, transA, diag, m, A, lda, x.data(), 1);
+                for (int j = 0; j < m; ++j)
+                    B[j*ldb + i] = x[j];
+            }
+        });
     } else {
-        gemm(cblas::Transpose::NoTrans, transA,
-             m, n, k,
-             alpha, Y.get(), n, X.get(), k,
-             xfn::zero<T>(), B, ldb);
+        transA = transA == cblas::Transpose::NoTrans ? cblas::Transpose::Trans : cblas::Transpose::NoTrans;
+        tbb::parallel_for(tbb::blocked_range<int>(0, m), [=](const auto& r) {
+            for (int i = r.begin(); i < r.end(); ++i) {
+                detail::trmv(uplo, transA, diag, n, A, lda, B + i*ldb, 1);
+            }
+        });
     }
 }
 
