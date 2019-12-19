@@ -459,8 +459,7 @@ enable_if_tensor<TensorT> matpow(TensorT&& A, long n) {
     if (!A.is_inner_square())
         throw shape_error("matpow: square matrix required");
     if (n < 0)
-        throw std::logic_error("matpow: negative exponentiation is not supported");
-
+        return matpow(matinv(std::forward<TensorT>(A)), -n);
     if (n == 0)
         return tensor_type<TensorT>::identity(A.shape());
     if (n == 1)
@@ -918,8 +917,7 @@ norm(const TensorT& X, float ord, bool keepdims = false) {
  * Compute the inverse of the given matrix.
  */
 template <typename T>
-std::enable_if_t<cblas::is_blasable<T>::value, Tensor<T>>
-matinv(Tensor<T>&& X) {
+Tensor<T> matinv(Tensor<T>&& X) {
     if (!X.is_inner_square())
         throw shape_error("matinv: requires square matrix");
 
@@ -930,32 +928,35 @@ matinv(Tensor<T>&& X) {
 
     auto px = X.data();
     for (lapack_int i = 0; i < m; ++i, px += n*n) {
-        if (cblas::getrf(n, n, px, ld, ipiv.data()) != 0)
+        if (detail::getrf(n, n, px, ld, ipiv.data()) != 0)
             throw std::runtime_error("matinv: the matrix is not invertible");
-        if (cblas::getri(n, px, ld, ipiv.data()) != 0)
+        if (detail::getri(n, px, ld, ipiv.data()) != 0)
             throw std::runtime_error("matinv: the matrix is not invertible");
     }
     return std::move(X);
 }
 
 template <typename T>
-std::enable_if_t<cblas::is_blasable<T>::value, Tensor<T>>
-inline matinv(const Tensor<T>& X) {
+inline Tensor<T> matinv(const Tensor<T>& X) {
     return matinv(Tensor<T>(X));
 }
 
 template <typename T>
-std::enable_if_t<cblas::is_blasable<T>::value, Tensor<T>>
-inline matinv(const TensorView<T>& X) {
+inline Tensor<T> matinv(const TensorView<T>& X) {
     return matinv(X.reorder());
+}
+
+template <typename TensorT>
+std::enable_if_t<is_gpu_tensor<TensorT>::value, tensor_type<TensorT>>
+inline matinv(TensorT&& X) {
+    return dev(matinv(X.read())); // FIXME
 }
 
 /**
  * Compute the determinant of the given matrix.
  */
 template <typename T>
-std::enable_if_t<cblas::is_blasable<T>::value, Tensor<T>>
-det(Tensor<T>&& X) {
+Tensor<T> det(Tensor<T>&& X) {
     if (!X.is_inner_square())
         throw shape_error("det: requires square matrix");
 
@@ -969,7 +970,7 @@ det(Tensor<T>&& X) {
 
     auto px = X.data();
     for (auto& y : Y) {
-        cblas::getrf(n, n, px, ld, ipiv.data());
+        detail::getrf(n, n, px, ld, ipiv.data());
         y = T{1};
         for (lapack_int i = 0; i < n; ++i) {
             y *= px[i*(n+1)];
@@ -982,15 +983,19 @@ det(Tensor<T>&& X) {
 }
 
 template <typename T>
-std::enable_if_t<cblas::is_blasable<T>::value, Tensor<T>>
-inline det(const Tensor<T>& X) {
+inline Tensor<T> det(const Tensor<T>& X) {
     return det(Tensor<T>(X));
 }
 
 template <typename T>
-std::enable_if_t<cblas::is_blasable<T>::value, Tensor<T>>
-inline det(const TensorView<T>& X) {
+inline Tensor<T> det(const TensorView<T>& X) {
     return det(X.reorder());
+}
+
+template <typename TensorT>
+std::enable_if_t<is_gpu_tensor<TensorT>::value, tensor_type<TensorT>>
+inline det(TensorT&& X) {
+    return dev(det(X.read())); // FIXME
 }
 
 template <typename T>
@@ -1016,7 +1021,7 @@ linear_solve_function<T>::linear_solve_function(Tensor<T>&& mat) : A(std::move(m
 
     auto n = A.extent(-1);
     ipiv.resize(n);
-    info = cblas::getrf(n, n, A.data(), A.stride(0), ipiv.data());
+    info = detail::getrf(n, n, A.data(), A.stride(0), ipiv.data());
 }
 
 template <typename T>
@@ -1034,21 +1039,8 @@ Tensor<T> linear_solve_function<T>::operator()(Tensor<T>&& b) const {
     lapack_int nrhs = b.is_vector() ? 1 : b.extent(1);
     if (b.extent(0) != n)
         throw shape_error("solve: incompatible shape");
-
-#if HAS_LAPACKE
-    cblas::getrs(n, nrhs, A.data(), A.stride(0), ipiv.data(), b.data(), b.stride(0));
+    detail::getrs(cblas::Transpose::NoTrans, n, nrhs, A.data(), A.stride(0), ipiv.data(), b.data(), b.stride(0));
     return std::move(b);
-#else
-    if (nrhs == 1) {
-        cblas::getrs(n, 1, A.data(), n, ipiv.data(), b.data(), n);
-        return std::move(b);
-    } else {
-        auto x = b.transpose().reorder();
-        cblas::getrs(n, nrhs, A.data(), n, ipiv.data(), x.data(), n);
-        reorder(x.transpose(), b);
-        return std::move(b);
-    }
-#endif
 }
 
 template <typename T>
@@ -1060,14 +1052,12 @@ Tensor<T> linear_solve_function<T>::operator()(const Tensor<T>& b) const {
  * Generate a linear solve function that can be applied repeatedly to different b.
  */
 template <typename T>
-std::enable_if_t<cblas::is_blasable<T>::value, linear_solve_function<T>>
-inline solve(Tensor<T>&& A) {
+inline linear_solve_function<T> solve(Tensor<T>&& A) {
     return linear_solve_function<T>(std::move(A));
 }
 
 template <typename T>
-std::enable_if_t<cblas::is_blasable<T>::value, linear_solve_function<T>>
-inline solve(const Tensor<T>& A) {
+inline linear_solve_function<T> solve(const Tensor<T>& A) {
     return linear_solve_function<T>(A);
 }
 
@@ -1077,9 +1067,7 @@ inline solve(const Tensor<T>& A) {
 template <typename TensorA, typename TensorB>
 std::enable_if_t<
     is_cpu_tensor<TensorA>::value && is_cpu_tensor<TensorB>::value &&
-    !is_tensor_view<TensorA>::value && !is_tensor_view<TensorB>::value &&
-    is_exactly_same_tensor<TensorA, TensorB>::value &&
-    cblas::is_blasable<tensor_value_type<TensorA>>::value,
+    is_exactly_same_tensor<TensorA, TensorB>::value,
     tensor_type<TensorB>>
 inline solve(TensorA&& A, TensorB&& b) {
     return solve(std::forward<TensorA>(A))(std::forward<TensorB>(b));

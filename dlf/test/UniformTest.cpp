@@ -2,6 +2,10 @@
 #include "gtest/gtest.h"
 #include "test_utility.h"
 
+#if HAS_GMP
+#include "gmpxx.h"
+#endif
+
 using namespace dlf;
 
 template <typename T>
@@ -2793,6 +2797,23 @@ TEST(UniformTest, Trsm) {
     trsm_right_test("right lower trans unit", cblas::Triangle::Lower, cblas::Transpose::Trans, cblas::Diagonal::Unit);
 }
 
+TEST(UniformTest, GETRF) {
+    const size_t n = 10;
+
+    auto A = Tensor<float>({n, n}).random(1, 10);
+    auto P = Tensor<float>::identity({n, n});
+    auto ipiv = Tensor<lapack_int>({n});
+
+    auto B = A;
+    detail::getrf2(n, n, B.data(), n, ipiv.data());
+    detail::laswp(n, P.data(), n, 0, n, ipiv.data(), -1);
+
+    Tensor<float> C;
+    C = trmm(cblas::Side::Right, cblas::Triangle::Lower, cblas::Transpose::NoTrans, cblas::Diagonal::Unit, B, P);
+    C = trmm(cblas::Side::Right, cblas::Triangle::Upper, cblas::Transpose::NoTrans, cblas::Diagonal::NonUnit, B, C);
+    ExpectElementsEQ(A, C);
+}
+
 TEST(UniformTest, MatrixInverse) {
     auto X = Matrix<double>({
         {1.,   1/2., 1/3., 1/4., 1/5.},
@@ -2810,6 +2831,25 @@ TEST(UniformTest, MatrixInverse) {
     }));
 }
 
+#if HAS_GMP
+TEST(UniformTest, MatrixInverseGMP) {
+    auto X = Matrix<mpq_class>({
+        {1_mpq,   1_mpq/2, 1_mpq/3, 1_mpq/4, 1_mpq/5},
+        {1_mpq/2, 1_mpq/3, 1_mpq/4, 1_mpq/5, 1_mpq/6},
+        {1_mpq/3, 1_mpq/4, 1_mpq/5, 1_mpq/6, 1_mpq/7},
+        {1_mpq/4, 1_mpq/5, 1_mpq/6, 1_mpq/7, 1_mpq/8},
+        {1_mpq/5, 1_mpq/6, 1_mpq/7, 1_mpq/8, 1_mpq/9}
+    });
+    ExpectElementsEQ(matinv(X), Matrix<mpq_class>({
+        {   25,   -300,    1050,   -1400,    630},
+        { -300,   4800,  -18900,   26880, -12600},
+        { 1050, -18900,   79380, -117600,  56700},
+        {-1400,  26880, -117600,  179200, -88200},
+        {  630, -12600,   56700,  -88200,  44100}
+    }));
+}
+#endif
+
 TEST(UniformTest, LinearSolveVector) {
     auto A = Matrix<float>({{1, 1, 1}, {1, 2, 3}, {1, 4, 9}});
     auto b = Vector<float>({1, 2, 3});
@@ -2823,3 +2863,12 @@ TEST(UniformTest, LinearSolveMatrix) {
     auto x = Matrix<float>({{-2, -1}, {4, 4}, {-1, -1}});
     ExpectElementsEQ(x, solve(A, b));
 }
+
+#if HAS_GMP
+TEST(UniformTest, LinearSolveGMP) {
+    auto A = Tensor<mpq_class>({10, 10}).random(std::uniform_int_distribution<>(1, 10));
+    auto B = Tensor<mpq_class>({10, 8}).random(std::uniform_int_distribution<>(1, 10));
+    auto X = solve(A, B);
+    EXPECT_EQ(matmul(A, X), B);
+}
+#endif

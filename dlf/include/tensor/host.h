@@ -997,7 +997,7 @@ class tensor_printer {
 
         if (level == shape.rank()-1) {
             // last level, printing data
-            out << '[';
+            out << '{';
             for (int i = 0; ; ++i) {
                 out << std::setw(w) << *cur;
                 ++cur;
@@ -1005,10 +1005,10 @@ class tensor_printer {
                     break;
                 out << ',';
             }
-            out << ']';
+            out << '}';
         } else {
             // Intermediate levels, recursive
-            out << '[';
+            out << '{';
             for (int i = 0; ; ++i) {
                 cur = print_rec(out, w, shape, level+1, cur);
                 if (i == d-1)
@@ -1019,7 +1019,7 @@ class tensor_printer {
                 for (int j = 0; j <= level; j++)
                     out << ' ';
             }
-            out << ']';
+            out << '}';
         }
 
         return cur;

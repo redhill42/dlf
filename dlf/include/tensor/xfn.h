@@ -159,35 +159,35 @@ function_kernel_name(norm<T>) { return "norm"; }
 #define DEFINE_UNARY_FUNCTION(fn, op) \
 template <typename T> \
 struct fn : std::unary_function<T,T> { \
-    T operator()(const T& x) const { return op; } \
+    T operator()(const T& x) const { op; } \
 }; \
 template <typename T> inline constexpr const char* \
 function_kernel_name(fn<T>) { return #fn; }
 
-DEFINE_UNARY_FUNCTION(reciprocal, one<T>()/x)
-DEFINE_UNARY_FUNCTION(floor, std::floor(x))
-DEFINE_UNARY_FUNCTION(ceil, std::ceil(x))
-DEFINE_UNARY_FUNCTION(round, std::round(x))
-DEFINE_UNARY_FUNCTION(sqrt, std::sqrt(x))
-DEFINE_UNARY_FUNCTION(square, x*x)
-DEFINE_UNARY_FUNCTION(exp, std::exp(x))
-DEFINE_UNARY_FUNCTION(log, std::log(x))
-DEFINE_UNARY_FUNCTION(sin, std::sin(x))
-DEFINE_UNARY_FUNCTION(cos, std::cos(x))
-DEFINE_UNARY_FUNCTION(tan, std::tan(x))
-DEFINE_UNARY_FUNCTION(asin, std::asin(x))
-DEFINE_UNARY_FUNCTION(acos, std::acos(x))
-DEFINE_UNARY_FUNCTION(atan, std::atan(x))
-DEFINE_UNARY_FUNCTION(sinh, std::sinh(x))
-DEFINE_UNARY_FUNCTION(cosh, std::cosh(x))
-DEFINE_UNARY_FUNCTION(tanh, std::tanh(x))
-DEFINE_UNARY_FUNCTION(asinh, std::asinh(x))
-DEFINE_UNARY_FUNCTION(acosh, std::acosh(x))
-DEFINE_UNARY_FUNCTION(atanh, std::atanh(x))
-DEFINE_UNARY_FUNCTION(erf, std::erf(x))
-DEFINE_UNARY_FUNCTION(sigmoid, one<T>()/(one<T>()+std::exp(-x)))
-DEFINE_UNARY_FUNCTION(softsign, x/(one<T>()+std::abs(x)))
-DEFINE_UNARY_FUNCTION(softplus, std::log(std::exp(x)+one<T>()))
+DEFINE_UNARY_FUNCTION(reciprocal, return one<T>()/x)
+DEFINE_UNARY_FUNCTION(floor,    using std::floor; return floor(x))
+DEFINE_UNARY_FUNCTION(ceil,     using std::ceil; return ceil(x))
+DEFINE_UNARY_FUNCTION(round,    using std::round; return round(x))
+DEFINE_UNARY_FUNCTION(sqrt,     using std::sqrt; return sqrt(x))
+DEFINE_UNARY_FUNCTION(square,   return x*x)
+DEFINE_UNARY_FUNCTION(exp,      using std::exp; return exp(x))
+DEFINE_UNARY_FUNCTION(log,      using std::log; return log(x))
+DEFINE_UNARY_FUNCTION(sin,      using std::sin; return sin(x))
+DEFINE_UNARY_FUNCTION(cos,      using std::cos; return cos(x))
+DEFINE_UNARY_FUNCTION(tan,      using std::tan; return tan(x))
+DEFINE_UNARY_FUNCTION(asin,     using std::asin; return asin(x))
+DEFINE_UNARY_FUNCTION(acos,     using std::acos; return acos(x))
+DEFINE_UNARY_FUNCTION(atan,     using std::atan; return atan(x))
+DEFINE_UNARY_FUNCTION(sinh,     using std::sinh; return sinh(x))
+DEFINE_UNARY_FUNCTION(cosh,     using std::cosh; return cosh(x))
+DEFINE_UNARY_FUNCTION(tanh,     using std::tanh; return tanh(x))
+DEFINE_UNARY_FUNCTION(asinh,    using std::asinh; return asinh(x))
+DEFINE_UNARY_FUNCTION(acosh,    using std::acosh; return acosh(x))
+DEFINE_UNARY_FUNCTION(atanh,    using std::atanh; return atanh(x))
+DEFINE_UNARY_FUNCTION(erf,      using std::erf; return erf(x))
+DEFINE_UNARY_FUNCTION(sigmoid,  using std::exp; return one<T>()/(one<T>()+exp(-x)))
+DEFINE_UNARY_FUNCTION(softsign, using std::abs; return x/(one<T>()+abs(x)))
+DEFINE_UNARY_FUNCTION(softplus, using std::log; using std::exp; return log(exp(x)+one<T>()))
 
 #undef DEFINE_UNARY_FUNCTION
 

@@ -67,7 +67,7 @@ void gemv_serial(cblas::Transpose trans, int m, int n,
         if (alpha == xfn::zero<T>())
             return;
         for (int i = 0; i < m; ++i, x += incX, A += lda)
-            vmad(n, alpha * *x, A, 1, y, incY);
+            vmad(n, static_cast<T>(alpha * *x), A, 1, y, incY);
     }
 }
 
@@ -191,7 +191,7 @@ void gemm_ikj(const int m, const int n, const int p,
 
         auto pa = A, pb = B;
         for (int k = 0; k < p; ++k, pa += incA, pb += ldb) {
-            vmad(n, alpha * *pa, pb, incB, C, 1);
+            vmad(n, static_cast<T>(alpha * *pa), pb, incB, C, 1);
         }
     }
 }
@@ -342,7 +342,7 @@ void symv_up(const int n,
         *py = alpha * acc + beta * *py;
     }
     for (i = 1, y += incY; i < n; ++i, A += lda, x += incX, y += incY) {
-        vmad(n - i, alpha * *x, A + i, 1, y, incY);
+        vmad(n - i, static_cast<T>(alpha * *x), A + i, 1, y, incY);
     }
 }
 
@@ -360,7 +360,7 @@ void symv_lo(const int n,
         *py = alpha * acc + beta * *py;
     }
     for (i = 1, A += lda, x += incX; i < n; ++i, A += lda, x += incX) {
-        vmad(i, alpha * *x, A, 1, y, incY);
+        vmad(i, static_cast<T>(alpha * *x), A, 1, y, incY);
     }
 }
 
@@ -541,7 +541,7 @@ void trsv_up(const int n, const T* A, const int lda, T* x, const int incX, bool 
     } else {
         for (int i = 0; i < n; ++i, A += lda, x += incX) {
             if (nounit) *x /= A[i];
-            detail::vmad(n-i-1, -*x, A+i+1, 1, x+incX, incX);
+            detail::vmad(n-i-1, static_cast<T>(-*x), A+i+1, 1, x+incX, incX);
         }
     }
 }
@@ -560,7 +560,7 @@ void trsv_lo(const int n, const T* A, const int lda, T* x, const int incX, bool 
         y += (n - 1)*incX;
         for (int i = n; --i >= 0; A -= lda, y -= incX) {
             if (nounit) *y /= A[i];
-            detail::vmad(i, -*y, A, 1, x, incX);
+            detail::vmad(i, static_cast<T>(-*y), A, 1, x, incX);
         }
     }
 }
@@ -1154,6 +1154,373 @@ norm_p(const TensorT& X, float ord, int axis, bool keepdims) {
     using T = tensor_value_type<TensorT>;
     const auto p = static_cast<T>(ord);
     return pow(reduce_sum(pow(abs(X), p), axis, keepdims), xfn::one<T>()/p);
+}
+
+//==-------------------------------------------------------------------------
+// LU Decomposition
+//==-------------------------------------------------------------------------
+
+/**
+ * Finds the index of the first element having maximum absolute value.
+ */
+template <typename T>
+lapack_int iamax(lapack_int n, T* x, lapack_int x_inc) {
+    using std::abs;
+    if (n == 0)
+        return -1;
+    int imax = 0;
+    T   xmax = abs(*x);
+    for (lapack_int i = 1; i < n; ++i) {
+        x += x_inc;
+        if (abs(*x) > xmax) {
+            xmax = abs(*x);
+            imax = i;
+        }
+    }
+    return imax;
+}
+
+/**
+ * Performs a series of row interchanges on the matrix A.
+ * One row interchange is initiated for each of rows k1 throw k2 of A.
+ */
+template <typename T>
+void laswp(lapack_int n, T* A, lapack_int lda, lapack_int k1, lapack_int k2, const lapack_int* ipiv, lapack_int inc = 1) {
+    assert(inc == 1 || inc == -1);
+    if (inc == 1) {
+        for (auto i = k1; i < k2; ++i) {
+            auto ip = ipiv[i] - 1;
+            if (ip != i) {
+                for (lapack_int j = 0; j < n; ++j) {
+                    using std::swap;
+                    swap(A[i*lda + j], A[ip*lda + j]);
+                }
+            }
+        }
+    } else {
+        for (auto i = k2-1; i >= k1; --i) {
+            auto ip = ipiv[i] - 1;
+            if (ip != i) {
+                for (lapack_int j = 0; j < n; ++j) {
+                    using std::swap;
+                    swap(A[i*lda + j], A[ip*lda + j]);
+                }
+            }
+        }
+    }
+}
+
+/**
+ * GETRF2 computes an LU factorization of a general M-by-N A using
+ * partial pivoting with row interchanges.
+ *
+ * The factorization has the form
+ *     A = P * L * U
+ * where P is a permutation matrix, L is lower triangular with unit diagonal
+ * elements (lower trapezoidal if m > n), and U is upper triangular (upper
+ * trapezoidal if m < n).
+ *
+ * This is the recursive version of the algorithm. It divides the matrix
+ * into four submatrices:
+*
+ *         [  A11 | A12  ]   where A11 is n1 by n1 and A22 is n2 by n2
+ *     A = [ -----|----- ]   with n1 = min(m,n)/2
+ *         [  A21 | A22  ]        n2 = n-n1
+ *
+ *                                       [ A11 ]
+ * The subroutine calls itself to factor [ --- ],
+ *                                       [ A21 ]
+ *                [ A12 ]
+ * do the swap on [ --- ], solve A12, update A22,
+ *                [ A22 ]
+ *
+ * then calls itself to factor A22 and do the swap on A21
+ *
+ * @param m The number of rows of the matrix A.
+ * @param n The number of columns of the matrix A.
+ * @param A On entry, The M-by-N matrix to be factorized
+ *          On exit, the factors L and U from the factorizaiton
+ *          A = P*L*U; the unit diagonal elements of L are not stored.
+ * @param lda The leading dimension of the array A.
+ * @param ipiv The 1-based pivot indices; for 1 <= i <= min(m,n), row
+ *        i of the matrix was interchanged with row ipiv(i).
+ * @return = 0:  successful exit
+ *         > 0:  U(i,i) is exactly zero. The factorization has been
+ *               completed, but the factor U is exactly sigular,
+ *               and division by zero will occur if it is to solve
+ *               a system of equations.
+ */
+template <typename T>
+lapack_int getrf2(lapack_int m, lapack_int n, T* A, lapack_int lda, lapack_int* ipiv) {
+    using std::swap;
+
+    if (m == 1) {
+        // Use unblocked code for on row case
+        ipiv[0] = 1;
+        if (A[0] == xfn::zero<T>())
+            return 1;
+        return 0;
+    }
+
+    if (n == 1) {
+        // Use unblocked code for one column case.
+        auto i = detail::iamax(m, A, lda);  // Find pivot
+        auto pivot = A[i * lda];
+        ipiv[0] = i + 1;
+        if (pivot == xfn::zero<T>())    // Test for singularity
+            return 1;
+        if (i != 0)                     // Apply the interchange
+            swap(A[0], A[i * lda]);
+        for (i = 1; i < m; ++i)         // Compute elements 2:M of the column
+            A[i * lda] /= pivot;
+        return 0;
+    }
+
+    // Use recursive code
+    auto n1 = std::min(m, n) / 2;
+    auto n2 = n - n1;
+
+    //        [ A11 ]
+    // Factor [ --- ]
+    //        [ A21 ]
+    auto info = detail::getrf2(m, n1, A, lda, ipiv);
+
+    //                      [ A12 ]
+    // Apply interchange to [ --- ]
+    //                      [ A22 ]
+    detail::laswp(n2, A + n1, lda, 0, n1, ipiv);
+
+    // Solve A12
+    detail::trsm(cblas::Side::Left, cblas::Triangle::Lower, cblas::Transpose::NoTrans, cblas::Diagonal::Unit,
+                 n1, n2, xfn::one<T>(), A, lda, A + n1, lda);
+
+    // Update A22
+    detail::gemm(cblas::Transpose::NoTrans, cblas::Transpose::NoTrans,
+                 m-n1, n2, n1, xfn::neg_one<T>(), A + n1*lda, lda, A + n1, lda,
+                 xfn::one<T>(), A + n1*lda + n1, lda);
+
+    // Factor A22
+    auto info2 = detail::getrf2(m-n1, n2, A + n1*lda + n1, lda, ipiv + n1);
+    if (info == 0 && info2 > 0)
+        info = info2 + n1;
+    for (auto i = n1; i < std::min(m, n); ++i)
+        ipiv[i] += n1;
+
+    // Apply interchanges to A21
+    detail::laswp(n1, A, lda, n1, std::min(m, n), ipiv);
+
+    return info;
+}
+
+/**
+ * GETRF computes an LU factorization of a general M-by-N matrix A
+ * using partial pivoting with row interchanges.
+ *
+ * The factorization has the form
+ *     A = P * L * U
+ * where P is a permutation matrix, L is lower triangular with unit
+ * diagonal elements (lower trapezoidal if m > n), and U is upper
+ * triangular (upper trapezoidal if m < n).
+ *
+ * @param m The number of rows of the matrix A.
+ * @param n The number of columns of the matrix A.
+ * @param A On entry, The M-by-N matrix to be factorized
+ *          On exit, the factors L and U from the factorizaiton
+ *          A = P*L*U; the unit diagonal elements of L are not stored.
+ * @param lda The leading dimension of the array A.
+ * @param ipiv The 1-based pivot indices; for 1 <= i <= min(m,n), row
+ *        i of the matrix was interchanged with row ipiv(i).
+ * @return = 0:  successful exit
+ *         > 0:  U(i,i) is exactly zero. The factorization has been
+ *               completed, but the factor U is exactly sigular,
+ *               and division by zero will occur if it is to solve
+ *               a system of equations.
+ */
+template <typename T>
+std::enable_if_t<!cblas::is_blasable<T>::value, lapack_int>
+getrf(lapack_int m, lapack_int n, T* A, lapack_int lda, lapack_int* ipiv) {
+    return getrf2(m, n, A, lda, ipiv); // TODO
+}
+
+template <typename T>
+std::enable_if_t<cblas::is_blasable<T>::value, lapack_int>
+inline getrf(lapack_int m, lapack_int n, T* A, lapack_int lda, lapack_int* ipiv) {
+    return cblas::getrf(m, n, A, lda, ipiv);
+}
+
+/**
+ * GETRS solves a system of linear equations
+ *     A * X = B  or  A**T * X = B
+ * with a general N-by-N matrix A using the LU factorization computed by GETRF.
+ */
+template <typename T>
+std::enable_if_t<!cblas::is_blasable<T>::value>
+getrs(cblas::Transpose trans, lapack_int n, lapack_int nrhs,
+      const T* A, lapack_int lda, const lapack_int* ipiv,
+      T* B, lapack_int ldb)
+{
+    if (trans == cblas::Transpose::NoTrans) {
+        // Apply row interchanges to the right hand sides.
+        detail::laswp(nrhs, B, ldb, 0, n, ipiv);
+
+        // Solve L*X = B, overwriting B with X.
+        detail::trsm(cblas::Side::Left, cblas::Triangle::Lower, cblas::Transpose::NoTrans, cblas::Diagonal::Unit,
+                     n, nrhs, xfn::one<T>(), A, lda, B, ldb);
+
+        // Solve U*X = B, overwriting B with X.
+        detail::trsm(cblas::Side::Left, cblas::Triangle::Upper, cblas::Transpose::NoTrans, cblas::Diagonal::NonUnit,
+                      n, nrhs, xfn::one<T>(), A, lda, B, ldb);
+    } else {
+        // Solve U**T * X = B, overwriting B with X.
+        detail::trsm(cblas::Side::Left, cblas::Triangle::Upper, cblas::Transpose::Trans, cblas::Diagonal::NonUnit,
+                      n, nrhs, xfn::one<T>(), A, lda, B, ldb);
+
+        // Solve L**T * X = B, overwriting B with X
+        detail::trsm(cblas::Side::Left, cblas::Triangle::Lower, cblas::Transpose::Trans, cblas::Diagonal::Unit,
+                      n, nrhs, xfn::one<T>(), A, lda, B, ldb);
+
+        // Apply row interchanges to the solution vectors.
+        detail::laswp(nrhs, B, ldb, 0, n, ipiv, -1);
+    }
+}
+
+template <typename T>
+std::enable_if_t<cblas::is_blasable<T>::value>
+getrs(cblas::Transpose trans, lapack_int n, lapack_int nrhs,
+      const T* A, lapack_int lda, const lapack_int* ipiv,
+      T* B, lapack_int ldb)
+{
+#if HAS_LAPACKE
+    char tr = trans == cblas::Transpose::NoTrans ? 'N' : 'T';
+    cblas::getrs(tr, n, nrhs, A, lda, ipiv, B, ldb);
+#else
+    char tr = trans == cblas::Transpose::NoTrans ? 'T' : 'N';
+    if (nrhs == 1) {
+        cblas::getrs(tr, n, 1, A, lda, ipiv, B, n);
+    } else {
+        auto t = Tensor<T>::wrap(Shape(n, ldb), B).slice({{0, n}, {0, nrhs}});
+        auto work = t.transpose().reorder();
+        cblas::getrs(tr, n, nrhs, A, lda, ipiv, work.data(), n);
+        reorder(work.transpose(), t);
+    }
+#endif
+}
+
+/**
+ * Computes the inverse of a real upper or lower triangular matrix.
+ *
+ * @param uplo Specifies whether the matrix A is upper or lower triangular.
+ * @param diag Specifies whether or not the matrix is unit triangular.
+ * @param n The order of the matrix A.
+ * @param A On entry, the triangular matrix A. If uplo = 'U', the leading
+ *        n by n upper triangular part of the array A contains the upper
+ *        triangular matrix, and the strictly lower triangular part of A
+ *        is not referenced. If uplo = 'L', the leading n by n lower triangular
+ *        part of the array A contains the lower triangular matrix, and the
+ *        strictly upper triangular part of A is not referenced. if diag == 'U,
+ *        the diagonal elements of A are also not referenced and are assumed
+ *        to be 1.
+ *
+ *        On exit, the (triangular) inverse of the original matrix, in the
+ *        same storage format.
+ * @param lda The leading dimension of the array A
+ */
+template <typename T>
+lapack_int trtri(cblas::Triangle uplo, cblas::Diagonal diag,
+                 lapack_int n, T* A, lapack_int lda)
+{
+    lapack_int i;
+    T a;
+
+    // check zero on diagonal for singularity
+    for (i = 0; i < n; ++i) {
+        if (A[i*(lda+1)] == xfn::zero<T>())
+            return i;
+    }
+
+    if (uplo == cblas::Triangle::Upper) {
+        for (i = 0; i < n; ++i) {
+            if (diag == cblas::Diagonal::NonUnit) {
+                T& t = A[i*(lda+1)];
+                t = xfn::one<T>() / t;
+                a = -t;
+            } else {
+                a = xfn::neg_one<T>();
+            }
+
+            // Compute elements 0:i-1 of i-th column
+            detail::trmv(uplo, cblas::Transpose::NoTrans, diag, i, A, lda, A+i, lda);
+            detail::vscal(i, a, A+i, lda);
+        }
+    } else {
+        for (i = n; --i >= 0; ) {
+            if (diag == cblas::Diagonal::NonUnit) {
+                T& t = A[i*(lda+1)];
+                t = xfn::one<T>() / t;
+                a = -t;
+            } else {
+                a = xfn::neg_one<T>();
+            }
+
+            // Compute elements i+1:n of i-th column
+            detail::trmv(uplo, cblas::Transpose::NoTrans, diag,
+                         n-i-1, A + (i+1)*(lda+1), lda, A + (i+1)*lda + i, lda);
+            detail::vscal(n-i-1, a, A + (i+1)*lda + i, lda);
+        }
+    }
+
+    return 0;
+}
+
+/**
+ * Computes the inverse of a matrix using the LU factorization computed by GETRF.
+ *
+ * This method inverts U and then computes inv(A) by solving the system
+ * inv(A)*L = inv(U) for inv(A).
+ */
+template <typename T>
+std::enable_if_t<!cblas::is_blasable<T>::value, lapack_int>
+getri(lapack_int n, T* A, lapack_int lda, const lapack_int* ipiv) {
+    lapack_int i, j;
+
+    // Form inv(U). If info > 0 from trtri, then U is singular, and the inverse
+    // is not computed.
+    auto info = trtri(cblas::Triangle::Upper, cblas::Diagonal::NonUnit, n, A, lda);
+    if (info > 0) return info;
+
+    // Solve the equation inv(A)*L = inv(U) for inv(A)
+    auto work = std::vector<T>(n);
+    for (j = n; --j >= 0; ) {
+        // Copy current column of L to work and replace with zeros.
+        for (i = j+1; i < n; ++i) {
+            work[i] = A[i*lda + j];
+            A[i*lda + j] = xfn::zero<T>();
+        }
+
+        // Compute current column of inv(A)
+        detail::gemv(cblas::Transpose::NoTrans, n, n-j-1, xfn::neg_one<T>(),
+                     A + j+1, lda, work.data() + j+1, 1,
+                     xfn::one<T>(), A + j, lda);
+    }
+
+    // Apply column interchanges
+    for (j = n; --j >= 0; ) {
+        auto jp = ipiv[j] - 1;
+        if (jp != j) {
+            for (i = 0; i < n; ++i) {
+                using std::swap;
+                swap(A[i*lda + j], A[i*lda + jp]);
+            }
+        }
+    }
+
+    return 0;
+}
+
+template <typename T>
+std::enable_if_t<cblas::is_blasable<T>::value, lapack_int>
+inline getri(lapack_int n, T* A, lapack_int lda, const lapack_int* ipiv) {
+    return cblas::getri(n, A, lda, ipiv);
 }
 
 }} // namespace dlf::detail
