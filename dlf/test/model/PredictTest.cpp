@@ -326,6 +326,44 @@ TYPED_TEST(PredictTest, Reduce) {
     }));
 }
 
+TYPED_TEST(PredictTest, Det_2D) {
+    using Context = TypeParam;
+    Graph g;
+
+    auto x = g.addInput("X", DataType::FLOAT, {2, 2});
+
+    auto a = g.append<Det>();
+    a->addInput(x);
+    g.addOutput(a->addOutput("Y"));
+
+    Predictor<Context, float> predictor(g);
+    predictor.set(0, Tensor<float>({2, 2}, {1, 2, 3, 4}));
+    predictor.predict();
+
+    ExpectElementsEQ(predictor.get(0), Scalar<float>(-2));
+}
+
+TYPED_TEST(PredictTest, Det_ND) {
+    using Context = TypeParam;
+    Graph g;
+
+    auto x = g.addInput("X", DataType::FLOAT, {3, 2, 2});
+
+    auto a = g.append<Det>();
+    a->addInput(x);
+    g.addOutput(a->addOutput("Y"));
+
+    Predictor<Context, float> predictor(g);
+    predictor.set(0, Tensor<float>({3, 2, 2}, {
+        1, 2, 3, 4,
+        1, 2, 2, 1,
+        1, 3, 3, 1
+    }));
+    predictor.predict();
+
+    ExpectElementsEQ(predictor.get(0), Vector<float>({-2, -3, -8}));
+}
+
 TYPED_TEST(PredictTest, Pad) {
     using Context = TypeParam;
     Graph g;

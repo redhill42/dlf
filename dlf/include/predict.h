@@ -1240,6 +1240,21 @@ private:
         result = std::make_unique<MatMulOp>(this, n);
     }
 
+    struct DetOp : Operator {
+        datum_ptr X, Y;
+        DetOp(OperatorFactory* of, model::Det* n)
+            : X(of->alloc(n->input())), Y(of->alloc(n->output())) {}
+        void evaluate() override {
+            auto out = deref(Y);
+            det(deref(X), out);
+            Y->unget(out);
+        }
+    };
+
+    void visit(model::Det* n) override {
+        result = std::make_unique<DetOp>(this, n);
+    }
+
     struct ConvOp : Operator {
         datum_ptr X, W, B, Y;
         dnn::Filter2D filter;

@@ -32,6 +32,7 @@
   _(Cosh)                   \
   _(CumSum)                 \
   _(DepthToSpace)           \
+  _(Det)                    \
   _(Div)                    \
   _(Dropout)                \
   _(Elu)                    \

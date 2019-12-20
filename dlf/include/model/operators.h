@@ -353,6 +353,8 @@ BEGIN_OPERATOR(QLinearMatMul)
     Value* Y()            { return output(); }
 END_OPERATOR()
 
+DEFINE_OPERATOR(Det)
+
 BEGIN_OPERATOR(TopK)
     DEFINE_INT_ATTRIBUTE(axis, -1)
     DEFINE_BOOL_ATTRIBUTE(largest, true)

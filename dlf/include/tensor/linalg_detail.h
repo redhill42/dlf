@@ -1160,11 +1160,23 @@ norm_p(const TensorT& X, float ord, int axis, bool keepdims) {
 // LU Decomposition
 //==-------------------------------------------------------------------------
 
+template <typename T, typename V = void>
+struct is_comparable {
+    static constexpr bool value = false;
+};
+
+template <typename T>
+struct is_comparable<T, decltype((void)(std::declval<T>() < std::declval<T>()))> {
+    static constexpr bool value = true;
+};
+
 /**
  * Finds the index of the first element having maximum absolute value.
  */
 template <typename T>
-lapack_int iamax(lapack_int n, T* x, lapack_int x_inc) {
+std::enable_if_t<is_comparable<T>::value, lapack_int>
+iamax(lapack_int n, T* x, lapack_int x_inc) {
+    // Find maximum absolute element
     using std::abs;
     if (n == 0)
         return -1;
@@ -1172,12 +1184,24 @@ lapack_int iamax(lapack_int n, T* x, lapack_int x_inc) {
     T   xmax = abs(*x);
     for (lapack_int i = 1; i < n; ++i) {
         x += x_inc;
-        if (abs(*x) > xmax) {
+        if (xmax < abs(*x)) {
             xmax = abs(*x);
             imax = i;
         }
     }
     return imax;
+}
+
+template <typename T>
+std::enable_if_t<!is_comparable<T>::value, lapack_int>
+iamax(lapack_int n, T* x, lapack_int x_inc) {
+    // Find first non-zero element
+    if (n == 0)
+        return -1;
+    for (lapack_int i = 0; i < n; ++i, x += x_inc)
+        if (*x != xfn::zero<T>())
+            return i;
+    return 0; // singular if all elements are zero
 }
 
 /**

@@ -641,6 +641,19 @@ public:
         matmulShapeInference(n, n->A(), n->B());
     }
 
+    void visit(Det* n) override {
+        if (!propagateTypeAndCheckShape(n))
+            return;
+
+        auto dims = n->input()->dims();
+        auto rank = dims.rank();
+        if (rank < 2 || dims[rank-1] != dims[rank-2])
+            fail_shape_inference("Det: The input must be a square matrix or batches of square matrices");
+        dims.erase(rank-1);
+        dims.erase(rank-2);
+        n->output()->set_dims(dims);
+    }
+
     void visit(TopK* n) override {
         if (!propagateTypeAndCheckShape(n))
             return;

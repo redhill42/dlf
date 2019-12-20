@@ -913,89 +913,126 @@ norm(const TensorT& X, float ord, bool keepdims = false) {
     throw shape_error("norm: improper number of dimensions to norm");
 }
 
+//==-------------------------------------------------------------------------
+// Linear solver
+//==-------------------------------------------------------------------------
+
 /**
  * Compute the inverse of the given matrix.
  */
-template <typename T>
-Tensor<T> matinv(Tensor<T>&& X) {
+template <typename TensorT, typename TensorR>
+std::enable_if_t<
+    is_cpu_tensor<TensorT>::value &&
+    is_exactly_same_tensor<TensorT, TensorR>::value &&
+    !is_tensor_view<TensorR>::value &&
+    !std::is_const<std::remove_reference_t<TensorR>>::value>
+matinv(TensorT&& X, TensorR&& Y) {
     if (!X.is_inner_square())
         throw shape_error("matinv: requires square matrix");
 
-    lapack_int n  = X.extent(-1);
-    lapack_int m  = X.size() / (n*n);
-    lapack_int ld = X.stride(-2);
-    std::vector<lapack_int> ipiv(n);
+    reorder(X, Y);
 
-    auto px = X.data();
-    for (lapack_int i = 0; i < m; ++i, px += n*n) {
+    auto n    = Y.extent(-1);
+    auto m    = Y.size() / (n*n);
+    auto ld   = Y.stride(-2);
+    auto px   = Y.data();
+    auto ipiv = std::vector<lapack_int>(n);
+
+    for (size_t i = 0; i < m; ++i, px += n*n) {
         if (detail::getrf(n, n, px, ld, ipiv.data()) != 0)
             throw std::runtime_error("matinv: the matrix is not invertible");
         if (detail::getri(n, px, ld, ipiv.data()) != 0)
             throw std::runtime_error("matinv: the matrix is not invertible");
     }
-    return std::move(X);
 }
 
-template <typename T>
-inline Tensor<T> matinv(const Tensor<T>& X) {
-    return matinv(Tensor<T>(X));
-}
-
-template <typename T>
-inline Tensor<T> matinv(const TensorView<T>& X) {
-    return matinv(X.reorder());
+template <typename TensorT, typename TensorR>
+std::enable_if_t<
+    is_gpu_tensor<TensorT>::value &&
+    is_exactly_same_tensor<TensorT, TensorR>::value &&
+    !is_tensor_view<TensorR>::value&&
+    !std::is_const<std::remove_reference_t<TensorT>>::value>
+matinv(TensorT&& X, TensorR&& Y) {
+    // FIXME
+    auto work = X.read();
+    matinv(work, work);
+    Y.resize(X.shape());
+    Y.write(work);
 }
 
 template <typename TensorT>
-std::enable_if_t<is_gpu_tensor<TensorT>::value, tensor_type<TensorT>>
+enable_if_tensor<TensorT>
+inline matinv(const TensorT& X) {
+    auto Y = tensor_type<TensorT>();
+    matinv(X, Y);
+    return Y;
+}
+
+template <typename TensorT>
+std::enable_if_t<
+    is_non_view_tensor<TensorT>::value &&
+    !std::is_lvalue_reference<TensorT>::value,
+    tensor_type<TensorT>>
 inline matinv(TensorT&& X) {
-    return dev(matinv(X.read())); // FIXME
+    matinv(X, X);
+    return std::move(X);
 }
 
 /**
  * Compute the determinant of the given matrix.
  */
-template <typename T>
-Tensor<T> det(Tensor<T>&& X) {
+template <typename TensorT, typename TensorR>
+std::enable_if_t<
+    is_cpu_tensor<TensorT>::value &&
+    is_exactly_same_tensor<TensorT, TensorR>::value &&
+    !std::is_const<std::remove_reference_t<TensorR>>::value>
+det(TensorT&& X, TensorR&& Y) {
     if (!X.is_inner_square())
         throw shape_error("det: requires square matrix");
 
-    lapack_int n  = X.extent(-1);
-    lapack_int ld = X.stride(-2);
-    std::vector<lapack_int> ipiv(n);
+    using      T     = tensor_value_type<TensorT>;
+    Tensor<T>  A     = std::forward<TensorT>(X);
+    lapack_int n     = A.extent(-1);
+    lapack_int lda   = A.extent(-2);
+    auto       ipiv  = std::vector<lapack_int>(n);
 
-    auto y_dims = X.shape().extents();
+    auto y_dims = A.shape().extents();
     y_dims.erase(y_dims.end()-2, y_dims.end());
-    auto Y = Tensor<T>(Shape(y_dims));
+    Y.resize(Shape(y_dims));
 
-    auto px = X.data();
+    auto pa = A.data();
     for (auto& y : Y) {
-        detail::getrf(n, n, px, ld, ipiv.data());
-        y = T{1};
+        detail::getrf(n, n, pa, lda, ipiv.data());
+        T d = xfn::one<T>();
         for (lapack_int i = 0; i < n; ++i) {
-            y *= px[i*(n+1)];
+            d *= pa[i*(n+1)];
             if (i+1 != ipiv[i])
-                y = -y;
+                d = -d;
         }
-        px += n*n;
+        y = d;
+        pa += n*n;
     }
-    return Y;
 }
 
-template <typename T>
-inline Tensor<T> det(const Tensor<T>& X) {
-    return det(Tensor<T>(X));
-}
-
-template <typename T>
-inline Tensor<T> det(const TensorView<T>& X) {
-    return det(X.reorder());
+template <typename TensorT, typename TensorR>
+std::enable_if_t<
+    is_gpu_tensor<TensorT>::value &&
+    is_exactly_same_tensor<TensorT, TensorR>::value &&
+    !std::is_const<std::remove_reference_t<TensorR>>::value>
+det(TensorT&& X, TensorR&& Y) {
+    // FIXME
+    auto work = Tensor<tensor_value_type<TensorT>>();
+    det(X.read(), work);
+    Y.resize(work.shape());
+    Y.write(work);
 }
 
 template <typename TensorT>
-std::enable_if_t<is_gpu_tensor<TensorT>::value, tensor_type<TensorT>>
+enable_if_tensor<TensorT>
 inline det(TensorT&& X) {
-    return dev(det(X.read())); // FIXME
+    auto Y = tensor_type<TensorT>();
+    det(std::forward<TensorT>(X), Y);
+    return Y;
 }
 
 template <typename T>
