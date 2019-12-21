@@ -1279,7 +1279,7 @@ lapack_int getrf2(lapack_int m, lapack_int n, T* A, lapack_int lda, lapack_int* 
     using std::swap;
 
     if (m == 1) {
-        // Use unblocked code for on row case
+        // Use unblocked code for one row case
         ipiv[0] = 1;
         if (A[0] == xfn::zero<T>())
             return 1;
@@ -1363,7 +1363,47 @@ lapack_int getrf2(lapack_int m, lapack_int n, T* A, lapack_int lda, lapack_int* 
 template <typename T>
 std::enable_if_t<!cblas::is_blasable<T>::value, lapack_int>
 getrf(lapack_int m, lapack_int n, T* A, lapack_int lda, lapack_int* ipiv) {
-    return getrf2(m, n, A, lda, ipiv); // TODO
+    constexpr lapack_int nb = 64;
+    lapack_int info = 0;
+    lapack_int i, j;
+
+    if (std::min(m, n) <= nb) {
+        return detail::getrf2(m, n, A, lda, ipiv);
+    }
+
+    for (j = 0; j < std::min(m, n); j += nb) {
+        auto jb = std::min(std::min(m, n) - j, nb);
+        auto k = j + jb;
+
+        // Factor diagonal and subdiagonal blocks and test for exact singularity.
+        auto info2 = detail::getrf2(m - j, jb, A + j*(lda+1), lda, ipiv + j);
+        if (info == 0 && info2 > 0)
+            info = info2 + j;
+        for (i = j; i < std::min(m, k); ++i)
+            ipiv[i] += j;
+
+        // Apply interchanges to columns 0:j
+        detail::laswp(j, A, lda, j, k, ipiv);
+
+        if (k <= n) {
+            // Apply interchanges to columns k:n
+            detail::laswp(n - k, A + k, lda, j, k, ipiv);
+
+            // Compute block row of U
+            detail::trsm(cblas::Side::Left, cblas::Triangle::Lower, cblas::Transpose::NoTrans, cblas::Diagonal::Unit,
+                         jb, n - k, xfn::one<T>(), A + j*(lda + 1), lda, A + j*lda + k, lda);
+
+            if (k <= m) {
+                // Update trailing submatrix.
+                detail::gemm(cblas::Transpose::NoTrans, cblas::Transpose::NoTrans,
+                             m - k, n - k, jb, xfn::neg_one<T>(),
+                             A + k*lda + j, lda, A + j*lda + k, lda,
+                             xfn::one<T>(), A + k*(lda + 1), lda);
+            }
+        }
+    }
+
+    return info;
 }
 
 template <typename T>

@@ -2798,17 +2798,17 @@ TEST(UniformTest, Trsm) {
 }
 
 TEST(UniformTest, GETRF) {
-    const size_t n = 10;
+    const size_t n = 100;
 
-    auto A = Tensor<float>({n, n}).random(1, 10);
-    auto P = Tensor<float>::identity({n, n});
+    auto A = Tensor<long double>({n, n}).random(1, 10);
+    auto P = Tensor<long double>::identity({n, n});
     auto ipiv = Tensor<lapack_int>({n});
 
     auto B = A;
-    detail::getrf2(n, n, B.data(), n, ipiv.data());
+    detail::getrf(n, n, B.data(), n, ipiv.data());
     detail::laswp(n, P.data(), n, 0, n, ipiv.data(), -1);
 
-    Tensor<float> C;
+    Tensor<long double> C;
     C = trmm(cblas::Side::Right, cblas::Triangle::Lower, cblas::Transpose::NoTrans, cblas::Diagonal::Unit, B, P);
     C = trmm(cblas::Side::Right, cblas::Triangle::Upper, cblas::Transpose::NoTrans, cblas::Diagonal::NonUnit, B, C);
     ExpectElementsEQ(A, C);
