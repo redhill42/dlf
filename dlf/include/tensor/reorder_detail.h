@@ -6,20 +6,32 @@ namespace dlf { namespace detail {
 // Tensor reorder operations
 //==-------------------------------------------------------------------------
 
-#if HAS_MKL
+template <typename T>
+void mtrans(size_t m, size_t n, const T* A, size_t lda, T* B, size_t ldb) {
+    constexpr size_t NB = 32;
+    tbb::parallel_for<size_t>(0, m, NB, [=](size_t i) {
+        for (size_t j = 0; j < n; ++j) {
+            for (size_t k = 0; k < NB && i + k < m; ++k) {
+                B[j*ldb + (i + k)] = A[(i + k)*lda + j];
+            }
+        }
+    });
+}
+
 template <typename TensorX, typename TensorY>
-std::enable_if_t<
-    is_cpu_tensor<TensorX>::value && is_cpu_tensor<TensorY>::value,
-    bool>
+std::enable_if_t<is_cpu_tensor<TensorX>::value && is_cpu_tensor<TensorY>::value, bool>
 inline reorder_transpose(const TensorX& X, TensorY& Y) {
     if (X.rank() != 2)
         return false;
-    return cblas::omatcopy2(
-        'R', 'T', X.extent(1), X.extent(0), xfn::one<tensor_value_type<TensorX>>(),
-        X.data() + X.shape().offset(), X.stride(1), X.stride(0),
-        Y.data() + Y.shape().offset(), Y.stride(0), Y.stride(1)) ;
+    if (X.stride(0) != 1 || static_cast<int>(X.stride(1)) < X.extent(0))
+        return false;
+    if (Y.stride(1) != 1 || static_cast<int>(Y.stride(0)) < Y.extent(1))
+        return false;
+    mtrans(X.extent(1), X.extent(0),
+           X.data() + X.shape().offset(), X.stride(1),
+           Y.data() + Y.shape().offset(), Y.stride(0));
+    return true;
 }
-#endif
 
 template <typename TensorX, typename TensorY>
 std::enable_if_t<is_cpu_tensor<TensorX>::value && is_cpu_tensor<TensorY>::value>
@@ -30,10 +42,8 @@ reorder_impl(const TensorX& X, TensorY&& Y) {
         X.data() == Y.data() && X.shape().offset() == Y.shape().offset())
         return;
 
-#if HAS_MKL
     if (reorder_transpose(X, Y))
         return;
-#endif
 
     map(xfn::transfer<>(), Y, X);
 }

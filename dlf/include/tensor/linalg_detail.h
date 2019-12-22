@@ -1462,10 +1462,10 @@ getrs(cblas::Transpose trans, lapack_int n, lapack_int nrhs,
     if (nrhs == 1) {
         cblas::getrs(tr, n, 1, A, lda, ipiv, B, n);
     } else {
-        auto t = Tensor<T>::wrap(Shape(n, ldb), B).slice({{0, n}, {0, nrhs}});
-        auto work = t.transpose().reorder();
+        auto work = Tensor<T>(Shape(nrhs, n));
+        detail::mtrans(n, nrhs, B, ldb, work.data(), n);
         cblas::getrs(tr, n, nrhs, A, lda, ipiv, work.data(), n);
-        reorder(work.transpose(), t);
+        detail::mtrans(nrhs, n, work.data(), n, B, ldb);
     }
 #endif
 }
