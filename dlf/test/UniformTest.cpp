@@ -8,14 +8,6 @@
 
 using namespace dlf;
 
-template <typename T>
-void ExpectElementsEQ(const Tensor<T>& a, const Tensor<T>& b) {
-    ASSERT_EQ(a.shape(), b.shape());
-    for (size_t i = 0; i < a.size(); i++) {
-        ExpectEQ(a.data()[i], b.data()[i]);
-    }
-}
-
 TEST(UniformTest, ScalarRobust) {
     auto V = Tensor<int>({5}).range(1);
     auto x = Tensor<int>::scalar(3);
@@ -1967,62 +1959,62 @@ TEST(UniformTest, ReduceSumSquare) {
 
 TEST(UniformTest, ReduceSumSquare_GPU) {
     auto X = Tensor<float>({3, 3, 3}).range();
-    ExpectElementsEQ(reduce_sum_square(dev(X), {}).read(), reduce_sum_square(X, {}));
-    ExpectElementsEQ(reduce_sum_square(dev(X), {0}).read(), reduce_sum_square(X, {0}));
-    ExpectElementsEQ(reduce_sum_square(dev(X), {1}).read(), reduce_sum_square(X, {1}));
-    ExpectElementsEQ(reduce_sum_square(dev(X), {2}).read(), reduce_sum_square(X, {2}));
-    ExpectElementsEQ(reduce_sum_square(dev(X), {0,2}).read(), reduce_sum_square(X, {0,2}));
+    EXPECT_ELEMENTS_NEAR(reduce_sum_square(dev(X), {}).read(), reduce_sum_square(X, {}));
+    EXPECT_ELEMENTS_NEAR(reduce_sum_square(dev(X), {0}).read(), reduce_sum_square(X, {0}));
+    EXPECT_ELEMENTS_NEAR(reduce_sum_square(dev(X), {1}).read(), reduce_sum_square(X, {1}));
+    EXPECT_ELEMENTS_NEAR(reduce_sum_square(dev(X), {2}).read(), reduce_sum_square(X, {2}));
+    EXPECT_ELEMENTS_NEAR(reduce_sum_square(dev(X), {0,2}).read(), reduce_sum_square(X, {0,2}));
 }
 
 TEST(UniformTest, ReduceLogSum) {
     auto X = Tensor<float>({3, 2, 2}, {5, 1, 20, 2, 30, 1, 40, 2, 55, 1, 60, 2});
-    ExpectElementsEQ(reduce_log_sum(X, {1}), log(reduce_sum(X, {1})));
+    EXPECT_ELEMENTS_NEAR(reduce_log_sum(X, {1}), log(reduce_sum(X, {1})));
 }
 
 TEST(UniformTest, ReduceLogSum_GPU) {
     auto X = Tensor<float>({3, 3, 3}).range();
-    ExpectElementsEQ(reduce_log_sum(dev(X), {}).read(), reduce_log_sum(X, {}));
-    ExpectElementsEQ(reduce_log_sum(dev(X), {0}).read(), reduce_log_sum(X, {0}));
-    ExpectElementsEQ(reduce_log_sum(dev(X), {1}).read(), reduce_log_sum(X, {1}));
-    ExpectElementsEQ(reduce_log_sum(dev(X), {2}).read(), reduce_log_sum(X, {2}));
-    ExpectElementsEQ(reduce_log_sum(dev(X), {0,2}).read(), reduce_log_sum(X, {0,2}));
+    EXPECT_ELEMENTS_NEAR(reduce_log_sum(dev(X), {}).read(), reduce_log_sum(X, {}));
+    EXPECT_ELEMENTS_NEAR(reduce_log_sum(dev(X), {0}).read(), reduce_log_sum(X, {0}));
+    EXPECT_ELEMENTS_NEAR(reduce_log_sum(dev(X), {1}).read(), reduce_log_sum(X, {1}));
+    EXPECT_ELEMENTS_NEAR(reduce_log_sum(dev(X), {2}).read(), reduce_log_sum(X, {2}));
+    EXPECT_ELEMENTS_NEAR(reduce_log_sum(dev(X), {0,2}).read(), reduce_log_sum(X, {0,2}));
 }
 
 TEST(UniformTest, ReduceLogSumExp) {
     auto X = Tensor<float>({3, 2, 2}, {5, 1, 20, 2, 30, 1, 40, 2, 55, 1, 60, 2});
-    ExpectElementsEQ(reduce_log_sum_exp(X, {1}), log(reduce_sum(exp(X), {1})));
+    EXPECT_ELEMENTS_NEAR(reduce_log_sum_exp(X, {1}), log(reduce_sum(exp(X), {1})));
 }
 
 TEST(UniformTest, ReduceLogSumExp_GPU) {
     auto X = Tensor<float>({3, 3, 3}).range();
-    ExpectElementsEQ(reduce_log_sum_exp(dev(X), {}).read(), reduce_log_sum_exp(X, {}));
-    ExpectElementsEQ(reduce_log_sum_exp(dev(X), {0}).read(), reduce_log_sum_exp(X, {0}));
-    ExpectElementsEQ(reduce_log_sum_exp(dev(X), {1}).read(), reduce_log_sum_exp(X, {1}));
-    ExpectElementsEQ(reduce_log_sum_exp(dev(X), {2}).read(), reduce_log_sum_exp(X, {2}));
-    ExpectElementsEQ(reduce_log_sum_exp(dev(X), {0,2}).read(), reduce_log_sum_exp(X, {0,2}));
+    EXPECT_ELEMENTS_NEAR(reduce_log_sum_exp(dev(X), {}).read(), reduce_log_sum_exp(X, {}));
+    EXPECT_ELEMENTS_NEAR(reduce_log_sum_exp(dev(X), {0}).read(), reduce_log_sum_exp(X, {0}));
+    EXPECT_ELEMENTS_NEAR(reduce_log_sum_exp(dev(X), {1}).read(), reduce_log_sum_exp(X, {1}));
+    EXPECT_ELEMENTS_NEAR(reduce_log_sum_exp(dev(X), {2}).read(), reduce_log_sum_exp(X, {2}));
+    EXPECT_ELEMENTS_NEAR(reduce_log_sum_exp(dev(X), {0,2}).read(), reduce_log_sum_exp(X, {0,2}));
 }
 
 TEST(UniformTest, ReduceProd) {
     auto X = Tensor<float>({3, 2, 2}).range(1);
 
-    ExpectElementsEQ(reduce_prod(X, {}, true), Tensor<float>({1,1,1}, {
+    EXPECT_ELEMENTS_NEAR(reduce_prod(X, {}, true), Tensor<float>({1,1,1}, {
         4.790016e+08
     }));
-    ExpectElementsEQ(reduce_prod(X, {1}, false), Tensor<float>({3,2}, {
+    EXPECT_ELEMENTS_NEAR(reduce_prod(X, {1}, false), Tensor<float>({3,2}, {
         3, 8, 35, 48, 99, 120
     }));
-    ExpectElementsEQ(reduce_prod(X, {1}, true), Tensor<float>({3,1,2}, {
+    EXPECT_ELEMENTS_NEAR(reduce_prod(X, {1}, true), Tensor<float>({3,1,2}, {
         3, 8, 35, 48, 99, 120
     }));
 }
 
 TEST(UniformTest, ReduceProd_GPU) {
     auto X = Tensor<float>({3, 3, 3}).range();
-    ExpectElementsEQ(reduce_prod(dev(X), {}).read(), reduce_prod(X, {}));
-    ExpectElementsEQ(reduce_prod(dev(X), {0}).read(), reduce_prod(X, {0}));
-    ExpectElementsEQ(reduce_prod(dev(X), {1}).read(), reduce_prod(X, {1}));
-    ExpectElementsEQ(reduce_prod(dev(X), {2}).read(), reduce_prod(X, {2}));
-    ExpectElementsEQ(reduce_prod(dev(X), {0,2}).read(), reduce_prod(X, {0,2}));
+    EXPECT_ELEMENTS_NEAR(reduce_prod(dev(X), {}).read(), reduce_prod(X, {}));
+    EXPECT_ELEMENTS_NEAR(reduce_prod(dev(X), {0}).read(), reduce_prod(X, {0}));
+    EXPECT_ELEMENTS_NEAR(reduce_prod(dev(X), {1}).read(), reduce_prod(X, {1}));
+    EXPECT_ELEMENTS_NEAR(reduce_prod(dev(X), {2}).read(), reduce_prod(X, {2}));
+    EXPECT_ELEMENTS_NEAR(reduce_prod(dev(X), {0,2}).read(), reduce_prod(X, {0,2}));
 }
 
 TEST(UniformTest, ReduceL1) {
@@ -2032,25 +2024,25 @@ TEST(UniformTest, ReduceL1) {
 
 TEST(UniformTest, ReduceL1_GPU) {
     auto X = Tensor<float>({3, 3, 3}).range();
-    ExpectElementsEQ(reduce_asum(dev(X), {}).read(), reduce_asum(X, {}));
-    ExpectElementsEQ(reduce_asum(dev(X), {0}).read(), reduce_asum(X, {0}));
-    ExpectElementsEQ(reduce_asum(dev(X), {1}).read(), reduce_asum(X, {1}));
-    ExpectElementsEQ(reduce_asum(dev(X), {2}).read(), reduce_asum(X, {2}));
-    ExpectElementsEQ(reduce_asum(dev(X), {0,2}).read(), reduce_asum(X, {0,2}));
+    EXPECT_ELEMENTS_NEAR(reduce_asum(dev(X), {}).read(), reduce_asum(X, {}));
+    EXPECT_ELEMENTS_NEAR(reduce_asum(dev(X), {0}).read(), reduce_asum(X, {0}));
+    EXPECT_ELEMENTS_NEAR(reduce_asum(dev(X), {1}).read(), reduce_asum(X, {1}));
+    EXPECT_ELEMENTS_NEAR(reduce_asum(dev(X), {2}).read(), reduce_asum(X, {2}));
+    EXPECT_ELEMENTS_NEAR(reduce_asum(dev(X), {0,2}).read(), reduce_asum(X, {0,2}));
 }
 
 TEST(UniformTest, ReduceL2) {
     auto X = Tensor<float>({3, 2, 2}).random(-10, 10);
-    ExpectElementsEQ(reduce_nrm2(X, {1}), sqrt(reduce_sum(X*X, {1})));
+    EXPECT_ELEMENTS_NEAR(reduce_nrm2(X, {1}), sqrt(reduce_sum(X*X, {1})));
 }
 
 TEST(UniformTest, ReduceL2_GPU) {
     auto X = Tensor<float>({3, 3, 3}).range();
-    ExpectElementsEQ(reduce_nrm2(dev(X), {}).read(), reduce_nrm2(X, {}));
-    ExpectElementsEQ(reduce_nrm2(dev(X), {0}).read(), reduce_nrm2(X, {0}));
-    ExpectElementsEQ(reduce_nrm2(dev(X), {1}).read(), reduce_nrm2(X, {1}));
-    ExpectElementsEQ(reduce_nrm2(dev(X), {2}).read(), reduce_nrm2(X, {2}));
-    ExpectElementsEQ(reduce_nrm2(dev(X), {0,2}).read(), reduce_nrm2(X, {0,2}));
+    EXPECT_ELEMENTS_NEAR(reduce_nrm2(dev(X), {}).read(), reduce_nrm2(X, {}));
+    EXPECT_ELEMENTS_NEAR(reduce_nrm2(dev(X), {0}).read(), reduce_nrm2(X, {0}));
+    EXPECT_ELEMENTS_NEAR(reduce_nrm2(dev(X), {1}).read(), reduce_nrm2(X, {1}));
+    EXPECT_ELEMENTS_NEAR(reduce_nrm2(dev(X), {2}).read(), reduce_nrm2(X, {2}));
+    EXPECT_ELEMENTS_NEAR(reduce_nrm2(dev(X), {0,2}).read(), reduce_nrm2(X, {0,2}));
 }
 
 TEST(UniformTest, ReduceL2_Complex) {
@@ -2084,7 +2076,7 @@ TEST(UniformTest, Norm) {
     EXPECT_EQ(norm(a, 1), Scalar(20.0f));
     EXPECT_EQ(norm(b, 1), Scalar(7.0f));
 
-    ExpectElementsEQ(norm(a, 3), Scalar(5.84804f));
+    EXPECT_ELEMENTS_NEAR(norm(a, 3), Scalar(5.84804f));
 }
 
 TEST(UniformTest, Norm_GPU) {
@@ -2096,7 +2088,7 @@ TEST(UniformTest, Norm_GPU) {
     EXPECT_EQ(norm(a, 1).read(), Scalar(20.0f));
     EXPECT_EQ(norm(b, 1).read(), Scalar(7.0f));
 
-    ExpectElementsEQ(norm(a, 3).read(), Scalar(5.84804f));
+    EXPECT_ELEMENTS_NEAR(norm(a, 3).read(), Scalar(5.84804f));
 }
 
 TEST(UniformTest, Scan) {
@@ -2739,7 +2731,7 @@ static void trsv_test(const char* name, cblas::Triangle uplo, cblas::Transpose t
 
     SCOPED_TRACE(name);
     x = trsv(uplo, trans, diag, A, std::move(x));
-    ExpectElementsEQ(y, trmv(uplo, trans, diag, A, x));
+    EXPECT_ELEMENTS_NEAR(y, trmv(uplo, trans, diag, A, x));
 }
 
 TEST(UniformTest, Trsv) {
@@ -2762,7 +2754,7 @@ static void trsm_left_test(const char* name, cblas::Triangle uplo, cblas::Transp
 
     SCOPED_TRACE(name);
     B = trsm(cblas::Side::Left, uplo, trans, diag, A, std::move(B));
-    ExpectElementsEQ(C, trmm(cblas::Side::Left, uplo, trans, diag, A, B));
+    EXPECT_ELEMENTS_NEAR(C, trmm(cblas::Side::Left, uplo, trans, diag, A, B));
 }
 
 static void trsm_right_test(const char* name, cblas::Triangle uplo, cblas::Transpose trans, cblas::Diagonal diag) {
@@ -2774,7 +2766,7 @@ static void trsm_right_test(const char* name, cblas::Triangle uplo, cblas::Trans
 
     SCOPED_TRACE(name);
     B = trsm(cblas::Side::Right, uplo, trans, diag, A, std::move(B));
-    ExpectElementsEQ(C, trmm(cblas::Side::Right, uplo, trans, diag, A, B));
+    EXPECT_ELEMENTS_NEAR(C, trmm(cblas::Side::Right, uplo, trans, diag, A, B));
 }
 
 TEST(UniformTest, Trsm) {
@@ -2811,7 +2803,7 @@ TEST(UniformTest, GETRF) {
     Tensor<long double> C;
     C = trmm(cblas::Side::Right, cblas::Triangle::Lower, cblas::Transpose::NoTrans, cblas::Diagonal::Unit, B, P);
     C = trmm(cblas::Side::Right, cblas::Triangle::Upper, cblas::Transpose::NoTrans, cblas::Diagonal::NonUnit, B, C);
-    ExpectElementsEQ(A, C);
+    EXPECT_ELEMENTS_NEAR(A, C);
 }
 
 TEST(UniformTest, MatrixInverse) {
@@ -2822,7 +2814,7 @@ TEST(UniformTest, MatrixInverse) {
         {1/4., 1/5., 1/6., 1/7., 1/8.},
         {1/5., 1/6., 1/7., 1/8., 1/9.}
     });
-    ExpectElementsEQ(matinv(X), Matrix<double>({
+    EXPECT_ELEMENTS_NEAR(matinv(X), Matrix<double>({
         {   25.,   -300.,    1050.,   -1400.,    630.},
         { -300.,   4800.,  -18900.,   26880., -12600.},
         { 1050., -18900.,   79380., -117600.,  56700.},
@@ -2840,7 +2832,7 @@ TEST(UniformTest, MatrixInverseGMP) {
         {1_mpq/4, 1_mpq/5, 1_mpq/6, 1_mpq/7, 1_mpq/8},
         {1_mpq/5, 1_mpq/6, 1_mpq/7, 1_mpq/8, 1_mpq/9}
     });
-    ExpectElementsEQ(matinv(X), Matrix<mpq_class>({
+    EXPECT_EQ(matinv(X), Matrix<mpq_class>({
         {   25,   -300,    1050,   -1400,    630},
         { -300,   4800,  -18900,   26880, -12600},
         { 1050, -18900,   79380, -117600,  56700},
@@ -2854,14 +2846,14 @@ TEST(UniformTest, LinearSolveVector) {
     auto A = Matrix<float>({{1, 1, 1}, {1, 2, 3}, {1, 4, 9}});
     auto b = Vector<float>({1, 2, 3});
     auto x = Vector<float>({-0.5, 2.0, -0.5});
-    ExpectElementsEQ(x, solve(A, b));
+    EXPECT_ELEMENTS_NEAR(x, solve(A, b));
 }
 
 TEST(UniformTest, LinearSolveMatrix) {
     auto A = Matrix<float>({{1, 1, 1}, {1, 2, 3}, {1, 4, 9}});
     auto b = Matrix<float>({{1, 2}, {3, 4}, {5, 6}});
     auto x = Matrix<float>({{-2, -1}, {4, 4}, {-1, -1}});
-    ExpectElementsEQ(x, solve(A, b));
+    EXPECT_ELEMENTS_NEAR(x, solve(A, b));
 }
 
 #if HAS_GMP

@@ -7,14 +7,6 @@ using namespace dlf;
 using namespace dlf::model;
 using namespace dlf::predict;
 
-template <typename T>
-void ExpectElementsEQ(const Tensor<T>& a, const Tensor<T>& b) {
-    ASSERT_EQ(a.shape(), b.shape());
-    for (size_t i = 0; i < a.size(); i++) {
-        ExpectEQ(a.data()[i], b.data()[i]);
-    }
-}
-
 template <typename Context> struct PredictTest : public testing::Test {};
 using PredictTestTypes = testing::Types<CPU, GPU>;
 TYPED_TEST_CASE(PredictTest, PredictTestTypes);
@@ -115,7 +107,7 @@ TYPED_TEST(PredictTest, Conv) {
     predictor.set(1, W);
     predictor.predict();
 
-    ExpectElementsEQ(predictor.get(0), Tensor<float>({1, 1, 5, 5}, {
+    EXPECT_ELEMENTS_NEAR(predictor.get(0), Tensor<float>({1, 1, 5, 5}, {
         13, 22, 28, 34, 25,
         34, 55, 64, 73, 52,
         64, 100, 109, 118, 82,
@@ -340,7 +332,7 @@ TYPED_TEST(PredictTest, Det_2D) {
     predictor.set(0, Tensor<float>({2, 2}, {1, 2, 3, 4}));
     predictor.predict();
 
-    ExpectElementsEQ(predictor.get(0), Scalar<float>(-2));
+    EXPECT_ELEMENTS_NEAR(predictor.get(0), Scalar<float>(-2));
 }
 
 TYPED_TEST(PredictTest, Det_ND) {
@@ -361,7 +353,7 @@ TYPED_TEST(PredictTest, Det_ND) {
     }));
     predictor.predict();
 
-    ExpectElementsEQ(predictor.get(0), Vector<float>({-2, -3, -8}));
+    EXPECT_ELEMENTS_NEAR(predictor.get(0), Vector<float>({-2, -3, -8}));
 }
 
 TYPED_TEST(PredictTest, Pad) {

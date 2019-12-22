@@ -2,7 +2,6 @@
 #include <complex>
 #include "gtest/gtest.h"
 #include "gmock/gmock.h"
-#include "test_utility.h"
 
 #ifndef NDEBUG
 #define GRAINSIZE 1 // enforce parallel algorithm

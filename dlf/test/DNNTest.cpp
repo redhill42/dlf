@@ -6,14 +6,6 @@
 
 using namespace dlf;
 
-template <typename T>
-void ExpectElementsEQ(const Tensor<T>& a, const Tensor<T>& b) {
-    ASSERT_EQ(a.shape(), b.shape());
-    for (size_t i = 0; i < a.size(); i++) {
-        ExpectEQ(a.data()[i], b.data()[i]);
-    }
-}
-
 template <typename T, size_t N, typename Unary>
 static void transform_test(const std::string& name, Unary op) {
     auto A = Tensor<T>({N}).range(N/2);
@@ -28,7 +20,7 @@ static void transform_test(const std::string& name, Unary op) {
     SCOPED_TRACE(name);
     for (size_t i = 0; i < N; i++) {
         T a = op(A(i)), b = B(i);
-        ExpectEQ(a, b);
+        EXPECT_VALUE_NEAR(a, b);
     }
 }
 
@@ -67,29 +59,29 @@ TEST(DNNTest, Transform_Complex) {
     auto A = Tensor<std::complex<float>>({2}, {{1,2}, {3,4}});
     auto dev_A = dev(A);
 
-    ExpectElementsEQ(abs(dev_A).read(), abs(A));
-    ExpectElementsEQ((-dev_A).read(), (-A));
-    ExpectElementsEQ(square(dev_A).read(), square(A));
-    ExpectElementsEQ(reciprocal(dev_A).read(), reciprocal(A));
-    ExpectElementsEQ(conj(dev_A).read(), conj(A));
-    ExpectElementsEQ(sqrt(dev_A).read(), sqrt(A));
-    ExpectElementsEQ(exp(dev_A).read(), exp(A));
-    ExpectElementsEQ(log(dev_A).read(), log(A));
-    ExpectElementsEQ(sin(dev_A).read(), sin(A));
-    ExpectElementsEQ(cos(dev_A).read(), cos(A));
-    ExpectElementsEQ(tan(dev_A).read(), tan(A));
-    ExpectElementsEQ(asin(dev_A).read(), asin(A));
-    ExpectElementsEQ(acos(dev_A).read(), acos(A));
-    ExpectElementsEQ(atan(dev_A).read(), atan(A));
-    ExpectElementsEQ(sinh(dev_A).read(), sinh(A));
-    ExpectElementsEQ(cosh(dev_A).read(), cosh(A));
-    ExpectElementsEQ(tanh(dev_A).read(), tanh(A));
-    ExpectElementsEQ(asinh(dev_A).read(), asinh(A));
-    ExpectElementsEQ(acosh(dev_A).read(), acosh(A));
-    ExpectElementsEQ(atanh(dev_A).read(), atanh(A));
-    ExpectElementsEQ(sigmoid(dev_A).read(), sigmoid(A));
+    EXPECT_ELEMENTS_NEAR(abs(dev_A).read(), abs(A));
+    EXPECT_ELEMENTS_NEAR((-dev_A).read(), (-A));
+    EXPECT_ELEMENTS_NEAR(square(dev_A).read(), square(A));
+    EXPECT_ELEMENTS_NEAR(reciprocal(dev_A).read(), reciprocal(A));
+    EXPECT_ELEMENTS_NEAR(conj(dev_A).read(), conj(A));
+    EXPECT_ELEMENTS_NEAR(sqrt(dev_A).read(), sqrt(A));
+    EXPECT_ELEMENTS_NEAR(exp(dev_A).read(), exp(A));
+    EXPECT_ELEMENTS_NEAR(log(dev_A).read(), log(A));
+    EXPECT_ELEMENTS_NEAR(sin(dev_A).read(), sin(A));
+    EXPECT_ELEMENTS_NEAR(cos(dev_A).read(), cos(A));
+    EXPECT_ELEMENTS_NEAR(tan(dev_A).read(), tan(A));
+    EXPECT_ELEMENTS_NEAR(asin(dev_A).read(), asin(A));
+    EXPECT_ELEMENTS_NEAR(acos(dev_A).read(), acos(A));
+    EXPECT_ELEMENTS_NEAR(atan(dev_A).read(), atan(A));
+    EXPECT_ELEMENTS_NEAR(sinh(dev_A).read(), sinh(A));
+    EXPECT_ELEMENTS_NEAR(cosh(dev_A).read(), cosh(A));
+    EXPECT_ELEMENTS_NEAR(tanh(dev_A).read(), tanh(A));
+    EXPECT_ELEMENTS_NEAR(asinh(dev_A).read(), asinh(A));
+    EXPECT_ELEMENTS_NEAR(acosh(dev_A).read(), acosh(A));
+    EXPECT_ELEMENTS_NEAR(atanh(dev_A).read(), atanh(A));
+    EXPECT_ELEMENTS_NEAR(sigmoid(dev_A).read(), sigmoid(A));
 
-    ExpectElementsEQ(pow(dev_A, dev_A).read(), pow(A, A));
+    EXPECT_ELEMENTS_NEAR(pow(dev_A, dev_A).read(), pow(A, A));
 }
 
 template <typename T> struct TransformTest : public testing::Test {};
@@ -167,7 +159,7 @@ TYPED_TEST(BinaryTest, Add) {
 
     dev_C.readTo(C);
     for (size_t i = 0; i < N; i++) {
-        ExpectEQ(T(A(i) + B(i)), C(i));
+        EXPECT_VALUE_NEAR(T(A(i) + B(i)), C(i));
     }
 }
 
@@ -185,7 +177,7 @@ TYPED_TEST(BinaryTest, Sub) {
 
     dev_C.readTo(C);
     for (size_t i = 0; i < N; i++) {
-        ExpectEQ(T(A(i) - B(i)), C(i));
+        EXPECT_VALUE_NEAR(T(A(i) - B(i)), C(i));
     }
 }
 
@@ -203,7 +195,7 @@ TYPED_TEST(BinaryTest, Mul) {
 
     dev_C.readTo(C);
     for (size_t i = 0; i < N; i++) {
-        ExpectEQ(T(A(i) * B(i)), C(i));
+        EXPECT_VALUE_NEAR(T(A(i) * B(i)), C(i));
     }
 }
 
@@ -223,7 +215,7 @@ TYPED_TEST(BinaryTest, Div) {
     for (size_t i = 0; i < N; i++) {
         if (B(i) == T(0))
             continue;
-        ExpectEQ(T(A(i) / B(i)), C(i));
+        EXPECT_VALUE_NEAR(T(A(i) / B(i)), C(i));
     }
 }
 
@@ -358,7 +350,7 @@ TEST(ActivationTest, Relu) {
     auto dev_A = DevTensor<float>(A);
     auto B = transform(A, xfn::relu<float>());
     auto dev_B = transform(dev_A, xfn::relu<float>());
-    ExpectEQ(B, dev_B.read());
+    EXPECT_ELEMENTS_NEAR(B, dev_B.read());
 }
 
 TEST(ActivationTest, PRelu) {
@@ -368,7 +360,7 @@ TEST(ActivationTest, PRelu) {
     auto dev_A = DevTensor<float>(A);
     auto B = transform(A, Tensor<float>::scalar(0.01f), xfn::prelu<float>());
     auto dev_B = transform(dev_A, DevTensor<float>::scalar(0.01f), xfn::prelu<float>());
-    ExpectEQ(B, dev_B.read());
+    EXPECT_ELEMENTS_NEAR(B, dev_B.read());
 }
 
 template <typename T>
@@ -394,7 +386,7 @@ TEST(DNNTest, BatchNormalizationCPU) {
 
         auto y = Tensor<float>({1, 2, 1, 3});
         dnn::batch_norm(x, y, s, b, m, v);
-        ExpectElementsEQ(t, y);
+        EXPECT_ELEMENTS_NEAR(t, y);
     }
 
     {
@@ -407,7 +399,7 @@ TEST(DNNTest, BatchNormalizationCPU) {
 
         auto y = Tensor<float>({2, 3, 4, 5});
         dnn::batch_norm(x, y, s, b, m, v);
-        ExpectElementsEQ(t, y);
+        EXPECT_ELEMENTS_NEAR(t, y);
     }
 }
 
@@ -422,7 +414,7 @@ TEST(DNNTest, BatchNormalizationGPU) {
 
         auto y = DevTensor<float>({1, 2, 1, 3});
         dnn::batch_norm(dev(x), y, dev(s), dev(b), dev(m), dev(v));
-        ExpectElementsEQ(t, y.read());
+        EXPECT_ELEMENTS_NEAR(t, y.read());
     }
 
     {
@@ -435,7 +427,7 @@ TEST(DNNTest, BatchNormalizationGPU) {
 
         auto y = DevTensor<float>({2, 3, 4, 5});
         dnn::batch_norm(dev(x), y, dev(s), dev(b), dev(m), dev(v));
-        ExpectElementsEQ(t, y.read());
+        EXPECT_ELEMENTS_NEAR(t, y.read());
     }
 }
 
@@ -475,12 +467,12 @@ TEST(DNNTest, LRN) {
     });
 
     dnn::lrn(X, Y, 3, 0.0001f, 0.75f, 1.0f);
-    ExpectElementsEQ(Y, R);
+    EXPECT_ELEMENTS_NEAR(Y, R);
 
     auto dev_X = dev(X);
     auto dev_Y = DevTensor<float>({1, 5, 5, 5});
     dnn::lrn(dev_X, dev_Y, 3, 0.0001f, 0.75f, 1.0f);
-    ExpectElementsEQ(dev_Y.read(), R);
+    EXPECT_ELEMENTS_NEAR(dev_Y.read(), R);
 }
 
 TEST(Conv2D, basic_conv_with_padding) {
@@ -501,7 +493,7 @@ TEST(Conv2D, basic_conv_with_padding) {
 
     auto dev_Y = DevTensor<float>({1, 1, 5, 5});
     dnn::conv2d(dev(X), dev(W), dev_Y, filter);
-    ExpectElementsEQ(dev_Y.read(), R);
+    EXPECT_ELEMENTS_NEAR(dev_Y.read(), R);
 }
 
 TEST(Conv2D, basic_conv_without_padding) {
@@ -520,7 +512,7 @@ TEST(Conv2D, basic_conv_without_padding) {
 
     auto dev_Y = DevTensor<float>({1, 1, 3, 3});
     dnn::conv2d(dev(X), dev(W), dev_Y, filter);
-    ExpectElementsEQ(dev_Y.read(), R);
+    EXPECT_ELEMENTS_NEAR(dev_Y.read(), R);
 }
 
 TEST(Conv2D, conv_with_strides_padding) {
@@ -540,7 +532,7 @@ TEST(Conv2D, conv_with_strides_padding) {
 
     auto dev_Y = DevTensor<float>({1, 1, 4, 3});
     dnn::conv2d(dev(X), dev(W), dev_Y, filter);
-    ExpectElementsEQ(dev_Y.read(), R);
+    EXPECT_ELEMENTS_NEAR(dev_Y.read(), R);
 }
 
 TEST(Conv2D, conv_with_strides_no_padding) {
@@ -559,7 +551,7 @@ TEST(Conv2D, conv_with_strides_no_padding) {
 
     auto dev_Y = DevTensor<float>({1, 1, 3, 2});
     dnn::conv2d(dev(X), dev(W), dev_Y, filter);
-    ExpectElementsEQ(dev_Y.read(), R);
+    EXPECT_ELEMENTS_NEAR(dev_Y.read(), R);
 }
 
 TEST(Conv2D, conv_with_strides_and_asymmetric_padding) {
@@ -579,7 +571,7 @@ TEST(Conv2D, conv_with_strides_and_asymmetric_padding) {
 
     auto dev_Y = DevTensor<float>({1, 1, 4, 2});
     dnn::conv2d(dev(X), dev(W), dev_Y, filter);
-    ExpectElementsEQ(dev_Y.read(), R);
+    EXPECT_ELEMENTS_NEAR(dev_Y.read(), R);
 }
 
 TEST(Conv2D, conv_with_multiple_channels) {
@@ -591,7 +583,7 @@ TEST(Conv2D, conv_with_multiple_channels) {
 
     dnn::conv2d(X, W, Y, filter);
     dnn::conv2d(dev(X), dev(W), dev_Y, filter);
-    ExpectElementsEQ(Y, dev_Y.read());
+    EXPECT_ELEMENTS_NEAR(Y, dev_Y.read());
 }
 
 TEST(Conv2D, conv_with_strange_padding) {
@@ -603,7 +595,7 @@ TEST(Conv2D, conv_with_strange_padding) {
 
     dnn::conv2d(X, W, Y, filter);
     dnn::conv2d(dev(X), dev(W), dev_Y, filter);
-    ExpectElementsEQ(Y, dev_Y.read());
+    EXPECT_ELEMENTS_NEAR(Y, dev_Y.read());
 }
 
 TEST(Conv2D, conv_with_1x1_kernel) {
@@ -615,7 +607,7 @@ TEST(Conv2D, conv_with_1x1_kernel) {
 
     dnn::conv2d(X, W, Y, filter);
     dnn::conv2d(dev(X), dev(W), dev_Y, filter);
-    ExpectElementsEQ(Y, dev_Y.read());
+    EXPECT_ELEMENTS_NEAR(Y, dev_Y.read());
 }
 
 TEST(Conv2D, conv_with_group) {
@@ -627,7 +619,7 @@ TEST(Conv2D, conv_with_group) {
 
     dnn::conv2d(X, W, Y, filter);
     dnn::conv2d(dev(X), dev(W), dev_Y, filter);
-    ExpectElementsEQ(Y, dev_Y.read());
+    EXPECT_ELEMENTS_NEAR(Y, dev_Y.read());
 }
 
 TEST(MaxPool, basic_2d_with_padding) {
@@ -759,7 +751,7 @@ TEST(AveragePool, basic_2d_with_multiple_channels) {
 
     dnn::average_pooling(X, Y, filter, false);
     dnn::average_pooling(dev_X, dev_Y, filter, false);
-    ExpectElementsEQ(dev_Y.read(), Y);
+    EXPECT_ELEMENTS_NEAR(dev_Y.read(), Y);
 }
 
 TEST(LpPool, basic_2d_with_multiple_channels) {
@@ -771,7 +763,7 @@ TEST(LpPool, basic_2d_with_multiple_channels) {
 
     dnn::lp_pooling(X, Y, filter, 2);
     dnn::lp_pooling(dev_X, dev_Y, filter, 2);
-    ExpectElementsEQ(dev_Y.read(), Y);
+    EXPECT_ELEMENTS_NEAR(dev_Y.read(), Y);
 }
 
 TEST(DNNTest, GlobalPooling) {
@@ -785,7 +777,7 @@ TEST(DNNTest, GlobalPooling) {
     EXPECT_EQ(Y, max_R);
 
     dnn::global_average_pooling(X, Y);
-    ExpectElementsEQ(Y, avg_R);
+    EXPECT_ELEMENTS_NEAR(Y, avg_R);
 
     auto dev_X = dev(X);
     auto dev_Y = DevTensor<float>({2, 3, 1, 1});
@@ -794,11 +786,11 @@ TEST(DNNTest, GlobalPooling) {
     EXPECT_EQ(dev_Y.read(), max_R);
 
     dnn::global_average_pooling(dev_X, dev_Y);
-    ExpectElementsEQ(dev_Y.read(), avg_R);
+    EXPECT_ELEMENTS_NEAR(dev_Y.read(), avg_R);
 
     dnn::global_lp_pooling(X, Y, 2);
     dnn::global_lp_pooling(dev_X, dev_Y, 2);
-    ExpectElementsEQ(dev_Y.read(), Y);
+    EXPECT_ELEMENTS_NEAR(dev_Y.read(), Y);
 }
 
 TEST(DNNTest, Softmax) {
@@ -809,13 +801,13 @@ TEST(DNNTest, Softmax) {
     });
 
     auto Y = dnn::softmax(X);
-    ExpectElementsEQ(Y, R);
+    EXPECT_ELEMENTS_NEAR(Y, R);
 
     auto dev_Y = dnn::softmax(dev(X));
-    ExpectElementsEQ(dev_Y.read(), R);
+    EXPECT_ELEMENTS_NEAR(dev_Y.read(), R);
 
     auto Y1 = dnn::softmax(std::move(X));
-    ExpectElementsEQ(Y1, R);
+    EXPECT_ELEMENTS_NEAR(Y1, R);
 }
 
 TEST(DNNTest, LogSoftmax) {
@@ -826,13 +818,13 @@ TEST(DNNTest, LogSoftmax) {
     });
 
     auto Y = dnn::logsoftmax(X);
-    ExpectElementsEQ(Y, R);
+    EXPECT_ELEMENTS_NEAR(Y, R);
 
     auto dev_Y = dnn::logsoftmax(dev(X));
-    ExpectElementsEQ(dev_Y.read(), R);
+    EXPECT_ELEMENTS_NEAR(dev_Y.read(), R);
 
     auto Y1 = dnn::logsoftmax(std::move(X));
-    ExpectElementsEQ(Y1, R);
+    EXPECT_ELEMENTS_NEAR(Y1, R);
 }
 
 TEST(DNNTest, Hardmax) {
