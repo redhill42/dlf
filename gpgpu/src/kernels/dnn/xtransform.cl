@@ -64,7 +64,7 @@ CL_PROGRAM R"(
 #  define OP(c,a)   c = zatanh(a)
 #elif defined(ROUTINE_erf)
 #  define OP(c,a) SetReal(c, erf(GetReal(a))) /*FIXME*/
-#elif defined(ROUTINE_reciprocal)
+#elif defined(ROUTINE_recip)
   #define OP(c,a)                           \
      do {                                   \
        singlereal d = a.x*a.x + a.y*a.y;    \
@@ -137,7 +137,7 @@ CL_PROGRAM R"(
 #  define OP(c,a)   c = atanh(a)
 #elif defined(ROUTINE_erf)
 #  define OP(c,a)   c = erf(a)
-#elif defined(ROUTINE_reciprocal)
+#elif defined(ROUTINE_recip)
 #  define OP(c,a)   c = ONE / a
 #elif defined(ROUTINE_sigmoid)
 #  define OP(c,a)   c = (ONE/(ONE+exp(-a)))

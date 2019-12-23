@@ -113,7 +113,7 @@ inline enable_if_tensor<TensorT> name(TensorT&& X) { \
 DEFINE_UNARY_OPERATOR(abs, abs)
 DEFINE_UNARY_OPERATOR(operator-, negate)
 DEFINE_UNARY_OPERATOR(sign, sign)
-DEFINE_UNARY_OPERATOR(reciprocal, reciprocal)
+DEFINE_UNARY_OPERATOR(recip, recip)
 DEFINE_UNARY_OPERATOR(conj, conj)
 DEFINE_UNARY_OPERATOR(floor, floor)
 DEFINE_UNARY_OPERATOR(ceil, ceil)

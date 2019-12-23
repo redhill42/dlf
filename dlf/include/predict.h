@@ -718,7 +718,7 @@ private:
     DEFINE_UNARY_OPERATOR(Abs, abs)
     DEFINE_UNARY_OPERATOR(Neg, negate)
     DEFINE_UNARY_OPERATOR(Sign, sign)
-    DEFINE_UNARY_OPERATOR(Reciprocal, reciprocal)
+    DEFINE_UNARY_OPERATOR(Reciprocal, recip)
     DEFINE_UNARY_OPERATOR(Floor, floor)
     DEFINE_UNARY_OPERATOR(Ceil, ceil)
     DEFINE_UNARY_OPERATOR(Round, round)

@@ -156,7 +156,7 @@ struct map_impl<xfn::transfer<fn<T>>> : mkl_map_impl<mkl_basic_types> { \
 };
 
 DEFINE_VML_UNARY_FUNCTION(Abs, xfn::abs)
-DEFINE_VML_UNARY_FUNCTION(Inv, xfn::reciprocal)
+DEFINE_VML_UNARY_FUNCTION(Inv, xfn::recip)
 DEFINE_VML_UNARY_FUNCTION(Sqr, xfn::square)
 DEFINE_VML_UNARY_FUNCTION(Floor, xfn::floor)
 DEFINE_VML_UNARY_FUNCTION(Ceil, xfn::ceil)
@@ -186,7 +186,7 @@ struct map_impl<xfn::transfer<fn<T>>> : map_impl_base { \
         { vx##name(f.f, n, y, static_cast<std::add_const_t<A>*>(a)); } \
 };
 
-DEFINE_VML_UNARY_FUNCTION(rec, xfn::reciprocal)
+DEFINE_VML_UNARY_FUNCTION(rec, xfn::recip)
 DEFINE_VML_UNARY_FUNCTION(sqrt, xfn::sqrt)
 DEFINE_VML_UNARY_FUNCTION(exp, xfn::exp)
 DEFINE_VML_UNARY_FUNCTION(log, xfn::log)

@@ -164,7 +164,7 @@ struct fn : std::unary_function<T,T> { \
 template <typename T> inline constexpr const char* \
 function_kernel_name(fn<T>) { return #fn; }
 
-DEFINE_UNARY_FUNCTION(reciprocal, return one<T>()/x)
+DEFINE_UNARY_FUNCTION(recip,    return one<T>()/x)
 DEFINE_UNARY_FUNCTION(floor,    using std::floor; return floor(x))
 DEFINE_UNARY_FUNCTION(ceil,     using std::ceil; return ceil(x))
 DEFINE_UNARY_FUNCTION(round,    using std::round; return round(x))

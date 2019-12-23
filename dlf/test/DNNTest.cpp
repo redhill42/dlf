@@ -26,7 +26,7 @@ static void transform_test(const std::string& name, Unary op) {
 
 template <typename T, size_t N>
 static void transform_test_all() {
-    transform_test<T,N>("reciprocal", [](T x){ return 1/x;});
+    transform_test<T,N>("recip", [](T x){ return 1/x;});
     transform_test<T,N>("floor", [](T x){ return floor(x); });
     transform_test<T,N>("ceil", [](T x){ return ceil(x); });
     transform_test<T,N>("round", [](T x){ return round(x); });
@@ -62,7 +62,7 @@ TEST(DNNTest, Transform_Complex) {
     EXPECT_ELEMENTS_NEAR(abs(dev_A).read(), abs(A));
     EXPECT_ELEMENTS_NEAR((-dev_A).read(), (-A));
     EXPECT_ELEMENTS_NEAR(square(dev_A).read(), square(A));
-    EXPECT_ELEMENTS_NEAR(reciprocal(dev_A).read(), reciprocal(A));
+    EXPECT_ELEMENTS_NEAR(recip(dev_A).read(), recip(A));
     EXPECT_ELEMENTS_NEAR(conj(dev_A).read(), conj(A));
     EXPECT_ELEMENTS_NEAR(sqrt(dev_A).read(), sqrt(A));
     EXPECT_ELEMENTS_NEAR(exp(dev_A).read(), exp(A));
