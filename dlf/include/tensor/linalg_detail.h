@@ -6,8 +6,8 @@ namespace dlf { namespace detail {
 // Low level BLAS routines
 //==-------------------------------------------------------------------------
 
-template <typename T>
-void vscal(const int n, const T& alpha, T* x, const int x_inc) {
+template <typename T, typename U>
+void vscal(const int n, const U& alpha, T* x, const int x_inc) {
     if (alpha == xfn::one<T>())
         return;
     if (alpha == xfn::zero<T>()) {
@@ -18,9 +18,10 @@ void vscal(const int n, const T& alpha, T* x, const int x_inc) {
                 *x = alpha;
         }
     } else {
-        if (x_inc == 1)
-            std::transform(x, x + n, x, [&alpha](const auto& x){ return alpha * x; });
-        else {
+        if (x_inc == 1) {
+            for (int i = 0; i < n; ++i, ++x)
+                *x = alpha * *x;
+        } else {
             for (int i = 0; i < n; ++i, x += x_inc)
                 *x = alpha * *x;
         }
@@ -39,8 +40,8 @@ T vdot(const int n, T init, const T* x, const int x_inc, const T* y, const int y
     return init;
 }
 
-template <typename T>
-void vmad(const int n, const T& alpha, const T* x, const int x_inc, T* y, const int y_inc) {
+template <typename T, typename U>
+void vmad(const int n, const U& alpha, const T* x, const int x_inc, T* y, const int y_inc) {
     if (n <= 0 || alpha == xfn::zero<T>())
         return;
     if (x_inc == 1 && y_inc == 1) {
@@ -67,7 +68,7 @@ void gemv_serial(cblas::Transpose trans, int m, int n,
         if (alpha == xfn::zero<T>())
             return;
         for (int i = 0; i < m; ++i, x += incX, A += lda)
-            vmad(n, static_cast<T>(alpha * *x), A, 1, y, incY);
+            vmad(n, alpha * *x, A, 1, y, incY);
     }
 }
 
@@ -191,7 +192,7 @@ void gemm_ikj(const int m, const int n, const int p,
 
         auto pa = A, pb = B;
         for (int k = 0; k < p; ++k, pa += incA, pb += ldb) {
-            vmad(n, static_cast<T>(alpha * *pa), pb, incB, C, 1);
+            vmad(n, alpha * *pa, pb, incB, C, 1);
         }
     }
 }
@@ -342,7 +343,7 @@ void symv_up(const int n,
         *py = alpha * acc + beta * *py;
     }
     for (i = 1, y += incY; i < n; ++i, A += lda, x += incX, y += incY) {
-        vmad(n - i, static_cast<T>(alpha * *x), A + i, 1, y, incY);
+        vmad(n - i, alpha * *x, A + i, 1, y, incY);
     }
 }
 
@@ -360,7 +361,7 @@ void symv_lo(const int n,
         *py = alpha * acc + beta * *py;
     }
     for (i = 1, A += lda, x += incX; i < n; ++i, A += lda, x += incX) {
-        vmad(i, static_cast<T>(alpha * *x), A, 1, y, incY);
+        vmad(i, alpha * *x, A, 1, y, incY);
     }
 }
 
@@ -541,7 +542,7 @@ void trsv_up(const int n, const T* A, const int lda, T* x, const int incX, bool 
     } else {
         for (int i = 0; i < n; ++i, A += lda, x += incX) {
             if (nounit) *x /= A[i];
-            detail::vmad(n-i-1, static_cast<T>(-*x), A+i+1, 1, x+incX, incX);
+            detail::vmad(n-i-1, -*x, A+i+1, 1, x+incX, incX);
         }
     }
 }
@@ -560,7 +561,7 @@ void trsv_lo(const int n, const T* A, const int lda, T* x, const int incX, bool 
         y += (n - 1)*incX;
         for (int i = n; --i >= 0; A -= lda, y -= incX) {
             if (nounit) *y /= A[i];
-            detail::vmad(i, static_cast<T>(-*y), A, 1, x, incX);
+            detail::vmad(i, -*y, A, 1, x, incX);
         }
     }
 }
@@ -1503,20 +1504,6 @@ lapack_int trtri(cblas::Triangle uplo, cblas::Diagonal diag,
     }
 
     if (uplo == cblas::Triangle::Upper) {
-        for (i = 0; i < n; ++i) {
-            if (diag == cblas::Diagonal::NonUnit) {
-                T& t = A[i*(lda+1)];
-                t = xfn::one<T>() / t;
-                a = -t;
-            } else {
-                a = xfn::neg_one<T>();
-            }
-
-            // Compute elements 0:i-1 of i-th column
-            detail::trmv(uplo, cblas::Transpose::NoTrans, diag, i, A, lda, A+i, lda);
-            detail::vscal(i, a, A+i, lda);
-        }
-    } else {
         for (i = n; --i >= 0; ) {
             if (diag == cblas::Diagonal::NonUnit) {
                 T& t = A[i*(lda+1)];
@@ -1526,10 +1513,25 @@ lapack_int trtri(cblas::Triangle uplo, cblas::Diagonal diag,
                 a = xfn::neg_one<T>();
             }
 
-            // Compute elements i+1:n of i-th column
-            detail::trmv(uplo, cblas::Transpose::NoTrans, diag,
-                         n-i-1, A + (i+1)*(lda+1), lda, A + (i+1)*lda + i, lda);
-            detail::vscal(n-i-1, a, A + (i+1)*lda + i, lda);
+            // Compute elements i+1:n of i-th row
+            detail::trmv(cblas::Triangle::Upper, cblas::Transpose::Trans, diag,
+                         n-i-1, A + (i+1)*(lda+1), lda, A + i*(lda+1) + 1, 1);
+            detail::vscal(n-i-1, a, A + i*(lda+1) + 1, 1);
+        }
+    } else {
+        for (i = 0; i < n; ++i) {
+            if (diag == cblas::Diagonal::NonUnit) {
+                T& t = A[i*(lda+1)];
+                t = xfn::one<T>() / t;
+                a = -t;
+            } else {
+                a = xfn::neg_one<T>();
+            }
+
+            // Compute elements 0:i of i-th row
+            detail::trmv(cblas::Triangle::Lower, cblas::Transpose::Trans, diag,
+                         i, A, lda, A + i*lda, 1);
+            detail::vscal(i, a, A + i*lda, 1);
         }
     }
 
@@ -1568,15 +1570,16 @@ getri(lapack_int n, T* A, lapack_int lda, const lapack_int* ipiv) {
     }
 
     // Apply column interchanges
-    for (j = n; --j >= 0; ) {
-        auto jp = ipiv[j] - 1;
-        if (jp != j) {
-            for (i = 0; i < n; ++i) {
+    tbb::parallel_for<lapack_int>(0, n, [=](auto i) {
+        auto x = A + i*lda;
+        for (auto j = n; --j >= 0; ) {
+            auto jp = ipiv[j] - 1;
+            if (jp != j) {
                 using std::swap;
-                swap(A[i*lda + j], A[i*lda + jp]);
+                swap(x[j], x[jp]);
             }
         }
-    }
+    });
 
     return 0;
 }
