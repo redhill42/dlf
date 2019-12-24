@@ -1415,6 +1415,18 @@ TYPED_TEST(TransposeTest, TransposePerm_GPU) {
     EXPECT_EQ(A.transpose(0, 2, 1).read(), B2);
 }
 
+TEST(UniformTest, TransposeInplace) {
+    constexpr size_t m = 35, n = 28;
+    auto A = Tensor<int>({m, n}).range(0);
+    auto B = A;
+
+    A.transpose_inplace();
+    EXPECT_EQ(A, B.transpose());
+
+    A.transpose_inplace();
+    EXPECT_EQ(A, B);
+}
+
 TEST(UniformTest, MoveAxis) {
     auto X = Tensor<int>({3, 4, 5, 6});
     EXPECT_EQ(moveaxis(X, 0, -1).shape(), Shape(4, 5, 6, 3));

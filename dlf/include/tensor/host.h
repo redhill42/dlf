@@ -355,6 +355,8 @@ public: // Shape operations
     using Spatial<Tensor>::flatten;
     using Spatial<Tensor>::squeeze;
     using Spatial<Tensor>::unsqueeze;
+
+    void transpose_inplace();
 };
 
 template <typename T>
@@ -1140,6 +1142,20 @@ inline void flat_copy(const Tensor<T>& src, Tensor<T>& dst) {
 template <typename T>
 inline void flat_copy(const Tensor<T>& src, Tensor<T>&& dst) {
     flat_copy(src, dst);
+}
+
+// forward declaration
+namespace detail {
+template <typename T> void mitrans(size_t, size_t, T*);
+}
+
+template <typename T>
+void Tensor<T>::transpose_inplace() {
+    assert(this->is_matrix());
+    auto m = shape().extent(0);
+    auto n = shape().extent(1);
+    detail::mitrans(m, n, data());
+    reshape(n, m);
 }
 
 } // namespace dlf

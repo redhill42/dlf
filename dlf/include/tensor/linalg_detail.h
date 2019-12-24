@@ -1462,11 +1462,15 @@ getrs(cblas::Transpose trans, lapack_int n, lapack_int nrhs,
     char tr = trans == cblas::Transpose::NoTrans ? 'T' : 'N';
     if (nrhs == 1) {
         cblas::getrs(tr, n, 1, A, lda, ipiv, B, n);
+    } else if (nrhs == ldb) {
+        detail::mitrans(n, nrhs, B);
+        cblas::getrs(tr, n, nrhs, A, lda, ipiv, B, n);
+        detail::mitrans(nrhs, n, B);
     } else {
-        auto work = Tensor<T>(Shape(nrhs, n));
-        detail::mtrans(n, nrhs, B, ldb, work.data(), n);
-        cblas::getrs(tr, n, nrhs, A, lda, ipiv, work.data(), n);
-        detail::mtrans(nrhs, n, work.data(), n, B, ldb);
+        auto work = std::make_unique<T[]>(n * nrhs);
+        detail::mtrans(n, nrhs, B, ldb, work.get(), n);
+        cblas::getrs(tr, n, nrhs, A, lda, ipiv, work.get(), n);
+        detail::mtrans(nrhs, n, work.get(), n, B, ldb);
     }
 #endif
 }

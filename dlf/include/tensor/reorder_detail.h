@@ -18,6 +18,225 @@ void mtrans(size_t m, size_t n, const T* A, size_t lda, T* B, size_t ldb) {
     });
 }
 
+/**
+ * TRIP: Transposing Rectangular matrices In-place and in Parallel
+ * http://www3.risc.jku.at/publications/download/risc_5916/main%20v1.0.2.pdf
+ */
+template <typename T>
+class TRIP {
+    static void trip(size_t rs, size_t re, size_t cs, size_t ce, T* A, size_t lda);
+    static void sq_trans(size_t, size_t, T*, size_t);
+    static void sq_swap(size_t, size_t, size_t, size_t, T*, size_t);
+    static void merge(size_t, size_t, size_t, size_t, size_t, size_t, T*, size_t);
+    static void merger(size_t, size_t, size_t, size_t, size_t, size_t, size_t, size_t, size_t, T*, size_t);
+    static void split(size_t, size_t, size_t, size_t, size_t, size_t, T*, size_t);
+    static void splitr(size_t, size_t, size_t, size_t, size_t, size_t, size_t, size_t, size_t, T*, size_t);
+    static void reverse(size_t, size_t, size_t, size_t, size_t, T*, size_t);
+    static void reverse_ser(size_t, size_t, size_t, size_t, size_t, size_t, T*, size_t);
+    static void reverse_par(size_t, size_t, size_t, size_t, size_t, size_t, T*, size_t);
+    static void next(size_t*, size_t*, size_t, size_t);
+    static void prev(size_t*, size_t*, size_t, size_t);
+
+public:
+    static void trip(size_t m, size_t n, T* A) {
+        trip(0, m, 0, n, A, n);
+    }
+};
+
+template <typename T>
+void TRIP<T>::trip(size_t rs, size_t re, size_t cs, size_t ce, T* A, size_t lda) {
+    auto m = re - rs;
+    auto n = ce - cs;
+
+    if (m == 1 || n == 1)
+        return;
+    if (m > n) {
+        auto rm = (m >= 2*n) ? (rs + re)/2 : rs + n;
+        tbb::parallel_invoke(
+            [=]{ trip(rs, rm, cs, ce, A, lda); },
+            [=]{ trip(rm, re, cs, ce, A, lda); });
+        merge(rm - rs, re - rm, rs, re, cs, ce, A, lda);
+    } else if (m < n) {
+        auto cm = (n >= 2*m) ? (cs + ce)/2 : cs + m;
+        tbb::parallel_invoke(
+            [=]{ trip(rs, re, cs, cm, A, lda); },
+            [=]{ trip(rs, re, cm, ce, A, lda); });
+        split(cm - cs, ce - cm, rs, re, cs, ce, A, lda);
+    } else {
+        sq_trans(0, n, A + rs*lda + cs, lda);
+    }
+}
+
+template <typename T>
+void TRIP<T>::sq_trans(size_t s, size_t e, T* A, size_t lda) {
+    if (e - s <= 32) {
+        for (size_t r = s; r < e - 1; ++r)
+            for (size_t c = r + 1; c < e; ++c) {
+                using std::swap;
+                swap(A[r*lda + c], A[c*lda + r]);
+            }
+    } else {
+        size_t m = (s + e) / 2;
+        tbb::parallel_invoke(
+            [=]{ sq_trans(s, m, A, lda); },
+            [=]{ sq_trans(m, e, A, lda); },
+            [=]{ sq_swap(m, s, e, m, A, lda); });
+    }
+}
+
+template <typename T>
+void TRIP<T>::sq_swap(size_t rs, size_t cs, size_t re, size_t ce, T* A, size_t lda) {
+    if (re - rs <= 32 && ce - cs <= 32) {
+        for (size_t r = rs; r < re; ++r)
+            for (size_t c = cs; c < ce; ++c) {
+                using std::swap;
+                swap(A[r*lda + c], A[c*lda + r]);
+            }
+    } else {
+        size_t rm = (rs + re) / 2;
+        size_t cm = (cs + ce) / 2;
+        tbb::parallel_invoke(
+            [=]{ sq_swap(rs, cs, rm, cm, A, lda); },
+            [=]{ sq_swap(rm, cs, re, cm, A, lda); },
+            [=]{ sq_swap(rs, cm, rm, ce, A, lda); },
+            [=]{ sq_swap(rm, cm, re, ce, A, lda); });
+    }
+}
+
+template <typename T>
+void TRIP<T>::merge(size_t p, size_t q, size_t rs, size_t re, size_t cs, size_t ce, T* A, size_t lda) {
+    merger(p, q, rs, re, cs, ce, 0, (ce - cs)*(re - rs), ce - cs, A, lda);
+}
+
+template <typename T>
+void TRIP<T>::merger(size_t p, size_t q, size_t rs, size_t re, size_t cs, size_t ce,
+                     size_t m0, size_t m1, size_t k, T* A, size_t lda)
+{
+    if (k == 1) return;
+
+    auto k2 = k / 2;
+    auto r0 = m0 + k2*p;
+    auto r1 = m0 + k*p + k2*q;
+    auto rm = r0 + k2*q;
+    auto mm = m0 + k2*(p + q);
+
+    // reverse whole middle part
+    reverse(r0, r1, rs, cs, ce, A, lda);
+
+    // reverse left and right of the middle part
+    tbb::parallel_invoke(
+        [=]{ reverse(r0, rm, rs, cs, ce, A, lda); },
+        [=]{ reverse(rm, r1, rs, cs, ce, A, lda); });
+
+    // merge the resulting sub-arrays
+    tbb::parallel_invoke(
+        [=]{ merger(p, q, rs, re, cs, ce, m0, mm, k2, A, lda); },
+        [=]{ merger(p, q, rs, re, cs, ce, mm, m1, k - k2, A, lda); });
+}
+
+template <typename T>
+void TRIP<T>::split(size_t p, size_t q, size_t rs, size_t re, size_t cs, size_t ce, T* A, size_t lda) {
+    return splitr(p, q, rs, re, cs, ce, 0, (ce - cs)*(re - rs), re - rs, A, lda);
+}
+
+template <typename T>
+void TRIP<T>::splitr(size_t p, size_t q, size_t rs, size_t re, size_t cs, size_t ce,
+                     size_t s0, size_t s1, size_t k, T* A, size_t lda)
+{
+    if (k == 1) return;
+
+    auto k2 = k / 2;
+    auto r0 = s0 + k2*p;
+    auto r1 = s0 + k*p + k2*q;
+    auto rm = s0 + k*p;
+    auto sm = s0 + k2*(p + q);
+
+    // split left and right part
+    tbb::parallel_invoke(
+        [=]{ splitr(p, q, rs, re, cs, ce, s0, sm, k2, A, lda); },
+        [=]{ splitr(p, q, rs, re, cs, ce, sm, s1, k - k2, A, lda); });
+
+    // rotate middle part
+    reverse(r0, r1, rs, cs, ce, A, lda);
+
+    // rotate left and right part
+    tbb::parallel_invoke(
+        [=]{ reverse(r0, rm, rs, cs, ce, A, lda); },
+        [=]{ reverse(rm, r1, rs, cs, ce, A, lda); });
+}
+
+template <typename T>
+inline void TRIP<T>::next(size_t* i, size_t* count, size_t p, size_t stride) {
+    if (*count == p - 1) {
+        *count = 0;
+        *i += stride;
+    } else {
+        ++*count;
+        ++*i;
+    }
+}
+
+template <typename T>
+inline void TRIP<T>::prev(size_t* i, size_t* count, size_t p, size_t stride) {
+    if (*count == 0) {
+        *count = p - 1;
+        *i -= stride;
+    } else {
+        --*count;
+        --*i;
+    }
+}
+
+template <typename T>
+void TRIP<T>::reverse_ser(size_t m0, size_t m1, size_t l,
+                          size_t rs, size_t cs, size_t ce,
+                          T* A, size_t lda)
+{
+    auto p = ce - cs;
+    auto stride = (lda - ce) + cs + 1;
+
+    // index starting from left (going right); original matrix index
+    auto i = rs*lda + cs + (m0 / p)*lda + (m0 % p);
+    auto next_count = m0 % p;
+
+    // index starting from right (going left); original matrix index
+    auto j = rs*lda + cs + ((m1 - 1)/p)*lda + ((m1 - 1) % p);
+    auto prev_count = (m1 - 1) % p;
+
+    for (auto m = 0; m < l; ++m) {
+        using std::swap;
+        swap(A[i], A[j]);
+        next(&i, &next_count, p, stride);
+        prev(&j, &prev_count, p, stride);
+    }
+}
+
+template <typename T>
+void TRIP<T>::reverse_par(size_t m0, size_t m1, size_t l,
+                          size_t rs, size_t cs, size_t ce,
+                          T* A, size_t lda)
+{
+    constexpr size_t REVERSE_CUTOFF = 1024;
+    if (l <= REVERSE_CUTOFF) {
+        reverse_ser(m0, m1, l, rs, cs, ce, A, lda);
+    } else {
+        auto lm = l / 2;
+        tbb::parallel_invoke(
+            [=]{ reverse_par(m0, m1, lm, rs, cs, ce, A, lda); },
+            [=]{ reverse_par(m0 + lm, m1 - lm, l - lm, rs, cs, ce, A, lda); });
+    }
+}
+
+template <typename T>
+void TRIP<T>::reverse(size_t m0, size_t m1, size_t rs, size_t cs, size_t ce, T* A, size_t lda) {
+    reverse_par(m0, m1, (m1 - m0)/2, rs, cs, ce, A, lda);
+}
+
+template <typename T>
+inline void mitrans(size_t m, size_t n, T* A) {
+    TRIP<T>::trip(m, n, A);
+}
+
 template <typename TensorX, typename TensorY>
 std::enable_if_t<is_cpu_tensor<TensorX>::value && is_cpu_tensor<TensorY>::value, bool>
 inline reorder_transpose(const TensorX& X, TensorY& Y) {
