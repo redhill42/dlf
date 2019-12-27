@@ -1036,7 +1036,10 @@ inline det(TensorT&& X) {
 }
 
 template <typename T>
-class linear_solve_function {
+class linear_solve_function {};
+
+template <typename T>
+class linear_solve_function<Tensor<T>> {
     Tensor<T> A;
     std::vector<lapack_int> ipiv;
     lapack_int info;
@@ -1052,7 +1055,22 @@ public:
 };
 
 template <typename T>
-linear_solve_function<T>::linear_solve_function(Tensor<T>&& mat) : A(std::move(mat)) {
+class linear_solve_function<DevTensor<T>> {
+    DevTensor<T> A;
+    gpgpu::Buffer<int32_t> ipiv;
+
+public:
+    linear_solve_function(DevTensor<T>&& A);
+    linear_solve_function(const DevTensor<T>& A);
+
+    DevTensor<T> operator()(DevTensor<T>&& b) const;
+    DevTensor<T> operator()(const DevTensor<T>& b) const;
+};
+
+template <typename T>
+linear_solve_function<Tensor<T>>::linear_solve_function(Tensor<T>&& mat)
+    : A(std::move(mat))
+{
     if (!A.is_square())
         throw shape_error("solve: requires square matrix");
 
@@ -1062,11 +1080,11 @@ linear_solve_function<T>::linear_solve_function(Tensor<T>&& mat) : A(std::move(m
 }
 
 template <typename T>
-linear_solve_function<T>::linear_solve_function(const Tensor<T>& A)
+linear_solve_function<Tensor<T>>::linear_solve_function(const Tensor<T>& A)
     : linear_solve_function(Tensor<T>(A)) {}
 
 template <typename T>
-Tensor<T> linear_solve_function<T>::operator()(Tensor<T>&& b) const {
+Tensor<T> linear_solve_function<Tensor<T>>::operator()(Tensor<T>&& b) const {
     if (info != 0)
         throw std::runtime_error("solve: the linear equation has no solution");
     if (!(b.is_vector() || b.is_matrix()))
@@ -1081,21 +1099,55 @@ Tensor<T> linear_solve_function<T>::operator()(Tensor<T>&& b) const {
 }
 
 template <typename T>
-Tensor<T> linear_solve_function<T>::operator()(const Tensor<T>& b) const {
+Tensor<T> linear_solve_function<Tensor<T>>::operator()(const Tensor<T>& b) const {
     return operator()(Tensor<T>(b));
+}
+
+template <typename T>
+linear_solve_function<DevTensor<T>>::linear_solve_function(DevTensor<T>&& mat)
+    : A(std::move(mat))
+{
+    if (!A.is_square())
+        throw shape_error("solve: requires square matrix");
+
+    auto n = A.extent(-1);
+    ipiv = gpgpu::current::context().createBuffer<int32_t>(n + 1);
+    gblas::getrf(n, n, A.data(), 0, A.stride(0), ipiv, 0);
+}
+
+template <typename T>
+linear_solve_function<DevTensor<T>>::linear_solve_function(const DevTensor<T>& A)
+    : linear_solve_function(DevTensor<T>(A)) {}
+
+template <typename T>
+DevTensor<T> linear_solve_function<DevTensor<T>>::operator()(DevTensor<T>&& b) const {
+    if (!(b.is_vector() || b.is_matrix()))
+        throw shape_error("solve: the rhs must be a vector or a matrix");
+
+    auto n = A.extent(0);
+    auto nrhs = b.is_vector() ? 1 : b.extent(1);
+    if (b.extent(0) != n)
+        throw shape_error("solve: incompatible shape");
+    gblas::getrs(gblas::Transpose::NoTrans, n, nrhs,
+                 A.data(), 0, A.stride(0), ipiv, 0,
+                 b.data(), 0, b.stride(0));
+    return std::move(b);
+}
+
+template <typename T>
+DevTensor<T> linear_solve_function<DevTensor<T>>::operator()(const DevTensor<T>& b) const {
+    return operator()(DevTensor<T>(b));
 }
 
 /**
  * Generate a linear solve function that can be applied repeatedly to different b.
  */
-template <typename T>
-inline linear_solve_function<T> solve(Tensor<T>&& A) {
-    return linear_solve_function<T>(std::move(A));
-}
-
-template <typename T>
-inline linear_solve_function<T> solve(const Tensor<T>& A) {
-    return linear_solve_function<T>(A);
+template <typename TensorT>
+std::enable_if_t<
+    is_tensor<TensorT>::value && !is_tensor_view<TensorT>::value,
+    linear_solve_function<tensor_type<TensorT>>>
+inline solve(TensorT&& A) {
+    return linear_solve_function<tensor_type<TensorT>>(std::forward<TensorT>(A));
 }
 
 /**
@@ -1103,7 +1155,8 @@ inline linear_solve_function<T> solve(const Tensor<T>& A) {
  */
 template <typename TensorA, typename TensorB>
 std::enable_if_t<
-    is_cpu_tensor<TensorA>::value && is_cpu_tensor<TensorB>::value &&
+    is_tensor<TensorA>::value && !is_tensor_view<TensorA>::value &&
+    is_tensor<TensorB>::value && !is_tensor_view<TensorB>::value &&
     is_exactly_same_tensor<TensorA, TensorB>::value,
     tensor_type<TensorB>>
 inline solve(TensorA&& A, TensorB&& b) {

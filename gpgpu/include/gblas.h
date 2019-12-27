@@ -936,6 +936,19 @@ void gemmStridedBatched(const Layout layout, const Transpose a_transpose, const 
                         const size_t batch_count,
                         const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
 
+template <typename T>
+void getrf(const size_t m, const size_t n,
+           Buffer<T>& A, const size_t a_offset, const size_t lda,
+           Buffer<int32_t>& ipiv, const size_t ipiv_offset,
+           const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
+
+template <typename T>
+void getrs(Transpose trans, const size_t n, const size_t nrhs,
+           const Buffer<T>& A, const size_t a_offset, const size_t lda,
+           const Buffer<int32_t>& ipiv, const size_t ipiv_offset,
+           Buffer<T>& B, const size_t b_offset, const size_t ldb,
+           const Queue& queue = gpgpu::current::queue(), Event* event = nullptr);
+
 // =================================================================================================
 
 // CLBlast stores binaries of compiled kernels into a cache in case the same kernel is used later on

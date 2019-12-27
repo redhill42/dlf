@@ -1720,17 +1720,44 @@ template void PUBLIC_API tpsv<double2>(const Layout, const Triangle, const Trans
 //---------------------------------------------------------------------------
 // General rank-1 matrix update: SGER/DGER/HGER
 
+#if HAS_CUDA
+inline void cublasGer(cublasHandle_t handle, const size_t m, const size_t n, float alpha,
+                      const float* x, int incx,
+                      const float* y, int incy,
+                      float* A, int lda)
+{
+    ::cublasSger(handle, m, n, &alpha, x, incx, y, incy, A, lda);
+}
+
+inline void cublasGer(cublasHandle_t handle, const size_t m, const size_t n, double alpha,
+                      const double* x, int incx,
+                      const double* y, int incy,
+                      double* A, int lda)
+{
+    ::cublasDger(handle, m, n, &alpha, x, incx, y, incy, A, lda);
+}
+#endif
+
 template <typename T>
 void ger(const Layout layout, const size_t m, const size_t n, const T alpha,
          const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
          const Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
          Buffer<T>& a_buffer, const size_t a_offset, const size_t a_ld,
          const Queue& queue, Event* event) {
-    auto routine = Xger<T>(queue, event);
-    routine.DoGer(layout, m, n, alpha,
-                  x_buffer, x_offset, x_inc,
-                  y_buffer, y_offset, y_inc,
-                  a_buffer, a_offset, a_ld);
+    dispatch<T>(queue,
+        OPENCL(
+            auto routine = Xger<T>(queue, event);
+            routine.DoGer(layout, m, n, alpha,
+                          x_buffer, x_offset, x_inc,
+                          y_buffer, y_offset, y_inc,
+                          a_buffer, a_offset, a_ld);
+        ),
+        CUDA(
+            cublasGer(h, n, m, alpha,
+                      cuBuffer::unwrap(y_buffer) + y_offset, y_inc,
+                      cuBuffer::unwrap(x_buffer) + x_offset, x_inc,
+                      cuBuffer::unwrap(a_buffer) + a_offset, a_ld);
+        ));
 }
 
 template void PUBLIC_API ger<float> (const Layout, const size_t, const size_t, const float,
@@ -1752,17 +1779,52 @@ template void PUBLIC_API ger<half>  (const Layout, const size_t, const size_t, c
 //---------------------------------------------------------------------------
 // General rank-1 complex matrix update: CGERU/ZGERU
 
+#if HAS_CUDA
+inline void cublasGeru(cublasHandle_t handle, const size_t m, const size_t n, float2 alpha,
+                      const float2* x, int incx,
+                      const float2* y, int incy,
+                      float2* A, int lda)
+{
+    ::cublasCgeru(handle, m, n,
+                  reinterpret_cast<const cuComplex*>(&alpha),
+                  reinterpret_cast<const cuComplex*>(x), incx,
+                  reinterpret_cast<const cuComplex*>(y), incy,
+                  reinterpret_cast<cuComplex*>(A), lda);
+}
+
+inline void cublasGeru(cublasHandle_t handle, const size_t m, const size_t n, double2 alpha,
+                      const double2* x, int incx,
+                      const double2* y, int incy,
+                      double2* A, int lda)
+{
+    ::cublasZgeru(handle, m, n,
+                  reinterpret_cast<const cuDoubleComplex*>(&alpha),
+                  reinterpret_cast<const cuDoubleComplex*>(x), incx,
+                  reinterpret_cast<const cuDoubleComplex*>(y), incy,
+                  reinterpret_cast<cuDoubleComplex*>(A), lda);
+}
+#endif
+
 template <typename T>
 void geru(const Layout layout, const size_t m, const size_t n, const T alpha,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
           const Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
           Buffer<T>& a_buffer, const size_t a_offset, const size_t a_ld,
           const Queue& queue, Event* event) {
-    auto routine = Xgeru<T>(queue, event);
-    routine.DoGeru(layout, m, n, alpha,
-                   x_buffer, x_offset, x_inc,
-                   y_buffer, y_offset, y_inc,
-                   a_buffer, a_offset, a_ld);
+    dispatch<T>(queue,
+        OPENCL(
+            auto routine = Xgeru<T>(queue, event);
+            routine.DoGeru(layout, m, n, alpha,
+                           x_buffer, x_offset, x_inc,
+                           y_buffer, y_offset, y_inc,
+                           a_buffer, a_offset, a_ld);
+        ),
+        CUDA(
+            cublasGeru(h, n, m, alpha,
+                       cuBuffer::unwrap(y_buffer) + y_offset, y_inc,
+                       cuBuffer::unwrap(x_buffer) + x_offset, x_inc,
+                       cuBuffer::unwrap(a_buffer) + a_offset, a_ld);
+        ));
 }
 
 template void PUBLIC_API geru<float2> (const Layout, const size_t, const size_t, const float2,
@@ -1779,17 +1841,52 @@ template void PUBLIC_API geru<double2>(const Layout, const size_t, const size_t,
 //---------------------------------------------------------------------------
 // General rank-1 complex conjugated matrix update: CGERC/ZGERC
 
+#if HAS_CUDA
+inline void cublasGerc(cublasHandle_t handle, const size_t m, const size_t n, float2 alpha,
+                       const float2* x, int incx,
+                       const float2* y, int incy,
+                       float2* A, int lda)
+{
+    ::cublasCgerc(handle, m, n,
+                  reinterpret_cast<const cuComplex*>(&alpha),
+                  reinterpret_cast<const cuComplex*>(x), incx,
+                  reinterpret_cast<const cuComplex*>(y), incy,
+                  reinterpret_cast<cuComplex*>(A), lda);
+}
+
+inline void cublasGerc(cublasHandle_t handle, const size_t m, const size_t n, double2 alpha,
+                       const double2* x, int incx,
+                       const double2* y, int incy,
+                       double2* A, int lda)
+{
+    ::cublasZgerc(handle, m, n,
+                  reinterpret_cast<const cuDoubleComplex*>(&alpha),
+                  reinterpret_cast<const cuDoubleComplex*>(x), incx,
+                  reinterpret_cast<const cuDoubleComplex*>(y), incy,
+                  reinterpret_cast<cuDoubleComplex*>(A), lda);
+}
+#endif
+
 template <typename T>
 void gerc(const Layout layout, const size_t m, const size_t n, const T alpha,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
           const Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
           Buffer<T>& a_buffer, const size_t a_offset, const size_t a_ld,
           const Queue& queue, Event* event) {
-    auto routine = Xgerc<T>(queue, event);
-    routine.DoGerc(layout, m, n, alpha,
-                   x_buffer, x_offset, x_inc,
-                   y_buffer, y_offset, y_inc,
-                   a_buffer, a_offset, a_ld);
+    dispatch<T>(queue,
+        OPENCL(
+            auto routine = Xgerc<T>(queue, event);
+            routine.DoGerc(layout, m, n, alpha,
+                           x_buffer, x_offset, x_inc,
+                           y_buffer, y_offset, y_inc,
+                           a_buffer, a_offset, a_ld);
+        ),
+        CUDA(
+            cublasGerc(h, n, m, alpha,
+                       cuBuffer::unwrap(y_buffer) + y_offset, y_inc,
+                       cuBuffer::unwrap(x_buffer) + x_offset, x_inc,
+                       cuBuffer::unwrap(a_buffer) + a_offset, a_ld);
+        ));
 }
 
 template void PUBLIC_API gerc<float2> (const Layout, const size_t, const size_t, const float2,
@@ -3596,6 +3693,65 @@ template void PUBLIC_API gemmStridedBatched<half>   (const Layout, const Transpo
                                                      Buffer<half>&, const size_t, const size_t, const size_t,
                                                      const size_t,
                                                      const Queue&, Event*);
+
+template <typename T>
+void getrf(const size_t m, const size_t n,
+           Buffer<T>& A, const size_t a_offset, const size_t lda,
+           Buffer<int32_t>& ipiv, const size_t ipiv_offset,
+           const Queue& queue, Event* event)
+{
+    auto routine = Xgetrf<T>(queue, event);
+    routine.DoGetrf(m, n, A, a_offset, lda, ipiv, ipiv_offset);
+}
+
+template void PUBLIC_API getrf<float>(const size_t, const size_t,
+                                      Buffer<float>&, const size_t, const size_t,
+                                      Buffer<int32_t>&, const size_t,
+                                      const Queue&, Event*);
+template void PUBLIC_API getrf<double>(const size_t, const size_t,
+                                      Buffer<double>&, const size_t, const size_t,
+                                      Buffer<int32_t>&, const size_t,
+                                      const Queue&, Event*);
+template void PUBLIC_API getrf<float2>(const size_t, const size_t,
+                                      Buffer<float2>&, const size_t, const size_t,
+                                      Buffer<int32_t>&, const size_t,
+                                      const Queue&, Event*);
+template void PUBLIC_API getrf<double2>(const size_t, const size_t,
+                                      Buffer<double2>&, const size_t, const size_t,
+                                      Buffer<int32_t>&, const size_t,
+                                      const Queue&, Event*);
+
+template <typename T>
+void getrs(Transpose trans, const size_t n, const size_t nrhs,
+           const Buffer<T>& A, const size_t a_offset, const size_t lda,
+           const Buffer<int32_t>& ipiv, const size_t ipiv_offset,
+           Buffer<T>& B, const size_t b_offset, const size_t ldb,
+           const Queue& queue, Event* event)
+{
+    auto routine = Xgetrf<T>(queue, event);
+    routine.DoGetrs(trans, n, nrhs, A, a_offset, lda, ipiv, ipiv_offset, B, b_offset, ldb);
+}
+
+template void PUBLIC_API getrs<float>(Transpose, const size_t, const size_t,
+                                      const Buffer<float>&, const size_t, const size_t,
+                                      const Buffer<int32_t>&, const size_t,
+                                      Buffer<float>&, const size_t, const size_t,
+                                      const Queue&, Event*);
+template void PUBLIC_API getrs<double>(Transpose, const size_t, const size_t,
+                                      const Buffer<double>&, const size_t, const size_t,
+                                      const Buffer<int32_t>&, const size_t,
+                                      Buffer<double>&, const size_t, const size_t,
+                                      const Queue&, Event*);
+template void PUBLIC_API getrs<float2>(Transpose, const size_t, const size_t,
+                                      const Buffer<float2>&, const size_t, const size_t,
+                                      const Buffer<int32_t>&, const size_t,
+                                      Buffer<float2>&, const size_t, const size_t,
+                                      const Queue&, Event*);
+template void PUBLIC_API getrs<double2>(Transpose, const size_t, const size_t,
+                                      const Buffer<double2>&, const size_t, const size_t,
+                                      const Buffer<int32_t>&, const size_t,
+                                      Buffer<double2>&, const size_t, const size_t,
+                                      const Queue&, Event*);
 
 // =================================================================================================
 }} // namespace gpgpu::blas

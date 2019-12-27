@@ -39,7 +39,8 @@ bool isValueNear(const T1& x, const T2& y, double e) {
         return std::isinf(y);
     if (std::isnan(y) || std::isinf(y))
         return false;
-    return std::abs(x - y) / std::sqrt(x*x + y*y) <= e;
+    auto d = std::abs(x - y);
+    return d <= e || d / std::sqrt(x*x + y*y) <= e;
 }
 
 template <typename T1, typename T2>

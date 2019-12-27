@@ -75,6 +75,7 @@
 #include "routines/levelx/xaxpybatched.hpp"
 #include "routines/levelx/xgemmbatched.hpp"
 #include "routines/levelx/xgemmstridedbatched.hpp"
+#include "routines/levelx/xgetrf.hpp"
 
 // DNN includes
 #include "routines/dnn/xcopy.hpp"
