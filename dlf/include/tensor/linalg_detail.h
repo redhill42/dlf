@@ -176,51 +176,6 @@ inline void gemv(cblas::Transpose trans, int m, int n,
 }
 
 template <typename T>
-void gemm_ikj(const int m, const int n, const int p,
-              const T& alpha,
-              const T* A, int lda, int incA,
-              const T* B, int ldb, int incB,
-              const T& beta, T* C, const int ldc)
-{
-    for (int i = 0; i < m; ++i, A += lda, C += ldc) {
-        if (beta == xfn::zero<T>())
-            std::fill(C, C+n, beta);
-        else if (beta != xfn::one<T>())
-            std::transform(C, C+n, C, [&](const auto& x){ return beta*x; });
-        if (alpha == xfn::zero<T>())
-            continue;
-
-        auto pa = A, pb = B;
-        for (int k = 0; k < p; ++k, pa += incA, pb += ldb) {
-            vmad(n, alpha * *pa, pb, incB, C, 1);
-        }
-    }
-}
-
-template <typename T>
-void gemm_ijk(const int m, const int n, const int p,
-              const T& alpha,
-              const T* A, int lda, int incA,
-              const T* B, int ldb, int incB,
-              const T& beta, T* C, const int ldc)
-{
-    for (int i = 0; i < m; ++i, A += lda, C += ldc) {
-        if (alpha == xfn::zero<T>()) {
-            if (beta == xfn::zero<T>())
-                std::fill(C, C+n, beta);
-            else if (beta != xfn::one<T>())
-                std::transform(C, C+n, C, [&](const auto& x){ return beta*x; });
-            continue;
-        }
-
-        for (int j = 0; j < n; ++j) {
-            auto acc = vdot(p, xfn::zero<T>(), A, incA, B + j*incB, ldb);
-            C[j] = alpha * acc + beta * C[j];
-        }
-    }
-}
-
-template <typename T>
 void gemm_serial(const int m, const int n, const int p,
                  const T& alpha,
                  const T* A, int lda, int incA,
@@ -228,9 +183,31 @@ void gemm_serial(const int m, const int n, const int p,
                  const T& beta, T* C, const int ldc)
 {
     if (incB < ldb) {
-        gemm_ikj(m, n, p, alpha, A, lda, incA, B, ldb, incB, beta, C, ldc);
+        for (int i = 0; i < m; ++i, A += lda, C += ldc) {
+            if (beta == xfn::zero<T>())
+                std::fill(C, C+n, beta);
+            else if (beta != xfn::one<T>())
+                std::transform(C, C+n, C, [&](const auto& x){ return beta*x; });
+            if (alpha == xfn::zero<T>())
+                continue;
+            for (int k = 0; k < p; ++k) {
+                vmad(n, alpha * A[k*incA], B + k*ldb, incB, C, 1);
+            }
+        }
     } else {
-        gemm_ijk(m, n, p, alpha, A, lda, incA, B, ldb, incB, beta, C, ldc);
+        for (int i = 0; i < m; ++i, A += lda, C += ldc) {
+            if (alpha == xfn::zero<T>()) {
+                if (beta == xfn::zero<T>())
+                    std::fill(C, C+n, beta);
+                else if (beta != xfn::one<T>())
+                    std::transform(C, C+n, C, [&](const auto& x){ return beta*x; });
+                continue;
+            }
+            for (int j = 0; j < n; ++j) {
+                auto acc = vdot(p, xfn::zero<T>(), A, incA, B + j*incB, ldb);
+                C[j] = alpha * acc + beta * C[j];
+            }
+        }
     }
 }
 
@@ -1161,22 +1138,11 @@ norm_p(const TensorT& X, float ord, int axis, bool keepdims) {
 // LU Decomposition
 //==-------------------------------------------------------------------------
 
-template <typename T, typename V = void>
-struct is_comparable {
-    static constexpr bool value = false;
-};
-
-template <typename T>
-struct is_comparable<T, decltype((void)(std::declval<T>() < std::declval<T>()))> {
-    static constexpr bool value = true;
-};
-
 /**
  * Finds the index of the first element having maximum absolute value.
  */
 template <typename T>
-std::enable_if_t<is_comparable<T>::value, lapack_int>
-iamax(lapack_int n, T* x, lapack_int x_inc) {
+lapack_int find_pivot(lapack_int n, T* x, lapack_int x_inc, std::true_type) {
     // Find maximum absolute element
     using std::abs;
     if (n == 0)
@@ -1194,8 +1160,7 @@ iamax(lapack_int n, T* x, lapack_int x_inc) {
 }
 
 template <typename T>
-std::enable_if_t<!is_comparable<T>::value, lapack_int>
-iamax(lapack_int n, T* x, lapack_int x_inc) {
+lapack_int find_pivot(lapack_int n, T* x, lapack_int x_inc, std::false_type) {
     // Find first non-zero element
     if (n == 0)
         return -1;
@@ -1236,7 +1201,7 @@ void laswp(lapack_int n, T* A, lapack_int lda, lapack_int k1, lapack_int k2, con
 }
 
 /**
- * GETRF2 computes an LU factorization of a general M-by-N A using
+ * GETRF computes an LU factorization of a general M-by-N A using
  * partial pivoting with row interchanges.
  *
  * The factorization has the form
@@ -1276,7 +1241,8 @@ void laswp(lapack_int n, T* A, lapack_int lda, lapack_int k1, lapack_int k2, con
  *               a system of equations.
  */
 template <typename T>
-lapack_int getrf2(lapack_int m, lapack_int n, T* A, lapack_int lda, lapack_int* ipiv) {
+std::enable_if_t<!cblas::is_blasable<T>::value, lapack_int>
+getrf(lapack_int m, lapack_int n, T* A, lapack_int lda, lapack_int* ipiv) {
     using std::swap;
 
     if (m == 1) {
@@ -1289,7 +1255,7 @@ lapack_int getrf2(lapack_int m, lapack_int n, T* A, lapack_int lda, lapack_int* 
 
     if (n == 1) {
         // Use unblocked code for one column case.
-        auto i = detail::iamax(m, A, lda);  // Find pivot
+        auto i = detail::find_pivot(m, A, lda, std::is_floating_point<T>());
         auto pivot = A[i * lda];
         ipiv[0] = i + 1;
         if (pivot == xfn::zero<T>())    // Test for singularity
@@ -1308,7 +1274,7 @@ lapack_int getrf2(lapack_int m, lapack_int n, T* A, lapack_int lda, lapack_int* 
     //        [ A11 ]
     // Factor [ --- ]
     //        [ A21 ]
-    auto info = detail::getrf2(m, n1, A, lda, ipiv);
+    auto info = detail::getrf(m, n1, A, lda, ipiv);
 
     //                      [ A12 ]
     // Apply interchange to [ --- ]
@@ -1325,7 +1291,7 @@ lapack_int getrf2(lapack_int m, lapack_int n, T* A, lapack_int lda, lapack_int* 
                  xfn::one<T>(), A + n1*lda + n1, lda);
 
     // Factor A22
-    auto info2 = detail::getrf2(m-n1, n2, A + n1*lda + n1, lda, ipiv + n1);
+    auto info2 = detail::getrf(m-n1, n2, A + n1*lda + n1, lda, ipiv + n1);
     if (info == 0 && info2 > 0)
         info = info2 + n1;
     for (auto i = n1; i < std::min(m, n); ++i)
@@ -1333,76 +1299,6 @@ lapack_int getrf2(lapack_int m, lapack_int n, T* A, lapack_int lda, lapack_int* 
 
     // Apply interchanges to A21
     detail::laswp(n1, A, lda, n1, std::min(m, n), ipiv);
-
-    return info;
-}
-
-/**
- * GETRF computes an LU factorization of a general M-by-N matrix A
- * using partial pivoting with row interchanges.
- *
- * The factorization has the form
- *     A = P * L * U
- * where P is a permutation matrix, L is lower triangular with unit
- * diagonal elements (lower trapezoidal if m > n), and U is upper
- * triangular (upper trapezoidal if m < n).
- *
- * @param m The number of rows of the matrix A.
- * @param n The number of columns of the matrix A.
- * @param A On entry, The M-by-N matrix to be factorized
- *          On exit, the factors L and U from the factorizaiton
- *          A = P*L*U; the unit diagonal elements of L are not stored.
- * @param lda The leading dimension of the array A.
- * @param ipiv The 1-based pivot indices; for 1 <= i <= min(m,n), row
- *        i of the matrix was interchanged with row ipiv(i).
- * @return = 0:  successful exit
- *         > 0:  U(i,i) is exactly zero. The factorization has been
- *               completed, but the factor U is exactly sigular,
- *               and division by zero will occur if it is to solve
- *               a system of equations.
- */
-template <typename T>
-std::enable_if_t<!cblas::is_blasable<T>::value, lapack_int>
-getrf(lapack_int m, lapack_int n, T* A, lapack_int lda, lapack_int* ipiv) {
-    constexpr lapack_int nb = 64;
-    lapack_int info = 0;
-    lapack_int i, j;
-
-    if (std::min(m, n) <= nb) {
-        return detail::getrf2(m, n, A, lda, ipiv);
-    }
-
-    for (j = 0; j < std::min(m, n); j += nb) {
-        auto jb = std::min(std::min(m, n) - j, nb);
-        auto k = j + jb;
-
-        // Factor diagonal and subdiagonal blocks and test for exact singularity.
-        auto info2 = detail::getrf2(m - j, jb, A + j*(lda+1), lda, ipiv + j);
-        if (info == 0 && info2 > 0)
-            info = info2 + j;
-        for (i = j; i < std::min(m, k); ++i)
-            ipiv[i] += j;
-
-        // Apply interchanges to columns 0:j
-        detail::laswp(j, A, lda, j, k, ipiv);
-
-        if (k <= n) {
-            // Apply interchanges to columns k:n
-            detail::laswp(n - k, A + k, lda, j, k, ipiv);
-
-            // Compute block row of U
-            detail::trsm(cblas::Side::Left, cblas::Triangle::Lower, cblas::Transpose::NoTrans, cblas::Diagonal::Unit,
-                         jb, n - k, xfn::one<T>(), A + j*(lda + 1), lda, A + j*lda + k, lda);
-
-            if (k <= m) {
-                // Update trailing submatrix.
-                detail::gemm(cblas::Transpose::NoTrans, cblas::Transpose::NoTrans,
-                             m - k, n - k, jb, xfn::neg_one<T>(),
-                             A + k*lda + j, lda, A + j*lda + k, lda,
-                             xfn::one<T>(), A + k*(lda + 1), lda);
-            }
-        }
-    }
 
     return info;
 }
