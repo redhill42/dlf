@@ -21,6 +21,14 @@ CL_PROGRAM R"(
 #  define OP(c,a) Multiply(c,a,a)
 #endif
 
+#if PRECISION == 32 || PRECISION == 3232
+#  define TOLERANCE 1e-5f
+#elif PRECISION == 64 || PRECISION == 6464
+#  define TOLERANCE 1e-10
+#else
+#  define TOLERANCE 0
+#endif
+
 #if !INTEGER_PRECISION
 #if PRECISION == 3232 || PRECISION == 6464
 
@@ -30,6 +38,9 @@ CL_PROGRAM R"(
 #  define OP(c,a)   c.x = ceil(a.x); c.y = ceil(a.y)
 #elif defined(ROUTINE_round)
 #  define OP(c,a)   c.x = round(a.x); c.y = round(a.y)
+#elif defined(ROUTINE_chop)
+#  define OP(c,a)   c.x = fabs(a.x) < TOLERANCE ? ZERO : a.x; \
+                    c.y = fabs(a.y) < TOLERANCE ? ZERO : a.y;
 #elif defined(ROUTINE_conj)
 #  define OP(c,a)   c.x = a.x; c.y = -a.y
 #elif defined(ROUTINE_sqrt)
@@ -103,6 +114,8 @@ CL_PROGRAM R"(
 #  define OP(c,a)   c = ceil(a)
 #elif defined(ROUTINE_round)
 #  define OP(c,a)   c = round(a)
+#elif defined(ROUTINE_chop)
+#  define OP(c,a)   c = fabs(a) < TOLERANCE ? ZERO : a
 #elif defined(ROUTINE_conj)
 #  define OP(c,a)   c = a
 #elif defined(ROUTINE_sqrt)

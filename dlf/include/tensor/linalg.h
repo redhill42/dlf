@@ -1014,8 +1014,8 @@ template <typename TensorT, typename TensorR>
 std::enable_if_t<
     is_gpu_tensor<TensorT>::value &&
     is_exactly_same_tensor<TensorT, TensorR>::value &&
-    !is_tensor_view<TensorR>::value&&
-    !std::is_const<std::remove_reference_t<TensorT>>::value>
+    !is_tensor_view<TensorR>::value &&
+    !std::is_const<std::remove_reference_t<TensorR>>::value>
 matinv(TensorT&& X, TensorR&& Y) {
     // FIXME
     auto work = X.read();

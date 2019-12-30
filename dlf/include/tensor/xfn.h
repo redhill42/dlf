@@ -156,6 +156,69 @@ struct norm<void> {
 template <typename T> inline constexpr const char*
 function_kernel_name(norm<T>) { return "norm"; }
 
+template <typename T>
+struct chop : std::unary_function<T,T> {
+    constexpr chop() = default;
+    constexpr explicit chop(double) {}
+    constexpr T operator()(const T& x) const { return x; }
+    constexpr T operator()(T&& x) const { return std::move(x); }
+};
+
+template <>
+struct chop<float> : std::unary_function<float, float> {
+    const float tolerance = 1e-5f;
+    chop() = default;
+    explicit chop(float tol) : tolerance(tol) {}
+    float operator()(float x) const
+        { return std::abs(x) < tolerance ? 0.f : x; }
+};
+
+template <>
+struct chop<double> : std::unary_function<double, double> {
+    const double tolerance = 1e-10;
+    chop() = default;
+    explicit chop(double tol) : tolerance(tol) {}
+    double operator()(double x) const
+        { return std::abs(x) < tolerance ? 0.0 : x; }
+};
+
+template <>
+struct chop<std::complex<float>> : std::unary_function<std::complex<float>, std::complex<float>> {
+    const float tolerance = 1e-5f;
+    chop() = default;
+    explicit chop(float tol) : tolerance(tol) {}
+
+    std::complex<float> operator()(const std::complex<float>& x) const {
+        float re = std::abs(x.real()), im = std::abs(x.imag());
+        if (re < tolerance || im < tolerance) {
+            return std::complex<float>(re < tolerance ? 0.f : x.real(),
+                                       im < tolerance ? 0.f : x.imag());
+        } else {
+            return x;
+        }
+    }
+};
+
+template <>
+struct chop<std::complex<double>> : std::unary_function<std::complex<double>, std::complex<double>> {
+    const double tolerance = 1e-10;
+    chop() = default;
+    explicit chop(double tol) : tolerance(tol) {}
+
+    std::complex<double> operator()(const std::complex<double>& x) const {
+        double re = std::abs(x.real()), im = std::abs(x.imag());
+        if (re < tolerance || im < tolerance) {
+            return std::complex<double>(re < tolerance ? 0.0 : x.real(),
+                                        im < tolerance ? 0.0 : x.imag());
+        } else {
+            return x;
+        }
+    }
+};
+
+template <typename T> inline constexpr const char*
+function_kernel_name(chop<T>) { return "chop"; }
+
 #define DEFINE_UNARY_FUNCTION(fn, op) \
 template <typename T> \
 struct fn : std::unary_function<T,T> { \
