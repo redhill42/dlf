@@ -303,6 +303,24 @@ function_kernel_name(min<T, Compare>) { return "min"; }
 template <typename T, typename Compare> inline constexpr const char*
 scan_kernel_name(min<T, Compare>) { return "cummin"; }
 
+template <typename T, typename Compare = std::less<>>
+struct amax : std::binary_function<T,T,T> {
+    const Compare comp{};
+    constexpr amax() = default;
+    constexpr amax(Compare comp) : comp(comp) {}
+    constexpr T operator()(const T& x, const T& y) const
+        { return comp(std::abs(x), std::abs(y)) ? y : x; }
+};
+
+template <typename T, typename Compare = std::less<>>
+struct amin : std::binary_function<T,T,T> {
+    const Compare comp{};
+    constexpr amin() = default;
+    constexpr amin(Compare comp) : comp(comp) {}
+    constexpr T operator()(const T& x, const T& y) const
+        { return comp(std::abs(x), std::abs(y)) ? x : y; }
+};
+
 //==-------------------------------------------------------------------------
 
 template <typename T = void>
@@ -521,7 +539,7 @@ template <typename T>
 struct reduce_amax {
     static constexpr T identity() { return zero<T>(); }
     using Map = xfn::abs<T>;
-    using Reduce = xfn::max<T>;
+    using Reduce = xfn::amax<T>;
     using Final = post_reduce_identity<T>;
 };
 
@@ -543,7 +561,7 @@ template <typename T>
 struct reduce_amin {
     static constexpr T identity() { return std::numeric_limits<T>::max(); }
     using Map = xfn::abs<T>;
-    using Reduce = xfn::min<T>;
+    using Reduce = xfn::amin<T>;
     using Final = post_reduce_identity<T>;
 };
 

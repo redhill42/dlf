@@ -890,13 +890,13 @@ norm(const TensorT& X, float ord, int row_axis, int col_axis, bool keepdims = fa
     if (ord > 0.f && std::isinf(ord)) {
         if (row_axis > col_axis && !keepdims)
             row_axis--;
-        return reduce_max(reduce_asum(X, col_axis, keepdims), row_axis, keepdims);
+        return reduce_amax(reduce_asum(X, col_axis, keepdims), row_axis, keepdims);
     }
 
     if (ord == 1.f) {
         if (col_axis > row_axis && !keepdims)
             col_axis--;
-        return reduce_max(reduce_asum(X, row_axis, keepdims), col_axis, keepdims);
+        return reduce_amax(reduce_asum(X, row_axis, keepdims), col_axis, keepdims);
     }
 
     // TODO: for ord == 2, we need singular value decomposition
@@ -905,12 +905,76 @@ norm(const TensorT& X, float ord, int row_axis, int col_axis, bool keepdims = fa
 
 template <typename TensorT>
 enable_if_tensor<TensorT>
-norm(const TensorT& X, float ord, bool keepdims = false) {
+norm(const TensorT& X, float ord = 2, bool keepdims = false) {
     if (X.rank() == 1)
         return norm(X, ord, 0, keepdims);
     if (X.rank() == 2)
         return norm(X, ord, 0, 1, keepdims);
     throw shape_error("norm: improper number of dimensions to norm");
+}
+
+//==-------------------------------------------------------------------------
+
+/**
+ * Gives the angle (in radians) between the vectors u and v.
+ *
+ * For nonzero real vectors the vector angle theta satisfies
+ *     cos theta = u.v / ||u||||v||
+ *
+ * For complex vectors the numerators is u.v*
+ */
+template <typename TensorU, typename TensorV>
+std::enable_if_t<
+    is_tensor<TensorU>::value &&
+    is_exactly_same_tensor<TensorU, TensorV>::value &&
+    !is_complex<tensor_value_type<TensorU>>::value,
+    tensor_type<TensorU>>
+angle(TensorU&& u, TensorV&& v) {
+    assert(u.is_vector() && v.is_vector());
+    return dot(u, v) / (norm(u) * norm(v));
+}
+
+template <typename TensorU, typename TensorV>
+std::enable_if_t<
+    is_tensor<TensorU>::value &&
+    is_exactly_same_tensor<TensorU, TensorV>::value &&
+    is_complex<tensor_value_type<TensorU>>::value,
+    tensor_type<TensorU>>
+angle(TensorU&& u, TensorV&& v) {
+    assert(u.is_vector() && v.is_vector());
+    return dot(u, conj(v)) / (norm(u) * norm(v));
+}
+
+/**
+ * Finds the projection of the vector u onto the vector v.
+ *
+ * For ordinary real vectors u and v, the projection is taken to be
+ *     (u.v/v.v)v.
+ *
+ * For ordinary complex vectors u and v, the projection is taken to be
+ *     (u.v* / v.v*)v, where v* is conjugate of v.
+ */
+template <typename TensorU, typename TensorV>
+std::enable_if_t<
+    is_tensor<TensorU>::value &&
+    is_exactly_same_tensor<TensorU, TensorV>::value &&
+    !is_complex<tensor_value_type<TensorU>>::value,
+    tensor_type<TensorU>>
+projection(TensorU&& u, TensorV&& v) {
+    assert(u.is_vector() && v.is_vector());
+    return (dot(u, v) / dot(v, v)) * std::forward<TensorV>(v);
+}
+
+template <typename TensorU, typename TensorV>
+std::enable_if_t<
+    is_tensor<TensorU>::value &&
+    is_exactly_same_tensor<TensorU, TensorV>::value &&
+    is_complex<tensor_value_type<TensorU>>::value,
+    tensor_type<TensorU>>
+projection(TensorU&& u, TensorV&& v) {
+    assert(u.is_vector() && v.is_vector());
+    auto cv = conj(v);
+    return (dot(u, cv) / dot(v, cv)) * std::forward<TensorV>(v);
 }
 
 //==-------------------------------------------------------------------------

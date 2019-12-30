@@ -6,6 +6,13 @@ namespace dlf {
 // Tensor traits
 //==-------------------------------------------------------------------------
 
+template <typename T>
+struct is_complex_impl : std::false_type {};
+template <typename T>
+struct is_complex_impl<std::complex<T>> : std::true_type {};
+template <typename T>
+struct is_complex : is_complex_impl<std::remove_cv_t<std::remove_reference_t<T>>> {};
+
 template <typename T> struct is_relop                        : public std::false_type {};
 template <typename T> struct is_relop<xfn::equal_to<T>>      : public std::true_type {};
 template <typename T> struct is_relop<xfn::not_equal_to<T>>  : public std::true_type {};
