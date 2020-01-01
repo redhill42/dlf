@@ -2734,6 +2734,36 @@ TEST(UniformTest, SymmLower) {
     EXPECT_EQ(symm(cblas::Side::Right, cblas::Triangle::Lower, A, B), matmul(B, A1));
 }
 
+static void syrk_test(cblas::Triangle uplo, cblas::Transpose trans) {
+    constexpr size_t n = 100, k = 80;
+
+    auto A = Tensor<int>({n, k}).random(0, 10);
+    auto B = Tensor<int>({n, n}).random(0, 10);
+
+    auto X = A.cast<float>();
+    auto Y = B.cast<float>();
+
+    if (trans == cblas::Transpose::Trans) {
+        A.reshape(k, n);
+        X.reshape(k, n);
+    }
+
+    detail::syrk(uplo, trans, n, k, 1, A.data(), A.stride(0), 0, B.data(), B.stride(0));
+    detail::syrk(uplo, trans, n, k, 1.f, X.data(), X.stride(0), 0.f, Y.data(), Y.stride(0));
+    EXPECT_EQ(B, Y.cast<int>());
+
+    detail::syrk(uplo, trans, n, k, 1, A.data(), A.stride(0), 1, B.data(), B.stride(0));
+    detail::syrk(uplo, trans, n, k, 1.f, X.data(), X.stride(0), 1.f, Y.data(), Y.stride(0));
+    EXPECT_EQ(B, Y.cast<int>());
+}
+
+TEST(UniformTest, Syrk) {
+    syrk_test(cblas::Triangle::Lower, cblas::Transpose::NoTrans);
+    syrk_test(cblas::Triangle::Upper, cblas::Transpose::NoTrans);
+    syrk_test(cblas::Triangle::Lower, cblas::Transpose::Trans);
+    syrk_test(cblas::Triangle::Upper, cblas::Transpose::Trans);
+}
+
 static void trsv_test(const char* name, cblas::Triangle uplo, cblas::Transpose trans, cblas::Diagonal diag) {
     constexpr size_t n = 100;
 

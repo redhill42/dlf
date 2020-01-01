@@ -844,7 +844,27 @@ inline void getrs(char trans, lapack_int n, lapack_int nrhs,
     assert(info == 0);
     (void)info;
 }
+
+inline lapack_int potrf(char uplo, lapack_int n, float* A, lapack_int lda) {
+    return LAPACKE_spotrf(LAPACK_ROW_MAJOR, uplo, n, A, lda);
+}
+
+inline lapack_int potrf(char uplo, lapack_int n, double* A, lapack_int lda) {
+    return LAPACKE_dpotrf(LAPACK_ROW_MAJOR, uplo, n, A, lda);
+}
+
+inline lapack_int potrf(char uplo, lapack_int n, std::complex<float>* A, lapack_int lda) {
+    return LAPACKE_cpotrf(LAPACK_ROW_MAJOR, uplo, n,
+                          reinterpret_cast<lapack_complex_float*>(A), lda);
+}
+
+inline lapack_int potrf(char uplo, lapack_int n, std::complex<double>* A, lapack_int lda) {
+    return LAPACKE_zpotrf(LAPACK_ROW_MAJOR, uplo, n,
+                          reinterpret_cast<lapack_complex_double*>(A), lda);
+}
+
 #else
+
 inline lapack_int getrf(lapack_int m, lapack_int n, float* A, lapack_int lda, lapack_int* ipiv) {
     lapack_int info;
     sgetrf_(&m, &n, A, &lda, ipiv, &info);
@@ -976,6 +996,35 @@ inline void getrs(char trans, lapack_int n, lapack_int nrhs,
             reinterpret_cast<lapack_complex_double*>(b), &ldb, &info);
     assert(info == 0);
 }
+
+inline lapack_int potrf(char uplo, lapack_int n, float* A, lapack_int lda) {
+    lapack_int info;
+    uplo = uplo == 'L' ? 'U' : 'L';
+    spotrf_(&uplo, &n, A, &lda, &info);
+    return info;
+}
+
+inline lapack_int potrf(char uplo, lapack_int n, double* A, lapack_int lda) {
+    lapack_int info;
+    uplo = uplo == 'L' ? 'U' : 'L';
+    dpotrf_(&uplo, &n, A, &lda, &info);
+    return info;
+}
+
+inline lapack_int potrf(char uplo, lapack_int n, std::complex<float>* A, lapack_int lda) {
+    lapack_int info;
+    uplo = uplo == 'L' ? 'U' : 'L';
+    cpotrf_(&uplo, &n, reinterpret_cast<lapack_complex_float*>(A), &lda, &info);
+    return info;
+}
+
+inline lapack_int potrf(char uplo, lapack_int n, std::complex<double>* A, lapack_int lda) {
+    lapack_int info;
+    uplo = uplo == 'L' ? 'U' : 'L';
+    zpotrf_(&uplo, &n, reinterpret_cast<lapack_complex_double*>(A), &lda, &info);
+    return info;
+}
+
 #endif
 
 } // namespace cblas

@@ -8,8 +8,6 @@ namespace dlf { namespace detail {
 
 template <typename T, typename U>
 void vscal(const int n, const U& alpha, T* x, const int x_inc) {
-    if (alpha == xfn::one<T>())
-        return;
     if (alpha == xfn::zero<T>()) {
         if (x_inc == 1)
             std::fill(x, x + n, alpha);
@@ -17,7 +15,7 @@ void vscal(const int n, const U& alpha, T* x, const int x_inc) {
             for (int i = 0; i < n; ++i, x += x_inc)
                 *x = alpha;
         }
-    } else {
+    } else if (alpha != xfn::one<T>()) {
         if (x_inc == 1) {
             for (int i = 0; i < n; ++i, ++x)
                 *x = alpha * *x;
@@ -50,6 +48,47 @@ void vmad(const int n, const U& alpha, const T* x, const int x_inc, T* y, const 
     } else {
         for (int i = 0; i < n; ++i, x += x_inc, y += y_inc)
             *y += alpha * *x;
+    }
+}
+
+template <typename T, typename U>
+void mscal(const int m, const int n, const U& alpha, T* A, const int lda) {
+    if (alpha == xfn::zero<T>()) {
+        for (int i = 0; i < m; ++i, A += lda)
+            std::fill(A, A + n, alpha);
+    } else if (alpha != xfn::one<T>()) {
+        for (int i = 0; i < m; ++i, A += lda) {
+            for (int j = 0; j < n; ++j)
+                A[j] = alpha * A[j];
+        }
+    }
+}
+
+template <typename T, typename U>
+void trscal(cblas::Triangle uplo, const int n, const U& alpha, T* A, const int lda) {
+    if (alpha == xfn::one<T>())
+        return;
+    if (uplo == cblas::Triangle::Lower) {
+        if (alpha == xfn::zero<T>()) {
+            for (int i = 0; i < n; ++i, A += lda)
+                std::fill(A, A + i + 1, alpha);
+        } else {
+            for (int i = 0; i < n; ++i, A += lda) {
+                for (int j = 0; j <= i; ++j)
+                    A[j] = alpha * A[j];
+            }
+        }
+    } else {
+        if (alpha == xfn::zero<T>()) {
+            for (int i = 0; i < n; ++i, A += lda) {
+                std::fill(A + i, A + n, alpha);
+            }
+        } else {
+            for (int i = 0; i < n; ++i, A += lda) {
+                for (int j = i; j < i; ++j)
+                    A[j] = alpha * A[j];
+            }
+        }
     }
 }
 
@@ -182,27 +221,20 @@ void gemm_serial(const int m, const int n, const int p,
                  const T* B, int ldb, int incB,
                  const T& beta, T* C, const int ldc)
 {
+    if (alpha == xfn::zero<T>()) {
+        mscal(m, n, beta, C, ldc);
+        return;
+    }
+
     if (incB < ldb) {
+        mscal(m, n, beta, C, ldc);
         for (int i = 0; i < m; ++i, A += lda, C += ldc) {
-            if (beta == xfn::zero<T>())
-                std::fill(C, C+n, beta);
-            else if (beta != xfn::one<T>())
-                std::transform(C, C+n, C, [&](const auto& x){ return beta*x; });
-            if (alpha == xfn::zero<T>())
-                continue;
             for (int k = 0; k < p; ++k) {
                 vmad(n, alpha * A[k*incA], B + k*ldb, incB, C, 1);
             }
         }
     } else {
         for (int i = 0; i < m; ++i, A += lda, C += ldc) {
-            if (alpha == xfn::zero<T>()) {
-                if (beta == xfn::zero<T>())
-                    std::fill(C, C+n, beta);
-                else if (beta != xfn::one<T>())
-                    std::transform(C, C+n, C, [&](const auto& x){ return beta*x; });
-                continue;
-            }
             for (int j = 0; j < n; ++j) {
                 auto acc = vdot(p, xfn::zero<T>(), A, incA, B + j*incB, ldb);
                 C[j] = alpha * acc + beta * C[j];
@@ -426,6 +458,87 @@ inline void symm(cblas::Side side, cblas::Triangle uplo, const int m, const int 
                 m, n, alpha, A, 0, lda, B, 0, ldb, beta, C, 0, ldc);
 }
 
+template <typename T>
+void syrk_serial(cblas::Triangle uplo, cblas::Transpose trans,
+                 const int s, const int e, const int n, const int k,
+                 const T& alpha, const T* A, const int lda, T* C, const int ldc)
+{
+    if (trans == cblas::Transpose::NoTrans) {
+        if (uplo == cblas::Triangle::Lower) {
+            for (int i = s; i < e; ++i) {
+                for (int j = 0; j <= i; ++j) {
+                    auto acc = vdot(k, xfn::zero<T>(), A + i*lda, 1, A + j*lda, 1);
+                    C[i*ldc + j] += alpha * acc;
+                }
+            }
+        } else {
+            for (int i = s; i < e; ++i) {
+                for (int j = i; j < n; ++j) {
+                    auto acc = vdot(k, xfn::zero<T>(), A + i*lda, 1, A + j*lda, 1);
+                    C[i*ldc + j] += alpha * acc;
+                }
+            }
+        }
+    } else {
+        if (uplo == cblas::Triangle::Lower) {
+            for (int l = 0; l < k; ++l) {
+                for (int i = s; i < e; ++i) {
+                    vmad(i + 1, alpha * A[l*lda + i], A + l*lda, 1, C + i*ldc, 1);
+                }
+            }
+        } else {
+            for (int l = 0; l < k; ++l) {
+                for (int i = s; i < e; ++i) {
+                    vmad(n - i, alpha * A[l*lda + i], A + l*lda + i, 1, C + i*ldc + i, 1);
+                }
+            }
+        }
+    }
+}
+
+template <typename T>
+std::enable_if_t<!cblas::is_blasable<T>::value>
+syrk(cblas::Triangle uplo, cblas::Transpose trans,
+     const int n, const int k,
+     const T& alpha, const T* A, const int lda,
+     const T& beta, T* C, const int ldc)
+{
+    trscal(uplo, n, beta, C, ldc);
+    if (alpha == xfn::zero<T>()) {
+        return;
+    }
+
+    if (n <= 32) {
+        syrk_serial(uplo, trans, 0, n, n, k, alpha, A, lda, C, ldc);
+    } else {
+        tbb::parallel_for(tbb::blocked_range<int>(0, n), [&](const auto& r) {
+            syrk_serial(uplo, trans, r.begin(), r.end(), n, k, alpha, A, lda, C, ldc);
+        });
+    }
+}
+
+template <typename T>
+std::enable_if_t<cblas::is_blasable<T>::value>
+inline syrk(cblas::Triangle uplo, cblas::Transpose trans,
+            const int n, const int k,
+            const T& alpha, const T* A, const int lda,
+            const T& beta, T* C, const int ldc)
+{
+    cblas::syrk(cblas::Layout::RowMajor, uplo, trans, n, k, alpha, A, lda, beta, C, ldc);
+}
+
+template <typename T>
+inline void syrk(cblas::Triangle uplo, cblas::Transpose trans,
+                 const int n, const int k,
+                 const T& alpha, const gpgpu::Buffer<T>& A, const int lda,
+                 const T& beta, gpgpu::Buffer<T>& C, const int ldc)
+{
+    gblas::syrk(gblas::Layout::RowMajor,
+                static_cast<gblas::Triangle>(uplo),
+                static_cast<gblas::Transpose>(trans),
+                n, k, alpha, A, 0, lda, beta, C, 0, ldc);
+}
+
 //==-------------------------------------------------------------------------
 // Triangular matrix multiplication
 //==-------------------------------------------------------------------------
@@ -585,17 +698,9 @@ trmm(cblas::Side side, cblas::Triangle uplo, cblas::Transpose transA, cblas::Dia
      const int m, const int n, const T& alpha,
      const T* A, const int lda, T* B, const int ldb)
 {
-    if (alpha == xfn::zero<T>()) {
-        for (int i = 0; i < m; ++i, B += ldb)
-            std::fill(B, B + n, alpha);
+    mscal(m, n, alpha, B, ldb);
+    if (alpha == xfn::zero<T>())
         return;
-    }
-
-    if (alpha != xfn::one<T>()) {
-        for (int i = 0; i < m; ++i, B += ldb) {
-            std::transform(B, B + n, B, [&alpha](const auto& x){ return alpha * x; });
-        }
-    }
 
     if (side == cblas::Side::Left) {
         tbb::parallel_for(tbb::blocked_range<int>(0, n), [=](const auto& r) {
@@ -647,17 +752,9 @@ trsm(cblas::Side side, cblas::Triangle uplo, cblas::Transpose transA, cblas::Dia
      const int m, const int n, const T& alpha,
      const T* A, int lda, T* B, int ldb)
 {
-    if (alpha == xfn::zero<T>()) {
-        for (int i = 0; i < m; ++i, B += ldb)
-            std::fill(B, B + n, alpha);
+    mscal(m, n, alpha, B, ldb);
+    if (alpha == xfn::zero<T>())
         return;
-    }
-
-    if (alpha != xfn::one<T>()) {
-        for (int i = 0; i < m; ++i, B += ldb) {
-            std::transform(B, B + n, B, [&alpha](const auto& x){ return alpha * x; });
-        }
-    }
 
     if (side == cblas::Side::Left) {
         tbb::parallel_for(tbb::blocked_range<int>(0, n), [=](const auto& r) {
@@ -1488,6 +1585,79 @@ template <typename T>
 std::enable_if_t<cblas::is_blasable<T>::value, lapack_int>
 inline getri(lapack_int n, T* A, lapack_int lda, const lapack_int* ipiv) {
     return cblas::getri(n, A, lda, ipiv);
+}
+
+/**
+ * POTRF computes the Cholesky factorization of a symmetric positive definite
+ * matrix A using the recursive algorithm.
+ *
+ * The factorization has the form
+ *     A = U**T * U,  if UPLO = 'U', or
+ *     A = L * L**T,  if UPLO = 'L'm
+ * where U is an upper triangular matrix and L is lower triangular.
+ *
+ * This is the recursive version of the algorithm. It divides the matrix
+ * into four submatrices:
+ *
+ *         [  A11 | A12  ]  where A11 is n1 by n1 and A22 is n2 by n2
+ *     A = [ -----|----- ]  with n1 = n/2
+ *         [  A21 | A22  ]       n2 = n-n1
+ *
+ * The subroutine calls itself to factor A11. Update and scale A21 or A12,
+ * update A22 then call itself to factor A22.
+ */
+template <typename T>
+std::enable_if_t<!cblas::is_blasable<T>::value, lapack_int>
+potrf(cblas::Triangle uplo, lapack_int n, T* A, lapack_int lda) {
+    if (n == 1) {
+        if (*A <= 0)
+            return 1;
+        using std::sqrt;
+        *A = sqrt(*A);
+        return 0;
+    }
+
+    lapack_int n1 = n / 2;
+    lapack_int n2 = n - n1;
+    lapack_int info;
+
+    // Factor A11
+    info = potrf(uplo, n1, A, lda);
+    if (info != 0) return info;
+
+    if (uplo == cblas::Triangle::Upper) {
+        // Update and scale A12
+        detail::trsm(cblas::Side::Left, cblas::Triangle::Upper,
+                     cblas::Transpose::Trans, cblas::Diagonal::NonUnit,
+                     n1, n2, xfn::one<T>(), A, lda, A + n1, lda);
+
+        // Update and factor A22
+        detail::syrk(uplo, cblas::Transpose::Trans, n2, n1,
+                     xfn::neg_one<T>(), A + n1, lda,
+                     xfn::one<T>(), A + n1*lda + n1, lda);
+        info = detail::potrf(uplo, n2, A + n1*lda + n1, lda);
+        if (info != 0) return info + n1;
+    } else {
+        // Update and scale A21
+        detail::trsm(cblas::Side::Right, cblas::Triangle::Lower,
+                     cblas::Transpose::Trans, cblas::Diagonal::NonUnit,
+                     n2, n1, xfn::one<T>(), A, lda, A + n1*lda, lda);
+
+        // Update and factor A22
+        detail::syrk(uplo, cblas::Transpose::NoTrans, n2, n1,
+                     xfn::neg_one<T>(), A + n1*lda, lda,
+                     xfn::one<T>(), A + n1*lda + n1, lda);
+        info = detail::potrf(uplo, n2, A + n1*lda + n1, lda);
+        if (info != 0) return info + n1;
+    }
+
+    return 0;
+}
+
+template <typename T>
+std::enable_if_t<cblas::is_blasable<T>::value, lapack_int>
+inline potrf(cblas::Triangle uplo, lapack_int n, T* A, lapack_int lda) {
+    return cblas::potrf(uplo == cblas::Triangle::Lower ? 'L' : 'U', n, A, lda);
 }
 
 }} // namespace dlf::detail
