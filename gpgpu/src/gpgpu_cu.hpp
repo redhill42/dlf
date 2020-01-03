@@ -7,6 +7,7 @@
 #include <cuda.h>
 #include <nvrtc.h>
 #include <cublas_v2.h>
+#include <cusolverDn.h>
 #include <cudnn.h>
 
 namespace gpgpu { namespace cu {
@@ -172,12 +173,13 @@ public:
 
 class cuQueue final : public rawQueue {
     CUstream m_queue;
-    mutable cublasHandle_t m_cublas;
-    mutable cudnnHandle_t m_cudnn;
+    mutable cublasHandle_t m_cublas{nullptr};
+    mutable cusolverDnHandle_t m_cusolver{nullptr};
+    mutable cudnnHandle_t m_cudnn{nullptr};
 
 public:
     explicit cuQueue(CUstream queue)
-        : m_queue(queue), m_cublas(nullptr), m_cudnn(nullptr) {}
+        : m_queue(queue) {}
 
     ~cuQueue() override;
 
@@ -186,6 +188,7 @@ public:
     }
 
     cublasHandle_t getCublasHandle() const;
+    cusolverDnHandle_t getCusolverHandle() const;
     cudnnHandle_t getCudnnHandle() const;
 
     void finish(rawEvent& event) const override;

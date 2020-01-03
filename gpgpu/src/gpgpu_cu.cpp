@@ -43,6 +43,13 @@ static void checkCublas(cublasStatus_t status, const std::string& where) {
     }
 }
 
+static void checkCusolver(cusolverStatus_t status, const std::string& where) {
+    if (status != CUSOLVER_STATUS_SUCCESS) {
+        throw APIError(static_cast<int>(status), where,
+            "CUSOLVER error: " + where + ": " + std::to_string(status));
+    }
+}
+
 static void checkCudnn(cudnnStatus_t status, const std::string& where) {
     if (status != CUDNN_STATUS_SUCCESS) {
         throw APIError(static_cast<int>(status), where,
@@ -63,6 +70,7 @@ static std::string trimCallString(const char* where) {
 #define CheckErrorDtor(call) checkDtor(call, trimCallString(#call))
 #define CheckNVRTC(call) checkNVRTC(call, trimCallString(#call))
 #define CheckCublas(call) checkCublas(call, trimCallString(#call))
+#define CheckCusolver(call) checkCusolver(call, trimCallString(#call))
 #define CheckCudnn(call) checkCudnn(call, trimCallString(#call))
 
 std::shared_ptr<rawPlatform> probe() {
@@ -255,6 +263,14 @@ cublasHandle_t cuQueue::getCublasHandle() const {
     return m_cublas;
 }
 
+cusolverDnHandle_t cuQueue::getCusolverHandle() const {
+    if (m_cusolver == nullptr) {
+        CheckCusolver(cusolverDnCreate(&m_cusolver));
+        CheckCusolver(cusolverDnSetStream(m_cusolver, m_queue));
+    }
+    return m_cusolver;
+}
+
 cudnnHandle_t cuQueue::getCudnnHandle() const {
     if (m_cudnn == nullptr) {
         CheckCudnn(cudnnCreate(&m_cudnn));
@@ -273,12 +289,14 @@ void cuQueue::finish() const {
 }
 
 cuQueue::~cuQueue() {
-    if (m_queue)
-        CheckErrorDtor(cuStreamDestroy(m_queue));
     if (m_cublas)
         cublasDestroy(m_cublas);
+    if (m_cusolver)
+        cusolverDnDestroy(m_cusolver);
     if (m_cudnn)
         cudnnDestroy(m_cudnn);
+    if (m_queue)
+        CheckErrorDtor(cuStreamDestroy(m_queue));
 }
 
 void cuBuffer::read(const rawQueue& queue, void* host, size_t size, size_t offset, rawEvent*) const {

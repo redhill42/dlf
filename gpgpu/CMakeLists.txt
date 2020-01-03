@@ -131,8 +131,13 @@ if(CUDA_FOUND)
   find_cuda_helper_libs("cuda")
   find_cuda_helper_libs("nvrtc")
   find_cuda_helper_libs("cublas")
+  find_cuda_helper_libs("cusolver")
   find_cuda_helper_libs("cudnn")
-  set(CUDA_LIBRARIES ${CUDA_cuda_LIBRARY} ${CUDA_nvrtc_LIBRARY} ${CUDA_cublas_LIBRARY} ${CUDA_cudnn_LIBRARY})
+  set(CUDA_LIBRARIES ${CUDA_cuda_LIBRARY}
+                     ${CUDA_nvrtc_LIBRARY}
+                     ${CUDA_cublas_LIBRARY}
+                     ${CUDA_cusolver_LIBRARY}
+                     ${CUDA_cudnn_LIBRARY})
   include_directories(${CUDA_INCLUDE_DIRS})
 endif()
 

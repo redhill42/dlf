@@ -58,8 +58,7 @@ dispatch(const Queue& queue, CL&& cl, CU&& cu) {
     if (IsOpenCL(queue.context().device())) {
         cl();
     } else {
-        const cuQueue& q = static_cast<const cuQueue&>(queue.raw());
-        cu(q.getCublasHandle(), CudaDataType<T>);
+        cu(static_cast<const cuQueue&>(queue.raw()));
     }
 }
 
@@ -70,7 +69,16 @@ dispatch(const Queue&, CL&& cl, CU&&) {
 }
 
 #define OPENCL(...) [&](){__VA_ARGS__}
-#define CUDA(...)   [&](auto h, auto t){(void)t; __VA_ARGS__}
+
+#define CUBLAS(...) [&](const auto& q) { \
+    auto h = q.getCublasHandle(); \
+    __VA_ARGS__ \
+}
+
+#define CUSOLVER(...) [&](const auto& q) { \
+    auto h = q.getCusolverHandle(); \
+    __VA_ARGS__ \
+}
 
 #else
 
@@ -79,8 +87,9 @@ void dispatch(const Queue&, CL&& cl, CU&&) {
     cl();
 }
 
-#define OPENCL(...) [&](){__VA_ARGS__}
-#define CUDA(...)   [&](){}
+#define OPENCL(...)   [&](){__VA_ARGS__}
+#define CUBLAS(...)   [&](){}
+#define CUSOLVER(...) [&](){}
 
 #endif // !HAS_CUDA
 
@@ -216,7 +225,7 @@ void swap(const size_t n,
                            x_buffer, x_offset, x_inc,
                            y_buffer, y_offset, y_inc);
         ),
-        CUDA(
+        CUBLAS(
             auto x = cuBuffer::unwrap(x_buffer) + x_offset;
             auto y = cuBuffer::unwrap(y_buffer) + y_offset;
             cublasSwapEx(h, n, x, x_inc, y, y_inc);
@@ -264,7 +273,8 @@ void scal(const size_t n, const T alpha,
             auto routine = Xscal<T>(queue, event);
             routine.DoScal(n, alpha, x_buffer, x_offset, x_inc);
         ),
-        CUDA(
+        CUBLAS(
+            auto t = CudaDataType<T>;
             auto x = cuBuffer::unwrap(x_buffer) + x_offset;
             cublasScalEx(h, n, &alpha, t, x, t, x_inc, t);
         ));
@@ -325,7 +335,7 @@ void copy(const size_t n,
                            x_buffer, x_offset, x_inc,
                            y_buffer, y_offset, y_inc);
         ),
-        CUDA(
+        CUBLAS(
             auto x = cuBuffer::unwrap(x_buffer) + x_offset;
             auto y = cuBuffer::unwrap(y_buffer) + y_offset;
             cublasCopyEx(h, n, x, x_inc, y, y_inc);
@@ -368,7 +378,8 @@ void axpy(const size_t n, const T alpha,
                            x_buffer, x_offset, x_inc,
                            y_buffer, y_offset, y_inc);
         ),
-        CUDA(
+        CUBLAS(
+            auto t = CudaDataType<T>;
             auto x = cuBuffer::unwrap(x_buffer) + x_offset;
             auto y = cuBuffer::unwrap(y_buffer) + y_offset;
             cublasAxpyEx(h, n, &alpha, t, x, t, x_inc, y, t, y_inc, t);
@@ -421,7 +432,8 @@ void dot(const size_t n,
                           y_buffer, y_offset, y_inc,
                           r_buffer, r_offset);
         ),
-        CUDA(
+        CUBLAS(
+            auto t = CudaDataType<T>;
             auto x = cuBuffer::unwrap(x_buffer) + x_offset;
             auto y = cuBuffer::unwrap(y_buffer) + y_offset;
             auto r = cuBuffer::unwrap(r_buffer) + r_offset;
@@ -477,7 +489,8 @@ void dotu(const size_t n,
                            y_buffer, y_offset, y_inc,
                            r_buffer, r_offset);
         ),
-        CUDA(
+        CUBLAS(
+            auto t = CudaDataType<T>;
             auto x = cuBuffer::unwrap(x_buffer) + x_offset;
             auto y = cuBuffer::unwrap(y_buffer) + y_offset;
             auto r = cuBuffer::unwrap(r_buffer) + r_offset;
@@ -518,7 +531,8 @@ void dotc(const size_t n,
                            y_buffer, y_offset, y_inc,
                            r_buffer, r_offset);
         ),
-        CUDA(
+        CUBLAS(
+            auto t = CudaDataType<T>;
             auto x = cuBuffer::unwrap(x_buffer) + x_offset;
             auto y = cuBuffer::unwrap(y_buffer) + y_offset;
             auto r = cuBuffer::unwrap(r_buffer) + r_offset;
@@ -552,7 +566,8 @@ void nrm2(const size_t n,
                            x_buffer, x_offset, x_inc,
                            r_buffer, r_offset);
         ),
-        CUDA(
+        CUBLAS(
+            auto t = CudaDataType<T>;
             auto x = cuBuffer::unwrap(x_buffer) + x_offset;
             auto r = cuBuffer::unwrap(r_buffer) + r_offset;
 
@@ -704,7 +719,7 @@ void amax(const size_t n,
                            x_buffer, x_offset, x_inc,
                            r_buffer, r_offset);
         ),
-        CUDA(
+        CUBLAS(
             auto x = cuBuffer::unwrap(x_buffer) + x_offset;
             auto r = cuBuffer::unwrap(r_buffer) + r_offset;
 
@@ -778,7 +793,7 @@ void amin(const size_t n,
                            x_buffer, x_offset, x_inc,
                            r_buffer, r_offset);
         ),
-        CUDA(
+        CUBLAS(
             auto x = cuBuffer::unwrap(x_buffer) + x_offset;
             auto r = cuBuffer::unwrap(r_buffer) + r_offset;
 
@@ -972,7 +987,7 @@ void gemv(const Layout layout, const Transpose a_transpose,
                            beta,
                            y_buffer, y_offset, y_inc);
         ),
-        CUDA(
+        CUBLAS(
             auto a = cuBuffer::unwrap(a_buffer) + a_offset;
             auto x = cuBuffer::unwrap(x_buffer) + x_offset;
             auto y = cuBuffer::unwrap(y_buffer) + y_offset;
@@ -1256,7 +1271,7 @@ void symv(const Layout layout, const Triangle triangle, const size_t n,
                            beta,
                            y_buffer, y_offset, y_inc);
         ),
-        CUDA(
+        CUBLAS(
             if (layout == Layout::RowMajor) {
                 auto uplo = triangle == Triangle::Lower
                     ? cublasFillMode_t::CUBLAS_FILL_MODE_UPPER
@@ -1466,7 +1481,7 @@ void trmv(const Layout layout, const Triangle triangle, const Transpose a_transp
                            a_buffer, a_offset, a_ld,
                            x_buffer, x_offset, x_inc);
         ),
-        CUDA(
+        CUBLAS(
             if (layout == Layout::RowMajor) {
                 auto uplo = triangle == Triangle::Lower
                     ? cublasFillMode_t::CUBLAS_FILL_MODE_UPPER
@@ -1752,7 +1767,7 @@ void ger(const Layout layout, const size_t m, const size_t n, const T alpha,
                           y_buffer, y_offset, y_inc,
                           a_buffer, a_offset, a_ld);
         ),
-        CUDA(
+        CUBLAS(
             cublasGer(h, n, m, alpha,
                       cuBuffer::unwrap(y_buffer) + y_offset, y_inc,
                       cuBuffer::unwrap(x_buffer) + x_offset, x_inc,
@@ -1819,7 +1834,7 @@ void geru(const Layout layout, const size_t m, const size_t n, const T alpha,
                            y_buffer, y_offset, y_inc,
                            a_buffer, a_offset, a_ld);
         ),
-        CUDA(
+        CUBLAS(
             cublasGeru(h, n, m, alpha,
                        cuBuffer::unwrap(y_buffer) + y_offset, y_inc,
                        cuBuffer::unwrap(x_buffer) + x_offset, x_inc,
@@ -1881,7 +1896,7 @@ void gerc(const Layout layout, const size_t m, const size_t n, const T alpha,
                            y_buffer, y_offset, y_inc,
                            a_buffer, a_offset, a_ld);
         ),
-        CUDA(
+        CUBLAS(
             cublasGerc(h, n, m, alpha,
                        cuBuffer::unwrap(y_buffer) + y_offset, y_inc,
                        cuBuffer::unwrap(x_buffer) + x_offset, x_inc,
@@ -2145,7 +2160,8 @@ void gemm(const Layout layout, const Transpose a_transpose, const Transpose b_tr
                            beta,
                            c_buffer, c_offset, c_ld);
         ),
-        CUDA(
+        CUBLAS(
+            auto t = CudaDataType<T>;
             auto a = cuBuffer::unwrap(a_buffer) + a_offset;
             auto b = cuBuffer::unwrap(b_buffer) + b_offset;
             auto c = cuBuffer::unwrap(c_buffer) + c_offset;
@@ -2312,7 +2328,7 @@ void symm(const Layout layout, const Side side, const Triangle triangle,
                            beta,
                            c_buffer, c_offset, c_ld);
         ),
-        CUDA(
+        CUBLAS(
             if (layout == Layout::RowMajor) {
                 auto cu_side = side == Side::Left
                     ? cublasSideMode_t::CUBLAS_SIDE_RIGHT
@@ -2711,7 +2727,7 @@ void trmm(const Layout layout, const Side side, const Triangle triangle, const T
                            a_buffer, a_offset, a_ld,
                            b_buffer, b_offset, b_ld);
         ),
-        CUDA(
+        CUBLAS(
             if (layout == Layout::RowMajor) {
                 auto cu_side = side == Side::Left
                     ? cublasSideMode_t::CUBLAS_SIDE_RIGHT
@@ -3358,7 +3374,9 @@ void gemmBatched(const Layout layout, const Transpose a_transpose, const Transpo
                                   c_buffer, c_offsets_cpp, c_ld,
                                   batch_count);
         ),
-        CUDA(
+        CUBLAS(
+            auto t = CudaDataType<T>;
+
             auto A = cuBuffer::unwrap(a_buffer);
             auto B = cuBuffer::unwrap(b_buffer);
             auto C = cuBuffer::unwrap(c_buffer);
@@ -3592,7 +3610,8 @@ void gemmStridedBatched(const Layout layout, const Transpose a_transpose, const 
                 c_buffer, c_offset, c_ld, c_stride,
                 batch_count);
         ),
-        CUDA(
+        CUBLAS(
+            auto t = CudaDataType<T>;
             auto a = cuBuffer::unwrap(a_buffer) + a_offset;
             auto b = cuBuffer::unwrap(b_buffer) + b_offset;
             auto c = cuBuffer::unwrap(c_buffer) + c_offset;
@@ -3694,14 +3713,124 @@ template void PUBLIC_API gemmStridedBatched<half>   (const Layout, const Transpo
                                                      const size_t,
                                                      const Queue&, Event*);
 
+// =================================================================================================
+// LAPACK routines
+// =================================================================================================
+
+#if HAS_CUDA
+inline cusolverStatus_t cusolverDnXgetrf_bufferSize(
+    cusolverDnHandle_t handle, int m, int n, float* A, int lda, int* lwork)
+{
+    return cusolverDnSgetrf_bufferSize(handle, m, n, A, lda, lwork);
+}
+
+inline cusolverStatus_t cusolverDnXgetrf_bufferSize(
+    cusolverDnHandle_t handle, int m, int n, double* A, int lda, int* lwork)
+{
+    return cusolverDnDgetrf_bufferSize(handle, m, n, A, lda, lwork);
+}
+
+inline cusolverStatus_t cusolverDnXgetrf_bufferSize(
+    cusolverDnHandle_t handle, int m, int n, float2* A, int lda, int* lwork)
+{
+    return cusolverDnCgetrf_bufferSize(
+        handle, m, n, reinterpret_cast<cuComplex*>(A), lda, lwork);
+}
+
+inline cusolverStatus_t cusolverDnXgetrf_bufferSize(
+    cusolverDnHandle_t handle, int m, int n, double2* A, int lda, int* lwork)
+{
+    return cusolverDnZgetrf_bufferSize(
+        handle, m, n, reinterpret_cast<cuDoubleComplex*>(A), lda, lwork);
+}
+
+inline cusolverStatus_t cusolverDnXgetrf(
+    cusolverDnHandle_t handle, int m, int n, float* A, int lda, float* work, int* ipiv, int* info)
+{
+    return cusolverDnSgetrf(handle, m, n, A, lda, work, ipiv, info);
+}
+
+inline cusolverStatus_t cusolverDnXgetrf(
+    cusolverDnHandle_t handle, int m, int n, double* A, int lda, double* work, int* ipiv, int* info)
+{
+    return cusolverDnDgetrf(handle, m, n, A, lda, work, ipiv, info);
+}
+
+inline cusolverStatus_t cusolverDnXgetrf(
+    cusolverDnHandle_t handle, int m, int n, float2* A, int lda, float2* work, int* ipiv, int* info)
+{
+    return cusolverDnCgetrf(
+        handle, m, n, reinterpret_cast<cuComplex*>(A), lda,
+        reinterpret_cast<cuComplex*>(work), ipiv, info);
+}
+
+inline cusolverStatus_t cusolverDnXgetrf(
+    cusolverDnHandle_t handle, int m, int n, double2* A, int lda, double2* work, int* ipiv, int* info)
+{
+    return cusolverDnZgetrf(
+        handle, m, n, reinterpret_cast<cuDoubleComplex*>(A), lda,
+        reinterpret_cast<cuDoubleComplex*>(work), ipiv, info);
+}
+
+inline cusolverStatus_t cusolverDnXgetrs(
+    cusolverDnHandle_t handle, cublasOperation_t trans, int n, int nrhs,
+    const float* A, int lda, const int* ipiv, float* B, int ldb, int* info)
+{
+    return cusolverDnSgetrs(handle, trans, n, nrhs, A, lda, ipiv, B, ldb, info);
+}
+
+inline cusolverStatus_t cusolverDnXgetrs(
+    cusolverDnHandle_t handle, cublasOperation_t trans, int n, int nrhs,
+    const double* A, int lda, const int* ipiv, double* B, int ldb, int* info)
+{
+    return cusolverDnDgetrs(handle, trans, n, nrhs, A, lda, ipiv, B, ldb, info);
+}
+
+inline cusolverStatus_t cusolverDnXgetrs(
+    cusolverDnHandle_t handle, cublasOperation_t trans, int n, int nrhs,
+    const float2* A, int lda, const int* ipiv, float2* B, int ldb, int* info)
+{
+    return cusolverDnCgetrs(
+        handle, trans, n, nrhs,
+        reinterpret_cast<const cuComplex*>(A), lda, ipiv,
+        reinterpret_cast<cuComplex*>(B), ldb, info);
+}
+
+inline cusolverStatus_t cusolverDnXgetrs(
+    cusolverDnHandle_t handle, cublasOperation_t trans, int n, int nrhs,
+    const double2* A, int lda, const int* ipiv, double2* B, int ldb, int* info)
+{
+    return cusolverDnZgetrs(
+        handle, trans, n, nrhs,
+        reinterpret_cast<const cuDoubleComplex*>(A), lda, ipiv,
+        reinterpret_cast<cuDoubleComplex*>(B), ldb, info);
+}
+#endif
+
 template <typename T>
 void getrf(const size_t m, const size_t n,
            Buffer<T>& A, const size_t a_offset, const size_t lda,
            Buffer<int32_t>& ipiv, const size_t ipiv_offset,
            const Queue& queue, Event* event)
 {
-    auto routine = Xgetrf<T>(queue, event);
-    routine.DoGetrf(m, n, A, a_offset, lda, ipiv, ipiv_offset);
+    dispatch<T>(queue,
+        OPENCL(
+            auto routine = Xgetrf<T>(queue, event);
+            routine.DoGetrf(m, n, A, a_offset, lda, ipiv, ipiv_offset);
+        ),
+        CUSOLVER(
+            int lwork = 0;
+            cusolverDnXgetrf_bufferSize(
+                h, m, n, cuBuffer::unwrap(A) + a_offset, lda, &lwork);
+            auto work = queue.context().getTemporaryBuffer<T>(lwork);
+
+            cusolverDnXgetrf(
+                h, m, n,
+                cuBuffer::unwrap(A) + a_offset, lda,
+                cuBuffer::unwrap(work),
+                cuBuffer::unwrap(ipiv) + ipiv_offset + 1,
+                cuBuffer::unwrap(ipiv) + ipiv_offset);
+        ));
 }
 
 template void PUBLIC_API getrf<float>(const size_t, const size_t,
@@ -3728,8 +3857,32 @@ void getrs(Transpose trans, const size_t n, const size_t nrhs,
            Buffer<T>& B, const size_t b_offset, const size_t ldb,
            const Queue& queue, Event* event)
 {
-    auto routine = Xgetrf<T>(queue, event);
-    routine.DoGetrs(trans, n, nrhs, A, a_offset, lda, ipiv, ipiv_offset, B, b_offset, ldb);
+    dispatch<T>(queue,
+        OPENCL(
+            auto routine = Xgetrf<T>(queue, event);
+            routine.DoGetrs(trans, n, nrhs, A, a_offset, lda, ipiv, ipiv_offset, B, b_offset, ldb);
+        ),
+        CUSOLVER(
+            auto cuop = trans == Transpose::NoTrans
+                ? cublasOperation_t::CUBLAS_OP_T
+                : cublasOperation_t::CUBLAS_OP_N;
+            auto info = queue.context().getTemporaryBuffer<int>(1);
+
+            auto work = queue.context().getTemporaryBuffer<T>(n * nrhs);
+            omatcopy(Layout::RowMajor, Transpose::Trans, n, nrhs,
+                PrecisionTraits<T>::One, B, b_offset, ldb,
+                work, work.offset(), n , queue);
+
+            cusolverDnXgetrs(h, cuop, n, nrhs,
+                cuBuffer::unwrap(A) + a_offset, lda,
+                cuBuffer::unwrap(ipiv) + ipiv_offset + 1,
+                cuBuffer::unwrap(work), n,
+                cuBuffer::unwrap(info) + info.offset());
+
+            omatcopy(Layout::RowMajor, Transpose::Trans, nrhs, n,
+                PrecisionTraits<T>::One, work, work.offset(), n,
+                B, b_offset, ldb, queue);
+        ));
 }
 
 template void PUBLIC_API getrs<float>(Transpose, const size_t, const size_t,
