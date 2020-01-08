@@ -15,9 +15,9 @@
 
 #include <string>
 
-#include "routines/routines.hpp"
 #include "gblas.h"
-#include "gpgpu_cu.hpp"
+#include "routines/routines.hpp"
+#include "cublas.hpp"
 
 namespace gpgpu { namespace blas {
 
@@ -195,24 +195,6 @@ template void PUBLIC_API rotm<double>(const size_t,
 //---------------------------------------------------------------------------
 // Swap two vectors: SSWAP/DSWAP/CSWAP/ZSWAP/HSWAP
 
-#if HAS_CUDA
-inline void cublasSwapEx(cublasHandle_t handle, int n, float* x, int incx, float* y, int incy) {
-    cublasSswap(handle, n, x, incx, y, incy);
-}
-
-inline void cublasSwapEx(cublasHandle_t handle, int n, double* x, int incx, double* y, int incy) {
-    cublasDswap(handle, n, x, incx, y, incy);
-}
-
-inline void cublasSwapEx(cublasHandle_t handle, int n, float2* x, int incx, float2* y, int incy) {
-    cublasCswap(handle, n, reinterpret_cast<cuComplex*>(x), incx, reinterpret_cast<cuComplex*>(y), incy);
-}
-
-inline void cublasSwapEx(cublasHandle_t handle, int n, double2* x, int incx, double2* y, int incy) {
-    cublasZswap(handle, n, reinterpret_cast<cuDoubleComplex*>(x), incx, reinterpret_cast<cuDoubleComplex*>(y), incy);
-}
-#endif
-
 template <typename T>
 void swap(const size_t n,
           Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
@@ -304,24 +286,6 @@ template void PUBLIC_API scal<int64_t>(const size_t, const int64_t,
 
 //---------------------------------------------------------------------------
 // Vector copy: SCOPY/DCOPY/CCOPY/ZCOPY/HCOPY
-
-#if HAS_CUDA
-inline void cublasCopyEx(cublasHandle_t handle, int n, const float* x, int incx, float* y, int incy) {
-    cublasScopy(handle, n, x, incx, y, incy);
-}
-
-inline void cublasCopyEx(cublasHandle_t handle, int n, const double* x, int incx, double* y, int incy) {
-    cublasDcopy(handle, n, x, incx, y, incy);
-}
-
-inline void cublasCopyEx(cublasHandle_t handle, int n, const float2* x, int incx, float2* y, int incy) {
-    cublasCcopy(handle, n, reinterpret_cast<const cuComplex*>(x), incx, reinterpret_cast<cuComplex*>(y), incy);
-}
-
-inline void cublasCopyEx(cublasHandle_t handle, int n, const double2* x, int incx, double2* y, int incy) {
-    cublasZcopy(handle, n, reinterpret_cast<const cuDoubleComplex*>(x), incx, reinterpret_cast<cuDoubleComplex*>(y), incy);
-}
-#endif
 
 template <typename T>
 void copy(const size_t n,
@@ -471,44 +435,12 @@ template void PUBLIC_API dot<int64_t>(const size_t,
                                       const Buffer<int64_t>&, const size_t, const size_t,
                                       Buffer<int64_t>&, const size_t,
                                       const Queue&, Event*);
-
-//---------------------------------------------------------------------------
-// Dot product of two complex vectors: CDOTU/ZDOTU
-
-template <typename T>
-void dotu(const size_t n,
-          const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
-          const Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
-          Buffer<T>& r_buffer, const size_t r_offset,
-          const Queue& queue, Event* event) {
-    dispatch<T>(queue,
-        OPENCL(
-            auto routine = Xdotu<T>(queue, event);
-            routine.DoDotu(n,
-                           x_buffer, x_offset, x_inc,
-                           y_buffer, y_offset, y_inc,
-                           r_buffer, r_offset);
-        ),
-        CUBLAS(
-            auto t = CudaDataType<T>;
-            auto x = cuBuffer::unwrap(x_buffer) + x_offset;
-            auto y = cuBuffer::unwrap(y_buffer) + y_offset;
-            auto r = cuBuffer::unwrap(r_buffer) + r_offset;
-
-            cublasPointerMode_t mode;
-            cublasGetPointerMode(h, &mode);
-            cublasSetPointerMode(h, cublasPointerMode_t::CUBLAS_POINTER_MODE_DEVICE);
-            cublasDotEx(h, n, x, t, x_inc, y, t, y_inc, r, t, t);
-            cublasSetPointerMode(h, mode);
-        ));
-}
-
-template void PUBLIC_API dotu<float2> (const size_t,
+template void PUBLIC_API dot<float2>  (const size_t,
                                        const Buffer<float2>&, const size_t, const size_t,
                                        const Buffer<float2>&, const size_t, const size_t,
                                        Buffer<float2>&, const size_t,
                                        const Queue&, Event*);
-template void PUBLIC_API dotu<double2>(const size_t,
+template void PUBLIC_API dot<double2> (const size_t,
                                        const Buffer<double2>&, const size_t, const size_t,
                                        const Buffer<double2>&, const size_t, const size_t,
                                        Buffer<double2>&, const size_t,
@@ -525,11 +457,12 @@ void dotc(const size_t n,
           const Queue& queue, Event* event) {
     dispatch<T>(queue,
         OPENCL(
-            auto routine = Xdotc<T>(queue, event);
-            routine.DoDotc(n,
-                           x_buffer, x_offset, x_inc,
-                           y_buffer, y_offset, y_inc,
-                           r_buffer, r_offset);
+            auto routine = Xdot<T>(queue, event);
+            routine.DoDot(n,
+                          x_buffer, x_offset, x_inc,
+                          y_buffer, y_offset, y_inc,
+                          r_buffer, r_offset,
+                          true);
         ),
         CUBLAS(
             auto t = CudaDataType<T>;
@@ -689,24 +622,6 @@ template void PUBLIC_API sum<int64_t>(const size_t,
 //---------------------------------------------------------------------------
 // Index of absolute maximum value in a vector: iSAMAX/iDAMAX/iCAMAX/iZAMAX/iHAMAX
 
-#if HAS_CUDA
-inline void cublasAmaxEx(cublasHandle_t handle, int n, const float* x, int incx, int* result) {
-    cublasIsamax(handle, n, x, incx, result);
-}
-
-inline void cublasAmaxEx(cublasHandle_t handle, int n, const double* x, int incx, int* result) {
-    cublasIdamax(handle, n, x, incx, result);
-}
-
-inline void cublasAmaxEx(cublasHandle_t handle, int n, const float2* x, int incx, int* result) {
-    cublasIcamax(handle, n, reinterpret_cast<const cuComplex*>(x), incx, result);
-}
-
-inline void cublasAmaxEx(cublasHandle_t handle, int n, const double2* x, int incx, int* result) {
-    cublasIzamax(handle, n, reinterpret_cast<const cuDoubleComplex*>(x), incx, result);
-}
-#endif
-
 template <typename T>
 void amax(const size_t n,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
@@ -762,24 +677,6 @@ template void PUBLIC_API amax<int64_t>(const size_t,
 
 //---------------------------------------------------------------------------
 // Index of absolute minimum value in a vector (non-BLAS function): iSAMIN/iDAMIN/iCAMIN/iZAMIN/iHAMIN
-
-#if HAS_CUDA
-inline void cublasAminEx(cublasHandle_t handle, int n, const float* x, int incx, int* result) {
-    cublasIsamin(handle, n, x, incx, result);
-}
-
-inline void cublasAminEx(cublasHandle_t handle, int n, const double* x, int incx, int* result) {
-    cublasIdamin(handle, n, x, incx, result);
-}
-
-inline void cublasAminEx(cublasHandle_t handle, int n, const float2* x, int incx, int* result) {
-    cublasIcamin(handle, n, reinterpret_cast<const cuComplex*>(x), incx, result);
-}
-
-inline void cublasAminEx(cublasHandle_t handle, int n, const double2* x, int incx, int* result) {
-    cublasIzamin(handle, n, reinterpret_cast<const cuDoubleComplex*>(x), incx, result);
-}
-#endif
 
 template <typename T>
 void amin(const size_t n,
@@ -927,46 +824,6 @@ template void PUBLIC_API min<int64_t>(const size_t,
 //---------------------------------------------------------------------------
 // General matrix-vector multiplication: SGEMV/DGEMV/CGEMV/ZGEMV/HGEMV
 
-#if HAS_CUDA
-inline void cublasGemvEx(cublasHandle_t handle, Transpose trans,
-                         int m, int n, float alpha,
-                         const float* a, int lda, const float* x, int x_inc,
-                         float beta, float* y, int y_inc) {
-    cublasSgemv(handle, CudaOp(trans), m, n, &alpha, a, lda, x, x_inc, &beta, y, y_inc);
-}
-
-inline void cublasGemvEx(cublasHandle_t handle, Transpose trans,
-                         int m, int n, double alpha,
-                         const double* a, int lda, const double* x, int x_inc,
-                         double beta, double* y, int y_inc) {
-    cublasDgemv(handle, CudaOp(trans), m, n, &alpha, a, lda, x, x_inc, &beta, y, y_inc);
-}
-
-inline void cublasGemvEx(cublasHandle_t handle, Transpose trans,
-                         int m, int n, float2 alpha,
-                         const float2* a, int lda, const float2* x, int x_inc,
-                         float2 beta, float2* y, int y_inc) {
-    cublasCgemv(handle, CudaOp(trans), m, n,
-                reinterpret_cast<cuComplex*>(&alpha),
-                reinterpret_cast<const cuComplex*>(a), lda,
-                reinterpret_cast<const cuComplex*>(x), x_inc,
-                reinterpret_cast<cuComplex*>(&beta),
-                reinterpret_cast<cuComplex*>(y), y_inc);
-}
-
-inline void cublasGemvEx(cublasHandle_t handle, Transpose trans,
-                         int m, int n, double2 alpha,
-                         const double2* a, int lda, const double2* x, int x_inc,
-                         double2 beta, double2* y, int y_inc) {
-    cublasZgemv(handle, CudaOp(trans), m, n,
-                reinterpret_cast<cuDoubleComplex*>(&alpha),
-                reinterpret_cast<const cuDoubleComplex*>(a), lda,
-                reinterpret_cast<const cuDoubleComplex*>(x), x_inc,
-                reinterpret_cast<cuDoubleComplex*>(&beta),
-                reinterpret_cast<cuDoubleComplex*>(y), y_inc);
-}
-#endif
-
 template <typename T>
 void gemv(const Layout layout, const Transpose a_transpose,
           const size_t m, const size_t n,
@@ -975,7 +832,20 @@ void gemv(const Layout layout, const Transpose a_transpose,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
           const T beta,
           Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
-          const Queue& queue, Event* event) {
+          const Queue& queue, Event* event)
+{
+    if (layout == Layout::RowMajor && a_transpose == Transpose::ConjTrans) {
+        auto routine = Xgemv<T>(queue, event);
+        routine.DoGemv(layout, a_transpose,
+                       m, n,
+                       alpha,
+                       a_buffer, a_offset, a_ld,
+                       x_buffer, x_offset, x_inc,
+                       beta,
+                       y_buffer, y_offset, y_inc);
+        return;
+    }
+
     dispatch<T>(queue,
         OPENCL(
             auto routine = Xgemv<T>(queue, event);
@@ -993,10 +863,13 @@ void gemv(const Layout layout, const Transpose a_transpose,
             auto y = cuBuffer::unwrap(y_buffer) + y_offset;
 
             if (layout == Layout::RowMajor) {
-                auto transA = (a_transpose==Transpose::NoTrans) ? Transpose::Trans : Transpose::NoTrans;
+                auto transA = a_transpose == Transpose::NoTrans
+                    ? cublasOperation_t::CUBLAS_OP_T
+                    : cublasOperation_t::CUBLAS_OP_N;
                 cublasGemvEx(h, transA, n, m, alpha, a, a_ld, x, x_inc, beta, y, y_inc);
             } else {
-                cublasGemvEx(h, a_transpose, m, n, alpha, a, a_ld, x, x_inc, beta, y, y_inc);
+                auto transA = CudaOp(a_transpose);
+                cublasGemvEx(h, transA, m, n, alpha, a, a_ld, x, x_inc, beta, y, y_inc);
             }
         ));
 }
@@ -1233,26 +1106,6 @@ template void PUBLIC_API hpmv<double2>(const Layout, const Triangle, const size_
 //---------------------------------------------------------------------------
 // Symmetric matrix-vector multiplication: SSYMV/DSYMV/HSYMV
 
-#if HAS_CUDA
-inline void cublasSymv(cublasHandle_t handle,
-                       cublasFillMode_t uplo,
-                       const int n, const float alpha,
-                       const float* A, const int lda,
-                       const float* x, const int incX,
-                       const float beta,
-                       float* y, const int incY)
-{ cublasSsymv(handle, uplo, n, &alpha, A, lda, x, incX, &beta, y, incY); }
-
-inline void cublasSymv(cublasHandle_t handle,
-                       cublasFillMode_t uplo,
-                       const int n, const double alpha,
-                       const double* A, const int lda,
-                       const double* x, const int incX,
-                       const double beta,
-                       double* y, const int incY)
-{ cublasDsymv(handle, uplo, n, &alpha, A, lda, x, incX, &beta, y, incY); }
-#endif
-
 template <typename T>
 void symv(const Layout layout, const Triangle triangle, const size_t n,
           const T alpha,
@@ -1421,63 +1274,25 @@ template void PUBLIC_API spmv<half>  (const Layout, const Triangle, const size_t
 //---------------------------------------------------------------------------
 // Triangular matrix-vector multiplication: STRMV/DTRMV/CTRMV/ZTRMV/HTRMV
 
-#if HAS_CUDA
-inline void cublasTrmv(cublasHandle_t handle,
-                       cublasFillMode_t uplo,
-                       cublasOperation_t trans,
-                       cublasDiagType_t diag,
-                       int n,
-                       const float* A, int lda,
-                       float* x, int incx)
-{ cublasStrmv(handle, uplo, trans, diag, n, A, lda, x, incx); }
-
-inline void cublasTrmv(cublasHandle_t handle,
-                       cublasFillMode_t uplo,
-                       cublasOperation_t trans,
-                       cublasDiagType_t diag,
-                       int n,
-                       const double* A, int lda,
-                       double* x, int incx)
-{ cublasDtrmv(handle, uplo, trans, diag, n, A, lda, x, incx); }
-
-inline void cublasTrmv(cublasHandle_t handle,
-                       cublasFillMode_t uplo,
-                       cublasOperation_t trans,
-                       cublasDiagType_t diag,
-                       int n,
-                       const float2* A, int lda,
-                       float2* x, int incx)
-{
-    cublasCtrmv(handle, uplo, trans, diag, n,
-                reinterpret_cast<const cuComplex*>(A), lda,
-                reinterpret_cast<cuComplex*>(x), incx);
-}
-
-inline void cublasTrmv(cublasHandle_t handle,
-                       cublasFillMode_t uplo,
-                       cublasOperation_t trans,
-                       cublasDiagType_t diag,
-                       int n,
-                       const double2* A, int lda,
-                       double2* x, int incx)
-{
-    cublasZtrmv(handle, uplo, trans, diag, n,
-                reinterpret_cast<const cuDoubleComplex*>(A), lda,
-                reinterpret_cast<cuDoubleComplex*>(x), incx);
-}
-#endif
-
 template <typename T>
 void trmv(const Layout layout, const Triangle triangle, const Transpose a_transpose, const Diagonal diagonal,
                 const size_t n,
                 const Buffer<T>& a_buffer, const size_t a_offset, const size_t a_ld,
                 Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
-                const Queue& queue, Event* event) {
+                const Queue& queue, Event* event)
+{
+    if (layout == Layout::RowMajor && a_transpose == Transpose::ConjTrans) {
+        auto routine = Xtrmv<T>(queue, event);
+        routine.DoTrmv(layout, triangle, a_transpose, diagonal, n,
+                       a_buffer, a_offset, a_ld,
+                       x_buffer, x_offset, x_inc);
+        return;
+    }
+
     dispatch<T>(queue,
         OPENCL(
             auto routine = Xtrmv<T>(queue, event);
-            routine.DoTrmv(layout, triangle, a_transpose, diagonal,
-                           n,
+            routine.DoTrmv(layout, triangle, a_transpose, diagonal, n,
                            a_buffer, a_offset, a_ld,
                            x_buffer, x_offset, x_inc);
         ),
@@ -1637,12 +1452,49 @@ void trsv(const Layout layout, const Triangle triangle, const Transpose a_transp
           const size_t n,
           const Buffer<T>& a_buffer, const size_t a_offset, const size_t a_ld,
           Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
-          const Queue& queue, Event* event) {
-    auto routine = Xtrsv<T>(queue, event);
-    routine.DoTrsv(layout, triangle, a_transpose, diagonal,
-                   n,
-                   a_buffer, a_offset, a_ld,
-                   x_buffer, x_offset, x_inc);
+          const Queue& queue, Event* event)
+{
+    if (layout == Layout::RowMajor && a_transpose == Transpose::ConjTrans) {
+        auto routine = Xtrsv<T>(queue, event);
+        routine.DoTrsv(layout, triangle, a_transpose, diagonal, n,
+                       a_buffer, a_offset, a_ld,
+                       x_buffer, x_offset, x_inc);
+        return;
+    }
+
+    dispatch<T>(queue,
+        OPENCL(
+            auto routine = Xtrsv<T>(queue, event);
+            routine.DoTrsv(layout, triangle, a_transpose, diagonal, n,
+                           a_buffer, a_offset, a_ld,
+                           x_buffer, x_offset, x_inc);
+        ),
+        CUBLAS(
+            if (layout == Layout::RowMajor) {
+                auto uplo = triangle == Triangle::Lower
+                    ? cublasFillMode_t::CUBLAS_FILL_MODE_UPPER
+                    : cublasFillMode_t::CUBLAS_FILL_MODE_LOWER;
+                auto trans = a_transpose == Transpose::NoTrans
+                    ? cublasOperation_t::CUBLAS_OP_T
+                    : cublasOperation_t::CUBLAS_OP_N;
+                auto diag = diagonal == Diagonal::NonUnit
+                    ? cublasDiagType_t::CUBLAS_DIAG_NON_UNIT
+                    : cublasDiagType_t::CUBLAS_DIAG_UNIT;
+                cublasTrsv(h, uplo, trans, diag, n,
+                           cuBuffer::unwrap(a_buffer) + a_offset, a_ld,
+                           cuBuffer::unwrap(x_buffer) + x_offset, x_inc);
+            } else {
+                auto uplo = triangle == Triangle::Lower
+                    ? cublasFillMode_t::CUBLAS_FILL_MODE_LOWER
+                    : cublasFillMode_t::CUBLAS_FILL_MODE_UPPER;
+                auto diag = diagonal == Diagonal::NonUnit
+                    ? cublasDiagType_t::CUBLAS_DIAG_NON_UNIT
+                    : cublasDiagType_t::CUBLAS_DIAG_UNIT;
+                cublasTrsv(h, uplo, CudaOp(a_transpose), diag, n,
+                           cuBuffer::unwrap(a_buffer) + a_offset, a_ld,
+                           cuBuffer::unwrap(x_buffer) + x_offset, x_inc);
+            }
+        ));
 }
 
 template void PUBLIC_API trsv<float>  (const Layout, const Triangle, const Transpose, const Diagonal,
@@ -1735,24 +1587,6 @@ template void PUBLIC_API tpsv<double2>(const Layout, const Triangle, const Trans
 //---------------------------------------------------------------------------
 // General rank-1 matrix update: SGER/DGER/HGER
 
-#if HAS_CUDA
-inline void cublasGer(cublasHandle_t handle, const size_t m, const size_t n, float alpha,
-                      const float* x, int incx,
-                      const float* y, int incy,
-                      float* A, int lda)
-{
-    ::cublasSger(handle, m, n, &alpha, x, incx, y, incy, A, lda);
-}
-
-inline void cublasGer(cublasHandle_t handle, const size_t m, const size_t n, double alpha,
-                      const double* x, int incx,
-                      const double* y, int incy,
-                      double* A, int lda)
-{
-    ::cublasDger(handle, m, n, &alpha, x, incx, y, incy, A, lda);
-}
-#endif
-
 template <typename T>
 void ger(const Layout layout, const size_t m, const size_t n, const T alpha,
          const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
@@ -1775,113 +1609,6 @@ void ger(const Layout layout, const size_t m, const size_t n, const T alpha,
         ));
 }
 
-template void PUBLIC_API ger<float> (const Layout, const size_t, const size_t, const float,
-                                     const Buffer<float>&, const size_t, const size_t,
-                                     const Buffer<float>&, const size_t, const size_t,
-                                     Buffer<float>&, const size_t, const size_t,
-                                     const Queue&, Event*);
-template void PUBLIC_API ger<double>(const Layout, const size_t, const size_t, const double,
-                                     const Buffer<double>&, const size_t, const size_t,
-                                     const Buffer<double>&, const size_t, const size_t,
-                                     Buffer<double>&, const size_t, const size_t,
-                                     const Queue&, Event*);
-template void PUBLIC_API ger<half>  (const Layout, const size_t, const size_t, const half,
-                                     const Buffer<half>&, const size_t, const size_t,
-                                     const Buffer<half>&, const size_t, const size_t,
-                                     Buffer<half>&, const size_t, const size_t,
-                                     const Queue&, Event*);
-
-//---------------------------------------------------------------------------
-// General rank-1 complex matrix update: CGERU/ZGERU
-
-#if HAS_CUDA
-inline void cublasGeru(cublasHandle_t handle, const size_t m, const size_t n, float2 alpha,
-                      const float2* x, int incx,
-                      const float2* y, int incy,
-                      float2* A, int lda)
-{
-    ::cublasCgeru(handle, m, n,
-                  reinterpret_cast<const cuComplex*>(&alpha),
-                  reinterpret_cast<const cuComplex*>(x), incx,
-                  reinterpret_cast<const cuComplex*>(y), incy,
-                  reinterpret_cast<cuComplex*>(A), lda);
-}
-
-inline void cublasGeru(cublasHandle_t handle, const size_t m, const size_t n, double2 alpha,
-                      const double2* x, int incx,
-                      const double2* y, int incy,
-                      double2* A, int lda)
-{
-    ::cublasZgeru(handle, m, n,
-                  reinterpret_cast<const cuDoubleComplex*>(&alpha),
-                  reinterpret_cast<const cuDoubleComplex*>(x), incx,
-                  reinterpret_cast<const cuDoubleComplex*>(y), incy,
-                  reinterpret_cast<cuDoubleComplex*>(A), lda);
-}
-#endif
-
-template <typename T>
-void geru(const Layout layout, const size_t m, const size_t n, const T alpha,
-          const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
-          const Buffer<T>& y_buffer, const size_t y_offset, const size_t y_inc,
-          Buffer<T>& a_buffer, const size_t a_offset, const size_t a_ld,
-          const Queue& queue, Event* event) {
-    dispatch<T>(queue,
-        OPENCL(
-            auto routine = Xgeru<T>(queue, event);
-            routine.DoGeru(layout, m, n, alpha,
-                           x_buffer, x_offset, x_inc,
-                           y_buffer, y_offset, y_inc,
-                           a_buffer, a_offset, a_ld);
-        ),
-        CUBLAS(
-            cublasGeru(h, n, m, alpha,
-                       cuBuffer::unwrap(y_buffer) + y_offset, y_inc,
-                       cuBuffer::unwrap(x_buffer) + x_offset, x_inc,
-                       cuBuffer::unwrap(a_buffer) + a_offset, a_ld);
-        ));
-}
-
-template void PUBLIC_API geru<float2> (const Layout, const size_t, const size_t, const float2,
-                                       const Buffer<float2>&, const size_t, const size_t,
-                                       const Buffer<float2>&, const size_t, const size_t,
-                                       Buffer<float2>&, const size_t, const size_t,
-                                       const Queue&, Event*);
-template void PUBLIC_API geru<double2>(const Layout, const size_t, const size_t, const double2,
-                                       const Buffer<double2>&, const size_t, const size_t,
-                                       const Buffer<double2>&, const size_t, const size_t,
-                                       Buffer<double2>&, const size_t, const size_t,
-                                       const Queue&, Event*);
-
-//---------------------------------------------------------------------------
-// General rank-1 complex conjugated matrix update: CGERC/ZGERC
-
-#if HAS_CUDA
-inline void cublasGerc(cublasHandle_t handle, const size_t m, const size_t n, float2 alpha,
-                       const float2* x, int incx,
-                       const float2* y, int incy,
-                       float2* A, int lda)
-{
-    ::cublasCgerc(handle, m, n,
-                  reinterpret_cast<const cuComplex*>(&alpha),
-                  reinterpret_cast<const cuComplex*>(x), incx,
-                  reinterpret_cast<const cuComplex*>(y), incy,
-                  reinterpret_cast<cuComplex*>(A), lda);
-}
-
-inline void cublasGerc(cublasHandle_t handle, const size_t m, const size_t n, double2 alpha,
-                       const double2* x, int incx,
-                       const double2* y, int incy,
-                       double2* A, int lda)
-{
-    ::cublasZgerc(handle, m, n,
-                  reinterpret_cast<const cuDoubleComplex*>(&alpha),
-                  reinterpret_cast<const cuDoubleComplex*>(x), incx,
-                  reinterpret_cast<const cuDoubleComplex*>(y), incy,
-                  reinterpret_cast<cuDoubleComplex*>(A), lda);
-}
-#endif
-
 template <typename T>
 void gerc(const Layout layout, const size_t m, const size_t n, const T alpha,
           const Buffer<T>& x_buffer, const size_t x_offset, const size_t x_inc,
@@ -1903,6 +1630,42 @@ void gerc(const Layout layout, const size_t m, const size_t n, const T alpha,
                        cuBuffer::unwrap(a_buffer) + a_offset, a_ld);
         ));
 }
+
+template void PUBLIC_API ger<float>  (const Layout, const size_t, const size_t, const float,
+                                      const Buffer<float>&, const size_t, const size_t,
+                                      const Buffer<float>&, const size_t, const size_t,
+                                      Buffer<float>&, const size_t, const size_t,
+                                      const Queue&, Event*);
+template void PUBLIC_API ger<double> (const Layout, const size_t, const size_t, const double,
+                                      const Buffer<double>&, const size_t, const size_t,
+                                      const Buffer<double>&, const size_t, const size_t,
+                                      Buffer<double>&, const size_t, const size_t,
+                                      const Queue&, Event*);
+template void PUBLIC_API ger<half>   (const Layout, const size_t, const size_t, const half,
+                                      const Buffer<half>&, const size_t, const size_t,
+                                      const Buffer<half>&, const size_t, const size_t,
+                                      Buffer<half>&, const size_t, const size_t,
+                                      const Queue&, Event*);
+template void PUBLIC_API ger<float2> (const Layout, const size_t, const size_t, const float2,
+                                      const Buffer<float2>&, const size_t, const size_t,
+                                      const Buffer<float2>&, const size_t, const size_t,
+                                      Buffer<float2>&, const size_t, const size_t,
+                                      const Queue&, Event*);
+template void PUBLIC_API ger<double2>(const Layout, const size_t, const size_t, const double2,
+                                      const Buffer<double2>&, const size_t, const size_t,
+                                      const Buffer<double2>&, const size_t, const size_t,
+                                      Buffer<double2>&, const size_t, const size_t,
+                                      const Queue&, Event*);
+template void PUBLIC_API ger<int32_t>(const Layout, const size_t, const size_t, const int32_t,
+                                      const Buffer<int32_t>&, const size_t, const size_t,
+                                      const Buffer<int32_t>&, const size_t, const size_t,
+                                      Buffer<int32_t>&, const size_t, const size_t,
+                                      const Queue&, Event*);
+template void PUBLIC_API ger<int64_t>(const Layout, const size_t, const size_t, const int64_t,
+                                      const Buffer<int64_t>&, const size_t, const size_t,
+                                      const Buffer<int64_t>&, const size_t, const size_t,
+                                      Buffer<int64_t>&, const size_t, const size_t,
+                                      const Queue&, Event*);
 
 template void PUBLIC_API gerc<float2> (const Layout, const size_t, const size_t, const float2,
                                        const Buffer<float2>&, const size_t, const size_t,
@@ -2248,66 +2011,6 @@ template void PUBLIC_API gemm(const Layout, const Transpose, const Transpose,
 //---------------------------------------------------------------------------
 // Symmetric matrix-matrix multiplication: SSYMM/DSYMM/CSYMM/ZSYMM/HSYMM
 
-#if HAS_CUDA
-inline void cublasSymmEx(cublasHandle_t handle,
-                         cublasSideMode_t side,
-                         cublasFillMode_t uplo,
-                         int m, int n,
-                         const float* alpha,
-                         const float* A, int lda,
-                         const float* B, int ldb,
-                         const float* beta,
-                         float* C, int ldc)
-{ cublasSsymm(handle, side, uplo, m, n, alpha, A, lda, B, ldb, beta, C, ldc); }
-
-inline void cublasSymmEx(cublasHandle_t handle,
-                         cublasSideMode_t side,
-                         cublasFillMode_t uplo,
-                         int m, int n,
-                         const double* alpha,
-                         const double* A, int lda,
-                         const double* B, int ldb,
-                         const double* beta,
-                         double* C, int ldc)
-{ cublasDsymm(handle, side, uplo, m, n, alpha, A, lda, B, ldb, beta, C, ldc); }
-
-inline void cublasSymmEx(cublasHandle_t handle,
-                         cublasSideMode_t side,
-                         cublasFillMode_t uplo,
-                         int m, int n,
-                         const float2* alpha,
-                         const float2* A, int lda,
-                         const float2* B, int ldb,
-                         const float2* beta,
-                         float2* C, int ldc)
-{
-    cublasCsymm(handle, side, uplo, m, n,
-               reinterpret_cast<const cuComplex*>(alpha),
-               reinterpret_cast<const cuComplex*>(A), lda,
-               reinterpret_cast<const cuComplex*>(B), ldb,
-               reinterpret_cast<const cuComplex*>(beta),
-               reinterpret_cast<cuComplex*>(C), ldc);
-}
-
-inline void cublasSymmEx(cublasHandle_t handle,
-                         cublasSideMode_t side,
-                         cublasFillMode_t uplo,
-                         int m, int n,
-                         const double2* alpha,
-                         const double2* A, int lda,
-                         const double2* B, int ldb,
-                         const double2* beta,
-                         double2* C, int ldc)
-{
-    cublasZsymm(handle, side, uplo, m, n,
-               reinterpret_cast<const cuDoubleComplex*>(alpha),
-               reinterpret_cast<const cuDoubleComplex*>(A), lda,
-               reinterpret_cast<const cuDoubleComplex*>(B), ldb,
-               reinterpret_cast<const cuDoubleComplex*>(beta),
-               reinterpret_cast<cuDoubleComplex*>(C), ldc);
-}
-#endif
-
 template <typename T>
 void symm(const Layout layout, const Side side, const Triangle triangle,
           const size_t m, const size_t n,
@@ -2466,13 +2169,36 @@ void syrk(const Layout layout, const Triangle triangle, const Transpose a_transp
           const T beta,
           Buffer<T>& c_buffer, const size_t c_offset, const size_t c_ld,
           const Queue& queue, Event* event) {
-    auto routine = Xsyrk<T>(queue, event);
-    routine.DoSyrk(layout, triangle, a_transpose,
-                   n, k,
-                   alpha,
-                   a_buffer, a_offset, a_ld,
-                   beta,
-                   c_buffer, c_offset, c_ld);
+    dispatch<T>(queue,
+        OPENCL(
+            auto routine = Xsyrk<T>(queue, event);
+            routine.DoSyrk(layout, triangle, a_transpose,
+                           n, k,
+                           alpha,
+                           a_buffer, a_offset, a_ld,
+                           beta,
+                           c_buffer, c_offset, c_ld);
+        ),
+        CUBLAS(
+            if (layout == Layout::RowMajor) {
+                auto cu_uplo = triangle == Triangle::Lower
+                    ? cublasFillMode_t::CUBLAS_FILL_MODE_UPPER
+                    : cublasFillMode_t::CUBLAS_FILL_MODE_LOWER;
+                auto cu_trans = a_transpose == Transpose::NoTrans
+                    ? cublasOperation_t::CUBLAS_OP_T
+                    : cublasOperation_t::CUBLAS_OP_N;
+                cublasSyrkEx(h, cu_uplo, cu_trans, k, n,
+                             &alpha, cuBuffer::unwrap(a_buffer) + a_offset, a_ld,
+                             &beta, cuBuffer::unwrap(c_buffer) + c_offset, c_ld);
+            } else {
+                auto cu_uplo = triangle == Triangle::Lower
+                    ? cublasFillMode_t::CUBLAS_FILL_MODE_LOWER
+                    : cublasFillMode_t::CUBLAS_FILL_MODE_UPPER;
+                cublasSyrkEx(h, cu_uplo, CudaOp(a_transpose), n, k,
+                             &alpha, cuBuffer::unwrap(a_buffer) + a_offset, a_ld,
+                             &beta, cuBuffer::unwrap(c_buffer) + c_offset, c_ld);
+            }
+        ));
 }
 
 template void PUBLIC_API syrk<float>  (const Layout, const Triangle, const Transpose,
@@ -2651,68 +2377,6 @@ template void PUBLIC_API her2k<double2,double>(const Layout, const Triangle, con
 //---------------------------------------------------------------------------
 // Triangular matrix-matrix multiplication: STRMM/DTRMM/CTRMM/ZTRMM/HTRMM
 
-#if HAS_CUDA
-inline void cublasTrmmEx(cublasHandle_t handle,
-                         cublasSideMode_t side,
-                         cublasFillMode_t uplo,
-                         cublasOperation_t trans,
-                         cublasDiagType_t diag,
-                         int m, int n,
-                         const float* alpha,
-                         const float* A, int lda,
-                         const float* B, int ldb,
-                         float* C, int ldc)
-{ cublasStrmm(handle, side, uplo, trans, diag, m, n, alpha, A, lda, B, ldb, C, ldc); }
-
-inline void cublasTrmmEx(cublasHandle_t handle,
-                         cublasSideMode_t side,
-                         cublasFillMode_t uplo,
-                         cublasOperation_t trans,
-                         cublasDiagType_t diag,
-                         int m, int n,
-                         const double* alpha,
-                         const double* A, int lda,
-                         const double* B, int ldb,
-                         double* C, int ldc)
-{ cublasDtrmm(handle, side, uplo, trans, diag, m, n, alpha, A, lda, B, ldb, C, ldc); }
-
-inline void cublasTrmmEx(cublasHandle_t handle,
-                         cublasSideMode_t side,
-                         cublasFillMode_t uplo,
-                         cublasOperation_t trans,
-                         cublasDiagType_t diag,
-                         int m, int n,
-                         const float2* alpha,
-                         const float2* A, int lda,
-                         const float2* B, int ldb,
-                         float2* C, int ldc)
-{
-    cublasCtrmm(handle, side, uplo, trans, diag, m, n,
-                reinterpret_cast<const cuComplex*>(alpha),
-                reinterpret_cast<const cuComplex*>(A), lda,
-                reinterpret_cast<const cuComplex*>(B), ldb,
-                reinterpret_cast<cuComplex*>(C), ldc);
-}
-
-inline void cublasTrmmEx(cublasHandle_t handle,
-                         cublasSideMode_t side,
-                         cublasFillMode_t uplo,
-                         cublasOperation_t trans,
-                         cublasDiagType_t diag,
-                         int m, int n,
-                         const double2* alpha,
-                         const double2* A, int lda,
-                         const double2* B, int ldb,
-                         double2* C, int ldc)
-{
-    cublasZtrmm(handle, side, uplo, trans, diag, m, n,
-                reinterpret_cast<const cuDoubleComplex*>(alpha),
-                reinterpret_cast<const cuDoubleComplex*>(A), lda,
-                reinterpret_cast<const cuDoubleComplex*>(B), ldb,
-                reinterpret_cast<cuDoubleComplex*>(C), ldc);
-}
-#endif
-
 template <typename T>
 void trmm(const Layout layout, const Side side, const Triangle triangle, const Transpose a_transpose, const Diagonal diagonal,
           const size_t m, const size_t n, const T alpha,
@@ -2807,11 +2471,45 @@ void trsm(const Layout layout, const Side side, const Triangle triangle, const T
           const Buffer<T>& a_buffer, const size_t a_offset, const size_t a_ld,
           Buffer<T>& b_buffer, const size_t b_offset, const size_t b_ld,
           const Queue& queue, Event* event) {
-    auto routine = Xtrsm<T>(queue, event);
-    routine.DoTrsm(layout, side, triangle, a_transpose, diagonal,
-                   m, n, alpha,
-                   a_buffer, a_offset, a_ld,
-                   b_buffer, b_offset, b_ld);
+    dispatch<T>(queue,
+        OPENCL(
+            auto routine = Xtrsm<T>(queue, event);
+            routine.DoTrsm(layout, side, triangle, a_transpose, diagonal,
+                           m, n, alpha,
+                           a_buffer, a_offset, a_ld,
+                           b_buffer, b_offset, b_ld);
+        ),
+        CUBLAS(
+            if (layout == Layout::RowMajor) {
+                auto cu_side = side == Side::Left
+                    ? cublasSideMode_t::CUBLAS_SIDE_RIGHT
+                    : cublasSideMode_t::CUBLAS_SIDE_LEFT;
+                auto cu_uplo = triangle == Triangle::Lower
+                    ? cublasFillMode_t::CUBLAS_FILL_MODE_UPPER
+                    : cublasFillMode_t::CUBLAS_FILL_MODE_LOWER;
+                auto cu_diag = diagonal == Diagonal::Unit
+                    ? cublasDiagType_t::CUBLAS_DIAG_UNIT
+                    : cublasDiagType_t::CUBLAS_DIAG_NON_UNIT;
+                cublasTrsmEx(h, cu_side, cu_uplo, CudaOp(a_transpose), cu_diag,
+                             n, m, &alpha,
+                             cuBuffer::unwrap(a_buffer) + a_offset, a_ld,
+                             cuBuffer::unwrap(b_buffer) + b_offset, b_ld);
+            } else {
+                auto cu_side = side == Side::Left
+                    ? cublasSideMode_t::CUBLAS_SIDE_LEFT
+                    : cublasSideMode_t::CUBLAS_SIDE_RIGHT;
+                auto cu_uplo = triangle == Triangle::Lower
+                    ? cublasFillMode_t::CUBLAS_FILL_MODE_LOWER
+                    : cublasFillMode_t::CUBLAS_FILL_MODE_UPPER;
+                auto cu_diag = diagonal == Diagonal::Unit
+                    ? cublasDiagType_t::CUBLAS_DIAG_UNIT
+                    : cublasDiagType_t::CUBLAS_DIAG_NON_UNIT;
+                cublasTrsmEx(h, cu_side, cu_uplo, CudaOp(a_transpose), cu_diag,
+                             m, n, &alpha,
+                             cuBuffer::unwrap(a_buffer) + a_offset, a_ld,
+                             cuBuffer::unwrap(b_buffer) + b_offset, b_ld);
+            }
+        ));
 }
 
 template void PUBLIC_API trsm<float>  (const Layout, const Side, const Triangle, const Transpose, const Diagonal,
@@ -3227,116 +2925,6 @@ template void PUBLIC_API axpyBatched<half>   (const size_t, const half*,
 //---------------------------------------------------------------------------
 // Batched version of GEMM: SGEMMBATCHED/DGEMMBATCHED/CGEMMBATCHED/ZGEMMBATCHED/HGEMMBATCHED
 
-#if HAS_CUDA
-#if CUBLAS_VER_MAJOR >= 10
-template <typename T>
-inline void cublasGemmBatched(
-    cublasHandle_t handle, cublasOperation_t transa, cublasOperation_t transb,
-    int m, int n, int k,
-    const T* alpha,
-    const T* const Aarray[], cudaDataType Atype, int lda,
-    const T* const Barray[], cudaDataType Btype, int ldb,
-    const T* beta,
-    T* const Carray[], cudaDataType Ctype,  int ldc,
-    int batchCount, cudaDataType computeType, cublasGemmAlgo_t algo)
-{
-    cublasGemmBatchedEx(
-        handle, transa, transb,
-        m, n, k,
-        reinterpret_cast<const void*>(alpha),
-        reinterpret_cast<const void* const*>(Aarray), Atype, lda,
-        reinterpret_cast<const void* const*>(Barray), Btype, ldb,
-        reinterpret_cast<const void*>(beta),
-        reinterpret_cast<void* const*>(Carray), Ctype, ldc,
-        batchCount, computeType, algo);
-}
-#else
-inline void cublasGemmBatched(
-    cublasHandle_t handle, cublasOperation_t transa, cublasOperation_t transb,
-    int m, int n, int k,
-    const float* alpha,
-    const float* Aarray[], cudaDataType, int lda,
-    const float*  Barray[], cudaDataType, int ldb,
-    const float* beta,
-    float* Carray[], cudaDataType, int ldc,
-    int batchCount, cudaDataType, cublasGemmAlgo_t)
-{
-    cublasSgemmBatched(
-        handle, transa, transb,
-        m, n, k,
-        alpha,
-        Aarray, lda,
-        Barray, ldb,
-        beta,
-        Carray, ldc,
-        batchCount);
-}
-
-inline void cublasGemmBatched(
-    cublasHandle_t handle, cublasOperation_t transa, cublasOperation_t transb,
-    int m, int n, int k,
-    const double* alpha,
-    const double* Aarray[], cudaDataType, int lda,
-    const double* Barray[], cudaDataType, int ldb,
-    const double* beta,
-    double* Carray[], cudaDataType, int ldc,
-    int batchCount, cudaDataType, cublasGemmAlgo_t)
-{
-    cublasDgemmBatched(
-        handle, transa, transb,
-        m, n, k,
-        alpha,
-        Aarray, lda,
-        Barray, ldb,
-        beta,
-        Carray, ldc,
-        batchCount);
-}
-
-inline void cublasGemmBatched(
-    cublasHandle_t handle, cublasOperation_t transa, cublasOperation_t transb,
-    int m, int n, int k,
-    const float2* alpha,
-    const float2* Aarray[], cudaDataType, int lda,
-    const float2* Barray[], cudaDataType, int ldb,
-    const float2* beta,
-    float2* Carray[], cudaDataType, int ldc,
-    int batchCount, cudaDataType, cublasGemmAlgo_t)
-{
-    cublasCgemmBatched(
-        handle, transa, transb,
-        m, n, k,
-        reinterpret_cast<const cuComplex*>(alpha),
-        reinterpret_cast<const cuComplex**>(Aarray), lda,
-        reinterpret_cast<const cuComplex**>(Barray), ldb,
-        reinterpret_cast<const cuComplex*>(beta),
-        reinterpret_cast<cuComplex**>(Carray), ldc,
-        batchCount);
-}
-
-inline void cublasGemmBatched(
-    cublasHandle_t handle, cublasOperation_t transa, cublasOperation_t transb,
-    int m, int n, int k,
-    const double2* alpha,
-    const double2* Aarray[], cudaDataType, int lda,
-    const double2* Barray[], cudaDataType, int ldb,
-    const double2* beta,
-    double2* Carray[], cudaDataType, int ldc,
-    int batchCount, cudaDataType, cublasGemmAlgo_t)
-{
-    cublasZgemmBatched(
-        handle, transa, transb,
-        m, n, k,
-        reinterpret_cast<const cuDoubleComplex*>(alpha),
-        reinterpret_cast<const cuDoubleComplex**>(Aarray), lda,
-        reinterpret_cast<const cuDoubleComplex**>(Barray), ldb,
-        reinterpret_cast<const cuDoubleComplex*>(beta),
-        reinterpret_cast<cuDoubleComplex**>(Carray), ldc,
-        batchCount);
-}
-#endif
-#endif
-
 template <typename T>
 void gemmBatched(const Layout layout, const Transpose a_transpose, const Transpose b_transpose,
                  const size_t m, const size_t n, const size_t k,
@@ -3499,94 +3087,6 @@ template void PUBLIC_API gemmBatched<half>   (const Layout, const Transpose, con
 //---------------------------------------------------------------------------
 // StridedBatched version of GEMM: SGEMMSTRIDEDBATCHED/DGEMMSTRIDEDBATCHED/CGEMMSTRIDEDBATCHED/ZGEMMSTRIDEDBATCHED/HGEMMSTRIDEDBATCHED
 
-#if HAS_CUDA
-#if CUBLAS_VER_MAJOR < 10
-inline void cublasGemmStridedBatchedEx(
-    cublasHandle_t handle, cublasOperation_t transa, cublasOperation_t transb,
-    int m, int n, int k,
-    const float* alpha,
-    const float* A, cudaDataType, int lda, long long int strideA,
-    const float* B, cudaDataType, int ldb, long long int strideB,
-    const float* beta,
-    float* C, cudaDataType, int ldc, long long int strideC,
-    int batchCount, cudaDataType, cublasGemmAlgo_t)
-{
-    cublasSgemmStridedBatched(
-        handle, transa, transb,
-        m, n, k,
-        alpha,
-        A, lda, strideA,
-        B, ldb, strideB,
-        beta,
-        C, ldc, strideC,
-        batchCount);
-}
-
-inline void cublasGemmStridedBatchedEx(
-    cublasHandle_t handle, cublasOperation_t transa, cublasOperation_t transb,
-    int m, int n, int k,
-    const double* alpha,
-    const double* A, cudaDataType, int lda, long long int strideA,
-    const double* B, cudaDataType, int ldb, long long int strideB,
-    const double* beta,
-    double* C, cudaDataType, int ldc, long long int strideC,
-    int batchCount, cudaDataType, cublasGemmAlgo_t)
-{
-    cublasDgemmStridedBatched(
-        handle, transa, transb,
-        m, n, k,
-        alpha,
-        A, lda, strideA,
-        B, ldb, strideB,
-        beta,
-        C, ldc, strideC,
-        batchCount);
-}
-
-inline void cublasGemmStridedBatchedEx(
-    cublasHandle_t handle, cublasOperation_t transa, cublasOperation_t transb,
-    int m, int n, int k,
-    const float2* alpha,
-    const float2* A, cudaDataType, int lda, long long int strideA,
-    const float2* B, cudaDataType, int ldb, long long int strideB,
-    const float2* beta,
-    float2* C, cudaDataType, int ldc, long long int strideC,
-    int batchCount, cudaDataType, cublasGemmAlgo_t)
-{
-    cublasCgemmStridedBatched(
-        handle, transa, transb,
-        m, n, k,
-        reinterpret_cast<const cuComplex*>(alpha),
-        reinterpret_cast<const cuComplex*>(A), lda, strideA,
-        reinterpret_cast<const cuComplex*>(B), ldb, strideB,
-        reinterpret_cast<const cuComplex*>(beta),
-        reinterpret_cast<cuComplex*>(C), ldc, strideC,
-        batchCount);
-}
-
-inline void cublasGemmStridedBatchedEx(
-    cublasHandle_t handle, cublasOperation_t transa, cublasOperation_t transb,
-    int m, int n, int k,
-    const double2* alpha,
-    const double2* A, cudaDataType, int lda, long long int strideA,
-    const double2* B, cudaDataType, int ldb, long long int strideB,
-    const double2* beta,
-    double2* C, cudaDataType, int ldc, long long int strideC,
-    int batchCount, cudaDataType, cublasGemmAlgo_t)
-{
-    cublasZgemmStridedBatched(
-        handle, transa, transb,
-        m, n, k,
-        reinterpret_cast<const cuDoubleComplex*>(alpha),
-        reinterpret_cast<const cuDoubleComplex*>(A), lda, strideA,
-        reinterpret_cast<const cuDoubleComplex*>(B), ldb, strideB,
-        reinterpret_cast<const cuDoubleComplex*>(beta),
-        reinterpret_cast<cuDoubleComplex*>(C), ldc, strideC,
-        batchCount);
-}
-#endif
-#endif
-
 template <typename T>
 void gemmStridedBatched(const Layout layout, const Transpose a_transpose, const Transpose b_transpose,
                         const size_t m, const size_t n, const size_t k,
@@ -3717,96 +3217,6 @@ template void PUBLIC_API gemmStridedBatched<half>   (const Layout, const Transpo
 // LAPACK routines
 // =================================================================================================
 
-#if HAS_CUDA
-inline cusolverStatus_t cusolverDnXgetrf_bufferSize(
-    cusolverDnHandle_t handle, int m, int n, float* A, int lda, int* lwork)
-{
-    return cusolverDnSgetrf_bufferSize(handle, m, n, A, lda, lwork);
-}
-
-inline cusolverStatus_t cusolverDnXgetrf_bufferSize(
-    cusolverDnHandle_t handle, int m, int n, double* A, int lda, int* lwork)
-{
-    return cusolverDnDgetrf_bufferSize(handle, m, n, A, lda, lwork);
-}
-
-inline cusolverStatus_t cusolverDnXgetrf_bufferSize(
-    cusolverDnHandle_t handle, int m, int n, float2* A, int lda, int* lwork)
-{
-    return cusolverDnCgetrf_bufferSize(
-        handle, m, n, reinterpret_cast<cuComplex*>(A), lda, lwork);
-}
-
-inline cusolverStatus_t cusolverDnXgetrf_bufferSize(
-    cusolverDnHandle_t handle, int m, int n, double2* A, int lda, int* lwork)
-{
-    return cusolverDnZgetrf_bufferSize(
-        handle, m, n, reinterpret_cast<cuDoubleComplex*>(A), lda, lwork);
-}
-
-inline cusolverStatus_t cusolverDnXgetrf(
-    cusolverDnHandle_t handle, int m, int n, float* A, int lda, float* work, int* ipiv, int* info)
-{
-    return cusolverDnSgetrf(handle, m, n, A, lda, work, ipiv, info);
-}
-
-inline cusolverStatus_t cusolverDnXgetrf(
-    cusolverDnHandle_t handle, int m, int n, double* A, int lda, double* work, int* ipiv, int* info)
-{
-    return cusolverDnDgetrf(handle, m, n, A, lda, work, ipiv, info);
-}
-
-inline cusolverStatus_t cusolverDnXgetrf(
-    cusolverDnHandle_t handle, int m, int n, float2* A, int lda, float2* work, int* ipiv, int* info)
-{
-    return cusolverDnCgetrf(
-        handle, m, n, reinterpret_cast<cuComplex*>(A), lda,
-        reinterpret_cast<cuComplex*>(work), ipiv, info);
-}
-
-inline cusolverStatus_t cusolverDnXgetrf(
-    cusolverDnHandle_t handle, int m, int n, double2* A, int lda, double2* work, int* ipiv, int* info)
-{
-    return cusolverDnZgetrf(
-        handle, m, n, reinterpret_cast<cuDoubleComplex*>(A), lda,
-        reinterpret_cast<cuDoubleComplex*>(work), ipiv, info);
-}
-
-inline cusolverStatus_t cusolverDnXgetrs(
-    cusolverDnHandle_t handle, cublasOperation_t trans, int n, int nrhs,
-    const float* A, int lda, const int* ipiv, float* B, int ldb, int* info)
-{
-    return cusolverDnSgetrs(handle, trans, n, nrhs, A, lda, ipiv, B, ldb, info);
-}
-
-inline cusolverStatus_t cusolverDnXgetrs(
-    cusolverDnHandle_t handle, cublasOperation_t trans, int n, int nrhs,
-    const double* A, int lda, const int* ipiv, double* B, int ldb, int* info)
-{
-    return cusolverDnDgetrs(handle, trans, n, nrhs, A, lda, ipiv, B, ldb, info);
-}
-
-inline cusolverStatus_t cusolverDnXgetrs(
-    cusolverDnHandle_t handle, cublasOperation_t trans, int n, int nrhs,
-    const float2* A, int lda, const int* ipiv, float2* B, int ldb, int* info)
-{
-    return cusolverDnCgetrs(
-        handle, trans, n, nrhs,
-        reinterpret_cast<const cuComplex*>(A), lda, ipiv,
-        reinterpret_cast<cuComplex*>(B), ldb, info);
-}
-
-inline cusolverStatus_t cusolverDnXgetrs(
-    cusolverDnHandle_t handle, cublasOperation_t trans, int n, int nrhs,
-    const double2* A, int lda, const int* ipiv, double2* B, int ldb, int* info)
-{
-    return cusolverDnZgetrs(
-        handle, trans, n, nrhs,
-        reinterpret_cast<const cuDoubleComplex*>(A), lda, ipiv,
-        reinterpret_cast<cuDoubleComplex*>(B), ldb, info);
-}
-#endif
-
 template <typename T>
 void getrf(const size_t m, const size_t n,
            Buffer<T>& A, const size_t a_offset, const size_t lda,
@@ -3857,6 +3267,12 @@ void getrs(Transpose trans, const size_t n, const size_t nrhs,
            Buffer<T>& B, const size_t b_offset, const size_t ldb,
            const Queue& queue, Event* event)
 {
+    if (trans == Transpose::ConjTrans) {
+        auto routine = Xgetrf<T>(queue, event);
+        routine.DoGetrs(trans, n, nrhs, A, a_offset, lda, ipiv, ipiv_offset, B, b_offset, ldb);
+        return;
+    }
+
     dispatch<T>(queue,
         OPENCL(
             auto routine = Xgetrf<T>(queue, event);

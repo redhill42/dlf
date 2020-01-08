@@ -52,6 +52,30 @@ void vmad(const int n, const U& alpha, const T* x, const int x_inc, T* y, const 
 }
 
 template <typename T, typename U>
+std::enable_if_t<!cblas::is_blasable<T>::value>
+ger(int m, int n, const U& alpha,
+    const T* x, int incx,
+    const T* y, int incy,
+    T* A, int lda)
+{
+    if (incx < 0) x = x - (m - 1)*incx;
+    if (incy < 0) y = y - (n - 1)*incy;
+    tbb::parallel_for<int>(0, m, [=](auto i) {
+        vmad(n, alpha * x[i*incx], y, incy, A + i*lda, 1);
+    });
+}
+
+template <typename T, typename U>
+std::enable_if_t<cblas::is_blasable<T>::value>
+inline ger(int m, int n, const U& alpha,
+           const T* x, int incx,
+           const T* y, int incy,
+           T* A, int lda)
+{
+    cblas::ger(cblas::Layout::RowMajor, m, n, alpha, x, incx, y, incy, A, lda);
+}
+
+template <typename T, typename U>
 void mscal(const int m, const int n, const U& alpha, T* A, const int lda) {
     if (alpha == xfn::zero<T>()) {
         for (int i = 0; i < m; ++i, A += lda)
@@ -331,7 +355,7 @@ inline void gemm(cblas::Transpose transA, cblas::Transpose transB,
     gblas::gemm(gblas::Layout::RowMajor,
                 static_cast<gblas::Transpose>(transA),
                 static_cast<gblas::Transpose>(transB),
-                m, n, k, alpha, A, lda, B, ldb, beta, C, ldc);
+                m, n, k, alpha, A, 0, lda, B, 0, ldb, beta, C, 0, ldc);
 }
 
 //==-------------------------------------------------------------------------

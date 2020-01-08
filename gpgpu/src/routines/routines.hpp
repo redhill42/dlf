@@ -20,8 +20,6 @@
 #include "routines/level1/xcopy.hpp"
 #include "routines/level1/xaxpy.hpp"
 #include "routines/level1/xdot.hpp"
-#include "routines/level1/xdotu.hpp"
-#include "routines/level1/xdotc.hpp"
 #include "routines/level1/xnrm2.hpp"
 #include "routines/level1/xasum.hpp"
 #include "routines/level1/xsum.hpp" // non-BLAS routine
@@ -44,7 +42,6 @@
 #include "routines/level2/xtpmv.hpp"
 #include "routines/level2/xtrsv.hpp"
 #include "routines/level2/xger.hpp"
-#include "routines/level2/xgeru.hpp"
 #include "routines/level2/xgerc.hpp"
 #include "routines/level2/xher.hpp"
 #include "routines/level2/xhpr.hpp"

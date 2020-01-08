@@ -528,7 +528,7 @@ TEST_F(GPGPUTest, Xcopy) {
                 cblas::copy(N, A.data(), 1, B.data(), 1);
             },
             [&](auto N, auto& A, auto& B, auto) {
-                gblas::copy(N, A.data(), 1, B.data(), 1);
+                gblas::copy(N, A.data(), 0, 1, B.data(), 0, 1);
             });
     });
 }
@@ -541,7 +541,7 @@ TEST_F(GPGPUTest, Xswap) {
                 cblas::swap(N, A.data(), 1, B.data(), 1);
             },
             [&](auto N, auto& A, auto& B, auto) {
-                gblas::swap(N, A.data(), 1, B.data(), 1);
+                gblas::swap(N, A.data(), 0, 1, B.data(), 0, 1);
             });
 
         blas_level1_test<int32_t>(
@@ -549,7 +549,7 @@ TEST_F(GPGPUTest, Xswap) {
                 std::swap(A, B);
             },
             [&](auto N, auto& A, auto& B, auto) {
-                gblas::swap(N, A.data(), 1, B.data(), 1);
+                gblas::swap(N, A.data(), 0, 1, B.data(), 0, 1);
             });
 
         blas_level1_test<int64_t>(
@@ -557,7 +557,7 @@ TEST_F(GPGPUTest, Xswap) {
                 std::swap(A, B);
             },
             [&](auto N, auto& A, auto& B, auto) {
-                gblas::swap(N, A.data(), 1, B.data(), 1);
+                gblas::swap(N, A.data(), 0, 1, B.data(), 0, 1);
             });
     });
 }
@@ -570,7 +570,7 @@ TEST_F(GPGPUTest, Xscal) {
                 cblas::scal(N, alpha, A.data(), 1);
             },
             [&](auto N, auto& A, auto&, auto alpha) {
-                gblas::scal(N, alpha, A.data(), 1);
+                gblas::scal(N, alpha, A.data(), 0, 1);
             });
 
         blas_level1_test<int32_t>(
@@ -578,7 +578,7 @@ TEST_F(GPGPUTest, Xscal) {
                 A *= alpha;
             },
             [&](auto N, auto& A, auto&, auto alpha) {
-                gblas::scal(N, alpha, A.data(), 1);
+                gblas::scal(N, alpha, A.data(), 0, 1);
             });
 
         blas_level1_test<int64_t>(
@@ -586,7 +586,7 @@ TEST_F(GPGPUTest, Xscal) {
                 A *= alpha;
             },
             [&](auto N, auto& A, auto&, auto alpha) {
-                gblas::scal(N, alpha, A.data(), 1);
+                gblas::scal(N, alpha, A.data(), 0, 1);
             });
     });
 }
@@ -599,7 +599,7 @@ TEST_F(GPGPUTest, Xaxpy) {
                 cblas::axpy(N, alpha, A.data(), 1, B.data(), 1);
             },
             [&](auto N, auto& A, auto& B, auto alpha) {
-                gblas::axpy(N, alpha, A.data(), 1, B.data(), 1);
+                gblas::axpy(N, alpha, A.data(), 0, 1, B.data(), 0, 1);
             });
 
         blas_level1_test<int32_t>(
@@ -607,7 +607,7 @@ TEST_F(GPGPUTest, Xaxpy) {
                 transformTo(A, B, B, [=](auto a, auto b) { return alpha*a+b; });
             },
             [&](auto N, auto& A, auto& B, auto alpha) {
-                gblas::axpy(N, alpha, A.data(), 1, B.data(), 1);
+                gblas::axpy(N, alpha, A.data(), 0, 1, B.data(), 0, 1);
             });
 
         blas_level1_test<int64_t>(
@@ -615,7 +615,7 @@ TEST_F(GPGPUTest, Xaxpy) {
                 transformTo(A, B, B, [=](auto a, auto b) { return alpha*a+b; });
             },
             [&](auto N, auto& A, auto& B, auto alpha) {
-                gblas::axpy(N, alpha, A.data(), 1, B.data(), 1);
+                gblas::axpy(N, alpha, A.data(), 0, 1, B.data(), 0, 1);
             });
     });
 }
@@ -628,7 +628,7 @@ TEST_F(GPGPUTest, Xnrm2) {
                 return cblas::nrm2(N, A.data(), 1);
             },
             [&](auto N, auto& A, auto&, auto& R) {
-                gblas::nrm2(N, A.data(), 1, R.data());
+                gblas::nrm2(N, A.data(), 0, 1, R.data(), 0);
             });
     });
 }
@@ -641,7 +641,7 @@ TEST_F(GPGPUTest, Xasum) {
                 return cblas::asum(N, A.data(), 1);
             },
             [&](auto N, auto& A, auto&, auto& R) {
-                gblas::asum(N, A.data(), 1, R.data());
+                gblas::asum(N, A.data(), 0, 1, R.data(), 0);
             });
 
         blas_level1_r_test<int32_t>(
@@ -652,7 +652,7 @@ TEST_F(GPGPUTest, Xasum) {
                 return r;
             },
             [&](auto N, auto& A, auto&, auto& R) {
-                gblas::asum(N, A.data(), 1, R.data());
+                gblas::asum(N, A.data(), 0, 1, R.data(), 0);
             });
 
         blas_level1_r_test<int64_t>(
@@ -663,7 +663,7 @@ TEST_F(GPGPUTest, Xasum) {
                 return r;
             },
             [&](auto N, auto& A, auto&, auto& R) {
-                gblas::asum(N, A.data(), 1, R.data());
+                gblas::asum(N, A.data(), 0, 1, R.data(), 0);
             });
     });
 }

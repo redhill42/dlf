@@ -19,16 +19,6 @@ inline void xger(const size_t m, const size_t n, const size_t i,
 }
 
 template <typename T>
-inline void xger(const size_t m, const size_t n, const size_t i,
-                 Buffer<std::complex<T>>& A, const size_t a_offset, const size_t lda)
-{
-    geru(Layout::RowMajor, m-i-1, n-i-1, PrecisionTraits<std::complex<T>>::NegOne,
-         A, a_offset + (i+1)*lda + i, lda,
-         A, a_offset + i*lda + (i+1), 1,
-         A, a_offset + (i+1)*lda + (i+1), lda);
-}
-
-template <typename T>
 void Xgetrf<T>::DoGetrf(const size_t m, const size_t n,
                         Buffer<T>& A, const size_t a_offset, const size_t lda,
                         Buffer<int32_t>& ipiv, const size_t ipiv_offset)

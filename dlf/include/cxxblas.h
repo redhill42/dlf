@@ -58,146 +58,172 @@ enum class Side {
 // BLAS level-1 (vector-vector) routines
 //==-------------------------------------------------------------------------
 
-inline float dot(int N, const float* X, int incX, const float* Y, int incY) {
-    return cblas_sdot(N, X, incX, Y, incY);
+inline float dot(int n, const float* X, int incX, const float* Y, int incY) {
+    return cblas_sdot(n, X, incX, Y, incY);
 }
 
-inline double dot(int N, const double* X, int incX, const double* Y, int incY) {
-    return cblas_ddot(N, X, incX, Y, incY);
+inline double dot(int n, const double* X, int incX, const double* Y, int incY) {
+    return cblas_ddot(n, X, incX, Y, incY);
 }
 
-inline std::complex<float> dot(int N,
+inline std::complex<float> dot(int n,
     const std::complex<float>* X, int incX,
     const std::complex<float>* Y, int incY)
 {
     std::complex<float> R;
-    cblas_cdotu_sub(N, X, incX, Y, incY, &R);
+    cblas_cdotu_sub(n, X, incX, Y, incY, &R);
     return R;
 }
 
-inline std::complex<double> dot(int N,
+inline std::complex<double> dot(int n,
     const std::complex<double>* X, int incX,
     const std::complex<double>* Y, int incY)
 {
     std::complex<double> R;
-    cblas_zdotu_sub(N, X, incX, Y, incY, &R);
+    cblas_zdotu_sub(n, X, incX, Y, incY, &R);
     return R;
 }
 
-inline float nrm2(int N, const float* X, int incX) {
-    return cblas_snrm2(N, X, incX);
+inline float dotc(int n, const float* X, int incX, const float* Y, int incY) {
+    return cblas_sdot(n, X, incX, Y, incY);
 }
 
-inline double nrm2(int N, const double* X, int incX) {
-    return cblas_dnrm2(N, X, incX);
+inline float dotc(int n, const double* X, int incX, const double* Y, int incY) {
+    return cblas_ddot(n, X, incX, Y, incY);
 }
 
-inline std::complex<float> nrm2(int N, const std::complex<float>* X, int incX) {
-    return cblas_scnrm2(N, X, incX);
+inline std::complex<float> dotc(int n,
+    const std::complex<float>* X, int incX,
+    const std::complex<float>* Y, int incY)
+{
+    std::complex<float> R;
+    cblas_cdotc_sub(n, X, incX, Y, incY, &R);
+    return R;
 }
 
-inline std::complex<double> nrm2(int N, const std::complex<double>* X, int incX) {
-    return cblas_dznrm2(N, X, incX);
+inline std::complex<double> dotc(int n,
+    const std::complex<double>* X, int incX,
+    const std::complex<double>* Y, int incY)
+{
+    std::complex<double> R;
+    cblas_zdotc_sub(n, X, incX, Y, incY, &R);
+    return R;
 }
 
-inline float asum(int N, const float* X, int incX) {
-    return cblas_sasum(N, X, incX);
+inline float nrm2(int n, const float* X, int incX) {
+    return cblas_snrm2(n, X, incX);
 }
 
-inline double asum(int N, const double* X, int incX) {
-    return cblas_dasum(N, X, incX);
+inline double nrm2(int n, const double* X, int incX) {
+    return cblas_dnrm2(n, X, incX);
 }
 
-inline std::complex<float> asum(int N, const std::complex<float>* X, int incX) {
-    return cblas_scasum(N, X, incX);
+inline std::complex<float> nrm2(int n, const std::complex<float>* X, int incX) {
+    return cblas_scnrm2(n, X, incX);
 }
 
-inline std::complex<double> asum(int N, const std::complex<double>* X, int incX) {
-    return cblas_dzasum(N, X, incX);
+inline std::complex<double> nrm2(int n, const std::complex<double>* X, int incX) {
+    return cblas_dznrm2(n, X, incX);
 }
 
-inline int iamax(int N, const float* X, int incX) {
-    return cblas_isamax(N, X, incX);
+inline float asum(int n, const float* X, int incX) {
+    return cblas_sasum(n, X, incX);
 }
 
-inline int iamax(int N, const double* X, int incX) {
-    return cblas_idamax(N, X, incX);
+inline double asum(int n, const double* X, int incX) {
+    return cblas_dasum(n, X, incX);
 }
 
-inline int iamax(int N, const std::complex<float>* X, int incX) {
-    return cblas_icamax(N, X, incX);
+inline std::complex<float> asum(int n, const std::complex<float>* X, int incX) {
+    return cblas_scasum(n, X, incX);
 }
 
-inline int iamax(int N, const std::complex<double>* X, int incX) {
-    return cblas_izamax(N, X, incX);
+inline std::complex<double> asum(int n, const std::complex<double>* X, int incX) {
+    return cblas_dzasum(n, X, incX);
 }
 
-inline void swap(int N, float* X, int incX, float* Y, int incY) {
-    cblas_sswap(N, X, incX, Y, incY);
+inline int iamax(int n, const float* X, int incX) {
+    return cblas_isamax(n, X, incX);
 }
 
-inline void swap(int N, double* X, int incX, double* Y, int incY) {
-    cblas_dswap(N, X, incX, Y, incY);
+inline int iamax(int n, const double* X, int incX) {
+    return cblas_idamax(n, X, incX);
 }
 
-inline void swap(int N, std::complex<float>* X, int incX, std::complex<float>* Y, int incY) {
-    cblas_cswap(N, X, incX, Y, incY);
+inline int iamax(int n, const std::complex<float>* X, int incX) {
+    return cblas_icamax(n, X, incX);
 }
 
-inline void swap(int N, std::complex<double>* X, int incX, std::complex<double>* Y, int incY) {
-    cblas_zswap(N, X, incX, Y, incY);
+inline int iamax(int n, const std::complex<double>* X, int incX) {
+    return cblas_izamax(n, X, incX);
 }
 
-inline void copy(int N, const float* X, int incX, float* Y, int incY) {
-    cblas_scopy(N, X, incX, Y, incY);
+inline void swap(int n, float* X, int incX, float* Y, int incY) {
+    cblas_sswap(n, X, incX, Y, incY);
 }
 
-inline void copy(int N, const double* X, int incX, double* Y, int incY) {
-    cblas_dcopy(N, X, incX, Y, incY);
+inline void swap(int n, double* X, int incX, double* Y, int incY) {
+    cblas_dswap(n, X, incX, Y, incY);
 }
 
-inline void copy(int N, const std::complex<float>* X, int incX, std::complex<float>* Y, int incY) {
-    cblas_ccopy(N, X, incX, Y, incY);
+inline void swap(int n, std::complex<float>* X, int incX, std::complex<float>* Y, int incY) {
+    cblas_cswap(n, X, incX, Y, incY);
 }
 
-inline void copy(int N, const std::complex<double>* X, int incX, std::complex<double>* Y, int incY) {
-    cblas_ccopy(N, X, incX, Y, incY);
+inline void swap(int n, std::complex<double>* X, int incX, std::complex<double>* Y, int incY) {
+    cblas_zswap(n, X, incX, Y, incY);
 }
 
-inline void axpy(int N, float alpha, const float* X, int incX, float* Y, int incY) {
-    cblas_saxpy(N, alpha, X, incX, Y, incY);
+inline void copy(int n, const float* X, int incX, float* Y, int incY) {
+    cblas_scopy(n, X, incX, Y, incY);
 }
 
-inline void axpy(int N, double alpha, const double* X, int incX, double* Y, int incY) {
-    cblas_daxpy(N, alpha, X, incX, Y, incY);
+inline void copy(int n, const double* X, int incX, double* Y, int incY) {
+    cblas_dcopy(n, X, incX, Y, incY);
 }
 
-inline void axpy(int N, const std::complex<float>& alpha,
+inline void copy(int n, const std::complex<float>* X, int incX, std::complex<float>* Y, int incY) {
+    cblas_ccopy(n, X, incX, Y, incY);
+}
+
+inline void copy(int n, const std::complex<double>* X, int incX, std::complex<double>* Y, int incY) {
+    cblas_ccopy(n, X, incX, Y, incY);
+}
+
+inline void axpy(int n, float alpha, const float* X, int incX, float* Y, int incY) {
+    cblas_saxpy(n, alpha, X, incX, Y, incY);
+}
+
+inline void axpy(int n, double alpha, const double* X, int incX, double* Y, int incY) {
+    cblas_daxpy(n, alpha, X, incX, Y, incY);
+}
+
+inline void axpy(int n, const std::complex<float>& alpha,
                  const std::complex<float>* X, int incX,
                  std::complex<float>* Y, int incY) {
-    cblas_caxpy(N, &alpha, X, incX, Y, incY);
+    cblas_caxpy(n, &alpha, X, incX, Y, incY);
 }
 
-inline void axpy(int N, const std::complex<double>& alpha,
+inline void axpy(int n, const std::complex<double>& alpha,
                  const std::complex<double>* X, int incX,
                  std::complex<double>* Y, int incY) {
-    cblas_zaxpy(N, &alpha, X, incX, Y, incY);
+    cblas_zaxpy(n, &alpha, X, incX, Y, incY);
 }
 
-inline void scal(int N, float a, float* X, int incX) {
-    cblas_sscal(N, a, X, incX);
+inline void scal(int n, float a, float* X, int incX) {
+    cblas_sscal(n, a, X, incX);
 }
 
-inline void scal(int N, double a, double* X, int incX) {
-    cblas_dscal(N, a, X, incX);
+inline void scal(int n, double a, double* X, int incX) {
+    cblas_dscal(n, a, X, incX);
 }
 
-inline void scal(int N, const std::complex<float>& a, std::complex<float>* X, int incX) {
-    cblas_cscal(N, &a, X, incX);
+inline void scal(int n, const std::complex<float>& a, std::complex<float>* X, int incX) {
+    cblas_cscal(n, &a, X, incX);
 }
 
-inline void scal(int N, const std::complex<double>& a, std::complex<double>* X, int incX) {
-    cblas_zscal(N, &a, X, incX);
+inline void scal(int n, const std::complex<double>& a, std::complex<double>* X, int incX) {
+    cblas_zscal(n, &a, X, incX);
 }
 
 //==-------------------------------------------------------------------------
@@ -360,6 +386,86 @@ inline void trsv(Layout layout, Triangle uplo, Transpose trans, Diagonal diag,
                 static_cast<decltype(CblasNoTrans)>(trans),
                 static_cast<decltype(CblasUnit)>(diag),
                 n, A, lda, X, incX);
+}
+
+inline void ger(Layout layout, const int m, const int n,
+                const float alpha,
+                const float* X, const int incX,
+                const float* Y, const int incY,
+                float* A, const int lda)
+{
+    cblas_sger(static_cast<decltype(CblasRowMajor)>(layout),
+               m, n, alpha, X, incX, Y, incY, A, lda);
+}
+
+inline void ger(Layout layout, const int m, const int n,
+                const double alpha,
+                const double* X, const int incX,
+                const double* Y, const int incY,
+                double* A, const int lda)
+{
+    cblas_dger(static_cast<decltype(CblasRowMajor)>(layout),
+               m, n, alpha, X, incX, Y, incY, A, lda);
+}
+
+inline void ger(Layout layout, const int m, const int n,
+                const std::complex<float>& alpha,
+                const std::complex<float>* X, const int incX,
+                const std::complex<float>* Y, const int incY,
+                std::complex<float>* A, const int lda)
+{
+    cblas_cgeru(static_cast<decltype(CblasRowMajor)>(layout),
+                m, n, &alpha, X, incX, Y, incY, A, lda);
+}
+
+inline void ger(Layout layout, const int m, const int n,
+                const std::complex<double>& alpha,
+                const std::complex<double>* X, const int incX,
+                const std::complex<double>* Y, const int incY,
+                std::complex<double>* A, const int lda)
+{
+    cblas_zgeru(static_cast<decltype(CblasRowMajor)>(layout),
+                m, n, &alpha, X, incX, Y, incY, A, lda);
+}
+
+inline void gerc(Layout layout, const int m, const int n,
+                 const float alpha,
+                 const float* X, const int incX,
+                 const float* Y, const int incY,
+                 float* A, const int lda)
+{
+    cblas_sger(static_cast<decltype(CblasRowMajor)>(layout),
+               m, n, alpha, X, incX, Y, incY, A, lda);
+}
+
+inline void gerc(Layout layout, const int m, const int n,
+                 const double alpha,
+                 const double* X, const int incX,
+                 const double* Y, const int incY,
+                 double* A, const int lda)
+{
+    cblas_dger(static_cast<decltype(CblasRowMajor)>(layout),
+               m, n, alpha, X, incX, Y, incY, A, lda);
+}
+
+inline void gerc(Layout layout, const int m, const int n,
+                 const std::complex<float>& alpha,
+                 const std::complex<float>* X, const int incX,
+                 const std::complex<float>* Y, const int incY,
+                 std::complex<float>* A, const int lda)
+{
+    cblas_cgerc(static_cast<decltype(CblasRowMajor)>(layout),
+                m, n, &alpha, X, incX, Y, incY, A, lda);
+}
+
+inline void gerc(Layout layout, const int m, const int n,
+                 const std::complex<double>& alpha,
+                 const std::complex<double>* X, const int incX,
+                 const std::complex<double>* Y, const int incY,
+                 std::complex<double>* A, const int lda)
+{
+    cblas_zgerc(static_cast<decltype(CblasRowMajor)>(layout),
+                m, n, &alpha, X, incX, Y, incY, A, lda);
 }
 
 //==-------------------------------------------------------------------------

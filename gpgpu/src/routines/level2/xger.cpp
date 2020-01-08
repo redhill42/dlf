@@ -86,6 +86,8 @@ template class Xger<float>;
 template class Xger<double>;
 template class Xger<float2>;
 template class Xger<double2>;
+template class Xger<int32_t>;
+template class Xger<int64_t>;
 
 // =================================================================================================
 }} // namespace gpgpu::blas

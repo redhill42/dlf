@@ -35,8 +35,6 @@ void FillCacheForPrecision(const Queue& queue) {
     Xcopy<Real>(queue, nullptr); Xcopy<Complex>(queue, nullptr);
     Xaxpy<Real>(queue, nullptr); Xaxpy<Complex>(queue, nullptr);
     Xdot<Real>(queue, nullptr);
-    Xdotu<Complex>(queue, nullptr);
-    Xdotc<Complex>(queue, nullptr);
     Xnrm2<Real>(queue, nullptr); Xnrm2<Complex>(queue, nullptr);
     Xasum<Real>(queue, nullptr); Xasum<Complex>(queue, nullptr);
     Xsum<Real>(queue, nullptr); Xsum<Complex>(queue, nullptr);
@@ -57,7 +55,6 @@ void FillCacheForPrecision(const Queue& queue) {
     Xtbmv<Real>(queue, nullptr); Xtbmv<Complex>(queue, nullptr);
     Xtpmv<Real>(queue, nullptr); Xtpmv<Complex>(queue, nullptr);
     Xger<Real>(queue, nullptr);
-    Xgeru<Complex>(queue, nullptr);
     Xgerc<Complex>(queue, nullptr);
     Xher<Complex,Real>(queue, nullptr);
     Xhpr<Complex,Real>(queue, nullptr);
