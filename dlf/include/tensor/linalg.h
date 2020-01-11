@@ -452,7 +452,7 @@ inline matmul(const LHS& A, const RHS& B) {
 //==-------------------------------------------------------------------------
 
 /**
- * Matrix exponentiation.
+ * Powers of a matrix.
  */
 template <typename TensorT>
 enable_if_tensor<TensorT> matpow(TensorT&& A, long n) {
@@ -464,18 +464,24 @@ enable_if_tensor<TensorT> matpow(TensorT&& A, long n) {
         return tensor_type<TensorT>::identity(A.shape());
     if (n == 1)
         return std::forward<TensorT>(A);
-    n--;
 
-    tensor_type<TensorT> x = std::forward<TensorT>(A);
-    auto y = x, t = x;
-    while (n > 0) {
-        if (n & 1) {
-            matmul(x, y, t);
-            std::swap(y, t);
-        }
-        matmul(x, x, t);
-        std::swap(x, t);
+    tensor_type<TensorT> y = std::forward<TensorT>(A);
+    auto t = tensor_type<TensorT>();
+    while (n % 2 == 0) {
+        matmul(y, y, t);
+        std::swap(y, t);
         n >>= 1;
+    }
+    if (n > 1) {
+        auto x = y;
+        while ((n >>= 1) > 0) {
+            matmul(x, x, t);
+            std::swap(x, t);
+            if (n & 1) {
+                matmul(x, y, t);
+                std::swap(y, t);
+            }
+        }
     }
     return y;
 }

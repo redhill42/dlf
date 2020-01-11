@@ -2790,8 +2790,8 @@ TEST(UniformTest, Trsv) {
 static void trsm_left_test(const char* name, cblas::Triangle uplo, cblas::Transpose trans, cblas::Diagonal diag) {
     constexpr size_t m = 10, n = 20;
 
-    auto A = Tensor<double>({m, m}).random(0.1, 1.0);
-    auto B = Tensor<double>({m, n}).random(0.1, 1.0);
+    auto A = Tensor<long double>({m, m}).random(0.1, 1.0);
+    auto B = Tensor<long double>({m, n}).random(0.1, 1.0);
     auto C = B;
 
     SCOPED_TRACE(name);
