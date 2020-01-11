@@ -905,7 +905,7 @@ norm(const TensorT& X, float ord, int row_axis, int col_axis, bool keepdims = fa
 
 template <typename TensorT>
 enable_if_tensor<TensorT>
-norm(const TensorT& X, float ord = 2, bool keepdims = false) {
+norm(const TensorT& X, float ord = NAN, bool keepdims = false) {
     if (X.rank() == 1)
         return norm(X, ord, 0, keepdims);
     if (X.rank() == 2)

@@ -717,33 +717,289 @@ inline void trsv(cblas::Triangle uplo, cblas::Transpose trans, cblas::Diagonal d
 }
 
 template <typename T>
+void trmm_serial(cblas::Side side, cblas::Triangle uplo, cblas::Transpose transA, cblas::Diagonal diag,
+                 const int m, const int n, const T* A, const int lda, T* B, const int ldb)
+{
+    bool nounit = diag == cblas::Diagonal::NonUnit;
+    const T* const A0 = A;
+          T* const B0 = B;
+
+    if (side == cblas::Side::Left) {
+        if (uplo == cblas::Triangle::Lower) {
+            if (transA == cblas::Transpose::NoTrans) {
+                // B := L * B
+                A += (m - 1)*lda;
+                B += (m - 1)*ldb;
+                for (int i = m - 1; i >= 0; --i, A -= lda, B -= ldb) {
+                    if (nounit)
+                        detail::vscal(n, A[i], B, 1);
+                    for (int j = 0; j < i; ++j)
+                        detail::vmad(n, A[j], B0 + j*ldb, 1, B, 1);
+                }
+            } else {
+                // B := L**T * B
+                for (int i = 0; i < m; ++i, A += lda, B += ldb) {
+                    for (int j = 0; j < i; ++j)
+                        detail::vmad(n, A[j], B, 1, B0 + j*ldb, 1);
+                    if (nounit)
+                        detail::vscal(n, A[i], B, 1);
+                }
+            }
+        } else {
+            if (transA == cblas::Transpose::NoTrans) {
+                // B := U * B
+                for (int i = 0; i < m; ++i, A += lda, B += ldb) {
+                    if (nounit)
+                        detail::vscal(n, A[i], B, 1);
+                    for (int j = i+1; j < m; ++j)
+                        detail::vmad(n, A[j], B0 + j*ldb, 1, B, 1);
+                }
+            } else {
+                // B := U**T * B
+                A += (m - 1)*lda;
+                B += (m - 1)*ldb;
+                for (int i = m - 1; i >= 0; --i, A -= lda, B -= ldb) {
+                    for (int j = i+1; j < m; ++j)
+                        detail::vmad(n, A[j], B, 1, B0 + j*ldb, 1);
+                    if (nounit)
+                        detail::vscal(n, A[i], B, 1);
+                }
+            }
+        }
+    } else {
+        if (uplo == cblas::Triangle::Lower) {
+            if (transA == cblas::Transpose::NoTrans) {
+                // B := B * L
+                for (int i = 0; i < m; ++i, B += ldb, A = A0) {
+                    for (int j = 0; j < n; ++j, A += lda) {
+                        detail::vmad(j, B[j], A, 1, B, 1);
+                        if (nounit) B[j] *= A[j];
+                    }
+                }
+            } else {
+                // B := B * L**T
+                A += (n - 1)*lda;
+                B += (m - 1)*ldb;
+                for (int i = m - 1; i >= 0; --i, B -= ldb, A = A0 + (n-1)*lda) {
+                    for (int j = n - 1; j >= 0; --j, A -= lda) {
+                        if (nounit) B[j] *= A[j];
+                        B[j] = detail::vdot(j, std::move(B[j]), A, 1, B, 1);
+                    }
+                }
+            }
+        } else {
+            if (transA == cblas::Transpose::NoTrans) {
+                // B := B * U
+                A += (n - 1)*lda;
+                B += (m - 1)*ldb;
+                for (int i = m - 1; i >= 0; --i, B -= ldb, A = A0 + (n-1)*lda) {
+                    for (int j = n - 1; j >= 0; --j, A -= lda) {
+                        detail::vmad(n-j-1, B[j], A + j+1, 1, B + j+1, 1);
+                        if (nounit) B[j] *= A[j];
+                    }
+                }
+            } else {
+                // B := B * U**T
+                for (int i = 0; i < m; ++i, B += ldb, A = A0) {
+                    for (int j = 0; j < n; ++j, A += lda) {
+                        if (nounit) B[j] *= A[j];
+                        B[j] = detail::vdot(n-j-1, std::move(B[j]), A + j+1, 1, B + j+1, 1);
+                    }
+                }
+            }
+        }
+    }
+}
+
+template <typename T, int NB = 64>
+void trmm_left(cblas::Triangle uplo, cblas::Transpose trans, cblas::Diagonal diag,
+               const int m, const int n, const T* A, const int lda, T* B, const int ldb)
+{
+    if (n <= NB) {
+        trmm_serial(cblas::Side::Left, uplo, trans, diag, m, n, A, lda, B, ldb);
+        return;
+    }
+
+    if (m <= NB) {
+        auto n1 = n / 2;
+        auto n2 = n - n1;
+        tbb::parallel_invoke(
+            [=]{ trmm_left(uplo, trans, diag, m, n1, A, lda, B, ldb); },
+            [=]{ trmm_left(uplo, trans, diag, m, n2, A, lda, B + n1, ldb); });
+        return;
+    }
+
+    auto m1 = m / 2, n1 = n / 2;
+    auto m2 = m - m1, n2 = n - n1;
+
+    auto A11 = A;
+    auto A12 = uplo == cblas::Triangle::Upper ? A + m1 : A + m1*lda;
+    auto A21 = A12;
+    auto A22 = A + m1*lda + m1;
+
+    auto B11 = B;
+    auto B12 = B + n1;
+    auto B21 = B + m1*ldb;
+    auto B22 = B + m1*ldb + n1;
+
+    if ((uplo == cblas::Triangle::Upper && trans == cblas::Transpose::NoTrans) ||
+        (uplo == cblas::Triangle::Lower && trans == cblas::Transpose::Trans)) {
+
+        tbb::parallel_invoke(
+            [=]{ trmm_left(uplo, trans, diag, m1, n1, A11, lda, B11, ldb); },
+            [=]{ trmm_left(uplo, trans, diag, m1, n2, A11, lda, B12, ldb); });
+
+        tbb::parallel_invoke(
+            [=]{
+                detail::gemm(trans, cblas::Transpose::NoTrans,
+                             m1, n1, m2,
+                             xfn::one<T>(),
+                             A12, lda, B21, ldb,
+                             xfn::one<T>(),
+                             B11, ldb);
+            },
+            [=]{
+                detail::gemm(trans, cblas::Transpose::NoTrans,
+                             m1, n2, m2,
+                             xfn::one<T>(),
+                             A12, lda, B22, ldb,
+                             xfn::one<T>(),
+                             B12, ldb);
+            });
+
+        tbb::parallel_invoke(
+            [=]{ trmm_left(uplo, trans, diag, m2, n1, A22, lda, B21, ldb); },
+            [=]{ trmm_left(uplo, trans, diag, m2, n2, A22, lda, B22, ldb); });
+    } else {
+        tbb::parallel_invoke(
+            [=]{ trmm_left(uplo, trans, diag, m2, n1, A22, lda, B21, ldb); },
+            [=]{ trmm_left(uplo, trans, diag, m2, n2, A22, lda, B22, ldb); });
+
+        tbb::parallel_invoke(
+            [=]{
+                detail::gemm(trans, cblas::Transpose::NoTrans,
+                             m2, n1, m1,
+                             xfn::one<T>(),
+                             A21, lda, B11, ldb,
+                             xfn::one<T>(),
+                             B21, ldb);
+            },
+            [=]{
+                detail::gemm(trans, cblas::Transpose::NoTrans,
+                             m2, n2, m1,
+                             xfn::one<T>(),
+                             A21, lda, B12, ldb,
+                             xfn::one<T>(),
+                             B22, ldb);
+            });
+
+        tbb::parallel_invoke(
+            [=]{ trmm_left(uplo, trans, diag, m1, n1, A11, lda, B11, ldb); },
+            [=]{ trmm_left(uplo, trans, diag, m1, n2, A11, lda, B12, ldb); });
+    }
+}
+
+template <typename T, int NB = 64>
+void trmm_right(cblas::Triangle uplo, cblas::Transpose trans, cblas::Diagonal diag,
+                const int m, const int n, const T* A, const int lda, T* B, const int ldb)
+{
+    if (m <= NB) {
+        trmm_serial(cblas::Side::Right, uplo, trans, diag, m, n, A, lda, B, ldb);
+        return;
+    }
+
+    if (n <= NB) {
+        auto m1 = m / 2;
+        auto m2 = m - m1;
+        tbb::parallel_invoke(
+            [=]{ trmm_right(uplo, trans, diag, m1, n, A, lda, B, ldb); },
+            [=]{ trmm_right(uplo, trans, diag, m2, n, A, lda, B + m1*ldb, ldb); });
+        return;
+    }
+
+    auto m1 = m / 2, n1 = n / 2;
+    auto m2 = m - m1, n2 = n - n1;
+
+    auto A11 = A;
+    auto A12 = uplo == cblas::Triangle::Upper ? A + n1 : A + n1*lda;
+    auto A21 = A12;
+    auto A22 = A + n1*lda + n1;
+
+    auto B11 = B;
+    auto B12 = B + n1;
+    auto B21 = B + m1*ldb;
+    auto B22 = B + m1*ldb + n1;
+
+    if ((uplo == cblas::Triangle::Upper && trans == cblas::Transpose::NoTrans) ||
+        (uplo == cblas::Triangle::Lower && trans == cblas::Transpose::Trans)) {
+
+        tbb::parallel_invoke(
+            [=]{ trmm_right(uplo, trans, diag, m1, n2, A22, lda, B12, ldb); },
+            [=]{ trmm_right(uplo, trans, diag, m2, n2, A22, lda, B22, ldb); });
+
+        tbb::parallel_invoke(
+            [=]{
+                detail::gemm(cblas::Transpose::NoTrans, trans,
+                             m1, n2, n1,
+                             xfn::one<T>(),
+                             B11, ldb, A12, lda,
+                             xfn::one<T>(),
+                             B12, ldb);
+            },
+            [=]{
+                detail::gemm(cblas::Transpose::NoTrans, trans,
+                             m2, n2, n1,
+                             xfn::one<T>(),
+                             B21, ldb, A12, lda,
+                             xfn::one<T>(),
+                             B22, ldb);
+            });
+
+        tbb::parallel_invoke(
+            [=]{ trmm_right(uplo, trans, diag, m1, n1, A11, lda, B11, ldb); },
+            [=]{ trmm_right(uplo, trans, diag, m2, n1, A11, lda, B21, ldb); });
+    } else {
+        tbb::parallel_invoke(
+            [=]{ trmm_right(uplo, trans, diag, m1, n1, A11, lda, B11, ldb); },
+            [=]{ trmm_right(uplo, trans, diag, m2, n1, A11, lda, B21, ldb); });
+
+        tbb::parallel_invoke(
+            [=]{
+                detail::gemm(cblas::Transpose::NoTrans, trans,
+                             m1, n1, n2,
+                             xfn::one<T>(),
+                             B12, ldb, A21, lda,
+                             xfn::one<T>(),
+                             B11, ldb);
+            },
+            [=]{
+                detail::gemm(cblas::Transpose::NoTrans, trans,
+                             m2, n1, n2,
+                             xfn::one<T>(),
+                             B22, ldb, A21, lda,
+                             xfn::one<T>(),
+                             B21, ldb);
+            });
+
+        tbb::parallel_invoke(
+            [=]{ trmm_right(uplo, trans, diag, m1, n2, A22, lda, B12, ldb); },
+            [=]{ trmm_right(uplo, trans, diag, m2, n2, A22, lda, B22, ldb); });
+    }
+}
+
+template <typename T>
 std::enable_if_t<!cblas::is_blasable<T>::value>
 trmm(cblas::Side side, cblas::Triangle uplo, cblas::Transpose transA, cblas::Diagonal diag,
-     const int m, const int n, const T& alpha,
-     const T* A, const int lda, T* B, const int ldb)
+     int m, int n, const T& alpha, const T* A, int lda, T* B, int ldb)
 {
-    mscal(m, n, alpha, B, ldb);
+    detail::mscal(m, n, alpha, B, ldb);
     if (alpha == xfn::zero<T>())
         return;
 
     if (side == cblas::Side::Left) {
-        tbb::parallel_for(tbb::blocked_range<int>(0, n), [=](const auto& r) {
-            std::vector<T> x(m);
-            for (int i = r.begin(); i < r.end(); ++i) {
-                for (int j = 0; j < m; ++j)
-                    x[j] = B[j*ldb + i];
-                detail::trmv(uplo, transA, diag, m, A, lda, x.data(), 1);
-                for (int j = 0; j < m; ++j)
-                    B[j*ldb + i] = x[j];
-            }
-        });
+        trmm_left(uplo, transA, diag, m, n, A, lda, B, ldb);
     } else {
-        transA = transA == cblas::Transpose::NoTrans ? cblas::Transpose::Trans : cblas::Transpose::NoTrans;
-        tbb::parallel_for(tbb::blocked_range<int>(0, m), [=](const auto& r) {
-            for (int i = r.begin(); i < r.end(); ++i) {
-                detail::trmv(uplo, transA, diag, n, A, lda, B + i*ldb, 1);
-            }
-        });
+        trmm_right(uplo, transA, diag, m, n, A, lda, B, ldb);
     }
 }
 
