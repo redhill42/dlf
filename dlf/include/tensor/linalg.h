@@ -1233,4 +1233,21 @@ inline solve(TensorA&& A, TensorB&& b) {
     return solve(std::forward<TensorA>(A))(std::forward<TensorB>(b));
 }
 
+//==-------------------------------------------------------------------------
+// Schur decomposition
+//==-------------------------------------------------------------------------
+
+Tensor<std::complex<float>>  schur(const Tensor<float>& A,
+                                   Tensor<float>& Q,
+                                   Tensor<float>& U);
+Tensor<std::complex<double>> schur(const Tensor<double>& A,
+                                   Tensor<double>& Q,
+                                   Tensor<double>& U);
+Tensor<std::complex<float>>  schur(const Tensor<std::complex<float>>& A,
+                                   Tensor<std::complex<float>>& Q,
+                                   Tensor<std::complex<float>>& U);
+Tensor<std::complex<double>> schur(const Tensor<std::complex<double>>& A,
+                                   Tensor<std::complex<double>>& Q,
+                                   Tensor<std::complex<double>>& U);
+
 } // namespace dlf

@@ -41,6 +41,10 @@ public:
     static void trip(size_t m, size_t n, T* A) {
         trip(0, m, 0, n, A, n);
     }
+
+    static void trip(size_t n, T* A, size_t lda) {
+        sq_trans(0, n, A, lda);
+    }
 };
 
 template <typename T>
@@ -235,6 +239,11 @@ void TRIP<T>::reverse(size_t m0, size_t m1, size_t rs, size_t cs, size_t ce, T* 
 template <typename T>
 inline void mitrans(size_t m, size_t n, T* A) {
     TRIP<T>::trip(m, n, A);
+}
+
+template <typename T>
+inline void mitrans(size_t n, T* A, size_t lda) {
+    TRIP<T>::trip(n, A, lda);
 }
 
 template <typename TensorX, typename TensorY>

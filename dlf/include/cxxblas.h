@@ -13,6 +13,7 @@
   #define HAS_LAPACKE 0
   #include <Accelerate/Accelerate.h>
   #define lapack_int __CLPK_integer
+  #define lapack_logical __CLPK_logical
   #define lapack_complex_float __CLPK_complex
   #define lapack_complex_double __CLPK_doublecomplex
 #else
@@ -969,6 +970,86 @@ inline lapack_int potrf(char uplo, lapack_int n, std::complex<double>* A, lapack
                           reinterpret_cast<lapack_complex_double*>(A), lda);
 }
 
+inline void gees(char jobvs, char sort,
+                 lapack_logical (*select)(const float*, const float*),
+                 lapack_int n, float* A, lapack_int lda,
+                 lapack_int* sdim, float* wr, float* wi,
+                 float* vs, lapack_int ldvs)
+{
+    auto info = LAPACKE_sgees(LAPACK_ROW_MAJOR, jobvs, sort, select,
+                              n, A, lda, sdim, wr, wi, vs, ldvs);
+
+    assert(info >= 0);
+    if (info == n + 1)
+        throw std::runtime_error("Eigenvalues could not be separated for reordering.");
+    if (info == n + 2)
+        throw std::runtime_error("Leading eigenvalues do not satisfy sort condition.");
+    if (info > 0)
+        throw std::runtime_error("Schur form not found.  Possibly ill-conditioned.");
+}
+
+inline void gees(char jobvs, char sort,
+                 lapack_logical (*select)(const double*, const double*),
+                 lapack_int n, double* A, lapack_int lda,
+                 lapack_int* sdim, double* wr, double* wi,
+                 double* vs, lapack_int ldvs)
+{
+    auto info = LAPACKE_dgees(LAPACK_ROW_MAJOR, jobvs, sort, select,
+                              n, A, lda, sdim, wr, wi, vs, ldvs);
+
+    assert(info >= 0);
+    if (info == n + 1)
+        throw std::runtime_error("Eigenvalues could not be separated for reordering.");
+    if (info == n + 2)
+        throw std::runtime_error("Leading eigenvalues do not satisfy sort condition.");
+    if (info > 0)
+        throw std::runtime_error("Schur form not found.  Possibly ill-conditioned.");
+}
+
+inline void gees(char jobvs, char sort,
+                 lapack_logical (*select)(const std::complex<float>*),
+                 lapack_int n, std::complex<float>* A, lapack_int lda,
+                 lapack_int* sdim, std::complex<float>* w,
+                 std::complex<float>* vs, lapack_int ldvs)
+{
+    auto info = LAPACKE_cgees(
+        LAPACK_ROW_MAJOR, jobvs, sort,
+        reinterpret_cast<lapack_logical(*)(const lapack_complex_float*)>(select),
+        n, reinterpret_cast<lapack_complex_float*>(A), lda, sdim,
+        reinterpret_cast<lapack_complex_float*>(w),
+        reinterpret_cast<lapack_complex_float*>(vs), ldvs);
+
+    assert(info >= 0);
+    if (info == n + 1)
+        throw std::runtime_error("Eigenvalues could not be separated for reordering.");
+    if (info == n + 2)
+        throw std::runtime_error("Leading eigenvalues do not satisfy sort condition.");
+    if (info > 0)
+        throw std::runtime_error("Schur form not found.  Possibly ill-conditioned.");
+}
+
+inline void gees(char jobvs, char sort,
+                 lapack_logical (*select)(const std::complex<double>*),
+                 lapack_int n, std::complex<double>* A, lapack_int lda,
+                 lapack_int* sdim, std::complex<double>* w,
+                 std::complex<double>* vs, lapack_int ldvs)
+{
+    auto info = LAPACKE_zgees(
+        LAPACK_ROW_MAJOR, jobvs, sort,
+        reinterpret_cast<lapack_logical(*)(const lapack_complex_double*)>(select),
+        n, reinterpret_cast<lapack_complex_double*>(A), lda, sdim,
+        reinterpret_cast<lapack_complex_double*>(w),
+        reinterpret_cast<lapack_complex_double*>(vs), ldvs);
+
+    assert(info >= 0);
+    if (info == n + 1)
+        throw std::runtime_error("Eigenvalues could not be separated for reordering.");
+    if (info == n + 2)
+        throw std::runtime_error("Leading eigenvalues do not satisfy sort condition.");
+    if (info > 0)
+        throw std::runtime_error("Schur form not found.  Possibly ill-conditioned.");
+}
+
 #else
 
 inline lapack_int getrf(lapack_int m, lapack_int n, float* A, lapack_int lda, lapack_int* ipiv) {
@@ -1129,6 +1210,200 @@ inline lapack_int potrf(char uplo, lapack_int n, std::complex<double>* A, lapack
     uplo = uplo == 'L' ? 'U' : 'L';
     zpotrf_(&uplo, &n, reinterpret_cast<lapack_complex_double*>(A), &lda, &info);
     return info;
+}
+
+inline void gees(char jobvs, char sort,
+                 lapack_logical (*select)(const float*, const float*),
+                 lapack_int n, float* A, lapack_int lda,
+                 lapack_int* sdim, float* wr, float* wi,
+                 float* vs, lapack_int ldvs)
+{
+    lapack_int info = 0;
+    lapack_int lwork = -1;
+    float work_query;
+    std::vector<lapack_logical> bwork(n);
+
+#if defined(__APPLE__)
+    sgees_(&jobvs, &sort, reinterpret_cast<__CLPK_L_fp>(select),
+           &n, A, &lda, sdim, wr, wi, vs, &ldvs,
+           &work_query, &lwork, bwork.data(), &info);
+#else
+    sgees_(&jobvs, &sort, select,
+           &n, A, &lda, sdim, wr, wi, vs, &ldvs,
+           &work_query, &lwork, bwork.data(), &info);
+#endif
+
+    lwork = static_cast<lapack_int>(work_query);
+    std::vector<float> work(lwork);
+
+#if defined(__APPLE__)
+    sgees_(&jobvs, &sort, reinterpret_cast<__CLPK_L_fp>(select),
+           &n, A, &lda, sdim, wr, wi, vs, &ldvs,
+           work.data(), &lwork, bwork.data(), &info);
+#else
+    sgees_(&jobvs, &sort, select,
+           &n, A, &lda, sdim, wr, wi, vs, &ldvs,
+           work.data(), &lwork, bwork.data(), &info);
+#endif
+
+    assert(info >= 0);
+    if (info == n + 1)
+        throw std::runtime_error("Eigenvalues could not be separated for reordering.");
+    if (info == n + 2)
+        throw std::runtime_error("Leading eigenvalues do not satisfy sort condition.");
+    if (info > 0)
+        throw std::runtime_error("Schur form not found.  Possibly ill-conditioned.");
+}
+
+inline void gees(char jobvs, char sort,
+                 lapack_logical (*select)(const double*, const double*),
+                 lapack_int n, double* A, lapack_int lda,
+                 lapack_int* sdim, double* wr, double* wi,
+                 double* vs, lapack_int ldvs)
+{
+    lapack_int info = 0;
+    lapack_int lwork = -1;
+    double work_query;
+    std::vector<lapack_logical> bwork(n);
+
+#if defined(__APPLE__)
+    dgees_(&jobvs, &sort, reinterpret_cast<__CLPK_L_fp>(select),
+           &n, A, &lda, sdim, wr, wi, vs, &ldvs,
+           &work_query, &lwork, bwork.data(), &info);
+#else
+    dgees_(&jobvs, &sort, select,
+           &n, A, &lda, sdim, wr, wi, vs, &ldvs,
+           &work_query, &lwork, bwork.data(), &info);
+#endif
+
+    lwork = static_cast<lapack_int>(work_query);
+    std::vector<double> work(lwork);
+
+#if defined(__APPLE__)
+    dgees_(&jobvs, &sort, reinterpret_cast<__CLPK_L_fp>(select),
+           &n, A, &lda, sdim, wr, wi, vs, &ldvs,
+           work.data(), &lwork, bwork.data(), &info);
+#else
+    dgees_(&jobvs, &sort, select,
+           &n, A, &lda, sdim, wr, wi, vs, &ldvs,
+           work.data(), &lwork, bwork.data(), &info);
+#endif
+
+    assert(info >= 0);
+    if (info == n + 1)
+        throw std::runtime_error("Eigenvalues could not be separated for reordering.");
+    if (info == n + 2)
+        throw std::runtime_error("Leading eigenvalues do not satisfy sort condition.");
+    if (info > 0)
+        throw std::runtime_error("Schur form not found.  Possibly ill-conditioned.");
+}
+
+inline void gees(char jobvs, char sort,
+                 lapack_logical (*select)(const std::complex<float>*),
+                 lapack_int n, std::complex<float>* A, lapack_int lda,
+                 lapack_int* sdim, std::complex<float>* w,
+                 std::complex<float>* vs, lapack_int ldvs)
+{
+    lapack_int info = 0;
+    lapack_int lwork = -1;
+    lapack_complex_float work_query;
+    std::vector<float> rwork(n);
+    std::vector<lapack_logical> bwork(n);
+
+#if defined(__APPLE__)
+    cgees_(&jobvs, &sort, reinterpret_cast<__CLPK_L_fp>(select), &n,
+           reinterpret_cast<lapack_complex_float*>(A), &lda, sdim,
+           reinterpret_cast<lapack_complex_float*>(w),
+           reinterpret_cast<lapack_complex_float*>(vs), &ldvs,
+           &work_query, &lwork, rwork.data(), bwork.data(), &info);
+#else
+    sgees_(&jobvs, &sort,
+           reinterpret_cast<lapack_logical(*)(const lapack_complex_float*)>(select), &n,
+           reinterpret_cast<lapack_complex_float*>(A), &lda, sdim,
+           reinterpret_cast<lapack_complex_float*>(w),
+           reinterpret_cast<lapack_complex_float*>(vs), &ldvs,
+           &work_query, &lwork, rwork.data(), bwork.data(), &info);
+#endif
+
+    lwork = static_cast<lapack_int>(*reinterpret_cast<float*>(&work_query));
+    std::vector<lapack_complex_float> work(lwork);
+
+#if defined(__APPLE__)
+    cgees_(&jobvs, &sort, reinterpret_cast<__CLPK_L_fp>(select), &n,
+           reinterpret_cast<lapack_complex_float*>(A), &lda, sdim,
+           reinterpret_cast<lapack_complex_float*>(w),
+           reinterpret_cast<lapack_complex_float*>(vs), &ldvs,
+           work.data(), &lwork, rwork.data(), bwork.data(), &info);
+#else
+    cgees_(&jobvs, &sort,
+           reinterpret_cast<lapack_logical(*)(const lapack_complex_float*)>(select), &n,
+           reinterpret_cast<lapack_complex_float*>(A), &lda, sdim,
+           reinterpret_cast<lapack_complex_float*>(w),
+           reinterpret_cast<lapack_complex_float*>(vs), &ldvs,
+           work.data(), &lwork, rwork.data(), bwork.data(), &info);
+#endif
+
+    assert(info >= 0);
+    if (info == n + 1)
+        throw std::runtime_error("Eigenvalues could not be separated for reordering.");
+    if (info == n + 2)
+        throw std::runtime_error("Leading eigenvalues do not satisfy sort condition.");
+    if (info > 0)
+        throw std::runtime_error("Schur form not found.  Possibly ill-conditioned.");
+}
+
+inline void gees(char jobvs, char sort,
+                 lapack_logical (*select)(const std::complex<double>*),
+                 lapack_int n, std::complex<double>* A, lapack_int lda,
+                 lapack_int* sdim, std::complex<double>* w,
+                 std::complex<double>* vs, lapack_int ldvs)
+{
+    lapack_int info = 0;
+    lapack_int lwork = -1;
+    lapack_complex_double work_query;
+    std::vector<double> rwork(n);
+    std::vector<lapack_logical> bwork(n);
+
+#if defined(__APPLE__)
+    zgees_(&jobvs, &sort, reinterpret_cast<__CLPK_L_fp>(select), &n,
+           reinterpret_cast<lapack_complex_double*>(A), &lda, sdim,
+           reinterpret_cast<lapack_complex_double*>(w),
+           reinterpret_cast<lapack_complex_double*>(vs), &ldvs,
+           &work_query, &lwork, rwork.data(), bwork.data(), &info);
+#else
+    zgees_(&jobvs, &sort,
+           reinterpret_cast<lapack_logical(*)(const lapack_complex_double*)>(select), &n,
+           reinterpret_cast<lapack_complex_double*>(A), &lda, sdim,
+           reinterpret_cast<lapack_complex_double*>(w),
+           reinterpret_cast<lapack_complex_double*>(vs), &ldvs,
+           &work_query, &lwork, rwork.data(), bwork.data(), &info);
+#endif
+
+    lwork = static_cast<lapack_int>(*reinterpret_cast<double*>(&work_query));
+    std::vector<lapack_complex_double> work(lwork);
+
+#if defined(__APPLE__)
+    zgees_(&jobvs, &sort, reinterpret_cast<__CLPK_L_fp>(select), &n,
+           reinterpret_cast<lapack_complex_double*>(A), &lda, sdim,
+           reinterpret_cast<lapack_complex_double*>(w),
+           reinterpret_cast<lapack_complex_double*>(vs), &ldvs,
+           work.data(), &lwork, rwork.data(), bwork.data(), &info);
+#else
+    zgees_(&jobvs, &sort,
+           reinterpret_cast<lapack_logical(*)(const lapack_complex_double*)>(select), &n,
+           reinterpret_cast<lapack_complex_double*>(A), &lda, sdim,
+           reinterpret_cast<lapack_complex_double*>(w),
+           reinterpret_cast<lapack_complex_double*>(vs), &ldvs,
+           work.data(), &lwork, rwork.data(), bwork.data(), &info);
+#endif
+
+    assert(info >= 0);
+    if (info == n + 1)
+        throw std::runtime_error("Eigenvalues could not be separated for reordering.");
+    if (info == n + 2)
+        throw std::runtime_error("Leading eigenvalues do not satisfy sort condition.");
+    if (info > 0)
+        throw std::runtime_error("Schur form not found.  Possibly ill-conditioned.");
 }
 
 #endif

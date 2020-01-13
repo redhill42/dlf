@@ -2906,3 +2906,41 @@ TEST(UniformTest, LinearSolveGMP) {
     EXPECT_EQ(matmul(A, X), B);
 }
 #endif
+
+TEST(UniformTest, Schur) {
+    {
+        auto A = Tensor<float>({10, 10}).random(0, 10);
+        auto Q = Tensor<float>();
+        auto U = Tensor<float>();
+        schur(A, Q, U);
+        EXPECT_ELEMENTS_NEAR(matinv(Q), Q.transpose());
+        EXPECT_ELEMENTS_NEAR(A, multi_dot(Q, U, Q.transpose()));
+    }
+
+    {
+        auto A = Tensor<double>({10, 10}).random(0, 10);
+        auto Q = Tensor<double>();
+        auto U = Tensor<double>();
+        schur(A, Q, U);
+        EXPECT_ELEMENTS_NEAR(matinv(Q), Q.transpose());
+        EXPECT_ELEMENTS_NEAR(A, multi_dot(Q, U, Q.transpose()));
+    }
+
+    {
+        auto A = Tensor<std::complex<float>>({10, 10}).random(std::uniform_real_distribution<float>(0, 10));
+        auto Q = Tensor<std::complex<float>>();
+        auto U = Tensor<std::complex<float>>();
+        schur(A, Q, U);
+        EXPECT_ELEMENTS_NEAR(matinv(Q), conj(Q).transpose());
+        EXPECT_ELEMENTS_NEAR(A, multi_dot(Q, U, conj(Q).transpose()));
+    }
+
+    {
+        auto A = Tensor<std::complex<double>>({10, 10}).random(std::uniform_real_distribution<double>(0, 10));
+        auto Q = Tensor<std::complex<double>>();
+        auto U = Tensor<std::complex<double>>();
+        schur(A, Q, U);
+        EXPECT_ELEMENTS_NEAR(matinv(Q), conj(Q).transpose());
+        EXPECT_ELEMENTS_NEAR(A, multi_dot(Q, U, conj(Q).transpose()));
+    }
+}
