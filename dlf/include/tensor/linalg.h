@@ -1234,7 +1234,7 @@ inline solve(TensorA&& A, TensorB&& b) {
 }
 
 //==-------------------------------------------------------------------------
-// Schur decomposition
+// Schur decomposition and matrix functions
 //==-------------------------------------------------------------------------
 
 Tensor<std::complex<float>>  schur(const Tensor<float>& A,
@@ -1249,5 +1249,78 @@ Tensor<std::complex<float>>  schur(const Tensor<std::complex<float>>& A,
 Tensor<std::complex<double>> schur(const Tensor<std::complex<double>>& A,
                                    Tensor<std::complex<double>>& Q,
                                    Tensor<std::complex<double>>& U);
+
+template <typename T, typename F>
+void matfun(F f, const Tensor<std::complex<T>>& X, Tensor<std::complex<T>>& Y) {
+    static_assert(std::is_same<T, float>::value || std::is_same<T, double>::value, "");
+    if (!X.is_square())
+        throw shape_error("matfun: expected square matrix");
+    auto n = X.extent(0);
+    auto Q = Tensor<std::complex<T>>();
+    auto U = Tensor<std::complex<T>>();
+    schur(X, Q, U);
+
+    // Schur-Parlett method
+    Y.resize(X.shape());
+    for (size_t i = 0; i < n; ++i) {
+        Y(i,i) = f(U(i,i));
+    }
+    for (size_t p = 1; p < n; ++p) {
+        for (size_t i = 0; i < n - p; ++i) {
+            size_t j = i + p;
+            auto s = U(i,j)*(Y(j,j) - Y(i,i));
+            s += detail::vdot(p - 1, std::complex<T>{}, &U(i,i+1), 1, &Y(i+1,j), n);
+            s -= detail::vdot(p - 1, std::complex<T>{}, &Y(i,i+1), 1, &U(i+1,j), n);
+            Y(i,j) = s / (U(j,j) - U(i,i));
+        }
+    }
+
+    // Y := QYQ^(H)
+    trmm(cblas::Side::Right, cblas::Triangle::Upper, cblas::Transpose::NoTrans, cblas::Diagonal::NonUnit,
+         xfn::one<std::complex<T>>(), Y, Q, U);
+    gemm(cblas::Transpose::NoTrans, cblas::Transpose::ConjTrans,
+         xfn::one<std::complex<T>>(), U, Q,
+         xfn::zero<std::complex<T>>(), &Y);
+}
+
+template <typename T, typename F>
+void matfun(F f, const Tensor<T>& X, Tensor<T>& Y) {
+    auto temp = Tensor<std::complex<T>>();
+    matfun(f, X.template cast<std::complex<T>>(), temp);
+    transformTo(temp, Y, [](const auto& x){ return x.real(); });
+}
+
+template <typename T, typename F>
+Tensor<T> matfun(F f, const Tensor<T>& X) {
+    auto Y = Tensor<T>();
+    matfun(f, X, Y);
+    return Y;
+}
+
+template <typename T, typename F>
+Tensor<T> matfun(F f, Tensor<T>&& X) {
+    matfun(f, X, X);
+    return std::move(X);
+}
+
+template <typename T>
+inline Tensor<T> matexp(const Tensor<T>& X) {
+    return matfun(xfn::exp<>(), X);
+}
+
+template <typename T>
+inline Tensor<T> matexp(Tensor<T>&& X) {
+    return matfun(xfn::exp<>(), std::move(X));
+}
+
+template <typename T>
+inline Tensor<T> matlog(const Tensor<T>& X) {
+    return matfun(xfn::log<>(), X);
+}
+
+template <typename T>
+inline Tensor<T> matlog(Tensor<T>&& X) {
+    return matfun(xfn::log<>(), std::move(X));
+}
 
 } // namespace dlf

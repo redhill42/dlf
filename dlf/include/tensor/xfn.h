@@ -99,6 +99,12 @@ struct sign : std::unary_function<T,T> {
         { return (zero<T>() < x) - (x < zero<T>()); }
 };
 
+template <typename T>
+struct sign<std::complex<T>> {
+    constexpr std::complex<T> operator()(const std::complex<T>& x) const
+        { return (zero<T>() < x.real()) - (x.real() < zero<T>()); }
+};
+
 template <>
 struct sign<void> {
     template <typename T>
@@ -106,6 +112,12 @@ struct sign<void> {
     noexcept(noexcept((zero<T>() < x) - (x < zero<T>())))
     -> decltype      ((zero<T>() < x) - (x < zero<T>()))
         { return      (zero<T>() < x) - (x < zero<T>()); }
+
+    template <typename T>
+    constexpr auto operator()(const std::complex<T>& x) const
+    noexcept(noexcept((zero<T>() < x.real()) - (x.real() < zero<T>())))
+    -> decltype      ((zero<T>() < x.real()) - (x.real() < zero<T>()))
+        { return      (zero<T>() < x.real()) - (x.real() < zero<T>()); }
 };
 
 template <typename T> inline constexpr const char*
@@ -128,6 +140,7 @@ struct conj<void> {
     template <typename T>
     constexpr T operator()(T&& x) const noexcept
         { return std::forward<T>(x); }
+
     template <typename T>
     constexpr auto operator()(const std::complex<T>& x) const
     noexcept(noexcept(std::conj(x)))
@@ -148,13 +161,94 @@ template <>
 struct norm<void> {
     template <typename T>
     constexpr auto operator()(T&& x) const
-    noexcept(noexcept(std::norm(x)))
-    -> decltype      (std::norm(x))
-        { return      std::norm(x); }
+    noexcept(noexcept(std::norm(std::forward<T>(x))))
+    -> decltype      (std::norm(std::forward<T>(x)))
+        { return      std::norm(std::forward<T>(x)); }
 };
 
 template <typename T> inline constexpr const char*
 function_kernel_name(norm<T>) { return "norm"; }
+
+template <typename T = void>
+struct floor : std::unary_function<T,T> {
+    T operator()(const T& x) const { return std::floor(x); }
+};
+
+template <typename T>
+struct floor<std::complex<T>> : std::unary_function<std::complex<T>, std::complex<T>> {
+    std::complex<T> operator()(const std::complex<T>& x) const
+        { return std::complex<T>(std::floor(x.real()), std::floor(x.imag())); }
+};
+
+template <>
+struct floor<void> {
+    template <typename T>
+    auto operator()(T&& x) const
+    noexcept(noexcept(std::floor(std::forward<T>(x))))
+    -> decltype      (std::floor(std::forward<T>(x)))
+        { return      std::floor(std::forward<T>(x)); }
+
+    template <typename T>
+    std::complex<T> operator()(const std::complex<T>& x) const
+        { return std::complex<T>(std::floor(x.real()), std::floor(x.imag())); }
+};
+
+template <typename T> inline constexpr const char*
+function_kernel_name(floor<T>) { return "floor"; }
+
+template <typename T = void>
+struct ceil : std::unary_function<T,T> {
+    T operator()(const T& x) const { return std::ceil(x); }
+};
+
+template <typename T>
+struct ceil<std::complex<T>> : std::unary_function<std::complex<T>, std::complex<T>> {
+    std::complex<T> operator()(const std::complex<T>& x) const
+        { return std::complex<T>(std::ceil(x.real()), std::ceil(x.imag())); }
+};
+
+template <>
+struct ceil<void> {
+    template <typename T>
+    auto operator()(T&& x) const
+    noexcept(noexcept(std::ceil(std::forward<T>(x))))
+    -> decltype      (std::ceil(std::forward<T>(x)))
+        { return      std::ceil(std::forward<T>(x)); }
+
+    template <typename T>
+    std::complex<T> operator()(const std::complex<T>& x) const
+        { return std::complex<T>(std::ceil(x.real()), std::ceil(x.imag())); }
+};
+
+template <typename T> inline constexpr const char*
+function_kernel_name(ceil<T>) { return "ceil"; }
+
+template <typename T = void>
+struct round : std::unary_function<T,T> {
+    T operator()(const T& x) const { return std::round(x); }
+};
+
+template <typename T>
+struct round<std::complex<T>> : std::unary_function<std::complex<T>, std::complex<T>> {
+    std::complex<T> operator()(const std::complex<T>& x) const
+        { return std::complex<T>(std::round(x.real()), std::round(x.imag())); }
+};
+
+template <>
+struct round<void> {
+    template <typename T>
+    auto operator()(T&& x) const
+    noexcept(noexcept(std::round(std::forward<T>(x))))
+    -> decltype      (std::round(std::forward<T>(x)))
+        { return      std::round(std::forward<T>(x)); }
+
+    template <typename T>
+    std::complex<T> operator()(const std::complex<T>& x) const
+        { return std::complex<T>(std::round(x.real()), std::round(x.imag())); }
+};
+
+template <typename T> inline constexpr const char*
+function_kernel_name(round<T>) { return "round"; }
 
 template <typename T>
 struct chop : std::unary_function<T,T> {
@@ -166,27 +260,24 @@ struct chop : std::unary_function<T,T> {
 
 template <>
 struct chop<float> : std::unary_function<float, float> {
-    const float tolerance = 1e-5f;
-    chop() = default;
-    explicit chop(float tol) : tolerance(tol) {}
+    const float tolerance;
+    explicit chop(float tol = 1e-5f) : tolerance(tol) {}
     float operator()(float x) const
         { return std::abs(x) < tolerance ? 0.f : x; }
 };
 
 template <>
 struct chop<double> : std::unary_function<double, double> {
-    const double tolerance = 1e-10;
-    chop() = default;
-    explicit chop(double tol) : tolerance(tol) {}
+    const double tolerance;
+    explicit chop(double tol = 1e-10) : tolerance(tol) {}
     double operator()(double x) const
         { return std::abs(x) < tolerance ? 0.0 : x; }
 };
 
 template <>
 struct chop<std::complex<float>> : std::unary_function<std::complex<float>, std::complex<float>> {
-    const float tolerance = 1e-5f;
-    chop() = default;
-    explicit chop(float tol) : tolerance(tol) {}
+    const float tolerance;
+    explicit chop(float tol = 1e-5f) : tolerance(tol) {}
 
     std::complex<float> operator()(const std::complex<float>& x) const {
         float re = std::abs(x.real()), im = std::abs(x.imag());
@@ -201,9 +292,8 @@ struct chop<std::complex<float>> : std::unary_function<std::complex<float>, std:
 
 template <>
 struct chop<std::complex<double>> : std::unary_function<std::complex<double>, std::complex<double>> {
-    const double tolerance = 1e-10;
-    chop() = default;
-    explicit chop(double tol) : tolerance(tol) {}
+    const double tolerance;
+    explicit chop(double tol = 1e-10) : tolerance(tol) {}
 
     std::complex<double> operator()(const std::complex<double>& x) const {
         double re = std::abs(x.real()), im = std::abs(x.imag());
@@ -220,17 +310,18 @@ template <typename T> inline constexpr const char*
 function_kernel_name(chop<T>) { return "chop"; }
 
 #define DEFINE_UNARY_FUNCTION(fn, op) \
-template <typename T> \
+template <typename T = void> \
 struct fn : std::unary_function<T,T> { \
+    T operator()(const T& x) const { op; } \
+}; \
+template <> struct fn<void> { \
+    template <typename T> \
     T operator()(const T& x) const { op; } \
 }; \
 template <typename T> inline constexpr const char* \
 function_kernel_name(fn<T>) { return #fn; }
 
 DEFINE_UNARY_FUNCTION(recip,    return one<T>()/x)
-DEFINE_UNARY_FUNCTION(floor,    using std::floor; return floor(x))
-DEFINE_UNARY_FUNCTION(ceil,     using std::ceil; return ceil(x))
-DEFINE_UNARY_FUNCTION(round,    using std::round; return round(x))
 DEFINE_UNARY_FUNCTION(sqrt,     using std::sqrt; return sqrt(x))
 DEFINE_UNARY_FUNCTION(square,   return x*x)
 DEFINE_UNARY_FUNCTION(exp,      using std::exp; return exp(x))
@@ -248,9 +339,9 @@ DEFINE_UNARY_FUNCTION(asinh,    using std::asinh; return asinh(x))
 DEFINE_UNARY_FUNCTION(acosh,    using std::acosh; return acosh(x))
 DEFINE_UNARY_FUNCTION(atanh,    using std::atanh; return atanh(x))
 DEFINE_UNARY_FUNCTION(erf,      using std::erf; return erf(x))
-DEFINE_UNARY_FUNCTION(sigmoid,  using std::exp; return one<T>()/(one<T>()+exp(-x)))
-DEFINE_UNARY_FUNCTION(softsign, using std::abs; return x/(one<T>()+abs(x)))
-DEFINE_UNARY_FUNCTION(softplus, using std::log; using std::exp; return log(exp(x)+one<T>()))
+DEFINE_UNARY_FUNCTION(sigmoid,  using std::exp; return one<T>()/(one<T>() + exp(-x)))
+DEFINE_UNARY_FUNCTION(softsign, using std::abs; return x/(one<T>() + abs(x)))
+DEFINE_UNARY_FUNCTION(softplus, using std::log; using std::exp; return log(exp(x) + one<T>()))
 
 #undef DEFINE_UNARY_FUNCTION
 
