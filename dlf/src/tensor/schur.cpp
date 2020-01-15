@@ -13,15 +13,8 @@ schur(const Tensor<float>& A, Tensor<float>& Q, Tensor<float>& U) {
     std::vector<float> wr(n), wi(n);
     lapack_int sdim;
 
-#if !HAS_LAPACKE
-    detail::mitrans(n, U.data(), U.stride(0));
-#endif
     cblas::gees('V', 'N', nullptr, n, U.data(), U.stride(0),
                 &sdim, wr.data(), wi.data(), Q.data(), Q.stride(0));
-#if !HAS_LAPACKE
-    detail::mitrans(n, Q.data(), Q.stride(0));
-    detail::mitrans(n, U.data(), U.stride(0));
-#endif
 
     auto W = Tensor<std::complex<float>>({n});
     for (int i = 0; i < n; ++i)
@@ -40,15 +33,8 @@ schur(const Tensor<double>& A, Tensor<double>& Q, Tensor<double>& U) {
     std::vector<double> wr(n), wi(n);
     lapack_int sdim;
 
-#if !HAS_LAPACKE
-    detail::mitrans(n, U.data(), U.stride(0));
-#endif
     cblas::gees('V', 'N', nullptr, n, U.data(), U.stride(0),
                 &sdim, wr.data(), wi.data(), Q.data(), Q.stride(0));
-#if !HAS_LAPACKE
-    detail::mitrans(n, Q.data(), Q.stride(0));
-    detail::mitrans(n, U.data(), U.stride(0));
-#endif
 
     auto W = Tensor<std::complex<double>>({n});
     for (int i = 0; i < n; ++i)
@@ -70,15 +56,8 @@ schur(const Tensor<std::complex<float>>& A,
     auto W = Tensor<std::complex<float>>({n});
     lapack_int sdim;
 
-#if !HAS_LAPACKE
-    detail::mitrans(n, U.data(), U.stride(0));
-#endif
     cblas::gees('V', 'N', nullptr, n, U.data(), U.stride(0),
                 &sdim, W.data(), Q.data(), Q.stride(0));
-#if !HAS_LAPACKE
-    detail::mitrans(n, Q.data(), Q.stride(0));
-    detail::mitrans(n, U.data(), U.stride(0));
-#endif
     return W;
 }
 
@@ -96,15 +75,8 @@ schur(const Tensor<std::complex<double>>& A,
     auto W = Tensor<std::complex<double>>({n});
     lapack_int sdim;
 
-#if !HAS_LAPACKE
-    detail::mitrans(n, U.data(), U.stride(0));
-#endif
     cblas::gees('V', 'N', nullptr, n, U.data(), U.stride(0),
                 &sdim, W.data(), Q.data(), Q.stride(0));
-#if !HAS_LAPACKE
-    detail::mitrans(n, Q.data(), Q.stride(0));
-    detail::mitrans(n, U.data(), U.stride(0));
-#endif
     return W;
 }
 
