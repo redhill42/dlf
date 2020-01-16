@@ -979,25 +979,6 @@ inline void trsm(Layout layout, Side side, Triangle uplo, Transpose trans, Diago
                 m, n, &alpha, A, lda, B, ldb);
 }
 
-//==-------------------------------------------------------------------------
-// MKL extension
-//==-------------------------------------------------------------------------
-
-template <typename T>
-inline bool imatcopy(char, char, size_t, size_t, const T&, T*, size_t, size_t) {
-    return false;
-}
-
-template <typename T>
-inline bool omatcopy(char, char, size_t, size_t, const T&, const T*, size_t, T*, size_t) {
-    return false;
-}
-
-template <typename T>
-inline bool omatcopy2(char, char, size_t, size_t, const T&, const T*, size_t, size_t, T*, size_t, size_t) {
-    return false;
-}
-
 #if HAS_LAPACKE
 
 inline lapack_int getrf(lapack_int m, lapack_int n, float* A, lapack_int lda, lapack_int* ipiv) {
@@ -1176,6 +1157,46 @@ inline void gees(char jobvs, char sort,
         throw std::runtime_error("Leading eigenvalues do not satisfy sort condition.");
     if (info > 0)
         throw std::runtime_error("Schur form not found.  Possibly ill-conditioned.");
+}
+
+inline lapack_int gelsd(Layout layout, lapack_int m, lapack_int n, lapack_int nrhs,
+                        float* A, lapack_int lda, float* B, lapack_int ldb,
+                        float* s, float rcond, lapack_int* rank)
+{
+    return LAPACKE_sgelsd(layout == Layout::RowMajor ? LAPACK_ROW_MAJOR : LAPACK_COL_MAJOR,
+                          m, n, nrhs, A, lda, B, ldb, s, rcond, rank);
+}
+
+inline lapack_int gelsd(Layout layout, lapack_int m, lapack_int n, lapack_int nrhs,
+                        double* A, lapack_int lda, double* B, lapack_int ldb,
+                        double* s, double rcond, lapack_int* rank)
+{
+    return LAPACKE_dgelsd(layout == Layout::RowMajor ? LAPACK_ROW_MAJOR : LAPACK_COL_MAJOR,
+                          m, n, nrhs, A, lda, B, ldb, s, rcond, rank);
+}
+
+inline lapack_int gelsd(Layout layout, lapack_int m, lapack_int n, lapack_int nrhs,
+                        std::complex<float>* A, lapack_int lda,
+                        std::complex<float>* B, lapack_int ldb,
+                        float* s, float rcond, lapack_int* rank)
+{
+    return LAPACKE_cgelsd(layout == Layout::RowMajor ? LAPACK_ROW_MAJOR : LAPACK_COL_MAJOR,
+                          m, n, nrhs,
+                          reinterpret_cast<lapack_complex_float*>(A), lda,
+                          reinterpret_cast<lapack_complex_float*>(B), ldb,
+                          s, rcond, rank);
+}
+
+inline lapack_int gelsd(Layout layout, lapack_int m, lapack_int n, lapack_int nrhs,
+                        std::complex<double>* A, lapack_int lda,
+                        std::complex<double>* B, lapack_int ldb,
+                        double* s, double rcond, lapack_int* rank)
+{
+    return LAPACKE_zgelsd(layout == Layout::RowMajor ? LAPACK_ROW_MAJOR : LAPACK_COL_MAJOR,
+                          m, n, nrhs,
+                          reinterpret_cast<lapack_complex_double*>(A), lda,
+                          reinterpret_cast<lapack_complex_double*>(B), ldb,
+                          s, rcond, rank);
 }
 
 #else
@@ -1494,6 +1515,160 @@ inline void gees(char jobvs, char sort,
         throw std::runtime_error("Leading eigenvalues do not satisfy sort condition.");
     if (info > 0)
         throw std::runtime_error("Schur form not found.  Possibly ill-conditioned.");
+}
+
+inline lapack_int gelsd(Layout layout, lapack_int m, lapack_int n, lapack_int nrhs,
+                        float* A, lapack_int lda, float* B, lapack_int ldb,
+                        float* s, float rcond, lapack_int* rank)
+{
+    lapack_int info = 0;
+
+    if (layout == Layout::RowMajor) {
+        lapack_int maxmn = std::max(m, n);
+        auto A_temp = std::vector<float>(m * n);
+        auto B_temp = std::vector<float>(maxmn * nrhs);
+        omatcopy(Transpose::Trans, m, n, A, lda, A_temp.data(), m);
+        omatcopy(Transpose::Trans, maxmn, nrhs, B, ldb, B_temp.data(), maxmn);
+        info = gelsd(Layout::ColMajor, m, n, nrhs,
+                     A_temp.data(), m, B_temp.data(), maxmn,
+                     s, rcond, rank);
+        omatcopy(Transpose::Trans, n, m, A_temp.data(), m, A, lda);
+        omatcopy(Transpose::Trans, nrhs, maxmn, B_temp.data(), maxmn, B, ldb);
+    } else {
+        float work_query;
+        lapack_int iwork_query;
+        lapack_int lwork = -1;
+
+        sgelsd_(&m, &n, &nrhs, A, &lda, B, &ldb, s, &rcond, rank,
+                &work_query, &lwork, &iwork_query, &info);
+        if (info != 0) return info;
+        lwork = static_cast<lapack_int>(work_query);
+
+        auto work = std::vector<float>(lwork);
+        auto iwork = std::vector<lapack_int>(iwork_query);
+        sgelsd_(&m, &n, &nrhs, A, &lda, B, &ldb, s, &rcond, rank,
+                work.data(), &lwork, iwork.data(), &info);
+    }
+    return info;
+}
+
+inline lapack_int gelsd(Layout layout, lapack_int m, lapack_int n, lapack_int nrhs,
+                        double* A, lapack_int lda, double* B, lapack_int ldb,
+                        double* s, double rcond, lapack_int* rank)
+{
+    lapack_int info = 0;
+
+    if (layout == Layout::RowMajor) {
+        lapack_int maxmn = std::max(m, n);
+        auto A_temp = std::vector<double>(m * n);
+        auto B_temp = std::vector<double>(maxmn * nrhs);
+        omatcopy(Transpose::Trans, m, n, A, lda, A_temp.data(), m);
+        omatcopy(Transpose::Trans, maxmn, nrhs, B, ldb, B_temp.data(), maxmn);
+        info = gelsd(Layout::ColMajor, m, n, nrhs,
+                     A_temp.data(), m, B_temp.data(), maxmn,
+                     s, rcond, rank);
+        omatcopy(Transpose::Trans, n, m, A_temp.data(), m, A, lda);
+        omatcopy(Transpose::Trans, nrhs, maxmn, B_temp.data(), maxmn, B, ldb);
+    } else {
+        double work_query;
+        lapack_int iwork_query;
+        lapack_int lwork = -1;
+
+        dgelsd_(&m, &n, &nrhs, A, &lda, B, &ldb, s, &rcond, rank,
+                &work_query, &lwork, &iwork_query, &info);
+        if (info != 0) return info;
+        lwork = static_cast<lapack_int>(work_query);
+
+        auto work = std::vector<double>(lwork);
+        auto iwork = std::vector<lapack_int>(iwork_query);
+        dgelsd_(&m, &n, &nrhs, A, &lda, B, &ldb, s, &rcond, rank,
+                work.data(), &lwork, iwork.data(), &info);
+    }
+    return info;
+}
+
+inline lapack_int gelsd(Layout layout, lapack_int m, lapack_int n, lapack_int nrhs,
+                        std::complex<float>* A, lapack_int lda,
+                        std::complex<float>* B, lapack_int ldb,
+                        float* s, float rcond, lapack_int* rank)
+{
+    lapack_int info = 0;
+
+    if (layout == Layout::RowMajor) {
+        lapack_int maxmn = std::max(m, n);
+        auto A_temp = std::vector<std::complex<float>>(m * n);
+        auto B_temp = std::vector<std::complex<float>>(maxmn * nrhs);
+        omatcopy(Transpose::Trans, m, n, A, lda, A_temp.data(), m);
+        omatcopy(Transpose::Trans, maxmn, nrhs, B, ldb, B_temp.data(), maxmn);
+        info = gelsd(Layout::ColMajor, m, n, nrhs,
+                     A_temp.data(), m, B_temp.data(), maxmn,
+                     s, rcond, rank);
+        omatcopy(Transpose::Trans, n, m, A_temp.data(), m, A, lda);
+        omatcopy(Transpose::Trans, nrhs, maxmn, B_temp.data(), maxmn, B, ldb);
+    } else {
+        lapack_complex_float work_query;
+        float      rwork_query;
+        lapack_int iwork_query;
+        lapack_int lwork = -1;
+
+        cgelsd_(&m, &n, &nrhs,
+                reinterpret_cast<lapack_complex_float*>(A), &lda,
+                reinterpret_cast<lapack_complex_float*>(B), &ldb,
+                s, &rcond, rank, &work_query, &lwork, &rwork_query, &iwork_query, &info);
+        if (info != 0) return info;
+        lwork = static_cast<lapack_int>(*reinterpret_cast<float*>(&work_query));
+
+        auto work = std::vector<lapack_complex_float>(lwork);
+        auto rwork = std::vector<float>(static_cast<lapack_int>(rwork_query));
+        auto iwork = std::vector<lapack_int>(iwork_query);
+        cgelsd_(&m, &n, &nrhs,
+                reinterpret_cast<lapack_complex_float*>(A), &lda,
+                reinterpret_cast<lapack_complex_float*>(B), &ldb,
+                s, &rcond, rank, work.data(), &lwork, rwork.data(), iwork.data(), &info);
+    }
+    return info;
+}
+
+inline lapack_int gelsd(Layout layout, lapack_int m, lapack_int n, lapack_int nrhs,
+                        std::complex<double>* A, lapack_int lda,
+                        std::complex<double>* B, lapack_int ldb,
+                        double* s, double rcond, lapack_int* rank)
+{
+    lapack_int info = 0;
+
+    if (layout == Layout::RowMajor) {
+        lapack_int maxmn = std::max(m, n);
+        auto A_temp = std::vector<std::complex<double>>(m * n);
+        auto B_temp = std::vector<std::complex<double>>(maxmn * nrhs);
+        omatcopy(Transpose::Trans, m, n, A, lda, A_temp.data(), m);
+        omatcopy(Transpose::Trans, maxmn, nrhs, B, ldb, B_temp.data(), maxmn);
+        info = gelsd(Layout::ColMajor, m, n, nrhs,
+                     A_temp.data(), m, B_temp.data(), maxmn,
+                     s, rcond, rank);
+        omatcopy(Transpose::Trans, n, m, A_temp.data(), m, A, lda);
+        omatcopy(Transpose::Trans, nrhs, maxmn, B_temp.data(), maxmn, B, ldb);
+    } else {
+        lapack_complex_double work_query;
+        double     rwork_query;
+        lapack_int iwork_query;
+        lapack_int lwork = -1;
+
+        zgelsd_(&m, &n, &nrhs,
+                reinterpret_cast<lapack_complex_double*>(A), &lda,
+                reinterpret_cast<lapack_complex_double*>(B), &ldb,
+                s, &rcond, rank, &work_query, &lwork, &rwork_query, &iwork_query, &info);
+        if (info != 0) return info;
+        lwork = static_cast<lapack_int>(*reinterpret_cast<double*>(&work_query));
+
+        auto work = std::vector<lapack_complex_double>(lwork);
+        auto rwork = std::vector<double>(static_cast<lapack_int>(rwork_query));
+        auto iwork = std::vector<lapack_int>(iwork_query);
+        zgelsd_(&m, &n, &nrhs,
+                reinterpret_cast<lapack_complex_double*>(A), &lda,
+                reinterpret_cast<lapack_complex_double*>(B), &ldb,
+                s, &rcond, rank, work.data(), &lwork, rwork.data(), iwork.data(), &info);
+    }
+    return info;
 }
 
 #endif

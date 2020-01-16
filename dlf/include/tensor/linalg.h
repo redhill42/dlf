@@ -1234,6 +1234,91 @@ inline solve(TensorA&& A, TensorB&& b) {
 }
 
 //==-------------------------------------------------------------------------
+// Linear Least Square
+//==-------------------------------------------------------------------------
+
+template <typename T>
+Tensor<T> lstsq(Tensor<T>&& A, const Tensor<T>& B) {
+    if (!A.is_matrix())
+        throw shape_error("lstsq: A expected matrix");
+    if (!B.is_vector() && !B.is_matrix())
+        throw shape_error("lstsq: B expected vector or matrix");
+
+    lapack_int m = A.extent(0), n = A.extent(1);
+    lapack_int nrhs = B.is_vector() ? 1 : B.extent(1);
+    if (B.extent(0) != m)
+        throw shape_error("lstsq: incompatible shape");
+
+    auto X = Tensor<T>();
+    if (B.is_vector()) {
+        X.resize(std::max(m, n));
+        reorder(B, X.slice({{0, int(m)}}));
+    } else {
+        X.resize(std::max(m, n), nrhs);
+        reorder(B, X.slice({{0, int(m)}, {0, int(nrhs)}}));
+    }
+
+    using real_t = decltype(std::real(std::declval<T>()));
+    auto s = std::vector<real_t>(std::min(m, n));
+    auto rcond = std::numeric_limits<real_t>::epsilon();
+    lapack_int rank = 0;
+
+    cblas::gelsd(cblas::Layout::RowMajor, m, n, nrhs,
+                 A.data(), A.stride(0), X.data(), X.stride(0),
+                 s.data(), rcond, &rank);
+    
+    if (n < m) {
+        if (X.is_vector()) {
+            return X.slice({{0, int(n)}});
+        } else {
+            return X.slice({{0, int(n)}, {0, int(nrhs)}});
+        }
+    } else {
+        return std::move(X);
+    }
+}
+
+template <typename T>
+Tensor<T> lstsq(const Tensor<T>& A, const Tensor<T>& B) {
+    return lstsq(Tensor<T>(A), B);
+}
+
+/**
+ * Compute the (Moore-Penrose) pseudo-inverse of a matrix.
+ */
+template <typename T>
+Tensor<T> pinv(Tensor<T>&& A) {
+    if (!A.is_matrix())
+        throw shape_error("pinv: expected matrix");
+
+    lapack_int m = A.extent(0), n = A.extent(1);
+    auto X = Tensor<T>(Shape(n, m));
+    X.fill(xfn::zero<T>());
+    X.diagonal().fill(xfn::one<T>());
+
+    using real_t = decltype(std::real(std::declval<T>()));
+    auto s = std::vector<real_t>(std::min(m, n));
+    auto rcond = std::numeric_limits<real_t>::epsilon();
+    lapack_int rank = 0;
+
+    if (m < n) {
+        cblas::gelsd(cblas::Layout::RowMajor, m, n, m,
+                     A.data(), A.stride(0), X.data(), X.stride(0),
+                     s.data(), rcond, &rank);
+    } else {
+        cblas::gelsd(cblas::Layout::ColMajor, n, m, n,
+                     A.data(), A.stride(0), X.data(), X.stride(0),
+                     s.data(), rcond, &rank);
+    }
+    return std::move(X);
+}
+
+template <typename T>
+Tensor<T> pinv(const Tensor<T>& A) {
+    return pinv(Tensor<T>(A));
+}
+
+//==-------------------------------------------------------------------------
 // Schur decomposition and matrix functions
 //==-------------------------------------------------------------------------
 

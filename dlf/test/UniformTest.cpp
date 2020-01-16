@@ -2907,6 +2907,34 @@ TEST(UniformTest, LinearSolveGMP) {
 }
 #endif
 
+template <typename T> struct PseudoInverseTest : public testing::Test {};
+using PseudoInverseTestTypes = testing::Types<float, double>;
+TYPED_TEST_CASE(PseudoInverseTest, PseudoInverseTestTypes);
+
+TYPED_TEST(PseudoInverseTest, ForReal) {
+    auto A = Tensor<TypeParam>({3, 4}).random(std::uniform_real_distribution<TypeParam>(0, 1));
+    auto Ap = pinv(A);
+    EXPECT_ELEMENTS_NEAR(multi_dot(A, Ap, A), A);
+    EXPECT_ELEMENTS_NEAR(multi_dot(Ap, A, Ap), Ap);
+
+    auto B = Tensor<TypeParam>({4, 3}).random(std::uniform_real_distribution<TypeParam>(0, 1));
+    auto Bp = pinv(B);
+    EXPECT_ELEMENTS_NEAR(multi_dot(B, Bp, B), B);
+    EXPECT_ELEMENTS_NEAR(multi_dot(Bp, B, Bp), Bp);
+}
+
+TYPED_TEST(PseudoInverseTest, ForComplex) {
+    auto A = Tensor<std::complex<TypeParam>>({3, 4}).random(std::uniform_real_distribution<TypeParam>(0, 1));
+    auto Ap = pinv(A);
+    EXPECT_ELEMENTS_NEAR(multi_dot(A, Ap, A), A);
+    EXPECT_ELEMENTS_NEAR(multi_dot(Ap, A, Ap), Ap);
+
+    auto B = Tensor<std::complex<TypeParam>>({4, 3}).random(std::uniform_real_distribution<TypeParam>(0, 1));
+    auto Bp = pinv(B);
+    EXPECT_ELEMENTS_NEAR(multi_dot(B, Bp, B), B);
+    EXPECT_ELEMENTS_NEAR(multi_dot(Bp, B, Bp), Bp);
+}
+
 TEST(UniformTest, Schur) {
     {
         auto A = Tensor<float>({10, 10}).random(0, 10);

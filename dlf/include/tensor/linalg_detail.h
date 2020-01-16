@@ -2044,7 +2044,7 @@ int trtri_serial(cblas::Triangle uplo, cblas::Diagonal diag, int n, T* A, int ld
     // check zero on diagonal for singularity
     for (int i = 0; i < n; ++i) {
         if (A[i*(lda+1)] == xfn::zero<T>())
-            return i;
+            return i + 1;
     }
 
     if (uplo == cblas::Triangle::Upper) {
@@ -2095,7 +2095,7 @@ int trtri(cblas::Triangle uplo, cblas::Diagonal diag, int n, T* A, int lda) {
         [&]{ info1 = trtri(uplo, diag, n1, A11, lda); },
         [&]{ info2 = trtri(uplo, diag, n2, A22, lda); });
     if (info1 != 0) return info1;
-    if (info2 != 0) return info2;
+    if (info2 != 0) return info2 + n1;
 
     if (uplo == cblas::Triangle::Upper) {
         auto A12 = A + n1;
