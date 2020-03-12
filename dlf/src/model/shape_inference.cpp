@@ -1010,6 +1010,7 @@ public:
     void visit(Dropout* n) override {
         if (!propagateTypeAndCheckShape(n))
             return;
+        n->output()->set_dims(n->input()->dims());
         if (n->mask() != nullptr) {
             n->mask()->set_type(DataType::BOOL);
             n->mask()->set_dims(n->input()->dims());
